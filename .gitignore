@@ -1,0 +1,30 @@
+# Local secrets and environment files
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# JavaScript dependencies and builds
+node_modules/
+dist/
+build/
+coverage/
+.next/
+.vite/
+.cache/
+
+# Python and other local caches
+__pycache__/
+*.pyc
+.venv/
+
+# Platform/user files
+.DS_Store
+Thumbs.db
+*.log
+
+# Local Catalyst credentials
+.catalyst/
