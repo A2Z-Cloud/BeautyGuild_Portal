@@ -1,1 +1,10 @@
-export {};
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { accreditationType, validate } from './logic.mjs';
+const fields=[{name:'name',type:'text',required:true},{name:'email',type:'email',required:true},{name:'age',type:'number',required:false}];
+test('required field validation',()=>assert.equal(validate(fields,{email:'a@example.test'}).name,'This field is required.'));
+test('email validation',()=>assert.equal(validate(fields,{name:'A',email:'not an email'}).email,'Enter a valid email address.'));
+test('non-negative numeric validation',()=>assert.ok(validate(fields,{name:'A',email:'a@example.test',age:-1}).age));
+test('valid form',()=>assert.deepEqual(validate(fields,{name:'A',email:'a@example.test',age:0}),{}));
+test('constituent UK nations are standard accreditation',()=>{for(const c of ['England','Scotland','Wales','Northern Ireland','United Kingdom','UK'])assert.equal(accreditationType(c),'Standard Accreditation');});
+test('other territory is international',()=>assert.equal(accreditationType('Ireland'),'International Accreditation'));

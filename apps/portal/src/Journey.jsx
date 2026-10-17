@@ -3,20 +3,8 @@ import { ArrowLeft, ArrowRight, CloudOff, LockKeyhole, Save, ShieldAlert } from 
 import { Link } from 'react-router-dom';
 import { JOURNEYS } from './JourneyConfig.js';
 import { Field, Notice, PageHeading, Stages } from './UiParts.jsx';
+import {accreditationType,validate} from './logic.mjs';
 
-const UK=new Set(['england','scotland','wales','northern ireland','united kingdom','uk']);
-function accreditationType(country){return UK.has(String(country||'').trim().toLowerCase())?'Standard Accreditation':'International Accreditation';}
-function validate(fields,values) {
-  const errors={};
-  for(const field of fields) {
-    if(field.when && !field.when(values)) continue;
-    const v=values[field.name];
-    if(field.required && (v===false || v===undefined || v===null || (typeof v==='string' && !v.trim()))) {errors[field.name]='This field is required.';continue;}
-    if(field.type==='email' && v && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v))) errors[field.name]='Enter a valid email address.';
-    if(field.type==='number' && v && (!Number.isFinite(Number(v)) || Number(v)<0)) errors[field.name]='Enter a valid non-negative number.';
-  }
-  return errors;
-}
 function ReviewDetails({config,values,kind}) {
   const entries=config.steps.flatMap(s=>s.fields).filter(f=>f.type!=='checkbox' && values[f.name]!==undefined && values[f.name]!=='' && values[f.name]!==false);
   return <div className="review-box"><div className="review-head"><h3>Your example responses</h3><span>Preview only</span></div>
