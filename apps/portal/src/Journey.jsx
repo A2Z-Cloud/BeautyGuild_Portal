@@ -1,10 +1,11 @@
-import React, {useMemo, useState} from 'react';
+import React, {useEffect, useMemo, useState} from 'react';
 import {ArrowLeft, ArrowRight, CreditCard, FileText, LockKeyhole, MapPin, Save, ShieldAlert} from 'lucide-react';
-import {Link, useNavigate} from 'react-router-dom';
+import {Link, useNavigate, useSearchParams} from 'react-router-dom';
 import {JOURNEYS} from './JourneyConfig.js';
 import {Field,Notice,PageHeading,Stages} from './UiParts.jsx';
 import {accreditationType,validate} from './logic.mjs';
 import {usePreviewState} from './journeys/previewState.jsx';
+import {INTEGRATIONS, DRAFT_CAPABILITIES, portalApi} from './services/api.js';
 
 function ReviewDetails({steps,values,kind}){
   const all=steps.flatMap(s=>s.fields).filter(f=>!f.when||f.when(values));
@@ -31,17 +32,57 @@ function CheckpointNotice({kind}) {
 }
 export function Journey({kind}){
   const navigate=useNavigate();
+  const [searchParams]=useSearchParams();
+  const draftId=searchParams.get('draft');
   const config=JOURNEYS[kind];
-  const {answers,steps:storedSteps,setAnswer,setJourneyStep,clearAnswers}=usePreviewState();
+  const {answers,steps:storedSteps,setAnswer,setJourneyStep,clearAnswers,restoreAnswers}=usePreviewState();
+  const draftsConnected=INTEGRATIONS.identity&&DRAFT_CAPABILITIES[kind];
   const values=answers[kind]||{};
   const visible=useMemo(()=>config.steps.filter(step=>!step.when||step.when(values)),[config,values]);
   const index=Math.min(storedSteps[kind]||0,visible.length-1);
   const current=visible[index];
   const last=index===visible.length-1;
   const [errors,setErrors]=useState({});
+  const [draftMessage,setDraftMessage]=useState('');
+  const [draftRevision,setDraftRevision]=useState(null);
+  const [savingDraft,setSavingDraft]=useState(false);
+  useEffect(()=>{
+    if(!draftId){setDraftRevision(null);setDraftMessage('');return;}
+    if(!draftsConnected){setDraftMessage('CRM draft restoration is not available in demo mode. Example answers were not replaced.');return;}
+    let active=true;
+    portalApi.getIdentity().then(user=>{
+      if(!user?.id)throw new Error('Sign in to resume a saved draft.');
+      return portalApi.getDraft(kind,draftId);
+    }).then(draft=>{
+      if(!active)return;
+      const visibleSteps=config.steps.filter(step=>!step.when||step.when(draft.answers));
+      const stepIndex=visibleSteps.findIndex(step=>step.id===draft.step);
+      restoreAnswers(kind,draft.answers,Math.max(stepIndex,0));
+      setDraftRevision(draft.revision);
+      setDraftMessage('CRM draft loaded. Use Save to persist further changes.');
+    }).catch(error=>{if(active)setDraftMessage(error.message);});
+    return ()=>{active=false;};
+  },[kind,draftId,draftsConnected,config,restoreAnswers]);
   const update=(name,value)=>{setAnswer(kind,name,value);setErrors(previous=>({...previous,[name]:undefined}));};
   const move=position=>{setJourneyStep(kind,position);setErrors({});window.scrollTo({top:0,behavior:'smooth'});};
   const checkpoint=intent=>navigate('/account/checkpoint?returnTo='+encodeURIComponent('/'+kind+'/new')+'&intent='+intent);
+  const saveDraft=async()=>{
+    if(!draftsConnected){checkpoint('save');return;}
+    setSavingDraft(true);setDraftMessage('');
+    try{
+      const user=await portalApi.getIdentity();
+      if(!user?.id)throw new Error('Sign in before saving a CRM draft.');
+      if(draftId&&draftRevision===null)throw new Error('Reload the draft before updating it.');
+      const payload={answers:values,step:current.id};
+      const saved=draftId?
+        await portalApi.updateDraft(kind,draftId,{...payload,revision:draftRevision}):
+        await portalApi.createDraft(kind,payload);
+      setDraftRevision(saved.revision);
+      setDraftMessage('Draft saved to CRM.');
+      if(!draftId)navigate('/'+kind+'/new?draft='+encodeURIComponent(saved.id),{replace:true});
+    }catch(error){setDraftMessage(error.message);}
+    finally{setSavingDraft(false);}
+  };
   const next=()=>{
     const errors=validate(current.fields,values);
     setErrors(errors);
@@ -56,6 +97,7 @@ export function Journey({kind}){
       <span className="journey-counter">Step {index+1} of {visible.length}</span>
     </PageHeading>
     <Notice title="Frontend preview">This journey is interactive, but does not store CRM records or calculate live prices. Use sample information only. Account creation, CRM drafts, Stripe and Guild fulfilment require backend integration.</Notice>
+    {draftMessage&&<Notice title="Draft status">{draftMessage}</Notice>}
     <div className="journey-shell">
       <section className="journey-card">
         <Stages steps={visible} current={index}/>
@@ -72,8 +114,11 @@ export function Journey({kind}){
       <aside className="journey-aside">
         <div className="aside-card"><span className="eyebrow">YOUR PROGRESS</span><div className="progress-track"><div style={{width:Math.round(((index+1)/visible.length)*100)+'%'}}/></div>
           <strong>{Math.round(((index+1)/visible.length)*100)}% through this journey</strong><p>Answers are held temporarily in this browser tab while you explore the site. They are not saved to CRM.</p></div>
-        <div className="aside-card muted-card"><LockKeyhole size={22}/><h3>Save and finish later</h3><p>Saving a CRM draft requires a verified account. Explore the account checkpoint before connecting the draft API.</p>
-          <button type="button" className="text-button" onClick={()=>checkpoint('save')}><Save size={15}/> Continue to account checkpoint</button></div>
+        <div className="aside-card muted-card"><LockKeyhole size={22}/><h3>Save and finish later</h3>
+          <p>{draftsConnected?'Save this application against your verified account.':'Saving a CRM draft requires a verified account. Explore the account checkpoint before connecting the draft API.'}</p>
+          <button type="button" className="text-button" disabled={savingDraft} onClick={draftsConnected?saveDraft:()=>checkpoint('save')}>
+            <Save size={15}/> {savingDraft?'Saving...':draftsConnected?'Save CRM draft':'Continue to account checkpoint'}
+          </button></div>
         <div className="aside-card"><CreditCard size={21}/><h3>Payment information</h3><p>No prices, card collection, checkout or active cover in this frontend preview.</p></div>
         <button type="button" className="text-button restart-button" onClick={()=>{clearAnswers(kind);setErrors({});}}>Clear example answers and restart</button>
         <div className="aside-help"><ShieldAlert size={18}/><span>Do not enter real personal, payment or confidential insurance information.</span></div>

@@ -1,35 +1,51 @@
-import { DEMO_RECORDS, DEMO_USER } from '../data/demo.js';
+import {DEMO_RECORDS, DEMO_USER} from '../data/demo.js';
+import {NotConnectedError} from './transport.mjs';
+import {createDraftService, DRAFT_KINDS, canUseDrafts} from './drafts.mjs';
 
-// The V2 M1 implementation is intentionally frontend-only. No API requests are sent.
-// Milestone 2 will wire these methods to verified backend contracts.
-export const DATA_MODE = 'demo';
+// The only usable runtime today is a clearly labelled demonstration.
+// An unsupported "live" flag cannot enable any CRM, identity or payment call.
+export const DATA_MODE = import.meta.env?.VITE_DATA_MODE === 'demo' ||
+  !import.meta.env?.VITE_DATA_MODE ? 'demo' : 'integration-pending';
+
+export const DRAFT_CAPABILITIES = Object.freeze(Object.fromEntries(
+  DRAFT_KINDS.map(kind => [kind, canUseDrafts(kind)])
+));
 export const INTEGRATIONS = Object.freeze({
-  identity:false, crmRecords:false, crmDrafts:false, pricing:false,
-  underwriting:false, stripeCheckout:false, policyIssuance:false, workdrive:false,
+  identity: false,
+  crmRecords: false,
+  crmDrafts: false, // Must remain false until verified auth AND all draft contracts exist.
+  pricing: false,
+  underwriting: false,
+  stripeCheckout: false,
+  policyIssuance: false,
+  workdrive: false,
+  loqate: false,
+  creator: false,
 });
-const copy=value=>JSON.parse(JSON.stringify(value));
-export class IntegrationUnavailableError extends Error {
-  constructor(operation) {
-    super(operation+' is not connected in Milestone 1. Nothing was saved, submitted or purchased.');
-    this.name='IntegrationUnavailableError';
-    this.code='NOT_CONNECTED';
-  }
-}
-const unavailable=(name)=>{throw new IntegrationUnavailableError(name);};
-export const portalApi=Object.freeze({
-  mode:DATA_MODE,
-  getViewer:async()=>copy(DEMO_USER),
-  listRecords:async(kind)=>copy(DEMO_RECORDS.filter(r=>!kind||r.kind===kind)),
-  getRecord:async(kind,id)=>copy(DEMO_RECORDS.find(r=>r.kind===kind&&r.id===id)||null),
-  getIdentity:async()=>unavailable('Catalyst identity'),
-  register:async()=>unavailable('Catalyst registration'),
-  createDraft:async()=>unavailable('CRM draft creation'),
-  updateDraft:async()=>unavailable('CRM draft update'),
-  getDraft:async()=>unavailable('CRM draft retrieval'),
-  listDrafts:async()=>unavailable('CRM draft listing'),
-  discardDraft:async()=>unavailable('CRM draft deletion'),
-  quote:async()=>unavailable('Authoritative pricing and underwriting'),
-  submit:async()=>unavailable('CRM submission'),
-  checkout:async()=>unavailable('Stripe Checkout'),
-  getDocuments:async()=>unavailable('Authorised document listing'),
+export {NotConnectedError as IntegrationUnavailableError};
+
+const draftClient = createDraftService();
+const copy = value => JSON.parse(JSON.stringify(value));
+const unavailable = operation => {throw new NotConnectedError(operation);};
+
+export const portalApi = Object.freeze({
+  mode: DATA_MODE,
+  // These are isolated examples, not the result of authenticated CRM reads.
+  getViewer: async () => DATA_MODE === 'demo' ? copy(DEMO_USER) : unavailable('CRM viewer'),
+  listRecords: async kind => DATA_MODE === 'demo' ?
+    copy(DEMO_RECORDS.filter(record => !kind || record.kind === kind)) : unavailable('CRM record listing'),
+  getRecord: async (kind, id) => DATA_MODE === 'demo' ?
+    copy(DEMO_RECORDS.find(record => record.kind === kind && record.id === id) || null) :
+    unavailable('CRM record'),
+  getIdentity: async () => unavailable('Catalyst identity and Contact resolution'),
+  register: async () => unavailable('Catalyst registration'),
+  createDraft: (...args) => draftClient.createDraft(...args),
+  listDrafts: (...args) => draftClient.listDrafts(...args),
+  getDraft: (...args) => draftClient.getDraft(...args),
+  updateDraft: (...args) => draftClient.updateDraft(...args),
+  discardDraft: (...args) => draftClient.discardDraft(...args),
+  quote: async () => unavailable('Authoritative pricing and underwriting'),
+  submit: async () => unavailable('CRM submission'),
+  checkout: async () => unavailable('Stripe Checkout'),
+  getDocuments: async () => unavailable('Authorised document listing'),
 });

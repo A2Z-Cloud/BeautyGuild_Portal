@@ -41,3 +41,11 @@ For the frontend development preview only. Do not enter real customer data or pa
 | Insurance review | No fabricated premium, underwriting PASS, insurance issuance or checkout |
 
 | From account checkpoint open payment preview | Shows backend-authoritative pricing placeholders only; button reports no Stripe session or charge |
+
+## Milestone 2 API boundary (demo mode)
+
+- Open `/drafts?kind=membership`, `/drafts?kind=insurance` and `/drafts?kind=accreditation`. Confirm each visibly says CRM drafts are **not connected**, with no fabricated saved applications.
+- Open `/membership/new?draft=demo-id` and confirm an unavailable-restoration message; no CRM record is loaded and any unsaved example answers remain in memory.
+- In each journey select Save and finish later; confirm the existing account checkpoint remains, with **no** success message claiming the draft was saved.
+- Verify login, payment preview, insurance underwriting and sample record screens remain clearly labelled demonstrations; no endpoint calls are made.
+- The injected-contract adapter tests are synthetic, not evidence that CRM or Catalyst Authentication is connected.

@@ -48,6 +48,12 @@ Do not add the portal to a Catalyst project that deploys unrelated code without 
 
 See [SMOKE-TEST.md](SMOKE-TEST.md) for routes, mobile sidebar, forms, review screens, sample record tabs and return navigation.
 
+## Milestone 2 frontend-only adapter layer
+
+The stacked API-integration PR adds a same-origin authenticated transport, fail-closed CRM draft adapters, and saved-drafts and journey-resume wiring. **No actual CRM draft route has been verified.** The default experience remains explicitly marked DEMO and no records are saved. A non-demo mode flag does not enable the integration.
+
+See [Milestone 2 API contracts and blockers](INTEGRATION-CONTRACTS.md) for service-by-service missing contracts, required backend ownership tests and activation conditions.
+
 ## Backend handover for Milestone 2
 
 The isolated frontend service boundary is src/services/api.js. It **deliberately** throws for identity, CRM draft create/update/list/get/discard, authoritative pricing, underwriting, record submission, document access and Stripe Checkout.

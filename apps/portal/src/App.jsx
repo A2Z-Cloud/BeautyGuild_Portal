@@ -9,6 +9,7 @@ import { Notice, PageHeading } from './UiParts.jsx';
 import { PreviewStateProvider } from './journeys/previewState.jsx';
 import { LoginPage, SignupPage, ForgotPasswordPage, AccountCheckpoint, AccountManagement } from './AccountPages.jsx';
 import { PaymentPreview } from './PaymentPreview.jsx';
+import SavedDrafts from './SavedDrafts.jsx';
 
 function NotReady({ area }) {
   return <div className="page narrow-page">
@@ -29,6 +30,7 @@ export default function App() {
     <Route path="/insurance/new" element={<Journey kind="insurance" />} />
     <Route path="/accreditation/new" element={<Journey kind="accreditation" />} />
     <Route path="/records" element={<Records />} />
+    <Route path="/drafts" element={<SavedDrafts />} />
     <Route path="/records/:kind/:id" element={<RecordDetail />} />
     <Route path="/membership/:id" element={<RecordDetail kindOverride="membership" />} />
     <Route path="/insurance/:id" element={<RecordDetail kindOverride="insurance" />} />
