@@ -31,7 +31,7 @@ export function AccountCheckpoint() {
       <Notice title="Backend not connected">Account registration, sign-in, CRM draft storage and final submission are disabled in this preview. No payment is taken.</Notice>
       <div className="account-options"><Link className="account-option" to={'/signup'+tail}><UserPlus size={25}/><strong>Create an account</strong><span>New to the Guild? Set up your account within the journey.</span><ArrowRight size={17}/></Link>
       <Link className="account-option" to={'/login'+tail}><KeyRound size={25}/><strong>Sign in</strong><span>Already a member? Continue using your Guild account.</span><ArrowRight size={17}/></Link></div>
-      <Link className="back-link" to={route}><ArrowLeft size={16}/> Return to your {service} answers</Link>
+      <div className="checkpoint-footer"><Link className="back-link" to={route}><ArrowLeft size={16}/> Return to your {service} answers</Link><Link className="auth-inline-link" to={'/checkout-preview/'+service}>Preview the payment screen (no real checkout)</Link></div>
     </div>
   </Shell>;
 }
