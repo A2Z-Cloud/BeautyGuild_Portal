@@ -1,0 +1,58 @@
+import React, { useEffect, useState } from 'react';
+import { Link, NavLink, useLocation } from 'react-router-dom';
+import { Award, BookOpen, ChevronLeft, ChevronRight, CircleHelp, ClipboardList, GraduationCap, House, Menu, ShieldCheck, UserRound, LogIn, X } from 'lucide-react';
+import { DEMO_USER } from './data/demo.js';
+import { Logo, PreviewLabel } from './UiParts.jsx';
+
+const sections = [
+  {label:'Dashboard',path:'/',icon:House,end:true},
+  {label:'Membership',path:'/membership',icon:Award},
+  {label:'Insurance',path:'/insurance',icon:ShieldCheck},
+  {label:'Accreditation',path:'/accreditation',icon:GraduationCap},
+  {label:'My records',path:'/records',icon:ClipboardList},
+];
+const secondary = [
+  {label:'GTi Courses',path:'/gti-courses',icon:BookOpen},
+  {label:'My Account',path:'/account',icon:UserRound},
+  {label:'Help',path:'/help',icon:CircleHelp},
+];
+function NavItems({items,onNavigate,collapsed}) {
+  return <div className="nav-group">{items.map(({label,path,icon:Icon,end})=><NavLink onClick={onNavigate} key={path} to={path} end={Boolean(end)}
+    title={collapsed ? label : undefined} className={({isActive})=>'nav-item'+(isActive?' active':'')}>
+    <Icon size={20} aria-hidden="true"/><span>{label}</span></NavLink>)}</div>;
+}
+function currentTitle(path) {
+  if(path==='/')return 'Dashboard';
+  const key=path.split('/').filter(Boolean)[0];
+  return ({membership:'Membership',insurance:'Insurance',accreditation:'Accreditation',records:'My records','gti-courses':'GTi Courses',account:'Account',login:'Sign in',signup:'Sign up','forgot-password':'Password reset',help:'Help'})[key]||'Beauty Guild';
+}
+export default function PortalView({children}){
+  const [collapsed,setCollapsed]=useState(()=>{try{return window.localStorage.getItem('bg-preview-sidebar')==='collapsed';}catch{return false;}});
+  const [mobileOpen,setMobileOpen]=useState(false);
+  const location=useLocation();
+  useEffect(()=>{setMobileOpen(false);},[location.pathname,location.search]);
+  const toggle=()=>setCollapsed(old=>{try{window.localStorage.setItem('bg-preview-sidebar',old?'expanded':'collapsed');}catch{}return !old;});
+  return <div className={'portal-shell'+(collapsed?' compact':'')}>
+    {mobileOpen&&<button className="mobile-scrim" aria-label="Close navigation" type="button" onClick={()=>setMobileOpen(false)}/>}
+    <aside id="portal-navigation" className={'sidebar'+(mobileOpen?' mobile-open':'')} aria-label="Main navigation">
+      <div className="sidebar-brand"><Link to="/" className="brand-link" onClick={()=>setMobileOpen(false)} aria-label="Beauty Guild dashboard"><Logo/></Link>
+        <button className="icon-button nav-collapse" type="button" title={collapsed?'Expand navigation':'Collapse navigation'} aria-label={collapsed?'Expand navigation':'Collapse navigation'} onClick={toggle}>{collapsed?<ChevronRight size={18}/>:<ChevronLeft size={18}/>}</button>
+        <button className="icon-button mobile-close" type="button" aria-label="Close navigation" onClick={()=>setMobileOpen(false)}><X size={20}/></button>
+      </div>
+      <div className="nav-content"><div className="nav-caption">YOUR GUILD</div><NavItems items={sections} onNavigate={()=>setMobileOpen(false)} collapsed={collapsed}/>
+        <div className="nav-divider"/><div className="nav-caption">RESOURCES</div>
+        <NavItems items={secondary} onNavigate={()=>setMobileOpen(false)} collapsed={collapsed}/>
+      </div>
+      <div className="sidebar-footer"><div className="sidebar-avatar">BG</div><div><strong>Beauty Guild</strong><span>Frontend preview</span></div></div>
+    </aside>
+    <div className="workspace">
+      <header className="topbar"><div className="topbar-left">
+          <button className="icon-button mobile-menu" type="button" onClick={()=>setMobileOpen(true)} aria-label="Open navigation" aria-expanded={mobileOpen} aria-controls="portal-navigation"><Menu size={22}/></button>
+          <div className="breadcrumb"><Link to="/">Portal</Link><ChevronRight size={15}/><strong>{currentTitle(location.pathname)}</strong></div>
+        </div><div className="topbar-right"><PreviewLabel/><Link className="header-login" to="/login"><LogIn size={15}/> Sign in</Link><span className="topbar-avatar" aria-label="Sample user">{DEMO_USER.initials}</span><div className="user-label"><strong>{DEMO_USER.name}</strong><span>Sample account</span></div></div>
+      </header>
+      <main id="main-content">{children}</main>
+      <footer className="page-footer"><span>Beauty Guild Portal V2 · Frontend demonstration</span><span>Sample information only · No CRM or payments connected</span></footer>
+    </div>
+  </div>;
+}
