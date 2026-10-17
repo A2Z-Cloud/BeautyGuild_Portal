@@ -5,11 +5,13 @@ import React, { createContext, useContext, useMemo, useState } from 'react';
 const Context = createContext(null);
 export function PreviewStateProvider({children}) {
   const [answers, setAnswers] = useState({});
+  const [steps, setSteps] = useState({});
   const setAnswer = (kind, name, value) => setAnswers(previous => ({
     ...previous, [kind]: {...(previous[kind] || {}), [name]: value}
   }));
-  const clearAnswers = kind => setAnswers(previous => ({...previous, [kind]: {}}));
-  const value = useMemo(() => ({answers, setAnswer, clearAnswers}), [answers]);
+  const setJourneyStep = (kind, index) => setSteps(previous => ({...previous, [kind]: index}));
+  const clearAnswers = kind => {setAnswers(previous => ({...previous, [kind]: {}}));setJourneyStep(kind,0);};
+  const value = useMemo(() => ({answers, steps, setAnswer, setJourneyStep, clearAnswers}), [answers, steps]);
   return <Context.Provider value={value}>{children}</Context.Provider>;
 }
 export function usePreviewState(){
