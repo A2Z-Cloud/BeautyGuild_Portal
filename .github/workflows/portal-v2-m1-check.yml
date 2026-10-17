@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - feature/portal-v2-m1-preview
+      - feature/portal-v2-m2-api-integration
   pull_request:
     paths:
       - "apps/portal/**"
