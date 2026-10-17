@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
-import { Award, BookOpen, ChevronLeft, ChevronRight, CircleHelp, ClipboardList, GraduationCap, House, Menu, ShieldCheck, UserRound, X } from 'lucide-react';
+import { Award, BookOpen, ChevronLeft, ChevronRight, CircleHelp, ClipboardList, GraduationCap, House, Menu, ShieldCheck, UserRound, LogIn, X } from 'lucide-react';
 import { DEMO_USER } from './data/demo.js';
 import { Logo, PreviewLabel } from './UiParts.jsx';
 
@@ -13,7 +13,7 @@ const sections = [
 ];
 const secondary = [
   {label:'GTi Courses',path:'/gti-courses',icon:BookOpen},
-  {label:'My Profile',path:'/my-profile',icon:UserRound},
+  {label:'My Account',path:'/account',icon:UserRound},
   {label:'Help',path:'/help',icon:CircleHelp},
 ];
 function NavItems({items,onNavigate,collapsed}) {
@@ -24,7 +24,7 @@ function NavItems({items,onNavigate,collapsed}) {
 function currentTitle(path) {
   if(path==='/')return 'Dashboard';
   const key=path.split('/').filter(Boolean)[0];
-  return ({membership:'Membership',insurance:'Insurance',accreditation:'Accreditation',records:'My records','gti-courses':'GTi Courses','my-profile':'My Profile',help:'Help'})[key]||'Beauty Guild';
+  return ({membership:'Membership',insurance:'Insurance',accreditation:'Accreditation',records:'My records','gti-courses':'GTi Courses',account:'Account',login:'Sign in',signup:'Sign up','forgot-password':'Password reset',help:'Help'})[key]||'Beauty Guild';
 }
 export default function PortalView({children}){
   const [collapsed,setCollapsed]=useState(()=>{try{return window.localStorage.getItem('bg-preview-sidebar')==='collapsed';}catch{return false;}});
@@ -49,7 +49,7 @@ export default function PortalView({children}){
       <header className="topbar"><div className="topbar-left">
           <button className="icon-button mobile-menu" type="button" onClick={()=>setMobileOpen(true)} aria-label="Open navigation" aria-expanded={mobileOpen} aria-controls="portal-navigation"><Menu size={22}/></button>
           <div className="breadcrumb"><Link to="/">Portal</Link><ChevronRight size={15}/><strong>{currentTitle(location.pathname)}</strong></div>
-        </div><div className="topbar-right"><PreviewLabel/><span className="topbar-avatar" aria-label="Sample user">{DEMO_USER.initials}</span><div className="user-label"><strong>{DEMO_USER.name}</strong><span>Sample account</span></div></div>
+        </div><div className="topbar-right"><PreviewLabel/><Link className="header-login" to="/login"><LogIn size={15}/> Sign in</Link><span className="topbar-avatar" aria-label="Sample user">{DEMO_USER.initials}</span><div className="user-label"><strong>{DEMO_USER.name}</strong><span>Sample account</span></div></div>
       </header>
       <main id="main-content">{children}</main>
       <footer className="page-footer"><span>Beauty Guild Portal V2 · Frontend demonstration</span><span>Sample information only · No CRM or payments connected</span></footer>
