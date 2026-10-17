@@ -33,6 +33,17 @@ The repo does not have a Catalyst project link or deployment manifest and intent
 
 Do not add the portal to a Catalyst project that deploys unrelated code without verifying targets and working configuration. Do not enable automatic functions deployment.
 
+## Expanded Milestone 1 screens
+
+- Dashboard, Membership, Accreditation, Insurance, sample records and direct record tabs.
+- Multi-step membership details, branches, optional insurance and review.
+- Applicant, correspondence, training centre, tutors, courses and declarations for Accreditation.
+- Insurance business working methods, specialist treatments, conditional premises, underwriting disclosures and review.
+- Login, sign-up, password reset, and account checkpoint at the end or on Save & Finish Later.
+- Account management with sample profile, communication preferences, account/security and membership links.
+
+**Security and persistence:** React keeps demo answers in memory only; it does not persist passwords or CRM drafts. Form actions report unavailable backend functionality rather than giving false success.
+
 ## Expected smoke test
 
 See [SMOKE-TEST.md](SMOKE-TEST.md) for routes, mobile sidebar, forms, review screens, sample record tabs and return navigation.
@@ -45,8 +56,8 @@ You own all backend integration endpoints, authenticated Contact association, CR
 
 ## Limits
 
-- The three preview forms demonstrate flow/validation, but do not reproduce every V1 field or complex conditional insurance rule. Full parity is subsequent scoped work.
-- Completing a form presents a clear "not connected" notice and creates no record.
+- All three forms now contain V1-informed membership, accreditation and insurance stages with conditional questions for tutors/venues and insurance property. They are not an exact CRM field map or full V1 pricing/underwriting implementation. Catalogue, Loqate, pricing and final field parity require backend review.
+- Completing the review screen opens an account checkpoint (sign in/create account), not a real submission. Nothing is sent to CRM or Stripe.
 - Sample record details, statuses and dates are fictional, with URL-persistent tabs.
-- Account, draft save/resume and payments are not functional until backend integration.
+- Login, sign-up, password reset, account checkpoint and account management are navigable frontend demonstrations. No real account creation, authentication, emails, CRM changes or payments occur. Sample journey answers remain in React memory when navigating between screens, but are lost after a full page refresh.
 - Fonts are loaded from Google Fonts (fallbacks are provided); confirm branding assets/licensing before Production.
