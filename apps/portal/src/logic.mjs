@@ -5,7 +5,7 @@ export function validate(fields, values){
   for(const f of fields){
     if(f.when&&!f.when(values))continue;
     const v=values[f.name];
-    if(f.required&&(v===false||v===undefined||v===null||(typeof v==='string'&&!v.trim()))){errors[f.name]='This field is required.';continue;}
+    if(f.required&&(v===false||v===undefined||v===null||(Array.isArray(v)&&v.length===0)||(typeof v==='string'&&!v.trim()))){errors[f.name]='This field is required.';continue;}
     if(f.type==='email'&&v&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v)))errors[f.name]='Enter a valid email address.';
     if(f.type==='number'&&v&&(!Number.isFinite(Number(v))||Number(v)<0))errors[f.name]='Enter a valid non-negative number.';
   }
