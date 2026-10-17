@@ -39,3 +39,5 @@ For the frontend development preview only. Do not enter real customer data or pa
 | Journey to account and back | Entered example answers and current step remain in current in-memory app session |
 | Full browser refresh | Unsaved preview answers clear; this is not a CRM draft |
 | Insurance review | No fabricated premium, underwriting PASS, insurance issuance or checkout |
+
+| From account checkpoint open payment preview | Shows backend-authoritative pricing placeholders only; button reports no Stripe session or charge |
