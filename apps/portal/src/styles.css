@@ -76,3 +76,23 @@
 @media(max-width:1000px){.auth-page{grid-template-columns:.7fr 1fr;gap:10px}.auth-intro{padding:24px}.account-layout{grid-template-columns:190px minmax(0,1fr)}}
 @media(max-width:760px){.auth-page{grid-template-columns:1fr;padding:18px;gap:12px}.auth-intro{min-height:220px;padding:23px}.auth-intro-copy{margin:18px 0}.auth-intro-copy h1{font-size:30px}.auth-feature{display:none}.auth-panel{align-items:start}.auth-card{padding:23px}.account-layout{grid-template-columns:1fr}.account-tabs{display:grid;grid-template-columns:repeat(2,1fr)}.account-profile-hero{flex-wrap:wrap}.account-profile-hero .btn{margin-left:0}}
 @media(max-width:520px){.auth-double,.multi-grid{grid-template-columns:1fr}.auth-page{margin:0 auto}.account-profile-hero .btn{width:100%}.account-tabs{grid-template-columns:1fr}.topbar .header-login{font-size:0}.topbar .header-login svg{width:19px;height:19px}.auth-intro{min-height:210px}}
+
+
+/* Presentation-only checkout: deliberately no live card collection */
+.checkout-layout{display:grid;grid-template-columns:minmax(0,1fr) 250px;gap:18px}
+.checkout-aside{display:grid;align-content:start;gap:15px}
+.checkout-aside svg{color:#d52c83}
+.checkout-summary{display:grid;gap:0;margin:21px 0}
+.checkout-summary>div{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:15px 0;border-bottom:1px solid #efe7ed}
+.checkout-summary span{font-size:12px;color:#7b6e79}
+.checkout-summary strong{font-size:12px;text-align:right}
+.checkout-summary .checkout-total{background:#fff3f9;padding:20px 15px;border-radius:10px;border:0;margin-top:10px}
+.checkout-summary .checkout-total strong{color:#a42369;font-size:17px}
+.checkout-method{display:flex;gap:14px;padding:18px 0;align-items:center}
+.checkout-method>svg{color:#d42d7c;flex-shrink:0}
+.checkout-method strong,.checkout-method span{display:block;font-size:12px}
+.checkout-method span{color:#80717c;font-size:11px;margin-top:5px;line-height:1.5}
+.checkpoint-footer{display:flex;justify-content:space-between;gap:15px;flex-wrap:wrap;align-items:center;margin-top:15px}
+.checkpoint-footer .auth-inline-link{display:inline;margin:0}
+@media(max-width:800px){.checkout-layout{grid-template-columns:1fr}.checkout-aside{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){.checkout-aside{grid-template-columns:1fr}.checkout-summary>div{align-items:flex-start;flex-direction:column;gap:5px}}
