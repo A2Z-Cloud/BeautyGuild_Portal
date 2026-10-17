@@ -6,6 +6,8 @@ import ServiceHome from './ServiceHome.jsx';
 import { Journey } from './Journey.jsx';
 import { Records, RecordDetail } from './Records.jsx';
 import { Notice, PageHeading } from './UiParts.jsx';
+import { PreviewStateProvider } from './journeys/previewState.jsx';
+import { LoginPage, SignupPage, ForgotPasswordPage, AccountCheckpoint, AccountManagement } from './AccountPages.jsx';
 
 function NotReady({ area }) {
   return <div className="page narrow-page">
@@ -17,7 +19,7 @@ function NotFound() {
   return <div className="page narrow-page"><PageHeading eyebrow="404" title="Page not found" description="This address does not match an available portal page." /><a href={import.meta.env.BASE_URL} className="btn btn-primary">Return to dashboard</a></div>;
 }
 export default function App() {
-  return <PortalView><Routes>
+  return <PreviewStateProvider><PortalView><Routes>
     <Route path="/" element={<Dashboard />} />
     <Route path="/membership" element={<ServiceHome kind="membership" />} />
     <Route path="/insurance" element={<ServiceHome kind="insurance" />} />
@@ -30,10 +32,15 @@ export default function App() {
     <Route path="/membership/:id" element={<RecordDetail kindOverride="membership" />} />
     <Route path="/insurance/:id" element={<RecordDetail kindOverride="insurance" />} />
     <Route path="/accreditation/:id" element={<RecordDetail kindOverride="accreditation" />} />
+    <Route path="/login" element={<LoginPage />} />
+    <Route path="/signup" element={<SignupPage />} />
+    <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+    <Route path="/account/checkpoint" element={<AccountCheckpoint />} />
+    <Route path="/account" element={<AccountManagement />} />
     <Route path="/gti-courses" element={<NotReady area="GTi Courses" />} />
-    <Route path="/my-profile" element={<NotReady area="My Profile" />} />
+    <Route path="/my-profile" element={<Navigate to="/account" replace />} />
     <Route path="/help" element={<NotReady area="Help and support" />} />
     <Route path="/apply" element={<Navigate to="/accreditation/new" replace />} />
     <Route path="*" element={<NotFound />} />
-  </Routes></PortalView>;
+  </Routes></PortalView></PreviewStateProvider>;
 }
