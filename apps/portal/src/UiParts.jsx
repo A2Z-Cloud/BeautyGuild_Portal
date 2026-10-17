@@ -23,6 +23,7 @@ export function Field({field,value,onChange,error}) {
   const options=(field.options||[]).map(o=>typeof o==='string'?{value:o,label:o}:o);
   let control;
   if(field.type==='checkbox') control=<label className="check-choice"><input {...common} type="checkbox" checked={Boolean(value)} onChange={update}/><span>{field.label}</span></label>;
+  else if(field.type==='multi') control=<div className="multi-grid" role="group" aria-label={field.label}>{options.map(o=><label key={o.value} className={'radio-choice'+((value||[]).includes(o.value)?' selected':'')}><input type="checkbox" name={field.name} checked={(value||[]).includes(o.value)} onChange={e=>{const current=Array.isArray(value)?value:[];onChange(field.name,e.target.checked?[...current,o.value]:current.filter(x=>x!==o.value));}}/><span>{o.label}</span></label>)}</div>;
   else if(field.type==='radio') control=<div className="radio-grid" role="radiogroup" aria-label={field.label}>{options.map(o=><label key={o.value} className={'radio-choice'+(value===o.value?' selected':'')}><input name={field.name} type="radio" checked={value===o.value} value={o.value} onChange={update}/><span>{o.label}</span></label>)}</div>;
   else if(field.type==='select') control=<select {...common} value={value||''} onChange={update}><option value="">Choose an option</option>{options.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}</select>;
   else if(field.type==='textarea') control=<textarea {...common} value={value||''} onChange={update} rows={4} placeholder={field.placeholder||''}/>;
