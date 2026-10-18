@@ -1,7 +1,7 @@
 'use strict';
 const express=require('express');
 const {HttpError}=require('./errors');
-const {createRateLimiter}=require('./rateLimit');
+const {createRateLimiter,clientKey}=require('./rateLimit');
 
 const REGISTRATION_RE=/^[A-Za-z0-9][A-Za-z0-9_-]{0,39}$/;
 const FIELD_RE=/^[A-Za-z][A-Za-z0-9_]{0,79}$/;
@@ -47,7 +47,7 @@ function registerPublicSchoolVerification(app,{
     if(!enabled||!['Accounts','Training_Centres'].includes(registrationModule)||
       !FIELD_RE.test(registrationField)||!String(activeStatus).trim())return next(unavailable());
     // Best-effort per-instance limiter. Require an edge/WAF rate limit in production.
-    if(!allowed(req.ip||req.socket.remoteAddress||'unknown'))
+    if(!allowed(clientKey(req)))
       return next(new HttpError(429,'RATE_LIMIT','Too many verification attempts. Please try again later.'));
     next();
   });

@@ -4,6 +4,7 @@ const assert=require('node:assert/strict');
 const {loadConfig}=require('../src/config');
 const {createApp}=require('../src/app');
 const {assess}=require('../src/publicSchoolVerification');
+const {clientKey}=require('../src/rateLimit');
 
 const school={id:'123456789012345',Account_Name:'Example Beauty Training School',School_Registration_Number:'12345'};
 const verified={id:'223456789012345',Account:{id:school.id},Accreditation_Status:'Verified',
@@ -115,6 +116,28 @@ test('rate limiting for public verification prevents repeated enumeration',async
     for(let i=0;i<31;i++)latest=await fetch('http://127.0.0.1:'+server.address().port+'/public/verify/12345');
     assert.equal(latest.status,429);
   }finally{await new Promise(ok=>server.close(ok));}
+});
+test('public verification rate limits each client separately using x-forwarded-for',async()=>{
+  const app=createApp({
+    config:config(),now:current,getCrmHeaders:async()=>({Authorization:'token'}),
+    getCurrentUser:async()=>null,fetchImpl:async()=>response({data:[]}),log:()=>{}
+  });
+  const server=await new Promise(ok=>{const s=app.listen(0,'127.0.0.1',()=>ok(s));});
+  const url='http://127.0.0.1:'+server.address().port+'/public/verify/12345';
+  const from=ip=>fetch(url,{headers:{'x-forwarded-for':ip+', 10.0.0.1'}});
+  try{
+    let latest;
+    for(let i=0;i<31;i++)latest=await from('203.0.113.7');
+    assert.equal(latest.status,429,'the noisy client is limited');
+    const other=await from('198.51.100.20');
+    assert.notEqual(other.status,429,'a different client is not limited by the noisy one');
+    assert.equal(other.status,404);
+  }finally{await new Promise(ok=>server.close(ok));}
+});
+test('clientKey prefers the first x-forwarded-for entry and falls back to the socket',()=>{
+  assert.equal(clientKey({headers:{'x-forwarded-for':' 203.0.113.7 , 10.0.0.1'},socket:{remoteAddress:'10.9.9.9'}}),'203.0.113.7');
+  assert.equal(clientKey({headers:{},socket:{remoteAddress:'10.9.9.9'}}),'10.9.9.9');
+  assert.equal(clientKey({headers:{},socket:{}}),'unknown');
 });
 test('accreditation is confirmed only with approved current dates',()=>{
   assert.equal(assess([verified],'2026-10-18').status,'accredited');

@@ -19,4 +19,12 @@ function createRateLimiter({ limit, windowMs, now = Date.now }) {
   };
 }
 
-module.exports = { createRateLimiter };
+// Identifies the caller for rate limiting. Behind Catalyst's proxy the socket address is the
+// proxy, so use the first x-forwarded-for entry and fall back to the socket address.
+// A client can still spoof this header, so public endpoints also need an edge/WAF limit.
+function clientKey(req) {
+  const forwarded = String((req.headers && req.headers['x-forwarded-for']) || '').split(',')[0].trim();
+  return forwarded || (req.socket && req.socket.remoteAddress) || 'unknown';
+}
+
+module.exports = { createRateLimiter, clientKey };
