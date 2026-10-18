@@ -4,7 +4,13 @@ import { Link } from 'react-router-dom';
 import { DEMO_RECORDS, DEMO_SERVICES } from './data/demo.js';
 import { IconFor, ServiceArrow, Status } from './UiParts.jsx';
 import IntegrationStatus from './components/IntegrationStatus.jsx';
+import {DATA_MODE,INTEGRATIONS} from './services/api.js';
+import {LiveDashboard} from './LiveRecords.jsx';
+import {Notice,PageHeading} from './UiParts.jsx';
 export default function Dashboard(){
+ if(INTEGRATIONS.crmRecords)return <LiveDashboard/>;
+ if(DATA_MODE==='api')return <div className="page"><PageHeading title="Welcome to the Guild" description="Sign in to access your membership and service records."/><Notice title="Member dashboard pending">Secure CRM record access is not configured.</Notice><IntegrationStatus/></div>;
+
  return <div className="page dashboard">
   <div className="eyebrow welcome">WELCOME TO YOUR PORTAL <span>October 2026 · Example date</span></div>
   <div className="hero"><div className="hero-copy"><div className="hero-top"><Sparkles size={16}/> Your Guild journey</div><h1>Everything you need,<br/><em>beautifully together.</em></h1><p>Explore membership, insurance and training centre accreditation in one place.</p><div className="hero-buttons"><Link className="btn btn-dark" to="/accreditation/new">Start an application <ArrowRight size={17}/></Link><Link className="btn btn-on-pink" to="/records">View sample records <ArrowUpRight size={16}/></Link></div></div><div className="hero-visual" aria-hidden><div className="hero-orbit orbit1"/><div className="hero-orbit orbit2"/><div className="hero-circle"><span>beauty</span><strong>guild</strong></div><span className="spark one">✧</span></div></div>

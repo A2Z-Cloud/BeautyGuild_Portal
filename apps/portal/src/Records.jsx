@@ -3,11 +3,16 @@ import { ArrowLeft, ArrowRight, CalendarClock, FileText, ListFilter } from 'luci
 import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom';
 import { DEMO_RECORDS } from './data/demo.js';
 import { IconFor, Notice, PageHeading, Status } from './UiParts.jsx';
+import {DATA_MODE,INTEGRATIONS} from './services/api.js';
+import {LiveRecords,LiveRecordDetail} from './LiveRecords.jsx';
 
 const TYPES=[{value:'all',label:'All records'},{value:'membership',label:'Membership'},{value:'insurance',label:'Insurance'},{value:'accreditation',label:'Accreditation'}];
 const TABS=[{id:'overview',label:'Overview'},{id:'activity',label:'Activity'},{id:'documents',label:'Documents'}];
 const routeFor=(record,tab='overview')=>'/records/'+record.kind+'/'+encodeURIComponent(record.id)+'?tab='+tab;
 export function Records(){
+  if(INTEGRATIONS.crmRecords)return <LiveRecords/>;
+  if(DATA_MODE==='api')return <div className="page"><PageHeading title="My records"/><Notice title="Record connection pending">Secure CRM record access is not configured.</Notice></div>;
+
   const [params,setParams]=useSearchParams();
   const type=TYPES.some(x=>x.value===params.get('type'))?params.get('type'):'all';
   const records=DEMO_RECORDS.filter(x=>type==='all'||x.kind===type);
@@ -24,6 +29,9 @@ export function Records(){
   </div>;
 }
 export function RecordDetail({kindOverride}){
+  if(INTEGRATIONS.crmRecords)return <LiveRecordDetail kindOverride={kindOverride}/>;
+  if(DATA_MODE==='api')return <div className="page"><PageHeading title="Record unavailable"/><Notice title="Not connected">Real record access is not configured.</Notice></div>;
+
   const path=useParams(),location=useLocation();
   const kind=kindOverride||path.kind;
   const id=path.id;

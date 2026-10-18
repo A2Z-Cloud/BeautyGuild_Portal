@@ -2,10 +2,10 @@
   "name": "beauty_guild_api",
   "version": "2.0.0",
   "private": true,
-  "description": "Beauty Guild Portal V2 backend (Advanced I/O). Read-only routes: courses and address lookup.",
+  "description": "Beauty Guild Portal V2 API: read-only course, address and authenticated member records",
   "main": "index.js",
   "scripts": {
-    "test": "node --test \"test/*.test.js\""
+    "test": "node --test test/*.test.js"
   },
   "engines": {
     "node": ">=20"

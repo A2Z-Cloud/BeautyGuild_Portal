@@ -21,6 +21,7 @@ function loadConfig(env = process.env) {
     loqateKey: String(env.LOQATE_API_KEY || ''),
     loqateCountries: String(env.LOQATE_COUNTRY_FILTER || '').trim(),
     loqateMaxResults: boundedInt(env.LOQATE_MAX_RESULTS, 40, 1, 100),
+    recordsEnabled:env.PORTAL_RECORDS_ENABLED === 'true',
   });
 }
 

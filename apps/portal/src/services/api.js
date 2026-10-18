@@ -3,12 +3,16 @@ import {parseIntegrationConfig,isEnabled} from './config.mjs';
 import {createLegacyGateway,IntegrationUnavailableError} from './legacy.mjs';
 import {createCatalystAuth} from './catalystAuth.js';
 import {resolveViewer} from './viewer.mjs';
+import {createHttpClient} from './transport.mjs';
 
 export {IntegrationUnavailableError};
 export const integrationConfig=parseIntegrationConfig(import.meta.env);
 export const DATA_MODE=integrationConfig.mode;
 const gateway=createLegacyGateway(integrationConfig);
 const auth=createCatalystAuth(integrationConfig.catalystAuth);
+const recordsOn=integrationConfig.baseConfigured && integrationConfig.catalystAuth && import.meta.env.VITE_PORTAL_RECORDS==='true';
+const recordHttp=recordsOn?createHttpClient({baseUrl:integrationConfig.apiBaseUrl}):null;
+const recordReq=path=>recordHttp?recordHttp('/portal/records'+path):unavailable('Authenticated CRM records');
 const clone=obj=>JSON.parse(JSON.stringify(obj));
 const unavailable=name=>{throw new IntegrationUnavailableError(name);};
 
@@ -19,15 +23,16 @@ export const INTEGRATIONS=Object.freeze({
   catalystAuth:integrationConfig.catalystAuth,
   courses:isEnabled(integrationConfig,'courses'),
   address:isEnabled(integrationConfig,'address'),
-  crmRecords:false,crmDrafts:false,crmContactMapping:false,pricing:false,
+  crmRecords:recordsOn,crmDrafts:false,crmContactMapping:false,pricing:false,
   underwriting:false,stripeCheckout:false,policyIssuance:false,workdrive:false,
 });
 export const portalApi=Object.freeze({
   mode:DATA_MODE,
   integrations:INTEGRATIONS,
   getViewer:()=>resolveViewer({config:integrationConfig,auth,demoUser:DEMO_USER}),
-  listRecords:async(kind)=>DATA_MODE==='demo'?clone(DEMO_RECORDS.filter(r=>!kind||r.kind===kind)):unavailable('Authenticated CRM record listing'),
-  getRecord:async(kind,id)=>DATA_MODE==='demo'?clone(DEMO_RECORDS.find(r=>r.kind===kind&&r.id===id)||null):unavailable('Authenticated CRM record retrieval'),
+  listRecords:async(kind)=>recordsOn?(await recordReq('/'+(kind?'?kind='+encodeURIComponent(kind):''))).records:DATA_MODE==='demo'?clone(DEMO_RECORDS.filter(r=>!kind||r.kind===kind)):unavailable('Authenticated CRM record listing'),
+  getRecord:async(kind,id)=>recordsOn?(await recordReq('/'+encodeURIComponent(kind)+'/'+encodeURIComponent(id))).record:DATA_MODE==='demo'?clone(DEMO_RECORDS.find(r=>r.kind===kind&&r.id===id)||null):unavailable('Authenticated CRM record retrieval'),
+  getDashboard:async()=>(await recordReq('/summary')),
   getIdentity:()=>auth.currentUser(),
   register:profile=>auth.signUp(profile),
   signInEmbed:container=>auth.signInEmbed(container),

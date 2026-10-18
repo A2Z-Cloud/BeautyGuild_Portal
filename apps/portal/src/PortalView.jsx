@@ -3,6 +3,7 @@ import { Link, NavLink, useLocation } from 'react-router-dom';
 import { Award, BookOpen, ChevronLeft, ChevronRight, CircleHelp, ClipboardList, GraduationCap, House, Menu, ShieldCheck, UserRound, LogIn, X } from 'lucide-react';
 import { DEMO_USER } from './data/demo.js';
 import { Logo, PreviewLabel } from './UiParts.jsx';
+import {DATA_MODE} from './services/api.js';
 
 const sections = [
   {label:'Dashboard',path:'/',icon:House,end:true},
@@ -49,10 +50,10 @@ export default function PortalView({children}){
       <header className="topbar"><div className="topbar-left">
           <button className="icon-button mobile-menu" type="button" onClick={()=>setMobileOpen(true)} aria-label="Open navigation" aria-expanded={mobileOpen} aria-controls="portal-navigation"><Menu size={22}/></button>
           <div className="breadcrumb"><Link to="/">Portal</Link><ChevronRight size={15}/><strong>{currentTitle(location.pathname)}</strong></div>
-        </div><div className="topbar-right"><PreviewLabel/><Link className="header-login" to="/login"><LogIn size={15}/> Sign in</Link><span className="topbar-avatar" aria-label="Sample user">{DEMO_USER.initials}</span><div className="user-label"><strong>{DEMO_USER.name}</strong><span>Sample account</span></div></div>
+        </div><div className="topbar-right">{DATA_MODE==='demo'&&<PreviewLabel/>}<Link className="header-login" to="/login"><LogIn size={15}/> Sign in</Link>{DATA_MODE==='demo'&&<><span className="topbar-avatar" aria-label="Sample user">{DEMO_USER.initials}</span><div className="user-label"><strong>{DEMO_USER.name}</strong><span>Sample account</span></div></>}</div>
       </header>
       <main id="main-content">{children}</main>
-      <footer className="page-footer"><span>Beauty Guild Portal V2 · Frontend demonstration</span><span>Sample information only · No CRM or payments connected</span></footer>
+      <footer className="page-footer"><span>Beauty Guild Portal V2</span><span>{DATA_MODE==='demo'?'Sample information only':'Authenticated services · Live data subject to backend availability'}</span></footer>
     </div>
   </div>;
 }
