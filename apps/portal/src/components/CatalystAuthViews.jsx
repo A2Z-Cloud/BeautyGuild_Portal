@@ -64,7 +64,7 @@ export function CatalystAccountOverview(){
     {result.error&&<div className="notice" role="alert"><strong>Sign-in required</strong><span>{result.error}. <Link to="/login">Sign in</Link></span></div>}
     {result.user&&<div className="surface padded">
       <h2>{[result.user.firstName,result.user.lastName].filter(Boolean).join(' ')||'Guild account'}</h2>
-      <dl className="detail-list"><div><dt>Email</dt><dd>{result.user.email}</dd></div><div><dt>Catalyst user ID</dt><dd>{result.user.userId}</dd></div></dl>
+      <dl className="detail-list"><div><dt>Email</dt><dd>{result.user.email}</dd></div><div><dt>Portal ID</dt><dd>{result.user.userId}</dd></div></dl>
       <div className="notice"><strong>CRM linking pending</strong><span>No CRM Contact has been verified. Membership, insurance, accreditation and account updates are intentionally unavailable.</span></div>
       <button type="button" className="btn btn-secondary" onClick={logout}><KeyRound size={16}/> Sign out</button>
       <p className="auth-small">If you use Catalyst Slate on a separate origin, frontend sign-out may not invalidate the backend session. Confirm the logout design before Production.</p>
