@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
-import { Award, BookOpen, ChevronLeft, ChevronRight, CircleHelp, ClipboardList, GraduationCap, House, Menu, ShieldCheck, UserRound, LogIn, X } from 'lucide-react';
+import { Award, BookOpen, Receipt, Building2, ChevronLeft, ChevronRight, CircleHelp, ClipboardList, GraduationCap, House, Menu, ShieldCheck, UserRound, LogIn, X } from 'lucide-react';
 import { DEMO_USER } from './data/demo.js';
 import { Logo, PreviewLabel } from './UiParts.jsx';
 import {DATA_MODE,INTEGRATIONS,portalApi} from './services/api.js';
@@ -28,22 +28,25 @@ const sections = [
   {label:'Insurance',path:'/insurance',icon:ShieldCheck},
   {label:'Accreditation',path:'/accreditation',icon:GraduationCap},
   {label:'My records',path:'/records',icon:ClipboardList},
-  {label:'Saved applications',path:'/drafts',icon:ClipboardList},
+  {label:'Saved applications',path:'/drafts',icon:ClipboardList,when:()=>INTEGRATIONS.crmDrafts},
+  {label:'My schools',path:'/schools',icon:Building2,when:()=>INTEGRATIONS.schoolServices},
 ];
 const secondary = [
   {label:'GTi Courses',path:'/gti-courses',icon:BookOpen},
   {label:'My Account',path:'/account',icon:UserRound},
+  {label:'My Invoices',path:'/invoices',icon:Receipt,when:()=>INTEGRATIONS.schoolServices},
+  {label:'My Documents',path:'/documents',icon:ClipboardList,when:()=>INTEGRATIONS.workdrive&&INTEGRATIONS.crmRecords},
   {label:'Help',path:'/help',icon:CircleHelp},
 ];
 function NavItems({items,onNavigate,collapsed}) {
-  return <div className="nav-group">{items.map(({label,path,icon:Icon,end})=><NavLink onClick={onNavigate} key={path} to={path} end={Boolean(end)}
+  return <div className="nav-group">{items.filter(i=>!i.when||i.when()).map(({label,path,icon:Icon,end})=><NavLink onClick={onNavigate} key={path} to={path} end={Boolean(end)}
     title={collapsed ? label : undefined} className={({isActive})=>'nav-item'+(isActive?' active':'')}>
     <Icon size={20} aria-hidden="true"/><span>{label}</span></NavLink>)}</div>;
 }
 function currentTitle(path) {
   if(path==='/')return 'Dashboard';
   const key=path.split('/').filter(Boolean)[0];
-  return ({membership:'Membership',insurance:'Insurance',accreditation:'Accreditation',records:'My records','gti-courses':'GTi Courses',account:'Account',login:'Sign in',signup:'Sign up','forgot-password':'Password reset',help:'Help'})[key]||'Beauty Guild';
+  return ({membership:'Membership',insurance:'Insurance',accreditation:'Accreditation',records:'My records',schools:'My schools',invoices:'My invoices',documents:'My documents','gti-courses':'GTi Courses',account:'Account',login:'Sign in',signup:'Sign up','forgot-password':'Password reset',help:'Help'})[key]||'Beauty Guild';
 }
 export default function PortalView({children}){
   const [collapsed,setCollapsed]=useState(()=>{try{return window.localStorage.getItem('bg-preview-sidebar')==='collapsed';}catch{return false;}});

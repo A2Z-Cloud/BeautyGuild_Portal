@@ -163,6 +163,38 @@
 .school-verify-support a{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:700;color:#bb3179;margin-top:12px}
 .school-verify-footer{border-top:1px solid #eee0e8;padding:20px;display:flex;align-items:center;justify-content:center;gap:9px;color:#96748a;font-size:11px}
 @media(max-width:640px){.school-verify-header{padding:17px}.school-verify-header .brand{font-size:25px}.school-verify-official{font-size:0}.school-verify-official svg{width:22px;height:22px}.school-verify-main{padding:38px 15px 55px}.school-verify-form{padding:18px}.school-verify-input-row{flex-direction:column}.school-verify-input-row .btn{width:100%}.school-result-details{grid-template-columns:1fr}.school-verify-main h1{font-size:35px}}
+
+/* V1 school management and Creator invoice parity */
+.school-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:15px}
+.school-list-card{display:flex;align-items:center;gap:17px;text-decoration:none}
+.school-list-card>svg:first-child{color:#d53482;flex-shrink:0}
+.school-list-card>div{flex:1}
+.school-list-card h2{margin:0 0 8px;font-size:18px}
+.school-list-card p{font-size:12px;color:#776879;margin:0 0 9px}
+.school-tabs{display:flex;gap:8px;overflow-x:auto;padding:8px 0 16px}
+.school-tabs a,.school-tabs button{white-space:nowrap;border:1px solid #eadde5;border-radius:9px;background:white;color:#6b5b67;padding:11px 15px;font-size:12px;text-decoration:none}
+.school-tabs a.active,.school-tabs button.active{background:#ee3e96;color:white;border-color:#ee3e96}
+.school-workspace-panel{min-height:360px}
+.school-workspace-panel h2{font-size:20px}
+.school-workspace-panel h3{font-size:16px;margin-top:25px}
+.school-empty-text{padding:22px;color:#877886;text-align:center}
+.school-table-scroll{overflow-x:auto;margin:14px 0}
+.school-table-scroll table{width:100%}
+.school-dialog-overlay{position:fixed;inset:0;background:#11050e88;z-index:50;display:grid;place-items:center;padding:20px}
+.school-dialog{width:min(640px,100%);max-height:80vh;overflow:auto}
+.school-dialog-head{display:flex;justify-content:space-between;align-items:center;gap:15px}
+.school-dialog-head h2{margin:0}
+@media(max-width:650px){.school-list{grid-template-columns:1fr}.school-tabs a,.school-tabs button{padding:10px 12px}.school-dialog{max-height:90vh}}
+
+/* Write-side school operations remain opt-in, with separate API/server feature flags */
+.school-ops-form{border:1px solid #f0d5e3;border-radius:13px;padding:19px;margin:18px 0 25px;background:#fffafd}
+.school-ops-form>label,.school-ops-form .auth-double label{display:flex;flex-direction:column;gap:7px;font-size:12px;font-weight:600;margin:13px 0;color:#584956}
+.school-ops-form input:not([type=checkbox]),.school-ops-form select{border:1px solid #e5d6df;border-radius:8px;min-height:42px;padding:9px 11px;background:#fff;width:100%;font-size:12px}
+.school-multi{border:1px solid #f0e6ec;border-radius:9px;margin:17px 0;padding:10px 13px}
+.school-multi legend{font-size:12px;font-weight:600}
+.school-multi label{display:flex;align-items:center;gap:11px;padding:7px 0;font-size:11px}
+.school-multi input{accent-color:#ee3e96}
+.school-ops-form .btn{margin-top:13px}
 /* Phones: keep every journey step visible; only the current step shows its label. */
 @media(max-width:600px){
   .stages{gap:6px;padding:14px 16px}

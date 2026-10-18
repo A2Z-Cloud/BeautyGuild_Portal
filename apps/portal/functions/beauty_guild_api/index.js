@@ -20,6 +20,10 @@ module.exports = createApp({
     const {headers}=await catalyst.initialize(req).connections().getConnectionCredentials(config.workdriveConnectionName);
     return headers;
   },
+  async getCreatorHeaders(req) {
+    const {headers}=await catalyst.initialize(req).connections().getConnectionCredentials(config.creatorConnectionName);
+    return headers;
+  },
   async getCrmHeaders(req) {
     const { headers } = await catalyst.initialize(req).connections().getConnectionCredentials(config.crmConnectionName);
     return headers;
