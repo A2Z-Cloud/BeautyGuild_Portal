@@ -62,7 +62,7 @@ export default function PortalView({children}){
         <div className="nav-divider"/><div className="nav-caption">RESOURCES</div>
         <NavItems items={secondary} onNavigate={()=>setMobileOpen(false)} collapsed={collapsed}/>
       </div>
-      <div className="sidebar-footer"><div className="sidebar-avatar">BG</div><div><strong>Beauty Guild</strong><span>Frontend preview</span></div></div>
+      <div className="sidebar-footer"><div className="sidebar-avatar">BG</div><div><strong>Beauty Guild</strong><span>Member portal</span></div></div>
     </aside>
     <div className="workspace">
       <header className="topbar"><div className="topbar-left">
@@ -71,7 +71,7 @@ export default function PortalView({children}){
         </div><div className="topbar-right">{DATA_MODE==='demo'&&<PreviewLabel/>}{signedIn?<Link className="header-user" to="/account"><span className="topbar-avatar" aria-hidden="true">{initialsOf(signedIn)}</span><div className="user-label"><strong>{[signedIn.firstName,signedIn.lastName].filter(Boolean).join(' ')||signedIn.email}</strong><span>My account</span></div></Link>:<Link className="header-login" to="/login"><LogIn size={15}/> Sign in</Link>}{DATA_MODE==='demo'&&<><span className="topbar-avatar" aria-label="Sample user">{DEMO_USER.initials}</span><div className="user-label"><strong>{DEMO_USER.name}</strong><span>Sample account</span></div></>}</div>
       </header>
       <main id="main-content">{children}</main>
-      <footer className="page-footer"><span>Beauty Guild Portal V2</span><span>{DATA_MODE==='demo'?'Sample information only':'Authenticated services · Live data subject to backend availability'}</span></footer>
+      <footer className="page-footer"><span>Beauty Guild member portal</span><span>{DATA_MODE==='demo'?'Sample information only':null}</span></footer>
     </div>
   </div>;
 }

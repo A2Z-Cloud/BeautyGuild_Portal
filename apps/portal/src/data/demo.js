@@ -7,7 +7,7 @@ export const DEMO_RECORDS = [
 ];
 export const DEMO_USER = { name: 'Alex Morgan', initials: 'AM', role: 'Preview account' };
 export const DEMO_SERVICES = [
-  { kind: 'membership', title: 'Membership', description: 'Explore Guild membership options and a guided application preview.', action: 'Explore membership', theme: 'pink' },
-  { kind: 'accreditation', title: 'Accreditation', description: 'See how training centres manage applications, courses and supporting information.', action: 'Explore accreditation', theme: 'cream' },
-  { kind: 'insurance', title: 'Insurance', description: 'Walk through the business questionnaire and cover selection preview.', action: 'Explore insurance', theme: 'violet' },
+  { kind: 'membership', title: 'Membership', description: 'Join the Guild or find out about membership options.', action: 'Go to membership', theme: 'pink' },
+  { kind: 'accreditation', title: 'Accreditation', description: 'Apply for accreditation for your training centre.', action: 'Go to accreditation', theme: 'cream' },
+  { kind: 'insurance', title: 'Insurance', description: 'Find cover designed around your business.', action: 'Go to insurance', theme: 'violet' },
 ];

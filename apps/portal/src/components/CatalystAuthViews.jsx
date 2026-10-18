@@ -57,7 +57,7 @@ export function CatalystAccountOverview(){
       .catch(err=>{if(active)setResult({loading:false,user:null,error:err.message});});
     return ()=>{active=false;};
   },[]);
-  const logout=async()=>{try{await portalApi.signOut();}catch(err){setLogoutError(err.message);}};
+  const logout=async()=>{try{await portalApi.signOut();}catch(err){console.warn('Sign-out failed:',err&&err.message);setLogoutError('We could not sign you out. Please try again.');}};
   const [reset,setReset]=useState({busy:false,message:'',ok:false});
   const sendReset=async()=>{
     if(reset.busy)return;
@@ -71,13 +71,13 @@ export function CatalystAccountOverview(){
     }
   };
   return <div className="page account-page">
-    <div className="page-heading"><div><small className="eyebrow">CATALYST IDENTITY</small><h1>My account</h1><p>Authenticated account identity from Zoho Catalyst. CRM profile editing remains unavailable until contact mapping is confirmed.</p></div></div>
+    <div className="page-heading"><div><small className="eyebrow">YOUR ACCOUNT</small><h1>My account</h1><p>Your Guild account details. Editing your profile online is coming soon.</p></div></div>
     {result.loading&&<p role="status">Checking your signed-in session…</p>}
-    {result.error&&<div className="notice" role="alert"><strong>Sign-in required</strong><span>{result.error}. <Link to="/login">Sign in</Link></span></div>}
+    {result.error&&<div className="notice" role="alert"><strong>Please sign in</strong><span>Sign in to see your account. <Link to="/login">Sign in</Link></span></div>}
     {result.user&&<div className="surface padded">
       <h2>{[result.user.firstName,result.user.lastName].filter(Boolean).join(' ')||'Guild account'}</h2>
       <dl className="detail-list"><div><dt>Email</dt><dd>{result.user.email}</dd></div><div><dt>Portal ID</dt><dd>{result.user.userId}</dd></div></dl>
-      <div className="notice"><strong>CRM linking pending</strong><span>No CRM Contact has been verified. Membership, insurance, accreditation and account updates are intentionally unavailable.</span></div>
+      <div className="notice"><strong>Your membership details are coming soon</strong><span>We are still linking accounts to Guild membership records. Until then, your membership, insurance and accreditation details are not available online.</span></div>
       <section className="account-password" aria-labelledby="password-heading">
         <h3 id="password-heading">Password</h3>
         <p>We will email a link to {result.user.email||'your email address'} so you can choose a new password.</p>
@@ -85,7 +85,6 @@ export function CatalystAccountOverview(){
         {reset.message&&<div className={reset.ok?'notice':'auth-unavailable'} role={reset.ok?'status':'alert'}>{reset.ok?<span>{reset.message}</span>:reset.message}</div>}
       </section>
       <button type="button" className="btn btn-secondary" onClick={logout}><KeyRound size={16}/> Sign out</button>
-      <p className="auth-small">If you use Catalyst Slate on a separate origin, frontend sign-out may not invalidate the backend session. Confirm the logout design before Production.</p>
     </div>}
     {logoutError&&<div className="notice" role="alert"><strong>Sign-out unavailable</strong><span>{logoutError}</span></div>}
   </div>;

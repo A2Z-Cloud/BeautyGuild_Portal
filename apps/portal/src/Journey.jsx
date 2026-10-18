@@ -13,22 +13,22 @@ function ReviewDetails({steps,values,kind}){
   const entries=all.filter(f=>f.type!=='checkbox'&&values[f.name]!==undefined&&values[f.name]!==''&&values[f.name]!==false&&!(Array.isArray(values[f.name])&&!values[f.name].length));
   const concern=kind==='insurance'&&['claimsHistory','potentialClaims','priorDecline','bankruptcy','convictions'].some(k=>values[k]==='yes');
   return <div className="review-box">
-    <div className="review-head"><h3>Your journey summary</h3><span>Frontend example</span></div>
-    {kind==='accreditation'&&values.country&&<div className="classification"><strong>{accreditationType(values.country)}</strong><small>Centre country determines the provisional accreditation route. Membership eligibility and prices are checked by CRM/backend.</small></div>}
-    {kind==='membership'&&<Notice title="Membership and fees">Membership eligibility, joining fees, optional cover and monthly instalments will be confirmed by the pricing backend. No payable amount has been calculated.</Notice>}
-    {kind==='insurance'&&<Notice title="Insurance quotation not yet calculated">Selected cover and declarations are captured for the journey preview only. There is no authoritative quote, underwriting decision, IPT calculation or policy.</Notice>}
-    {concern&&<div className="classification"><strong>Manual review may be required</strong><small>A positive disclosure was provided. Only the live underwriting backend can classify a quotation as PASS, REFER or STOP and flag a CRM referral.</small></div>}
+    <div className="review-head"><h3>Your answers</h3><span>Not yet submitted</span></div>
+    {kind==='accreditation'&&values.country&&<div className="classification"><strong>{accreditationType(values.country)}</strong><small>Your centre's country decides which accreditation route applies. The Guild confirms eligibility and prices when your application is reviewed.</small></div>}
+    {kind==='membership'&&<Notice title="Membership and fees">Your membership type, joining fee, optional cover and any monthly instalments will be confirmed by the Guild. No price has been calculated yet.</Notice>}
+    {kind==='insurance'&&<Notice title="Insurance quotation not yet calculated">Your cover choices and declarations are shown here for review only. No quote has been calculated and no cover is in place.</Notice>}
+    {concern&&<div className="classification"><strong>Manual review may be required</strong><small>You answered yes to one of the declarations. The Guild's insurance team may need to review your application before offering cover.</small></div>}
     <dl className="review-list">{entries.map(f=><div key={f.name}><dt>{f.label}</dt><dd>{Array.isArray(values[f.name])?values[f.name].join(', '):String(values[f.name])}</dd></div>)}</dl>
     <div className="review-docs"><h3><FileText size={18}/> Information and documents</h3>
       <div className="doc-list"><a href="https://www.beautyguild.com/Membership/Code-Of-Ethics" target="_blank" rel="noopener noreferrer">Guild Code of Ethics <ArrowRight size={15}/></a>
       {kind==='insurance'&&<a href="https://www.beautyguild.com/Membership/Treatments-We-Cover" target="_blank" rel="noopener noreferrer">Treatments We Cover <ArrowRight size={15}/></a>}
-      <span>Customer-specific documents and policy wording: links to be supplied by the backend</span></div>
+      <span>Your policy documents will be available here once your application is complete.</span></div>
     </div>
   </div>;
 }
 function CheckpointNotice({kind}) {
-  return <div className="journey-checkpoint"><div><LockKeyhole size={26}/><h3>Account checkpoint</h3><p>For a live application, new users register here and existing members sign in. A CRM Contact is verified before a draft, application or policy is saved.</p></div>
-    <div className="checkpoint-steps"><span>1. Review</span><ArrowRight size={14}/><span>2. Account</span><ArrowRight size={14}/><span>3. {kind==='insurance'?'Underwriting and payment':'Payment or submission'}</span></div>
+  return <div className="journey-checkpoint"><div><LockKeyhole size={26}/><h3>Account checkpoint</h3><p>Create an account or sign in to continue with your application.</p></div>
+    <div className="checkpoint-steps"><span>1. Review</span><ArrowRight size={14}/><span>2. Account</span><ArrowRight size={14}/><span>3. {kind==='insurance'?'Cover decision and payment':'Payment or submission'}</span></div>
   </div>;
 }
 export function Journey({kind}){
@@ -73,7 +73,7 @@ export function Journey({kind}){
     <PageHeading eyebrow={config.kicker} title={config.title+' application'} description={config.intro}>
       <span className="journey-counter">Step {index+1} of {visible.length}</span>
     </PageHeading>
-    <Notice title="Frontend preview">This journey is interactive, but does not store CRM records or calculate live prices. Use sample information only. Account creation, CRM drafts, Stripe and Guild fulfilment require backend integration.</Notice>
+    <Notice title="Applications are opening soon">You can complete this form to see the questions, but your answers are not submitted or saved, and nothing is charged. Please do not enter payment or confidential information.</Notice>
     <div className="journey-shell">
       <section className="journey-card">
         <Stages steps={visible} current={index}/>
@@ -89,12 +89,12 @@ export function Journey({kind}){
       </section>
       <aside className="journey-aside">
         <div className="aside-card"><span className="eyebrow">YOUR PROGRESS</span><div className="progress-track"><div style={{width:Math.round(((index+1)/visible.length)*100)+'%'}}/></div>
-          <strong>{Math.round(((index+1)/visible.length)*100)}% through this journey</strong><p>Answers are held temporarily in this browser tab while you explore the site. They are not saved to CRM.</p></div>
-        <div className="aside-card muted-card"><LockKeyhole size={22}/><h3>Save and finish later</h3><p>Saving a CRM draft requires a verified account. Explore the account checkpoint before connecting the draft API.</p>
-          <button type="button" className="text-button" onClick={()=>checkpoint('save')}><Save size={15}/> Continue to account checkpoint</button></div>
-        <div className="aside-card"><CreditCard size={21}/><h3>Payment information</h3><p>No prices, card collection, checkout or active cover in this frontend preview.</p></div>
-        <button type="button" className="text-button restart-button" onClick={()=>{clearAnswers(kind);setErrors({});}}>Clear example answers and restart</button>
-        <div className="aside-help"><ShieldAlert size={18}/><span>Do not enter real personal, payment or confidential insurance information.</span></div>
+          <strong>{Math.round(((index+1)/visible.length)*100)}% through this journey</strong><p>Your answers stay in this browser tab only. They are not saved or submitted.</p></div>
+        <div className="aside-card muted-card"><LockKeyhole size={22}/><h3>Save and finish later</h3><p>You will soon be able to save your application and come back to it later. This is not available yet.</p>
+          <button type="button" className="text-button" onClick={()=>checkpoint('save')}><Save size={15}/> Create an account or sign in</button></div>
+        <div className="aside-card"><CreditCard size={21}/><h3>Payment information</h3><p>Prices and payment are not available yet. You will not be charged.</p></div>
+        <button type="button" className="text-button restart-button" onClick={()=>{clearAnswers(kind);setErrors({});}}>Clear my answers and start again</button>
+        <div className="aside-help"><ShieldAlert size={18}/><span>Please do not enter card details or confidential information yet.</span></div>
       </aside>
     </div>
   </div>;
