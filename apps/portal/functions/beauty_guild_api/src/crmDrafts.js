@@ -113,7 +113,7 @@ function registerDraftRoutes(app,{enabled,getCurrentUser,getCrmHeaders,crmApiDom
    if(out.data?.[0]?.status!=='success')fail('NOTE_FAILED','CRM did not confirm draft state.',502);
    return String(noteId);
   }
-  const out=await request(req,'POST','Notes',{data:[{...payload,Parent_Id:{id:row.id},$se_module:module}]});
+  const out=await request(req,'POST',module+'/'+row.id+'/Notes',{data:[payload]});
   const id=out.data?.[0]?.details?.id;
   if(!id)fail('NOTE_FAILED','CRM did not confirm draft state.',502);
   const link=await request(req,'PUT',module+'/'+row.id,{data:[{Draft_State_Reference:String(id)}]});
