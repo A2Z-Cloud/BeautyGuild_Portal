@@ -128,3 +128,11 @@ export function MembershipManagement(){
  invoices.loading?<p>Loading invoices…</p>:invoices.error?<Notice title="Unavailable">{invoices.error}</Notice>:<InvoiceTable rows={invoices.value||[]}/>}</section></>}
  </div>;
 }
+
+export function AccountDocuments(){
+ const docs=useLoad(()=>portalApi.listRecords('membership'),[]);
+ if(!INTEGRATIONS.workdrive||!INTEGRATIONS.crmRecords)return <div className="page"><PageHeading eyebrow="YOUR ACCOUNT" title="My documents"/><Notice title="Documents not connected">The Guild must enable authenticated CRM records and WorkDrive access.</Notice></div>;
+ return <div className="page"><PageHeading eyebrow="YOUR ACCOUNT" title="My documents" description="WorkDrive documents linked to your Guild membership."/>
+ {docs.loading?<p role="status">Finding your membership documents…</p>:docs.error?<Notice title="Documents unavailable">{docs.error}</Notice>:
+ docs.value.length?<DocumentsPanel kind="membership" id={docs.value[0].id}/>:<Notice title="No membership documents">There is no linked membership folder for this account.</Notice>}</div>;
+}
