@@ -14,6 +14,8 @@ module.exports = createApp({
     if(!user || !user.user_id || user.status!=='ACTIVE' || user.is_confirmed!==true)return null;
     return {id:String(user.user_id),email:String(user.email_id||'').trim().toLowerCase()};
   },
+  async getQuoteTable(req) {return catalyst.initialize(req,{scope:'admin'}).datastore().table('Portal_Quotes');},
+  async getPaymentTable(req) {return catalyst.initialize(req,{scope:'admin'}).datastore().table('Portal_Payments');},
   async getCrmHeaders(req) {
     const { headers } = await catalyst.initialize(req).connections().getConnectionCredentials(config.crmConnectionName);
     return headers;

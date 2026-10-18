@@ -13,6 +13,9 @@ const auth=createCatalystAuth(integrationConfig.catalystAuth);
 const recordsOn=integrationConfig.baseConfigured && integrationConfig.catalystAuth && import.meta.env.VITE_PORTAL_RECORDS==='true';
 const recordHttp=recordsOn?createHttpClient({baseUrl:integrationConfig.apiBaseUrl}):null;
 const recordReq=path=>recordHttp?recordHttp('/portal/records'+path):unavailable('Authenticated CRM records');
+const billingOn=integrationConfig.baseConfigured && integrationConfig.catalystAuth && import.meta.env.VITE_PORTAL_BILLING==='true';
+const billingHttp=billingOn?createHttpClient({baseUrl:integrationConfig.apiBaseUrl}):null;
+const billingReq=(path,options)=>billingHttp?billingHttp('/portal/billing'+path,options):unavailable('Authorised pricing and checkout');
 const clone=obj=>JSON.parse(JSON.stringify(obj));
 const unavailable=name=>{throw new IntegrationUnavailableError(name);};
 
@@ -24,7 +27,7 @@ export const INTEGRATIONS=Object.freeze({
   courses:isEnabled(integrationConfig,'courses'),
   address:isEnabled(integrationConfig,'address'),
   crmRecords:recordsOn,crmDrafts:false,crmContactMapping:false,pricing:false,
-  underwriting:false,stripeCheckout:false,policyIssuance:false,workdrive:false,
+  underwriting:false,stripeCheckout:billingOn,policyIssuance:false,workdrive:false,
 });
 export const portalApi=Object.freeze({
   mode:DATA_MODE,
@@ -45,8 +48,8 @@ export const portalApi=Object.freeze({
   getDraft:async()=>unavailable('CRM draft retrieval'),
   listDrafts:async()=>unavailable('CRM draft listing'),
   discardDraft:async()=>unavailable('CRM draft deletion'),
-  quote:async()=>unavailable('Authoritative pricing and underwriting'),
+  quote:async id=>(await billingReq('/quotes/'+encodeURIComponent(id))).quote,
   submit:async()=>unavailable('CRM submission'),
-  checkout:async()=>unavailable('Stripe Checkout'),
+  checkout:async quoteId=>billingReq('/checkout',{method:'POST',body:{quoteId}}),
   getDocuments:async()=>unavailable('Authorised document listing'),
 });

@@ -1,0 +1,11 @@
+# Quotation, underwriting and Stripe stack (PR 3 of 4)
+
+**Current implementation:** user-owned, manually provisioned server-approved quotes in Catalyst DataStore. No client amount is ever used for checkout. This PR implements the secure **read quote → create Checkout Session → Stripe-signed webhook** lifecycle. It does **not** yet implement full V1 membership/insurance pricing or a live underwriting engine. Those must be signed off from the authoritative price tables and underwriting rules before enabling quote creation. Referral decisions PASS / REFER / STOP live in the backend-owned quote record; only PASS may pay.
+
+DataStore `Portal_Quotes` columns: `Owner_User_ID`, `Service`, `Decision`, `Status`, `Amount_Pence` integer, `Tax_Pence` integer, `Updated_At`. Only backend processes may insert/approve quotes; never give App Users table-write permission. `Portal_Payments` columns: `Owner_User_ID`, `Quote_ID`, `Status`, `Amount_Pence`, `Stripe_Session_ID`, `Updated_At`. All tables must be private. Webhook updates paid state only after Stripe signature verification, and does **not** issue a policy or activate membership.
+
+Function env: `PORTAL_BILLING_ENABLED=true`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `PORTAL_PUBLIC_ORIGIN=https://<verified-host>`; frontend `VITE_PORTAL_BILLING=true` plus API mode and Catalyst auth. No secrets in Vite. Test with Stripe test keys and signed webhook events, including replay, cancelled and asynchronous payments. Configure return URL under `/app/#/payment-return` before enabling production.
+
+**Critical backlog:** port and reconcile V1 rating tables (including VAT/IPT, instalments, eligibility, specialist treatments, property risk), sanctions checks, consent/declarations, referral workflow, webhook-to-CRM fulfilment, Stripe retry-safe event storage, duplicate checkout prevention and idempotency across repeat payment attempts. Until that work is complete, DO NOT enable payment in Production.
+
+**Drafts are not a dependency:** this branch stacks solely on authenticated record reads and leaves the CRM draft PR separately blocked. Stripe amounts are sourced solely from backend-owned approved quote records; the actual pricing engine, sanctions and underwriting assessments are not yet implemented.

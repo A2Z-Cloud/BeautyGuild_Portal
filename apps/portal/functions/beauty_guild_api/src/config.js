@@ -22,6 +22,10 @@ function loadConfig(env = process.env) {
     loqateCountries: String(env.LOQATE_COUNTRY_FILTER || '').trim(),
     loqateMaxResults: boundedInt(env.LOQATE_MAX_RESULTS, 40, 1, 100),
     recordsEnabled:env.PORTAL_RECORDS_ENABLED === 'true',
+    billingEnabled:env.PORTAL_BILLING_ENABLED === 'true',
+    stripeSecretKey:String(env.STRIPE_SECRET_KEY||''),
+    stripeWebhookSecret:String(env.STRIPE_WEBHOOK_SECRET||''),
+    portalPublicOrigin:String(env.PORTAL_PUBLIC_ORIGIN||''),
   });
 }
 
