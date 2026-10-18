@@ -27,7 +27,7 @@ select('title','Title',['Mr','Mrs','Miss','Ms','Mx','Dr'],false),
 f('firstName','First name'),f('lastName','Surname'),f('email','Email address','email'),f('mobile','Mobile','tel'),
 f('business','Business name','text',false),f('address1','Address line 1'),f('address2','Address line 2','text',false),
 f('town','Town / city'),f('county','County','text',false),f('postcode','Postcode')]},
-{id:'options',title:'Membership options',description:'Live eligibility and prices will be verified by the backend.',fields:[
+{id:'options',title:'Membership options',description:'The Guild will confirm your eligibility and price.',fields:[
 select('membershipLevel','Membership level',['Associate Membership','Full Membership','International Membership']),
 multi('branches','Professional branches',['Beauty','Nails','Holistic','Hair','Spa'],true),
 yn('newMember','Is this your first membership?'),yn('renewal','Are you renewing?',{required:false})]},
@@ -35,14 +35,14 @@ yn('newMember','Is this your first membership?'),yn('renewal','Are you renewing?
 multi('additionalBranches','Additional branches',['Beauty','Nails','Holistic','Hair','Spa']),
 yn('teaching','Do you provide teaching or training?'),yn('printedCertificate','Printed certificate?',{required:false}),
 f('notes','Additional information','textarea',false)]},
-{id:'insurance',title:'Insurance options',description:'Combined insurance requires separate risk questions and underwriting.',when:yes('insuranceWanted'),fields:[
+{id:'insurance',title:'Insurance options',description:'Combined insurance needs some extra questions about your business.',when:yes('insuranceWanted'),fields:[
 yn('liability','Include public liability?'),yn('professional','Include treatment cover?'),
 yn('contents','Consider equipment / contents?',{required:false}),f('coverNotes','Describe cover requirements','textarea',false)]},
 {id:'declarations',title:'Declarations',description:'Please review the statements below.',fields:[
-f('accuracy','I confirm the details entered for this demonstration are accurate.','checkbox'),
+f('accuracy','I confirm the details I have entered are accurate.','checkbox'),
 f('ethics','I have reviewed the Guild Code of Ethics.','checkbox'),
 f('privacy','I acknowledge the privacy information.','checkbox')]},
-{id:'review',title:'Review and account',description:'Review before the account checkpoint. No real application will be submitted.',fields:[]}
+{id:'review',title:'Review and account',description:'Check your answers before you continue. Nothing is submitted yet.',fields:[]}
 ]},
 accreditation:{title:'Accreditation',kicker:'TRAINING CENTRE ACCREDITATION',intro:'Training centre, tutor, course and evidence declarations.',steps:[
 {id:'applicant',title:'Your details',description:'Contact information for the person applying.',fields:[
@@ -52,7 +52,7 @@ f('mobile','Mobile','tel',false)]},
 {id:'contact-address',title:'Correspondence address',description:'This may differ from the teaching location.',fields:[
 select('contactCountry','Country',UK),f('address1','Address line 1'),f('address2','Address line 2','text',false),
 f('town','Town / city'),f('county','County','text',false),f('postcode','Postcode')]},
-{id:'centre',title:'Training centre',description:'Centre country determines UK versus International Accreditation.',fields:[
+{id:'centre',title:'Training centre',description:'The country of your centre decides whether UK or international accreditation applies.',fields:[
 f('centre','Training school name'),select('country','Training centre country',UK),
 f('centreContact','Contact name'),f('centreEmail','Centre email','email'),f('centreMobile','Centre mobile','tel'),
 f('centreAddress','Centre address line 1'),f('centreTown','Centre town'),f('centreCounty','Centre county','text',false),
@@ -63,7 +63,7 @@ f('tutorCount','Number of tutors','number',true,{when:yes('otherTutors')}),
 f('tutorDetails','Tutor names, qualifications and emails','textarea',true,{when:yes('otherTutors')}),
 yn('additionalVenues','Do you teach at additional venues?'),
 f('venueDetails','Other venue details','textarea',false,{when:yes('additionalVenues')})]},
-{id:'courses',title:'Courses and delivery',description:'Select subject areas. The live catalogue is not connected.',fields:[
+{id:'courses',title:'Courses and delivery',description:'Select the subject areas you teach.',fields:[
 multi('courses','Course subjects',['Beauty Therapy','Nail Technology','Holistic Therapy','Make-up','Massage','Lashes and Brows','Hair','Other'],true),
 f('courseDetails','Course / qualification details','textarea'),
 multi('delivery','Delivery methods',['Classroom','Live online','Blended','Self-paced'],true),
@@ -73,7 +73,7 @@ yn('qualifiedSixMonths','Have you held the qualification for six months?'),
 yn('teachingQualification','Do you hold a teaching qualification?'),
 yn('evidenceAvailable','Can you provide evidence if requested?'),
 f('terms','I accept the application terms and privacy information.','checkbox')]},
-{id:'review',title:'Review and account',description:'Review your answers. CRM validity dates are read from the actual Accreditation record in live mode.',fields:[]}
+{id:'review',title:'Review and account',description:'Check your answers before you continue.',fields:[]}
 ]},
 insurance:{title:'Insurance',kicker:'BEAUTY GUILD INSURANCE',intro:'Business, cover, property, declarations and quotation summary.',steps:[
 {id:'about',title:'About you',description:'Applicant details for your insurance quotation.',fields:[
@@ -100,7 +100,7 @@ yn('soleOccupation','Sole occupation of premises?'),yn('standardConstruction','S
 yn('floodHistory','Flood history?'),yn('subsidenceHistory','Subsidence history?'),
 f('buildingsSum','Buildings sum insured (£)','number',true,{when:yes('buildingsCover')}),
 f('interruptionSum','Business interruption sum insured (£)','number',true,{when:yes('businessInterruption')})]},
-{id:'declarations',title:'Underwriting declarations',description:'An underwriter, not this frontend, decides PASS, REFER or STOP.',fields:[
+{id:'declarations',title:'Your declarations',description:'Your answers help us decide whether we can offer you cover.',fields:[
 yn('claimsHistory','Any claims or relevant losses?'),yn('bankruptcy','Any bankruptcy or insolvency?'),
 yn('potentialClaims','Any circumstances that could lead to claims?'),yn('convictions','Relevant convictions?'),
 yn('priorDecline','Previously declined or cancelled insurance?'),
@@ -109,6 +109,6 @@ yn('territorySupported','Services provided only in supported territories?'),
 f('declaration','I confirm that the information is complete and accurate.','checkbox'),
 f('nonAdvised','I understand this is a non-advised sale.','checkbox'),
 f('demandsNeeds','I confirm the demands and needs statement.','checkbox')]},
-{id:'review',title:'Review your quote',description:'No live premium, underwriting decision, policy or payment exists.',fields:[]}
+{id:'review',title:'Review your quote',description:'No premium has been calculated and no cover is in place yet.',fields:[]}
 ]}
 };

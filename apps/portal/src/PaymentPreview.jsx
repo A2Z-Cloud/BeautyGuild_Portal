@@ -64,6 +64,6 @@ export function LiveCheckout(){
 }
 export function PaymentReturn(){
  const [params]=useSearchParams(),result=params.get('result');
- return <div className="page narrow-page"><PageHeading eyebrow="PAYMENT STATUS" title="Payment verification pending"/><Notice title="Not a payment confirmation">Your return from Stripe does not establish a successful payment or active membership or insurance cover. Please wait for the Guild's confirmed payment record and any subsequent fulfilment.</Notice>
+ return <div className="page narrow-page"><PageHeading eyebrow="PAYMENT STATUS" title="We are checking your payment"/><Notice title="Not confirmed yet">Thank you. Your membership or cover is not active until the Guild confirms your payment. We will be in touch once this is done.</Notice>
  <Link className="btn btn-secondary" to="/records">View my records</Link></div>;
 }

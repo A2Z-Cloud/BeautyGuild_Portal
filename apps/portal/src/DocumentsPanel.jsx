@@ -11,8 +11,8 @@ export function DocumentsPanel({kind,id}){
     .catch(e=>active&&setData({loading:false,items:[],error:e.message,message:''}));
    return()=>{active=false;};
  },[kind,id,value]);
- if(!INTEGRATIONS.workdrive)return <Notice title="Documents not connected">WorkDrive access will be available after backend configuration and permissions are verified.</Notice>;
- return <section className="surface padded"><h2>Documents</h2><p>Files belonging to this CRM record only.</p>
+ if(!INTEGRATIONS.workdrive)return <Notice title="Documents coming soon">You will be able to view and download your documents here soon.</Notice>;
+ return <section className="surface padded"><h2>Documents</h2><p>Documents for this record.</p>
    {path.length>0&&<button className="btn btn-secondary" onClick={()=>setPath(p=>p.slice(0,-1))}>← Up one folder</button>}
    {data.loading?<p role="status">Loading documents…</p>:data.error?<Notice title="Documents unavailable">{data.error}</Notice>:
    data.items.length?data.items.map(x=><div className="security-row" key={x.id}>
