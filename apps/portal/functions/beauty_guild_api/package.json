@@ -1,0 +1,17 @@
+{
+  "name": "beauty_guild_api",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Beauty Guild Portal V2 backend (Advanced I/O). Read-only routes: courses and address lookup.",
+  "main": "index.js",
+  "scripts": {
+    "test": "node --test \"test/*.test.js\""
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "express": "^5.2.1",
+    "zcatalyst-sdk-node": "^3.4.0"
+  }
+}
