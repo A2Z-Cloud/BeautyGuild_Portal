@@ -12,7 +12,8 @@ const gateway=createLegacyGateway(integrationConfig);
 const auth=createCatalystAuth(integrationConfig.catalystAuth);
 const schoolOn=integrationConfig.baseConfigured&&integrationConfig.catalystAuth&&import.meta.env.VITE_PORTAL_SCHOOL_SERVICES==='true';
 const schoolHttp=schoolOn?createHttpClient({baseUrl:integrationConfig.apiBaseUrl}):null;
-const schoolReq=path=>schoolHttp?schoolHttp('/portal/management'+path):unavailable('School and invoice services');
+const schoolReq=(path,opts)=>schoolHttp?schoolHttp('/portal/management'+path,opts):unavailable('School and invoice services');
+const schoolWritesOn=schoolOn&&import.meta.env.VITE_PORTAL_SCHOOL_WRITES==='true';
 const recordsOn=integrationConfig.baseConfigured && integrationConfig.catalystAuth && import.meta.env.VITE_PORTAL_RECORDS==='true';
 const recordHttp=recordsOn?createHttpClient({baseUrl:integrationConfig.apiBaseUrl}):null;
 const recordReq=path=>recordHttp?recordHttp('/portal/records'+path):unavailable('Authenticated CRM records');
@@ -32,7 +33,7 @@ export const INTEGRATIONS=Object.freeze({
   catalystAuth:integrationConfig.catalystAuth,
   courses:isEnabled(integrationConfig,'courses'),
   address:isEnabled(integrationConfig,'address'),
-  schoolServices:schoolOn,crmRecords:recordsOn,crmDrafts:false,crmContactMapping:false,pricing:false,
+  schoolServices:schoolOn,schoolWrites:schoolWritesOn,crmRecords:recordsOn,crmDrafts:false,crmContactMapping:false,pricing:false,
   underwriting:false,stripeCheckout:billingOn,policyIssuance:false,workdrive:documentsOn,
 });
 export const portalApi=Object.freeze({
@@ -45,6 +46,9 @@ export const portalApi=Object.freeze({
   listSchools:async()=>(await schoolReq('/schools')).schools,
   getSchoolSection:async(id,section)=>schoolReq('/schools/'+encodeURIComponent(id)+'/'+encodeURIComponent(section)),
   getSessionBookings:async(id,sessionId)=>schoolReq('/schools/'+encodeURIComponent(id)+'/sessions/'+encodeURIComponent(sessionId)+'/bookings'),
+  getCourseOptions:async id=>schoolReq('/schools/'+encodeURIComponent(id)+'/course-options'),
+  saveSchoolQualification:async(id,data)=>schoolWritesOn?(await schoolReq('/schools/'+encodeURIComponent(id)+'/qualifications',{method:'POST',body:data})).qualification:unavailable('School qualification changes'),
+  createCourseSession:async(id,data)=>schoolWritesOn?(await schoolReq('/schools/'+encodeURIComponent(id)+'/sessions',{method:'POST',body:data})).session:unavailable('Course session creation'),
   getAccountInvoices:async()=>(await schoolReq('/invoices')).invoices,
   getMembershipInvoices:async(id)=>(await schoolReq('/memberships/'+encodeURIComponent(id)+'/invoices')).invoices,
   getMembershipExtensions:async(id)=>(await schoolReq('/memberships/'+encodeURIComponent(id)+'/extensions')).extensions,
