@@ -49,11 +49,12 @@ export function Journey({kind}){
     try{
       const old=draftMeta[kind],service=kind==='membership'&&values.insuranceWanted==='yes'?'combined':kind;
       const journeyId=old?.journeyId||crypto.randomUUID();
+      if(!old?.journeyId)setDraft(kind,{journeyId,service,revision:0});
       const payload={service,journeyId,step:index,answers:service==='combined'?{membership:values,insurance:{insuranceWanted:values.insuranceWanted,liability:values.liability,professional:values.professional,contents:values.contents,coverNotes:values.coverNotes}}:values,...(old?{revision:old.revision}:{})};
-      const next=old&&old.service===service?await portalApi.updateDraft(service,old.id,payload):await portalApi.createDraft(payload);
+      const next=old?.id&&old.service===service?await portalApi.updateDraft(service,old.id,payload):await portalApi.createDraft(payload);
       setDraft(kind,{id:next.id,revision:next.revision,journeyId:next.journeyId,service});
       setSaveStatus('CRM confirmed your application was saved.');
-    }catch(e){setSaveStatus(e.message||'Unable to save. CRM has not confirmed the draft.');}
+    }catch(e){if(e.status===401||e.code==='NOT_AUTHENTICATED'){checkpoint('save');return;}setSaveStatus(e.message||'Unable to save. CRM has not confirmed the draft.');}
     finally{setSaving(false);}
   }
   const update=(name,value)=>{setAnswer(kind,name,value);setErrors(previous=>({...previous,[name]:undefined}));};
