@@ -22,6 +22,22 @@ npm run preview
 
 The built static site is in apps/portal/dist/. Do **not** commit dist/ or node_modules/. Example records and names are labelled sample/demo data and are not persisted or fetched from CRM.
 
+## Routing
+
+The app uses hash routing (`HashRouter`), so addresses look like `/app/#/records`. Catalyst web client hosting has no SPA fallback rule, so path-based deep links 404 on refresh; hash routes always load `index.html`. Revisit if the portal moves to a host with a fallback rule.
+
+## Development deployment (Catalyst web client hosting)
+
+Linked to the BeautyGuildPortal project (13537000000088009, Development) via `apps/portal/catalyst.json` and `.catalystrc`.
+
+~~~sh
+cd apps/portal
+VITE_PUBLIC_BASE=/app/ npm run build
+catalyst deploy --only client
+~~~
+
+`public/client-package.json` is copied into `dist/` by the build and is required by Catalyst.
+
 ## Manual deployment and Catalyst considerations
 
 The repo does not have a Catalyst project link or deployment manifest and intentionally does not deploy automatically. The backend/release owner determines which Catalyst project, environment and hosting model is used.

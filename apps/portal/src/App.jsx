@@ -1,5 +1,5 @@
 import React from 'react';
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Link, Navigate, Route, Routes } from 'react-router-dom';
 import PortalView from './PortalView.jsx';
 import Dashboard from './Dashboard.jsx';
 import ServiceHome from './ServiceHome.jsx';
@@ -17,7 +17,7 @@ function NotReady({ area }) {
   </div>;
 }
 function NotFound() {
-  return <div className="page narrow-page"><PageHeading eyebrow="404" title="Page not found" description="This address does not match an available portal page." /><a href={import.meta.env.BASE_URL} className="btn btn-primary">Return to dashboard</a></div>;
+  return <div className="page narrow-page"><PageHeading eyebrow="404" title="Page not found" description="This address does not match an available portal page." /><Link to="/" className="btn btn-primary">Return to dashboard</Link></div>;
 }
 export default function App() {
   return <PreviewStateProvider><PortalView><Routes>

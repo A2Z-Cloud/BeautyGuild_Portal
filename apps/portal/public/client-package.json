@@ -1,1 +1,6 @@
-{}
+{
+  "name": "beauty-guild-portal-v2",
+  "version": "0.1.0",
+  "homepage": "index.html",
+  "login_redirect": "index.html"
+}
