@@ -34,8 +34,8 @@ test('invoice mapping follows V1 Creator data fields',()=>{
 });
 test('requires Catalyst identity before any school or invoice data',async()=>{
  await withServer({getCurrentUser:async()=>null},async call=>{
-  assert.equal((await call('/portal/management/schools')).status,1000000000401);
-  assert.equal((await call('/portal/management/invoices')).status,1000000000401);
+  assert.equal((await call('/portal/management/schools')).status,401);
+  assert.equal((await call('/portal/management/invoices')).status,401);
  });
 });
 test('school listing only includes owned accreditations',async()=>{
