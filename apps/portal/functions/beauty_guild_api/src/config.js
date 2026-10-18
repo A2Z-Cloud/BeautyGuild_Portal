@@ -22,6 +22,9 @@ function loadConfig(env = process.env) {
     loqateCountries: String(env.LOQATE_COUNTRY_FILTER || '').trim(),
     loqateMaxResults: boundedInt(env.LOQATE_MAX_RESULTS, 40, 1, 100),
     recordsEnabled:env.PORTAL_RECORDS_ENABLED === 'true',
+    crmDraftsEnabled:env.PORTAL_CRM_DRAFTS_ENABLED === 'true',
+    draftStatus:String(env.PORTAL_CRM_DRAFT_STATUS||'Draft'),
+    dealStage:String(env.PORTAL_CRM_DRAFT_DEAL_STAGE||''),
     // Set these only after confirming the school identifier API name and status in CRM.
     publicVerificationEnabled:env.PUBLIC_SCHOOL_VERIFICATION_ENABLED === 'true',
     schoolRegistrationModule:String(env.PUBLIC_SCHOOL_REGISTRATION_MODULE||'Accounts').trim(),

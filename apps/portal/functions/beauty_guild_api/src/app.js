@@ -8,6 +8,7 @@ const {registerRecordRoutes}=require('./records');
 const {registerBillingRoutes}=require('./billing');
 const {registerDocumentRoutes}=require('./documents');
 const {registerPublicSchoolVerification}=require('./publicSchoolVerification');
+const {registerDraftRoutes}=require('./crmDrafts');
 
 const TEXT_MIN = 3;
 const TEXT_MAX = 100;
@@ -35,7 +36,7 @@ function createApp({
   });
   // Read-only function: reject anything but GET before any route logic runs.
   app.use((req, res, next) => {
-    if (req.method !== 'GET' && !req.path.startsWith('/portal/billing') && req.path!=='/portal/stripe/webhook') return next(new HttpError(405, 'METHOD_NOT_ALLOWED', 'Method not allowed.'));
+    if (req.method !== 'GET' && !req.path.startsWith('/portal/billing') && req.path!=='/portal/stripe/webhook' && !req.path.startsWith('/portal/drafts')) return next(new HttpError(405, 'METHOD_NOT_ALLOWED', 'Method not allowed.'));
     return next();
   });
 
@@ -73,6 +74,7 @@ function createApp({
     activeStatus:config.schoolActiveStatus,getCrmHeaders,crmApiDomain:config.crmApiDomain,fetchImpl,now});
   registerRecordRoutes(app,{enabled:config.recordsEnabled,getCurrentUser,getCrmHeaders,crmApiDomain:config.crmApiDomain,fetchImpl});
   registerBillingRoutes(app,{enabled:config.billingEnabled,getCurrentUser,getQuoteTable,getPaymentTable,stripeKey:config.stripeSecretKey,webhookSecret:config.stripeWebhookSecret,publicOrigin:config.portalPublicOrigin,fetchImpl});
+  registerDraftRoutes(app,{enabled:config.crmDraftsEnabled,getCurrentUser,getCrmHeaders,crmApiDomain:config.crmApiDomain,config,fetchImpl});
   registerDocumentRoutes(app,{enabled:config.documentsEnabled,getCurrentUser,getCrmHeaders,getWorkdriveHeaders,crmApiDomain:config.crmApiDomain,workdriveApiDomain:config.workdriveApiDomain,fetchImpl});
   app.use((req, res, next) => next(new HttpError(404, 'NOT_FOUND', 'Not found.')));
   // eslint-disable-next-line no-unused-vars
