@@ -7,6 +7,7 @@ const { createRateLimiter } = require('./rateLimit');
 const {registerRecordRoutes}=require('./records');
 const {registerBillingRoutes}=require('./billing');
 const {registerDocumentRoutes}=require('./documents');
+const {registerPublicSchoolVerification}=require('./publicSchoolVerification');
 
 const TEXT_MIN = 3;
 const TEXT_MAX = 100;
@@ -71,6 +72,9 @@ function createApp({
     res.json({ address: await loqate.retrieve(id) });
   }));
 
+  registerPublicSchoolVerification(app,{enabled:config.publicVerificationEnabled,
+    registrationModule:config.schoolRegistrationModule,registrationField:config.schoolRegistrationField,
+    activeStatus:config.schoolActiveStatus,getCrmHeaders,crmApiDomain:config.crmApiDomain,fetchImpl,now});
   registerRecordRoutes(app,{enabled:config.recordsEnabled,getCurrentUser,getCrmHeaders,crmApiDomain:config.crmApiDomain,fetchImpl});
   registerBillingRoutes(app,{enabled:config.billingEnabled,getCurrentUser,getQuoteTable,getPaymentTable,stripeKey:config.stripeSecretKey,webhookSecret:config.stripeWebhookSecret,publicOrigin:config.portalPublicOrigin,fetchImpl});
   registerDocumentRoutes(app,{enabled:config.documentsEnabled,getCurrentUser,getCrmHeaders,getWorkdriveHeaders,crmApiDomain:config.crmApiDomain,workdriveApiDomain:config.workdriveApiDomain,fetchImpl});
