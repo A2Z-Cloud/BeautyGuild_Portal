@@ -57,15 +57,38 @@ function createSchoolApi({getCrmHeaders,getCreatorHeaders,crmApiDomain,creatorAp
   const rows=await creator(req,creatorInvoiceReport,criteria);
   return rows.map(mapInvoice).sort((a,b)=>Number(b.invoiceNumber||0)-Number(a.invoiceNumber||0));
  }
- return {crm,creator,contact,acc,deal,invoices};
+
+ async function crmCreate(req,module,data){
+  const url=crmApiDomain+'/crm/v3/'+module;
+  let response;
+  try{response=await fetchImpl(url,{method:'POST',headers:{...(await getCrmHeaders(req)),'Content-Type':'application/json'},
+    body:JSON.stringify({data:[data]}),signal:AbortSignal.timeout(15000)});}
+  catch{fail('CRM could not save this record.');}
+  const body=await response.json().catch(()=>null);
+  const row=body?.data?.[0];
+  if(!response.ok||row?.status!=='success'||!row?.details?.id)fail('CRM did not confirm the record was saved.');
+  return row.details.id;
+ }
+ async function creatorCreate(req,form,data){
+  const url=creatorApiDomain+'/creator/v2.1/data/'+esc(creatorAccountOwner)+'/'+esc(creatorAppLinkName)+'/form/'+esc(form);
+  let response;
+  try{response=await fetchImpl(url,{method:'POST',headers:{...(await getCreatorHeaders(req)),'Content-Type':'application/json'},
+    body:JSON.stringify({data}),signal:AbortSignal.timeout(15000)});}
+  catch{fail('Creator could not save this record.');}
+  const body=await response.json().catch(()=>null);
+  if(!response.ok||body?.code!==3000||!body.data?.ID)fail('Creator did not confirm the record was saved.');
+  return String(body.data.ID);
+ }
+ return {crm,creator,contact,acc,deal,invoices,crmCreate,creatorCreate};
 }
-function registerSchoolRoutes(app,{enabled,getCurrentUser,getCrmHeaders,getCreatorHeaders,config,fetchImpl=fetch}){
+function registerSchoolRoutes(app,{enabled,writesEnabled,getCurrentUser,getCrmHeaders,getCreatorHeaders,config,fetchImpl=fetch}){
  const router=express.Router(),api=createSchoolApi({
   getCrmHeaders,getCreatorHeaders,crmApiDomain:config.crmApiDomain,
   creatorApiDomain:config.creatorApiDomain,creatorAccountOwner:config.creatorAccountOwner,
   creatorAppLinkName:config.creatorAppLinkName,creatorInvoiceReport:config.creatorInvoiceReport,fetchImpl
  });
  const handle=fn=>async(req,res,next)=>{try{await fn(req,res);}catch(e){next(e);}};
+ router.use(express.json({limit:'24kb'}));
  // Server-side identity verification is required for every member/school/invoice route.
  router.use(async(req,res,next)=>{try{
   if(!enabled)fail('School and invoice services have not been configured.',503,'SCHOOL_DISABLED');
@@ -163,6 +186,78 @@ function registerSchoolRoutes(app,{enabled,getCurrentUser,getCrmHeaders,getCreat
   const rows=await api.crm(req,'Membership_Extension/search?criteria='+esc('(Membership_Extension:equals:'+req.params.id+')'));
   res.json({extensions:rows.map(x=>({id:x.id,type:x.Extension_Type||null,branch:typeof x.Membership_Branch==='string'?x.Membership_Branch:null,
    quantity:x.Quantity||null,basePrice:x.Base_Price||null,finalPrice:x.Final_Price||null,status:x.Status||null}))});
+ }));
+
+ // V1-verified WRITE subset. Disabled separately from read-side school services.
+ const requireWrites=(req,res,next)=>writesEnabled?next():next(new HttpError(503,'SCHOOL_WRITES_DISABLED','School changes are not enabled.'));
+ const DELIVERY=['Face to Face In the Classroom','Face to Face via Live Video Link','Online only','Other'];
+ const ASSESS=['Face to Face In the Classroom','Face to Face via Live Video Link','Case Studies - Submitting Photographs','Case Studies - Submitting Videos','Other'];
+ router.post('/schools/:id/qualifications',requireWrites,handle(async(req,res)=>{
+  const acc=await api.acc(req,req.params.id,req.memberContact.id);
+  if(!acc.Account?.id)fail('School account not found.',409,'ACCOUNT_REQUIRED');
+  const body=req.body||{},name=String(body.name||'').trim(),month=String(body.month||'').trim(),year=Number(body.year);
+  if(!name||name.length>180||!^(?:[1-9]|1[0-2])$/.test(month)||!Number.isInteger(year)||year<1900||year>2200)
+   fail('A qualification name and valid completion month and year are required.',422,'INVALID_QUALIFICATION');
+  if(!Array.isArray(body.delivery)||!body.delivery.length||body.delivery.some(x=>!DELIVERY.includes(x))||
+   !Array.isArray(body.assessment)||!body.assessment.length||body.assessment.some(x=>!ASSESS.includes(x)))
+   fail('Choose valid practical delivery and assessment methods.',422,'INVALID_QUALIFICATION');
+  if(body.delivery.includes('Other')&&!String(body.deliveryOther||'').trim())fail('Specify the other delivery method.',422,'INVALID_QUALIFICATION');
+  if(body.assessment.includes('Other')&&!String(body.assessmentOther||'').trim())fail('Specify the other assessment method.',422,'INVALID_QUALIFICATION');
+  const record={Name:name,Contact:req.memberContact.id,Account:acc.Account.id,Primary_Accreditation:acc.id,
+   Date_Completed_Month:month,Date_Completed_Year:year,
+   Practical_Delivery_Type:body.delivery,Practical_Delivery_Other:body.deliveryOther||undefined,
+   Practical_Assessment_Type:body.assessment,Practical_Assessment_Other:body.assessmentOther||undefined,
+   Verification_Status:'Not Verified'};
+  const id=await api.crmCreate(req,'Qualifications',record);
+  res.status(201).json({qualification:{id,name,month,year,status:'Not Verified'}});
+ }));
+ function toCreatorDateTime(value){
+  if(!value)return undefined;
+  const d=new Date(value);if(Number.isNaN(d.getTime()))fail('Invalid session date.',422,'INVALID_DATE');
+  const mon=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const pad=n=>String(n).padStart(2,'0');
+  return pad(d.getDate())+'-'+mon[d.getMonth()]+'-'+d.getFullYear()+' '+pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds());
+ }
+ router.get('/schools/:id/course-options',handle(async(req,res)=>{
+  const a=await api.acc(req,req.params.id,req.memberContact.id);
+  const offerings=await api.crm(req,'TC_Course_Offering/search?criteria='+esc('(Accreditation:equals:'+a.id+')')+'&fields='+esc('Course,Training_Centre,Accreditation'));
+  const tutors=a.Account?.id?await api.crm(req,'Tutor_Relationships/search?criteria='+esc('((Account:equals:'+a.Account.id+')and(Status:equals:Active))')+'&fields='+esc('Tutor_Contact')):[];
+  res.json({offerings:offerings.filter(o=>o.Course?.id&&o.Training_Centre?.id).map(o=>({id:o.id,name:o.Course.name,trainingCentre:o.Training_Centre.name})),
+   tutors:tutors.filter(t=>t.Tutor_Contact?.id).map(t=>({id:t.id,name:t.Tutor_Contact.name}))});
+ }));
+ router.post('/schools/:id/sessions',requireWrites,handle(async(req,res)=>{
+  const acc=await api.acc(req,req.params.id,req.memberContact.id);
+  if(!acc.Account?.id)fail('Accreditation is not linked to a school.',409,'ACCOUNT_REQUIRED');
+  const body=req.body||{},offeringId=String(body.courseOfferingId||'');
+  if(!ID.test(offeringId))fail('Choose an accredited course offering.',422,'INVALID_OFFERING');
+  if(!['Fixed Date','Flexible Availability','Request-a-Date'].includes(body.availabilityType))
+   fail('Choose a valid session type.',422,'INVALID_SESSION_TYPE');
+  const offering=(await api.crm(req,'TC_Course_Offering/'+offeringId+'?fields='+esc('Course,Training_Centre,Accreditation')))[0];
+  if(String(offering?.Accreditation?.id)!==String(acc.id)||!offering.Training_Centre?.id)
+   fail('Course offering not found for this school.',404,'NOT_FOUND');
+  if(body.availabilityType==='Fixed Date'&&!body.sessionStart)fail('A start date is required.',422,'INVALID_DATE');
+  const max=body.maximumPlaces==null||body.maximumPlaces===''?undefined:Number(body.maximumPlaces);
+  if(max!==undefined&&(!Number.isInteger(max)||max<1||max>1000))fail('Invalid maximum places.',422,'INVALID_PLACES');
+  const data={
+   course_offering:offeringId,training_centre:offering.Training_Centre.id,account1:acc.Account.id,
+   tutor:body.tutorId||undefined,availability_type:body.availabilityType,status:'Open',
+   course_session_name:[offering.Training_Centre.name,offering.Course?.name].filter(Boolean).join(' - '),
+   maximum_places:max,instant_booking_available:Boolean(body.instantBookingAvailable),
+   request_a_date_available1:Boolean(body.requestADateAvailable),
+   total_advertised_price:body.totalAdvertisedPrice||undefined
+  };
+  if(body.availabilityType==='Fixed Date'){
+   data.session_start_date_time=toCreatorDateTime(body.sessionStart);
+   data.session_end_date_time=toCreatorDateTime(body.sessionEnd);
+  }else{
+   data.flexible_availability_description=body.flexibleDescription||undefined;
+   data.available_days=Array.isArray(body.availableDays)?body.availableDays:[];
+   data.weekend_availability=Boolean(body.weekendAvailability);
+   data.evening_availability1=Boolean(body.eveningAvailability);
+   data.booking_closing_date_and_time=toCreatorDateTime(body.bookingClosing);
+  }
+  const id=await api.creatorCreate(req,'Course_Sessions',data);
+  res.status(201).json({session:{id}});
  }));
  app.use('/portal/management',router);
 }
