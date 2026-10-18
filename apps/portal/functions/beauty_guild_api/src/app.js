@@ -36,7 +36,7 @@ function createApp({
   });
   // Read-only function: reject anything but GET before any route logic runs.
   app.use((req, res, next) => {
-    if (req.method !== 'GET' && !req.path.startsWith('/portal/billing') && req.path!=='/portal/stripe/webhook') return next(new HttpError(405, 'METHOD_NOT_ALLOWED', 'Method not allowed.'));
+    if (req.method !== 'GET' && !req.path.startsWith('/portal/billing') && req.path!=='/portal/stripe/webhook' && !req.path.startsWith('/portal/management')) return next(new HttpError(405, 'METHOD_NOT_ALLOWED', 'Method not allowed.'));
     return next();
   });
 
@@ -69,7 +69,7 @@ function createApp({
     res.json({ address: await loqate.retrieve(id) });
   }));
 
-  registerSchoolRoutes(app,{enabled:config.schoolServicesEnabled,getCurrentUser,getCrmHeaders,getCreatorHeaders,config,fetchImpl});
+  registerSchoolRoutes(app,{enabled:config.schoolServicesEnabled,writesEnabled:config.schoolWritesEnabled,getCurrentUser,getCrmHeaders,getCreatorHeaders,config,fetchImpl});
   registerPublicSchoolVerification(app,{enabled:config.publicVerificationEnabled,
     registrationModule:config.schoolRegistrationModule,registrationField:config.schoolRegistrationField,
     activeStatus:config.schoolActiveStatus,getCrmHeaders,crmApiDomain:config.crmApiDomain,fetchImpl,now});
