@@ -22,6 +22,11 @@ function loadConfig(env = process.env) {
     loqateCountries: String(env.LOQATE_COUNTRY_FILTER || '').trim(),
     loqateMaxResults: boundedInt(env.LOQATE_MAX_RESULTS, 40, 1, 100),
     recordsEnabled:env.PORTAL_RECORDS_ENABLED === 'true',
+    // Set these only after confirming the school identifier API name and status in CRM.
+    publicVerificationEnabled:env.PUBLIC_SCHOOL_VERIFICATION_ENABLED === 'true',
+    schoolRegistrationModule:String(env.PUBLIC_SCHOOL_REGISTRATION_MODULE||'Accounts').trim(),
+    schoolRegistrationField:String(env.PUBLIC_SCHOOL_REGISTRATION_FIELD||'').trim(),
+    schoolActiveStatus:String(env.PUBLIC_SCHOOL_ACTIVE_STATUS||'Verified').trim(),
     billingEnabled:env.PORTAL_BILLING_ENABLED === 'true',
     documentsEnabled:env.PORTAL_DOCUMENTS_ENABLED === 'true',
     workdriveApiDomain:httpsUrl(env.WORKDRIVE_API_DOMAIN,'https://www.zohoapis.eu','WORKDRIVE_API_DOMAIN'),

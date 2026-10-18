@@ -3,19 +3,16 @@ const express = require('express');
 const { HttpError } = require('./errors');
 const { createLoqate } = require('./loqate');
 const { createCourses } = require('./courses');
-const { createRateLimiter } = require('./rateLimit');
+const { createRateLimiter, clientKey } = require('./rateLimit');
 const {registerRecordRoutes}=require('./records');
 const {registerBillingRoutes}=require('./billing');
 const {registerDocumentRoutes}=require('./documents');
+const {registerPublicSchoolVerification}=require('./publicSchoolVerification');
 
 const TEXT_MIN = 3;
 const TEXT_MAX = 100;
 const ID_PATTERN = /^[A-Za-z0-9|._:-]{1,100}$/;
 
-function clientKey(req) {
-  const forwarded = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
-  return forwarded || req.socket.remoteAddress || 'unknown';
-}
 
 function cleanText(value) {
   // eslint-disable-next-line no-control-regex
@@ -71,6 +68,9 @@ function createApp({
     res.json({ address: await loqate.retrieve(id) });
   }));
 
+  registerPublicSchoolVerification(app,{enabled:config.publicVerificationEnabled,
+    registrationModule:config.schoolRegistrationModule,registrationField:config.schoolRegistrationField,
+    activeStatus:config.schoolActiveStatus,getCrmHeaders,crmApiDomain:config.crmApiDomain,fetchImpl,now});
   registerRecordRoutes(app,{enabled:config.recordsEnabled,getCurrentUser,getCrmHeaders,crmApiDomain:config.crmApiDomain,fetchImpl});
   registerBillingRoutes(app,{enabled:config.billingEnabled,getCurrentUser,getQuoteTable,getPaymentTable,stripeKey:config.stripeSecretKey,webhookSecret:config.stripeWebhookSecret,publicOrigin:config.portalPublicOrigin,fetchImpl});
   registerDocumentRoutes(app,{enabled:config.documentsEnabled,getCurrentUser,getCrmHeaders,getWorkdriveHeaders,crmApiDomain:config.crmApiDomain,workdriveApiDomain:config.workdriveApiDomain,fetchImpl});
