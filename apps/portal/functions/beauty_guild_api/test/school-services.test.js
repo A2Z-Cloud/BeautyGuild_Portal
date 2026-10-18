@@ -25,7 +25,7 @@ async function withServer(args,action){
  const server=await new Promise(resolve=>{const s=app.listen(0,'127.0.0.1',()=>resolve(s));});
  const base='http://127.0.0.1:'+server.address().port;
  try{
-  await action(async path=>{const response=await fetch(base+path);return {status:response.status,body:await response.json()};});
+  await action(async (path,options)=>{const response=await fetch(base+path,options);return {status:response.status,body:await response.json()};});
  }finally{await new Promise(resolve=>server.close(resolve));}
 }
 test('invoice mapping follows V1 Creator data fields',()=>{
@@ -70,5 +70,19 @@ test('specific membership invoicing requires owner match before calling Creator'
 test('invoice routes are disabled unless explicitly configured',async()=>{
  await withServer({config:loadConfig({})},async call=>{
   assert.equal((await call('/portal/management/invoices')).status,503);
+ });
+});
+
+test('qualification and Creator session writes remain disabled unless explicitly authorised',async()=>{
+ await withServer({},async call=>{
+  const post={method:'POST',headers:{'content-type':'application/json'},body:'{}'};
+  assert.equal((await call('/portal/management/schools/301/qualifications',post)).status,503);
+  assert.equal((await call('/portal/management/schools/301/sessions',post)).status,503);
+ });
+});
+test('an unverified identity cannot invoke school write endpoints even when writes are enabled',async()=>{
+ await withServer({config:loadConfig({PORTAL_SCHOOL_SERVICES_ENABLED:'true',PORTAL_SCHOOL_WRITES_ENABLED:'true'}),getCurrentUser:async()=>null},async call=>{
+  const post={method:'POST',headers:{'content-type':'application/json'},body:'{}'};
+  assert.equal((await call('/portal/management/schools/301/qualifications',post)).status,401);
  });
 });
