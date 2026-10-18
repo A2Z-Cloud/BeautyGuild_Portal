@@ -18,16 +18,17 @@ The function derives CRM Contact from signed-in Catalyst user ID using Contacts.
 
 ## Required Development configuration
 
-Function: PORTAL_SCHOOL_SERVICES_ENABLED=true, CRM_CONNECTION_NAME, CREATOR_CONNECTION_NAME=zohocreator, CREATOR_API_DOMAIN=https://www.zohoapis.eu, CREATOR_ACCOUNT_OWNER=beautyguild, CREATOR_APP_LINK_NAME=beautyguild, CREATOR_INVOICES_REPORT=All_Invoice_Records.
+Function: PORTAL_SCHOOL_SERVICES_ENABLED=true for reads. For the V1-mapped Qualification and Creator Session creation endpoints, separately set PORTAL_SCHOOL_WRITES_ENABLED=true only after Development testing and permission verification., CRM_CONNECTION_NAME, CREATOR_CONNECTION_NAME=zohocreator, CREATOR_API_DOMAIN=https://www.zohoapis.eu, CREATOR_ACCOUNT_OWNER=beautyguild, CREATOR_APP_LINK_NAME=beautyguild, CREATOR_INVOICES_REPORT=All_Invoice_Records.
 
-Frontend: VITE_DATA_MODE=api, VITE_CATALYST_AUTH=true, VITE_API_BASE_URL=/server/beauty_guild_api, VITE_PORTAL_SCHOOL_SERVICES=true.
+Frontend: VITE_DATA_MODE=api, VITE_CATALYST_AUTH=true, VITE_API_BASE_URL=/server/beauty_guild_api, VITE_PORTAL_SCHOOL_SERVICES=true. Separately VITE_PORTAL_SCHOOL_WRITES=true enables the supported create forms only when the backend flag is also on.
 
 Do not activate until Catalyst User to CRM Contact mapping and both connection permissions are verified. Read from real CRM/Creator via the new backend. No fake records are displayed in live mode.
 
 ## Critical V1 parity still outstanding
 
-- Add Venue wizard, Add/Link Tutor, Create Qualification, Creator session creation and student bookings are WRITE operations that exist in V1 but are not migrated in this PR. They must be ported with the same account/CRM ownership checks, validation, pricing and idempotency, and tested before exposing action buttons.
-- Tutor lists currently show linked/pending status; current-vs-expired membership status needs full Deals.Member_Profile -> Membership resolution as V1.
+- **Added, behind separate write flags:** CRM qualification creation using the V1 field mapping, and Creator Course_Sessions creation with server-verified Accreditation, offering and tutor. These are unverified in live Development and should remain disabled until CRM/Creator data types, connections, validations and idempotency are tested.
+- **Still missing:** Add Venue wizard/payment, Add/Link Tutor CRM Contact relationship workflow, and student booking creation. Do not show these as working. The existing V1 source must be followed and checked for cross-account authorisation, idempotency and invoice/payment side effects before porting.
+- Tutor listing now resolves Deals.Member_Profile -> Membership for current, expired and pending status, as in V1. Its API fields and rate limits still require Development verification.
 - Account-wide Documents navigation is not migrated; the existing record-scoped WorkDrive panel is reused for the school.
 - The school invoice tab intentionally mirrors V1's Contact-wide Creator invoice query, not only the selected Accreditation. A stricter school-specific Creator link must be confirmed before changing this behaviour.
 - Only the first CRM search page and up to 200 Creator rows are loaded. Production pagination and response-size handling are needed.
