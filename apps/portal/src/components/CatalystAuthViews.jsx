@@ -4,20 +4,19 @@ import {Link} from 'react-router-dom';
 import {portalApi} from '../services/api.js';
 
 export function CatalystSignIn({returnTo='/'}) {
-  const [status,setStatus]=useState('loading'),[error,setError]=useState('');
+  const [status,setStatus]=useState('loading');
   useEffect(()=>{
     let mounted=true;
     portalApi.signInEmbed('catalyst-login-widget').then(()=>{if(mounted)setStatus('ready');})
-      .catch(err=>{if(mounted){setStatus('error');setError(err.message);}});
+      .catch(err=>{if(mounted){console.warn('Sign-in form failed to load:',err&&err.message);setStatus('error');}});
     return ()=>{mounted=false;};
   },[]);
-  return <div className="auth-card"><h2>Secure Catalyst sign in</h2>
-    <p>The authentication form below is provided by Zoho Catalyst, not by the React application.</p>
-    {status==='loading'&&<p role="status">Loading the secure sign-in form…</p>}
-    {status==='error'&&<div className="auth-unavailable" role="alert"><ShieldAlert size={17}/>{error}. Check Catalyst hosting, SDK initialisation and Authentication settings.</div>}
-    <div id="catalyst-login-widget" className="catalyst-widget" aria-label="Catalyst sign-in form"/>
-    <p className="auth-small">Signing in alone does not verify CRM Contact ownership. CRM records remain inaccessible until the backend mapping is complete.</p>
-    <Link className="back-link" to={returnTo}><ArrowLeft size={16}/> Return to application</Link>
+  return <div className="auth-card"><h2>Member sign in</h2>
+    {status==='loading'&&<p role="status">Loading the sign-in form…</p>}
+    {status==='error'&&<div className="auth-unavailable" role="alert"><ShieldAlert size={17}/>Sign-in is temporarily unavailable. Please try again shortly.</div>}
+    <div id="catalyst-login-widget" className="catalyst-widget" aria-label="Sign-in form"/>
+    <p className="auth-small">New to the Guild? <Link to="/signup">Create an account</Link></p>
+    <Link className="back-link" to={returnTo}><ArrowLeft size={16}/> Return to your application</Link>
   </div>;
 }
 export function CatalystRegistration({returnTo='/'}) {
@@ -29,22 +28,25 @@ export function CatalystRegistration({returnTo='/'}) {
     setBusy(true);setMessage('');
     try{
       await portalApi.register({firstName:String(form.get('firstName')||''),lastName:String(form.get('lastName')||''),email:String(form.get('email')||'')});
-      setMessage('The account registration request was sent to Catalyst. Check your email for the invitation or verification step. No CRM Contact or draft has been created by this action.');
-    }catch(e){setMessage('Registration could not be completed: '+e.message);}
+      setMessage('Thank you. Check your email for a link to finish setting up your account.');
+    }catch(e){
+      console.warn('Account request failed:',e&&e.message);
+      setMessage('We could not create your account. Please check your details and try again.');
+    }
     finally{setBusy(false);}
   };
-  return <form className="auth-card" onSubmit={submit}><h2>Create a Catalyst account</h2>
-    <p>Catalyst manages the account invitation. We do not collect passwords in this frontend.</p>
+  return <form className="auth-card" onSubmit={submit}><h2>Your account details</h2>
+    <p>We will email you a link to finish setting up your account.</p>
     <div className="auth-double">
       <div><label htmlFor="live-first">First name</label><input id="live-first" name="firstName" required autoComplete="given-name"/></div>
       <div><label htmlFor="live-last">Surname</label><input id="live-last" name="lastName" required autoComplete="family-name"/></div>
     </div>
     <label htmlFor="live-email">Email address</label><input id="live-email" name="email" type="email" required autoComplete="email"/>
     <label className="auth-checkbox"><input type="checkbox" required/><span>I have reviewed the Guild terms and privacy information.</span></label>
-    <button type="submit" className="btn btn-primary btn-block" disabled={busy}>{busy?'Requesting account…':'Request account'}</button>
+    <button type="submit" className="btn btn-primary btn-block" disabled={busy}>{busy?'Creating account…':'Create account'}</button>
     {message&&<div className="auth-unavailable" role="status">{message}</div>}
-    <p className="auth-small">Public signup must be enabled in Catalyst Authentication settings for registration to work.</p>
-    <Link className="back-link" to={returnTo}><ArrowLeft size={16}/> Return to application</Link>
+    <p className="auth-small">Already have an account? <Link to="/login">Sign in</Link></p>
+    <Link className="back-link" to={returnTo}><ArrowLeft size={16}/> Return to your application</Link>
   </form>;
 }
 export function CatalystAccountOverview(){

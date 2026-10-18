@@ -28,10 +28,10 @@ export function AccountCheckpoint() {
   const {route,intent,tail}=useReturn();
   const service=route.split('/')[1]||'application';
   return <Shell eyebrow="YOUR ACCOUNT" title={intent==='save'?'Save and finish later':'One more step before you finish'}
-    description={intent==='save'?'To save a persistent CRM draft, the live portal requires a verified account. Your example form answers are still available while you navigate this preview.':'Existing members can sign in; new visitors create an account at the end of their journey.'}>
+    description={intent==='save'?'You will be able to save your application and come back to it later. This is not available yet, but your answers stay on this page while you browse.':'Sign in or create an account to continue.'}>
     <div className="auth-card"><span className="eyebrow">{intent==='save'?'SAVE APPLICATION':'ACCOUNT CHECKPOINT'}</span><h2>How would you like to continue?</h2>
-      <Notice title="Backend not connected">Account registration, sign-in, CRM draft storage and final submission are disabled in this preview. No payment is taken.</Notice>
-      <div className="account-options"><Link className="account-option" to={'/signup'+tail}><UserPlus size={25}/><strong>Create an account</strong><span>New to the Guild? Set up your account within the journey.</span><ArrowRight size={17}/></Link>
+      <Notice title="Not available yet">Saving applications and submitting them online are coming soon. Nothing is submitted and no payment is taken.</Notice>
+      <div className="account-options"><Link className="account-option" to={'/signup'+tail}><UserPlus size={25}/><strong>Create an account</strong><span>New to the Guild? Set up your account in a few minutes.</span><ArrowRight size={17}/></Link>
       <Link className="account-option" to={'/login'+tail}><KeyRound size={25}/><strong>Sign in</strong><span>Already a member? Continue using your Guild account.</span><ArrowRight size={17}/></Link></div>
       <div className="checkpoint-footer"><Link className="back-link" to={route}><ArrowLeft size={16}/> Return to your {service} answers</Link><Link className="auth-inline-link" to={'/checkout-preview/'+service}>Preview the payment screen (no real checkout)</Link></div>
     </div>
@@ -41,7 +41,7 @@ export function LoginPage() {
   const {route,tail}=useReturn();
   const [message,setMessage]=useState('');
   const submit=e=>{e.preventDefault();setMessage('Catalyst Authentication is not connected. No sign-in attempt was made. Your example journey is still available.');};
-  if(INTEGRATIONS.catalystAuth)return <Shell eyebrow="WELCOME BACK" title="Secure member sign in" description="Catalyst Authentication verifies your identity; CRM record access requires separate Contact matching."><CatalystSignIn returnTo={route}/></Shell>;
+  if(INTEGRATIONS.catalystAuth)return <Shell eyebrow="WELCOME BACK" title="Sign in to your account" description="Access your Guild services and account details."><CatalystSignIn returnTo={route}/></Shell>;
   return <Shell eyebrow="WELCOME BACK" title="Sign in to your account" description="Access your Guild services, saved applications and account details.">
     <form className="auth-card" onSubmit={submit} autoComplete="off"><h2>Member sign in</h2>
       <label htmlFor="signin-email">Email address</label><input id="signin-email" type="email" placeholder="you@example.com" autoComplete="off" required/>
@@ -59,7 +59,7 @@ export function SignupPage() {
   const [message,setMessage]=useState('');
   const [agreed,setAgreed]=useState(false);
   const submit=e=>{e.preventDefault();setMessage('Catalyst sign-up and CRM Contact matching are not connected. No account was registered or saved.');};
-  if(INTEGRATIONS.catalystAuth)return <Shell eyebrow="JOIN THE GUILD" title="Create your Catalyst account" description="Registration sends a verified invitation; CRM linkage follows separately."><CatalystRegistration returnTo={route}/></Shell>;
+  if(INTEGRATIONS.catalystAuth)return <Shell eyebrow="JOIN THE GUILD" title="Create your account" description="Register once to manage your Membership, Accreditation and Insurance in one place."><CatalystRegistration returnTo={route}/></Shell>;
   return <Shell eyebrow="JOIN THE GUILD" title="Create your account" description="Complete your application first, then register once. You won't need to start your answers again.">
     <form className="auth-card" onSubmit={submit} autoComplete="off"><h2>Your account details</h2>
       <div className="auth-double"><div><label htmlFor="reg-first">First name</label><input id="reg-first" required placeholder="First name"/></div><div><label htmlFor="reg-last">Surname</label><input id="reg-last" required placeholder="Surname"/></div></div>
