@@ -61,6 +61,8 @@ variables this function needs through `deployment.env_variables` in `catalyst-co
 restores the file so no secrets are left in the repo. A plain `catalyst deploy --only functions`
 also keeps the existing values, but the script is the way to change them.
 
+**Switching features on and off:** on/off switches live in `~/Documents/GitHub/BGV2-env/feature-flags.env` (or `BGV2_FLAGS_FILE`), outside the repo, for example `PORTAL_RECORDS_ENABLED=true`. The script sends only the switches it knows about; billing is deliberately excluded. To switch a feature off, remove its line and run the script again. Client-side switches are `VITE_` flags set when building (for example `VITE_PORTAL_RECORDS=true`), so rebuild and redeploy the client too.
+
 Then check `https://<project-domain>/server/beauty_guild_api/health`. Build the client with
 `VITE_DATA_MODE=api VITE_API_BASE_URL=/server/beauty_guild_api VITE_ENABLED_LEGACY_APIS=courses,address`
 to use these routes from the portal.

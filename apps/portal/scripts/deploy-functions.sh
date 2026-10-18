@@ -14,7 +14,11 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 ENV_FILE="${BGV2_ENV_FILE:-$HOME/Documents/GitHub/BGV2-env/Key-Development-Value.txt}"
 CONFIG="functions/beauty_guild_api/catalyst-config.json"
-ALLOWED="LOQATE_API_KEY LOQATE_API_BASE_URL LOQATE_COUNTRY_FILTER LOQATE_MAX_RESULTS CRM_API_DOMAIN CRM_CONNECTION_NAME"
+FLAGS_FILE="${BGV2_FLAGS_FILE:-$HOME/Documents/GitHub/BGV2-env/feature-flags.env}"
+# Secrets and connection settings come from ENV_FILE; on/off switches come from FLAGS_FILE (optional).
+# Billing is deliberately not in this list: it must not be switched on from here.
+ALLOWED="LOQATE_API_KEY LOQATE_API_BASE_URL LOQATE_COUNTRY_FILTER LOQATE_MAX_RESULTS CRM_API_DOMAIN CRM_CONNECTION_NAME CREATOR_API_DOMAIN CREATOR_CONNECTION_NAME CREATOR_ACCOUNT_OWNER CREATOR_APP_LINK_NAME CREATOR_INVOICES_REPORT WORKDRIVE_API_DOMAIN WORKDRIVE_CONNECTION_NAME"
+FLAG_NAMES="PORTAL_RECORDS_ENABLED PORTAL_DOCUMENTS_ENABLED PORTAL_SCHOOL_SERVICES_ENABLED PORTAL_SCHOOL_WRITES_ENABLED PORTAL_CRM_DRAFTS_ENABLED PORTAL_CRM_DRAFT_STATUS PORTAL_CRM_DRAFT_DEAL_STAGE PUBLIC_SCHOOL_VERIFICATION_ENABLED PUBLIC_SCHOOL_REGISTRATION_MODULE PUBLIC_SCHOOL_REGISTRATION_FIELD PUBLIC_SCHOOL_ACTIVE_STATUS"
 
 [ -f "$ENV_FILE" ] || { echo "Env file not found: $ENV_FILE" >&2; exit 1; }
 if git ls-files --error-unmatch "$ENV_FILE" >/dev/null 2>&1; then
@@ -26,14 +30,19 @@ cp "$CONFIG" "$BACKUP"
 restore() { cp "$BACKUP" "$CONFIG"; rm -f "$BACKUP"; }
 trap restore EXIT
 
-ENV_FILE="$ENV_FILE" CONFIG="$CONFIG" ALLOWED="$ALLOWED" node -e '
+ENV_FILE="$ENV_FILE" FLAGS_FILE="$FLAGS_FILE" CONFIG="$CONFIG" ALLOWED="$ALLOWED" FLAG_NAMES="$FLAG_NAMES" node -e '
 const fs = require("fs");
-const allowed = new Set(process.env.ALLOWED.split(" "));
 const vars = {};
-for (const line of fs.readFileSync(process.env.ENV_FILE, "utf8").split(/\r?\n/)) {
-  const m = line.match(/^\s*([A-Z][A-Z0-9_]*)\s*[=:\t ]\s*(.*?)\s*$/);
-  if (m && allowed.has(m[1]) && m[2] !== "") vars[m[1]] = m[2].replace(/^["\x27]|["\x27]$/g, "");
+function load(file, names) {
+  if (!file || !fs.existsSync(file)) return;
+  const allowed = new Set(names.split(" "));
+  for (const line of fs.readFileSync(file, "utf8").split(/\r?\n/)) {
+    const m = line.match(/^\s*([A-Z][A-Z0-9_]*)\s*[=:\t ]\s*(.*?)\s*$/);
+    if (m && allowed.has(m[1]) && m[2] !== "") vars[m[1]] = m[2].replace(/^["\x27]|["\x27]$/g, "");
+  }
 }
+load(process.env.ENV_FILE, process.env.ALLOWED);
+load(process.env.FLAGS_FILE, process.env.FLAG_NAMES);
 const config = JSON.parse(fs.readFileSync(process.env.CONFIG, "utf8"));
 config.deployment.env_variables = vars;
 fs.writeFileSync(process.env.CONFIG, JSON.stringify(config, null, 2) + "\n");

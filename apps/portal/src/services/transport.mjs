@@ -6,6 +6,11 @@ export class ApiError extends Error {
   }
 }
 const allowedMethods=new Set(['GET','POST','PUT','PATCH','DELETE']);
+// Backend codes we recognise get a fixed, customer-friendly message. Unknown codes never show backend text.
+const KNOWN_CODES=Object.freeze({
+  CONTACT_UNLINKED:'We could not find a Guild membership record for your email address. If you are already a member, please contact the Guild.',
+  CONTACT_AMBIGUOUS:'We need to check your details before we can show your records. Please contact the Guild.',
+});
 const SAFE_MESSAGES=Object.freeze({
   NOT_AUTHENTICATED:'Please sign in to continue.',
   NOT_AUTHORISED:'You do not have permission to do that.',
@@ -34,6 +39,8 @@ export function createHttpClient({baseUrl,fetchImpl=fetch,timeoutMs=15000}) {
       if(raw){try{data=JSON.parse(raw);}catch{throw new ApiError('The service returned an unexpected non-JSON response.',{status:response.status,code:'INVALID_RESPONSE'});}}
       if(!response.ok){
         // Backend error text is never shown to customers: it may carry internal detail.
+        const known=typeof data?.code==='string'?KNOWN_CODES[data.code]:undefined;
+        if(known)throw new ApiError(known,{status:response.status,code:data.code});
         const code=response.status===401?'NOT_AUTHENTICATED':response.status===403?'NOT_AUTHORISED':response.status===429?'RATE_LIMIT':'HTTP_ERROR';
         throw new ApiError(SAFE_MESSAGES[code],{status:response.status,code});
       }

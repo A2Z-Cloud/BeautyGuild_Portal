@@ -5,7 +5,7 @@ import { DEMO_RECORDS, DEMO_SERVICES } from './data/demo.js';
 import { IconFor, ServiceArrow, Status } from './UiParts.jsx';
 import IntegrationStatus from './components/IntegrationStatus.jsx';
 import {DATA_MODE,INTEGRATIONS} from './services/api.js';
-import {LiveDashboard} from './LiveRecords.jsx';
+import {RecordsSummary} from './LiveRecords.jsx';
 import {Notice,PageHeading} from './UiParts.jsx';
 const LIVE_SERVICES=[
   { kind: 'membership', title: 'Membership', description: 'Join the Guild or find out about membership options.', action: 'Go to membership', theme: 'pink' },
@@ -13,8 +13,7 @@ const LIVE_SERVICES=[
   { kind: 'insurance', title: 'Insurance', description: 'Find cover designed around your business.', action: 'Go to insurance', theme: 'violet' },
 ];
 export default function Dashboard(){
- if(INTEGRATIONS.crmRecords)return <LiveDashboard/>;
- if(DATA_MODE==='api')return <div className="page dashboard"><PageHeading eyebrow="YOUR GUILD" title="Welcome to the Guild" description="Manage your membership, insurance and training centre accreditation in one place."/><div className="services-grid">{LIVE_SERVICES.map(s=><Link key={s.kind} className={'service-card '+s.theme} to={'/'+s.kind}><span className="service-icon"><IconFor kind={s.kind}/></span><small>GUILD SERVICES</small><strong>{s.title}</strong><p>{s.description}</p><ServiceArrow>{s.action}</ServiceArrow></Link>)}</div></div>;
+ if(DATA_MODE==='api')return <div className="page dashboard"><PageHeading eyebrow="YOUR GUILD" title="Welcome to the Guild" description="Manage your membership, insurance and training centre accreditation in one place."/><div className="services-grid">{LIVE_SERVICES.map(s=><Link key={s.kind} className={'service-card '+s.theme} to={'/'+s.kind}><span className="service-icon"><IconFor kind={s.kind}/></span><small>GUILD SERVICES</small><strong>{s.title}</strong><p>{s.description}</p><ServiceArrow>{s.action}</ServiceArrow></Link>)}</div>{INTEGRATIONS.crmRecords&&<RecordsSummary/>}</div>;
 
  return <div className="page dashboard">
   <div className="eyebrow welcome">WELCOME TO YOUR PORTAL <span>October 2026 · Example date</span></div>
