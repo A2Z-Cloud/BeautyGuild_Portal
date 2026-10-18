@@ -11,10 +11,10 @@ function upstream(url) {
  if(u.includes('Training_Centre_Accred/search'))return {data:[{id:'301',Applicant_Contact:{id:'101'},Account:{id:'201',name:'Grace School'},Accreditation_Status:'Accredited'}]};
  if(u.includes('Training_Centre_Accred/301'))return {data:[{id:'301',Applicant_Contact:{id:'101'},Account:{id:'201',name:'Grace School'},Accreditation_Status:'Accredited'}]};
  if(u.includes('Training_Centre_Accred/302'))return {data:[{id:'302',Applicant_Contact:{id:'other'},Account:{id:'202',name:'Other School'}}]};
- if(u.includes('Deals/401'))return {data:[{id:'401',Contact_Name:{id:'101'}}]};
- if(u.includes('Deals/402'))return {data:[{id:'402',Contact_Name:{id:'other'}}]};
+ if(u.includes('Deals/1000000000401'))return {data:[{id:'1000000000401',Contact_Name:{id:'101'}}]};
+ if(u.includes('Deals/1000000000402'))return {data:[{id:'1000000000402',Contact_Name:{id:'other'}}]};
  if(u.includes('Membership_Extension/search'))return {data:[{id:'100',Extension_Type:'Branch',Membership_Branch:'Nails',Status:'Active'}]};
- if(u.includes('/creator/'))return {code:3000,data:[{ID:'901',invoice_number:'123',payment_amount:'75.35',invoice_status:'Paid',crm_membership_id:'401'}]};
+ if(u.includes('/creator/'))return {code:3000,data:[{ID:'901',invoice_number:'123',payment_amount:'75.35',invoice_status:'Paid',crm_membership_id:'1000000000401'}]};
  return {data:[]};
 }
 async function withServer(args,action){
@@ -34,8 +34,8 @@ test('invoice mapping follows V1 Creator data fields',()=>{
 });
 test('requires Catalyst identity before any school or invoice data',async()=>{
  await withServer({getCurrentUser:async()=>null},async call=>{
-  assert.equal((await call('/portal/management/schools')).status,401);
-  assert.equal((await call('/portal/management/invoices')).status,401);
+  assert.equal((await call('/portal/management/schools')).status,1000000000401);
+  assert.equal((await call('/portal/management/invoices')).status,1000000000401);
  });
 });
 test('school listing only includes owned accreditations',async()=>{
@@ -62,8 +62,8 @@ test('Creator invoices are scoped using verified Contact id, not a caller-provid
 });
 test('specific membership invoicing requires owner match before calling Creator',async()=>{
  await withServer({},async call=>{
-  assert.equal((await call('/portal/management/memberships/402/invoices')).status,404);
-  const r=await call('/portal/management/memberships/401/invoices');
+  assert.equal((await call('/portal/management/memberships/1000000000402/invoices')).status,404);
+  const r=await call('/portal/management/memberships/1000000000401/invoices');
   assert.equal(r.status,200);assert.equal(r.body.invoices.length,1);
  });
 });
