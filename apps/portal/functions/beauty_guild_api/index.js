@@ -16,6 +16,10 @@ module.exports = createApp({
   },
   async getQuoteTable(req) {return catalyst.initialize(req,{scope:'admin'}).datastore().table('Portal_Quotes');},
   async getPaymentTable(req) {return catalyst.initialize(req,{scope:'admin'}).datastore().table('Portal_Payments');},
+  async getWorkdriveHeaders(req) {
+    const {headers}=await catalyst.initialize(req).connections().getConnectionCredentials(config.workdriveConnectionName);
+    return headers;
+  },
   async getCrmHeaders(req) {
     const { headers } = await catalyst.initialize(req).connections().getConnectionCredentials(config.crmConnectionName);
     return headers;

@@ -86,4 +86,4 @@ function registerRecordRoutes(app,{enabled,getCurrentUser,getCrmHeaders,crmApiDo
   }));
   app.use('/portal/records',router);
 }
-module.exports={registerRecordRoutes,resolveContact,mapRecord,DEFINITIONS};
+module.exports={registerRecordRoutes,resolveContact,mapRecord,DEFINITIONS,createCrmClient};
