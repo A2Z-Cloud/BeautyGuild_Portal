@@ -1,3 +1,5 @@
+import {isSafePath} from './config.mjs';
+
 export class ApiError extends Error {
   constructor(message,{status=0,code='API_ERROR'}={}) {
     super(message);this.name='ApiError';this.status=status;this.code=code;
@@ -9,7 +11,7 @@ export function createHttpClient({baseUrl,fetchImpl=fetch,timeoutMs=15000}) {
   return async function request(path,{method='GET',body,signal}={}) {
     method=String(method).toUpperCase();
     if(!allowedMethods.has(method))throw new ApiError('Unsupported HTTP method.',{code:'UNSUPPORTED_METHOD'});
-    if(!path.startsWith('/') || path.startsWith('//') || path.includes('..'))throw new ApiError('Invalid API path.',{code:'INVALID_PATH'});
+    if(!isSafePath(path))throw new ApiError('Invalid API path.',{code:'INVALID_PATH'});
     const controller=new AbortController();
     const timer=setTimeout(()=>controller.abort(),timeoutMs);
     const abort=()=>controller.abort();

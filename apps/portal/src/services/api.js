@@ -2,6 +2,7 @@ import {DEMO_RECORDS,DEMO_USER} from '../data/demo.js';
 import {parseIntegrationConfig,isEnabled} from './config.mjs';
 import {createLegacyGateway,IntegrationUnavailableError} from './legacy.mjs';
 import {createCatalystAuth} from './catalystAuth.js';
+import {resolveViewer} from './viewer.mjs';
 
 export {IntegrationUnavailableError};
 export const integrationConfig=parseIntegrationConfig(import.meta.env);
@@ -24,7 +25,7 @@ export const INTEGRATIONS=Object.freeze({
 export const portalApi=Object.freeze({
   mode:DATA_MODE,
   integrations:INTEGRATIONS,
-  getViewer:async()=>integrationConfig.catalystAuth?auth.currentUser():clone(DEMO_USER),
+  getViewer:()=>resolveViewer({config:integrationConfig,auth,demoUser:DEMO_USER}),
   listRecords:async(kind)=>DATA_MODE==='demo'?clone(DEMO_RECORDS.filter(r=>!kind||r.kind===kind)):unavailable('Authenticated CRM record listing'),
   getRecord:async(kind,id)=>DATA_MODE==='demo'?clone(DEMO_RECORDS.find(r=>r.kind===kind&&r.id===id)||null):unavailable('Authenticated CRM record retrieval'),
   getIdentity:()=>auth.currentUser(),

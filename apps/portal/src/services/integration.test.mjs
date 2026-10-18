@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {parseIntegrationConfig,isEnabled,appendPath} from './config.mjs';
+import {parseIntegrationConfig,isEnabled,appendPath,isSafePath} from './config.mjs';
 import {ApiError,createHttpClient} from './transport.mjs';
 import {createLegacyGateway,IntegrationUnavailableError} from './legacy.mjs';
+import {resolveViewer} from './viewer.mjs';
 
 test('demo mode disables everything regardless of supplied address',()=>{
   const c=parseIntegrationConfig({VITE_DATA_MODE:'demo',VITE_API_BASE_URL:'/server/beauty_guild_api',VITE_ENABLED_LEGACY_APIS:'courses,address',VITE_CATALYST_AUTH:'true'});
@@ -55,6 +56,26 @@ test('bad paths and unsupported methods rejected before fetch',async()=>{
   await assert.rejects(()=>api('//other-site'),e=>e.code==='INVALID_PATH');
   await assert.rejects(()=>api('/courses',{method:'TRACE'}),e=>e.code==='UNSUPPORTED_METHOD');
   assert.throws(()=>appendPath('', '/courses'));
+});
+test('address search text containing ".." is allowed, path traversal is not',async()=>{
+  const urls=[];
+  const c=parseIntegrationConfig({VITE_DATA_MODE:'api',VITE_API_BASE_URL:'/server/beauty_guild_api',VITE_ENABLED_LEGACY_APIS:'address'});
+  const g=createLegacyGateway(c,{fetchImpl:async url=>{urls.push(url);return {ok:true,status:200,text:async()=>JSON.stringify({items:[]})};}});
+  assert.deepEqual(await g.findAddresses('Flat 1.. High St'),[]);
+  assert.ok(urls[0].includes('text=Flat+1..+High+St'));
+  const api=createHttpClient({baseUrl:'/server/beauty_guild_api',fetchImpl:async()=>{throw new Error('Unexpected fetch');}});
+  for(const bad of ['/../admin','/courses/../admin','/%2e%2e/admin','/courses/%2E%2E/x','/%zz'])
+    await assert.rejects(()=>api(bad),e=>e.code==='INVALID_PATH',bad);
+  assert.equal(isSafePath('/address/find?text=..'),true);
+  assert.throws(()=>appendPath('/base','/a/../b'));
+});
+test('API mode never falls back to the demo viewer',async()=>{
+  const demoUser={name:'Demo'},auth={currentUser:async()=>({userId:'42'})};
+  assert.deepEqual(await resolveViewer({config:parseIntegrationConfig({}),auth,demoUser}),demoUser);
+  const apiNoAuth=parseIntegrationConfig({VITE_DATA_MODE:'api',VITE_API_BASE_URL:'/server/beauty_guild_api'});
+  await assert.rejects(()=>resolveViewer({config:apiNoAuth,auth,demoUser}),IntegrationUnavailableError);
+  const apiAuth=parseIntegrationConfig({VITE_DATA_MODE:'api',VITE_CATALYST_AUTH:'true'});
+  assert.deepEqual(await resolveViewer({config:apiAuth,auth,demoUser}),{userId:'42'});
 });
 test('does not retry or silently mark writes as successful',async()=>{
   const api=createHttpClient({baseUrl:'/server/beauty_guild_api',fetchImpl:async()=>{throw new Error('offline');}});

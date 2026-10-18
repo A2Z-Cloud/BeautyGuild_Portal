@@ -15,7 +15,16 @@ export function parseIntegrationConfig(env={}) {
 export function isEnabled(config, feature) {
   return Boolean(config.baseConfigured && config.enabled.includes(feature));
 }
+// Same-origin, absolute API paths only. Traversal is checked on the path segments, not the
+// query string, so user text such as "Flat 1.." in an address search is still allowed.
+export function isSafePath(path) {
+  if(typeof path!=='string' || !path.startsWith('/') || path.startsWith('//'))return false;
+  const pathname=path.split(/[?#]/,1)[0];
+  let decoded;
+  try{decoded=decodeURIComponent(pathname);}catch{return false;}
+  return !decoded.split(/[\\/]/).includes('..');
+}
 export function appendPath(base,path) {
-  if(!base || !path.startsWith('/') || path.startsWith('//') || path.includes('..'))throw new Error('Invalid API configuration');
+  if(!base || !isSafePath(path))throw new Error('Invalid API configuration');
   return base+path;
 }
