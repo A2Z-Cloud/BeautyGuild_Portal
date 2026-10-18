@@ -74,12 +74,6 @@ body {
   color: #b02c70 !important;
 }
 
-/* Social login tiles */
-.fed_div { margin-top: 18px !important; }
-.zoho_fed_box, .fed_box {
-  border: 1px solid #e3d8df !important;
-  border-radius: 9px !important;
-  background: #fff !important;
-  color: #25212a !important;
-}
-.zoho_fed_box:hover, .fed_box:hover { background: #faeaf2 !important; border-color: #ee3e96 !important; }
+/* No social logins: members sign in with email and password only. Hidden here as well as
+   in the Catalyst console so a provider enabled later cannot appear unreviewed. */
+.fed_div, .zoho_fed_box, .fed_box, .fed_icon { display: none !important; }

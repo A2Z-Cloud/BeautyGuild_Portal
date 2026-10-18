@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link, Navigate, Route, Routes } from 'react-router-dom';
+import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import PortalView from './PortalView.jsx';
 import Dashboard from './Dashboard.jsx';
 import ServiceHome from './ServiceHome.jsx';
@@ -19,8 +19,15 @@ function NotReady({ area }) {
 function NotFound() {
   return <div className="page narrow-page"><PageHeading eyebrow="404" title="Page not found" description="This address does not match an available portal page." /><Link to="/" className="btn btn-primary">Return to dashboard</Link></div>;
 }
+// Sign-in, sign-up, password reset and the account checkpoint are full-page screens with their
+// own layout, so they render without the portal sidebar, top bar and footer.
+const STANDALONE_ROUTES = ['/login', '/signup', '/forgot-password', '/account/checkpoint'];
+function Layout({ children }) {
+  const { pathname } = useLocation();
+  return STANDALONE_ROUTES.includes(pathname.replace(/\/+$/, '')) ? children : <PortalView>{children}</PortalView>;
+}
 export default function App() {
-  return <PreviewStateProvider><PortalView><Routes>
+  return <PreviewStateProvider><Layout><Routes>
     <Route path="/" element={<Dashboard />} />
     <Route path="/membership" element={<ServiceHome kind="membership" />} />
     <Route path="/insurance" element={<ServiceHome kind="insurance" />} />
@@ -44,5 +51,5 @@ export default function App() {
     <Route path="/help" element={<NotReady area="Help and support" />} />
     <Route path="/apply" element={<Navigate to="/accreditation/new" replace />} />
     <Route path="*" element={<NotFound />} />
-  </Routes></PortalView></PreviewStateProvider>;
+  </Routes></Layout></PreviewStateProvider>;
 }

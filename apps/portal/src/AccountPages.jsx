@@ -21,7 +21,7 @@ function Shell({eyebrow,title,description,children}) {
   return <div className="auth-page"><div className="auth-intro">
     <Link to="/" className="auth-brand"><Logo/></Link><div className="auth-intro-copy"><span className="eyebrow">{eyebrow}</span><h1>{title}</h1><p>{description}</p></div>
     <div className="auth-feature"><Shield size={22}/><span>One Beauty Guild account for Membership, Accreditation and Insurance</span></div>
-    <div className="auth-preview-disclaimer">Frontend development preview. No real account is created or authenticated.</div>
+    {!INTEGRATIONS.catalystAuth&&<div className="auth-preview-disclaimer">Frontend development preview. No real account is created or authenticated.</div>}
   </div><div className="auth-panel">{children}</div></div>;
 }
 export function AccountCheckpoint() {
