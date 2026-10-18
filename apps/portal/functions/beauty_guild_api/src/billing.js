@@ -49,12 +49,14 @@ function registerBillingRoutes(app,{enabled,getCurrentUser,getQuoteTable,getPaym
   return res.json({received:true});
  }));
  router.use(express.json({limit:'20kb'}));
- router.use(active,send(async(req,res,next)=>{
-  const user=await getCurrentUser(req);
-  if(!user?.id)throw new HttpError(401,'SIGN_IN_REQUIRED','Sign in to continue.');
-  req.portalUser=user;
-  next();
- }));
+ router.use(active,async(req,res,next)=>{
+  try{
+    const user=await getCurrentUser(req);
+    if(!user?.id)throw new HttpError(401,'SIGN_IN_REQUIRED','Sign in to continue.');
+    req.portalUser=user;
+    next();
+  }catch(e){next(e);}
+ });
  router.get('/quotes/:id',send(async(req,res)=>{
   if(!ID.test(req.params.id))throw new HttpError(404,'NOT_FOUND','Quote not found.');
   const row=owned(await (await getQuoteTable(req)).getRow(req.params.id),req.portalUser);
@@ -64,7 +66,7 @@ function registerBillingRoutes(app,{enabled,getCurrentUser,getQuoteTable,getPaym
  router.post('/checkout',send(async(req,res)=>{
   const id=String(req.body?.quoteId||'');
   if(!ID.test(id))throw new HttpError(422,'INVALID_QUOTE','Choose a quote.');
-  if(!stripeKey || !webhookSecret || !/^https:\/\/[a-z0-9.-]+$/i.test(publicOrigin||''))throw new HttpError(503,'CHECKOUT_UNAVAILABLE','Checkout is not configured.');
+  if(!stripeKey?.startsWith('sk_test_') || !webhookSecret || !/^https:\/\/[a-z0-9.-]+$/i.test(publicOrigin||''))throw new HttpError(503,'CHECKOUT_UNAVAILABLE','Checkout is not configured.');
   const quote=owned(await (await getQuoteTable(req)).getRow(id),req.portalUser);
   if(!ALLOWED.has(quote.Service) || quote.Status!=='APPROVED' || quote.Decision!=='PASS')throw new HttpError(409,'QUOTE_NOT_PAYABLE','The quote is not approved for online payment.');
   const amount=money(quote),paymentTable=await getPaymentTable(req);
