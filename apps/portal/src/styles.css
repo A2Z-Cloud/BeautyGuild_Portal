@@ -195,3 +195,13 @@
 .school-multi label{display:flex;align-items:center;gap:11px;padding:7px 0;font-size:11px}
 .school-multi input{accent-color:#ee3e96}
 .school-ops-form .btn{margin-top:13px}
+/* Phones: keep every journey step visible; only the current step shows its label. */
+@media(max-width:600px){
+  .stages{gap:6px;padding:14px 16px}
+  .stages li{flex:none}
+  .stages li:not(.active) span{display:none}
+  .stages li.active span{max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+}
+img,svg,video,iframe{max-width:100%}
+/* Notices stack their title above the text at every width, so they never squeeze into a narrow card. */
+.notice{flex-direction:column;gap:4px}
