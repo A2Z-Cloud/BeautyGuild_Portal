@@ -24,7 +24,7 @@ export function LiveRecordDetail({kindOverride}){
   useEffect(()=>{let active=true;setLoading(true);portalApi.getRecord(kind,id).then(x=>{if(active){setRecord(x);setLoading(false);}}).catch(e=>{if(active){setError(e.message);setLoading(false);}});return()=>{active=false;};},[kind,id]);
   return <div className="page"><Link to="/records" className="back-link">← Back to records</Link>
     {loading?<p role="status">Loading record…</p>:error?<Notice title="Record unavailable">{error}</Notice>:record&&<><PageHeading eyebrow={record.kind.toUpperCase()} title={record.title} description="Your record details"/><div className="surface padded"><dl className="detail-list">
-      {Object.entries({Reference:record.id,Service:record.kind,Status:record.status,Type:record.type,'Start date':record.startDate,'End date':record.endDate,'Payment status':record.paymentStatus}).map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value||'—'}</dd></div>)}</dl></div><div style={{marginTop:24}}><DocumentsPanel kind={kind} id={id}/></div></>}
+      {Object.entries({Reference:record.id,Service:record.kind,Status:record.status,Type:record.type,'Start date':record.startDate,'End date':record.endDate,'Payment status':record.paymentStatus}).map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value||'—'}</dd></div>)}</dl></div><div style={{marginTop:24}}>{kind==='membership'&&<p><Link className="btn btn-secondary" to={'/membership/manage/'+id}>Manage membership and invoices</Link></p>}<DocumentsPanel kind={kind} id={id}/></div></>}
   </div>;
 }
 export function LiveDashboard(){
