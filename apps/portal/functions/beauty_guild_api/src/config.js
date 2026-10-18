@@ -23,6 +23,7 @@ function loadConfig(env = process.env) {
     loqateMaxResults: boundedInt(env.LOQATE_MAX_RESULTS, 40, 1, 100),
     recordsEnabled:env.PORTAL_RECORDS_ENABLED === 'true',
     schoolServicesEnabled:env.PORTAL_SCHOOL_SERVICES_ENABLED === 'true',
+    schoolWritesEnabled:env.PORTAL_SCHOOL_WRITES_ENABLED === 'true',
     creatorApiDomain:httpsUrl(env.CREATOR_API_DOMAIN,'https://www.zohoapis.eu','CREATOR_API_DOMAIN'),
     creatorConnectionName:String(env.CREATOR_CONNECTION_NAME||'zohocreator'),
     creatorAccountOwner:String(env.CREATOR_ACCOUNT_OWNER||'beautyguild'),
