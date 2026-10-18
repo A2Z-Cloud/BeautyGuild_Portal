@@ -22,6 +22,12 @@ function loadConfig(env = process.env) {
     loqateCountries: String(env.LOQATE_COUNTRY_FILTER || '').trim(),
     loqateMaxResults: boundedInt(env.LOQATE_MAX_RESULTS, 40, 1, 100),
     recordsEnabled:env.PORTAL_RECORDS_ENABLED === 'true',
+    schoolServicesEnabled:env.PORTAL_SCHOOL_SERVICES_ENABLED === 'true',
+    creatorApiDomain:httpsUrl(env.CREATOR_API_DOMAIN,'https://www.zohoapis.eu','CREATOR_API_DOMAIN'),
+    creatorConnectionName:String(env.CREATOR_CONNECTION_NAME||'zohocreator'),
+    creatorAccountOwner:String(env.CREATOR_ACCOUNT_OWNER||'beautyguild'),
+    creatorAppLinkName:String(env.CREATOR_APP_LINK_NAME||'beautyguild'),
+    creatorInvoiceReport:String(env.CREATOR_INVOICES_REPORT||'All_Invoice_Records'),
     // Set these only after confirming the school identifier API name and status in CRM.
     publicVerificationEnabled:env.PUBLIC_SCHOOL_VERIFICATION_ENABLED === 'true',
     schoolRegistrationModule:String(env.PUBLIC_SCHOOL_REGISTRATION_MODULE||'Accounts').trim(),

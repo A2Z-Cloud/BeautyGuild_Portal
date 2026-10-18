@@ -10,6 +10,9 @@ export const integrationConfig=parseIntegrationConfig(import.meta.env);
 export const DATA_MODE=integrationConfig.mode;
 const gateway=createLegacyGateway(integrationConfig);
 const auth=createCatalystAuth(integrationConfig.catalystAuth);
+const schoolOn=integrationConfig.baseConfigured&&integrationConfig.catalystAuth&&import.meta.env.VITE_PORTAL_SCHOOL_SERVICES==='true';
+const schoolHttp=schoolOn?createHttpClient({baseUrl:integrationConfig.apiBaseUrl}):null;
+const schoolReq=path=>schoolHttp?schoolHttp('/portal/management'+path):unavailable('School and invoice services');
 const recordsOn=integrationConfig.baseConfigured && integrationConfig.catalystAuth && import.meta.env.VITE_PORTAL_RECORDS==='true';
 const recordHttp=recordsOn?createHttpClient({baseUrl:integrationConfig.apiBaseUrl}):null;
 const recordReq=path=>recordHttp?recordHttp('/portal/records'+path):unavailable('Authenticated CRM records');
@@ -29,7 +32,7 @@ export const INTEGRATIONS=Object.freeze({
   catalystAuth:integrationConfig.catalystAuth,
   courses:isEnabled(integrationConfig,'courses'),
   address:isEnabled(integrationConfig,'address'),
-  crmRecords:recordsOn,crmDrafts:false,crmContactMapping:false,pricing:false,
+  schoolServices:schoolOn,crmRecords:recordsOn,crmDrafts:false,crmContactMapping:false,pricing:false,
   underwriting:false,stripeCheckout:billingOn,policyIssuance:false,workdrive:documentsOn,
 });
 export const portalApi=Object.freeze({
@@ -39,6 +42,12 @@ export const portalApi=Object.freeze({
   listRecords:async(kind)=>recordsOn?(await recordReq('/'+(kind?'?kind='+encodeURIComponent(kind):''))).records:DATA_MODE==='demo'?clone(DEMO_RECORDS.filter(r=>!kind||r.kind===kind)):unavailable('Authenticated CRM record listing'),
   getRecord:async(kind,id)=>recordsOn?(await recordReq('/'+encodeURIComponent(kind)+'/'+encodeURIComponent(id))).record:DATA_MODE==='demo'?clone(DEMO_RECORDS.find(r=>r.kind===kind&&r.id===id)||null):unavailable('Authenticated CRM record retrieval'),
   getDashboard:async()=>(await recordReq('/summary')),
+  listSchools:async()=>(await schoolReq('/schools')).schools,
+  getSchoolSection:async(id,section)=>schoolReq('/schools/'+encodeURIComponent(id)+'/'+encodeURIComponent(section)),
+  getSessionBookings:async(id,sessionId)=>schoolReq('/schools/'+encodeURIComponent(id)+'/sessions/'+encodeURIComponent(sessionId)+'/bookings'),
+  getAccountInvoices:async()=>(await schoolReq('/invoices')).invoices,
+  getMembershipInvoices:async(id)=>(await schoolReq('/memberships/'+encodeURIComponent(id)+'/invoices')).invoices,
+  getMembershipExtensions:async(id)=>(await schoolReq('/memberships/'+encodeURIComponent(id)+'/extensions')).extensions,
   getIdentity:()=>auth.currentUser(),
   register:profile=>auth.signUp(profile),
   signInEmbed:container=>auth.signInEmbed(container),
