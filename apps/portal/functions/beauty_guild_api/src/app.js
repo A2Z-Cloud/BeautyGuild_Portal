@@ -5,6 +5,7 @@ const { createLoqate } = require('./loqate');
 const { createCourses } = require('./courses');
 const { createRateLimiter } = require('./rateLimit');
 const {registerRecordRoutes}=require('./records');
+const {registerBillingRoutes}=require('./billing');
 
 const TEXT_MIN = 3;
 const TEXT_MAX = 100;
@@ -22,7 +23,7 @@ function cleanText(value) {
 
 function createApp({
   config, getCrmHeaders, fetchImpl = fetch, now = Date.now, log = console.log,
-  addressLimit = 60, addressWindowMs = 60 * 1000, getCurrentUser,
+  addressLimit = 60, addressWindowMs = 60 * 1000, getCurrentUser, getQuoteTable, getPaymentTable,
 }) {
   const loqate = createLoqate({ config, fetchImpl, log });
   const courses = createCourses({ config, getCrmHeaders, fetchImpl, now, log });
@@ -36,7 +37,7 @@ function createApp({
   });
   // Read-only function: reject anything but GET before any route logic runs.
   app.use((req, res, next) => {
-    if (req.method !== 'GET') return next(new HttpError(405, 'METHOD_NOT_ALLOWED', 'Method not allowed.'));
+    if (req.method !== 'GET' && !req.path.startsWith('/portal/billing') && req.path!=='/portal/stripe/webhook') return next(new HttpError(405, 'METHOD_NOT_ALLOWED', 'Method not allowed.'));
     return next();
   });
 
@@ -70,6 +71,7 @@ function createApp({
   }));
 
   registerRecordRoutes(app,{enabled:config.recordsEnabled,getCurrentUser,getCrmHeaders,crmApiDomain:config.crmApiDomain,fetchImpl});
+  registerBillingRoutes(app,{enabled:config.billingEnabled,getCurrentUser,getQuoteTable,getPaymentTable,stripeKey:config.stripeSecretKey,webhookSecret:config.stripeWebhookSecret,publicOrigin:config.portalPublicOrigin,fetchImpl});
   app.use((req, res, next) => next(new HttpError(404, 'NOT_FOUND', 'Not found.')));
   // eslint-disable-next-line no-unused-vars
   app.use((err, req, res, next) => {

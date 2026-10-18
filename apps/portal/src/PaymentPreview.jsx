@@ -1,11 +1,13 @@
-import React, {useState} from 'react';
+import React, {useEffect,useState} from 'react';
 import {ArrowLeft,CreditCard,FileCheck2,LockKeyhole,ShieldCheck} from 'lucide-react';
-import {Link,useParams} from 'react-router-dom';
+import {Link,useParams,useSearchParams} from 'react-router-dom';
 import {Notice,PageHeading} from './UiParts.jsx';
 import {usePreviewState} from './journeys/previewState.jsx';
+import {INTEGRATIONS,portalApi} from './services/api.js';
 import {accreditationType} from './logic.mjs';
 
 export function PaymentPreview(){
+  if(INTEGRATIONS.stripeCheckout)return <LiveCheckout/>;
   const {kind}=useParams();
   const {answers}=usePreviewState();
   const [detail,setDetail]=useState('');
@@ -34,4 +36,34 @@ export function PaymentPreview(){
       </aside>
     </div>
   </div>;
+}
+
+export function LiveCheckout(){
+ const [params]=useSearchParams(),quoteId=params.get('quote');
+ const [state,setState]=useState({loading:true,quote:null,error:'',busy:false});
+ useEffect(()=>{
+   let alive=true;
+   if(!quoteId){setState({loading:false,quote:null,error:'Quote reference is missing.',busy:false});return;}
+   portalApi.quote(quoteId).then(quote=>alive&&setState({loading:false,quote,error:'',busy:false}))
+   .catch(e=>alive&&setState({loading:false,quote:null,error:e.message,busy:false}));
+   return ()=>{alive=false;};
+ },[quoteId]);
+ async function openCheckout(){
+   if(state.busy)return;setState(s=>({...s,busy:true,error:''}));
+   try{
+     const {checkoutUrl}=await portalApi.checkout(quoteId);
+     if(!/^https:\/\/checkout\.stripe\.com\//.test(checkoutUrl))throw new Error('Unexpected payment URL.');
+     window.location.assign(checkoutUrl);
+   }catch(e){setState(s=>({...s,busy:false,error:e.message}));}
+ }
+ return <div className="page narrow-page"><PageHeading eyebrow="SERVER-APPROVED QUOTE" title="Secure checkout" description="Only backend-verified approved quotes can proceed. Payments and issuance must be confirmed independently."/>
+ {state.loading?<p role="status">Loading the quote…</p>:state.error?<Notice title="Payment unavailable">{state.error}</Notice>:<section className="surface padded">
+  <h2>{state.quote.service} quotation</h2><p>Status: {state.quote.status} · Decision: {state.quote.decision}</p>
+  {state.quote.status==='APPROVED' && state.quote.decision==='PASS'?<><h2>£{(state.quote.amountPence/100).toFixed(2)}</h2><button type="button" className="btn btn-primary" disabled={state.busy} onClick={openCheckout}>{state.busy?'Opening checkout…':'Continue to Stripe'}</button></>:<Notice title="Under review">The Guild has not authorised this quote for payment. No cover is active.</Notice>}
+ </section>}</div>;
+}
+export function PaymentReturn(){
+ const [params]=useSearchParams(),result=params.get('result');
+ return <div className="page narrow-page"><PageHeading eyebrow="PAYMENT STATUS" title="Payment verification pending"/><Notice title="Not a payment confirmation">Your return from Stripe does not establish a successful payment or active membership or insurance cover. Please wait for the Guild's confirmed payment record and any subsequent fulfilment.</Notice>
+ <Link className="btn btn-secondary" to="/records">View my records</Link></div>;
 }

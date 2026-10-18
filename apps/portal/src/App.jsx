@@ -8,7 +8,7 @@ import { Records, RecordDetail } from './Records.jsx';
 import { Notice, PageHeading } from './UiParts.jsx';
 import { PreviewStateProvider } from './journeys/previewState.jsx';
 import { LoginPage, SignupPage, ForgotPasswordPage, AccountCheckpoint, AccountManagement } from './AccountPages.jsx';
-import { PaymentPreview } from './PaymentPreview.jsx';
+import { PaymentPreview,PaymentReturn } from './PaymentPreview.jsx';
 
 function NotReady({ area }) {
   return <div className="page narrow-page">
@@ -44,6 +44,7 @@ export default function App() {
     <Route path="/signup" element={<SignupPage />} />
     <Route path="/forgot-password" element={<ForgotPasswordPage />} />
     <Route path="/account/checkpoint" element={<AccountCheckpoint />} />
+    <Route path="/payment-return" element={<PaymentReturn/>} />
     <Route path="/checkout-preview/:kind" element={<PaymentPreview />} />
     <Route path="/account" element={<AccountManagement />} />
     <Route path="/gti-courses" element={<NotReady area="GTi Courses" />} />
