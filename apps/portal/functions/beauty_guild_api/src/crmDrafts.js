@@ -171,7 +171,7 @@ function registerDraftRoutes(app,{enabled,getCurrentUser,getCrmHeaders,crmApiDom
    await fields(req,'Deals');await fields(req,'Insurance_Policy');
    const membership=await writeOne(req,'Deals',d,req.draftContact);
    const insurance=await writeOne(req,'Insurance_Policy',d,req.draftContact,{Membership:{id:membership.id}});
-   return res.status(201).json({draft:{...insurance,membershipId:membership.id,insuranceId:insurance.id}});
+   return res.status(201).json({draft:{...membership,membershipId:membership.id,insuranceId:insurance.id}});
   }
   const result=await writeOne(req,kind(d.service),d,req.draftContact);
   res.status(201).json({draft:result});
