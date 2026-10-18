@@ -27,12 +27,18 @@ export function LiveRecordDetail({kindOverride}){
       {Object.entries({Reference:record.id,Service:record.kind,Status:record.status,Type:record.type,'Start date':record.startDate,'End date':record.endDate,'Payment status':record.paymentStatus}).map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value||'—'}</dd></div>)}</dl></div><div style={{marginTop:24}}>{kind==='membership'&&<p><Link className="btn btn-secondary" to={'/membership/manage/'+id}>Manage membership and invoices</Link></p>}<DocumentsPanel kind={kind} id={id}/></div></>}
   </div>;
 }
-export function LiveDashboard(){
-  const [data,setData]=useState(null),[error,setError]=useState('');
-  useEffect(()=>{let active=true;portalApi.getDashboard().then(x=>active&&setData(x)).catch(e=>active&&setError(e.message));return()=>{active=false;};},[]);
-  return <div className="page"><PageHeading eyebrow="YOUR GUILD" title="Member dashboard" description="A summary of your memberships, accreditations and insurance."/>
-    {error?<Notice title="Dashboard unavailable">{error}</Notice>:!data?<p role="status">Loading dashboard…</p>:<>
-    <div className="stat-row">{Object.entries(data.summary).map(([k,v])=><div className="stat" key={k}><span>{k}</span><strong>{v}</strong></div>)}</div>
-    <h2>Recent records</h2><section className="surface padded">{data.recent.map(r=><p key={r.kind+r.id}><Link className="reference" to={'/records/'+r.kind+'/'+r.id}>{r.title}</Link> · {r.status}</p>)}{data.recent.length===0&&<p>No records yet.</p>}</section></>}
-  </div>;
+const SUMMARY_LABELS={total:'All records',memberships:'Memberships',accreditations:'Accreditations',insurance:'Insurance'};
+// A summary of the member's records, shown under the service cards. A missing or unmatched record
+// is explained in plain words and never replaces the rest of the dashboard.
+export function RecordsSummary(){
+  const [data,setData]=useState(null),[error,setError]=useState(null);
+  useEffect(()=>{let active=true;portalApi.getDashboard().then(x=>active&&setData(x)).catch(e=>active&&setError(e));return()=>{active=false;};},[]);
+  if(error){
+    if(error.code==='NOT_AUTHENTICATED')return <Notice title="Sign in to see your records">Your memberships, accreditations and insurance will appear here once you are signed in.</Notice>;
+    return <Notice title="Your records">{error.message}</Notice>;
+  }
+  if(!data)return <p role="status">Loading your records…</p>;
+  return <section aria-label="Your records"><div className="section-row"><div><small className="eyebrow">YOUR RECORDS</small><h2>At a glance</h2></div><Link className="text-link" to="/records">All records</Link></div>
+    <div className="stat-row">{Object.entries(data.summary).map(([k,v])=><div className="stat" key={k}><span>{SUMMARY_LABELS[k]||k}</span><strong>{v}</strong></div>)}</div>
+    <section className="surface padded">{data.recent.map(r=><p key={r.kind+r.id}><Link className="reference" to={'/records/'+r.kind+'/'+r.id}>{r.title}</Link> · {r.status}</p>)}{data.recent.length===0&&<p>No records yet.</p>}</section></section>;
 }

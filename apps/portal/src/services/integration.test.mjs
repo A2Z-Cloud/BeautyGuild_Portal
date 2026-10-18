@@ -88,3 +88,11 @@ test('does not retry or silently mark writes as successful',async()=>{
   const api=createHttpClient({baseUrl:'/server/beauty_guild_api',fetchImpl:async()=>{throw new Error('offline');}});
   await assert.rejects(()=>api('/never',{method:'POST',body:{}}),e=>e.code==='NETWORK_ERROR');
 });
+
+test('recognised Contact codes get a fixed friendly message and unknown codes never leak',async()=>{
+  const make=(status,body)=>createHttpClient({baseUrl:'/server/beauty_guild_api',fetchImpl:async()=>({ok:false,status,text:async()=>JSON.stringify(body)})});
+  await assert.rejects(()=>make(404,{error:'No Guild contact is linked to your account.',code:'CONTACT_UNLINKED'})('/portal/records/'),
+    e=>e.code==='CONTACT_UNLINKED'&&/could not find a Guild membership record/.test(e.message));
+  await assert.rejects(()=>make(409,{error:'x',code:'CONTACT_AMBIGUOUS'})('/portal/records/'),e=>e.code==='CONTACT_AMBIGUOUS'&&/check your details/.test(e.message));
+  await assert.rejects(()=>make(500,{error:'ORA-00942 internal',code:'SOMETHING_INTERNAL'})('/x'),e=>e.code==='HTTP_ERROR'&&!/ORA-/.test(e.message));
+});
