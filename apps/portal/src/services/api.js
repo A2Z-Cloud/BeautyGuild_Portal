@@ -10,6 +10,9 @@ export const integrationConfig=parseIntegrationConfig(import.meta.env);
 export const DATA_MODE=integrationConfig.mode;
 const gateway=createLegacyGateway(integrationConfig);
 const auth=createCatalystAuth(integrationConfig.catalystAuth);
+const draftsOn=integrationConfig.baseConfigured&&integrationConfig.catalystAuth&&import.meta.env.VITE_PORTAL_CRM_DRAFTS==='true';
+const draftHttp=draftsOn?createHttpClient({baseUrl:integrationConfig.apiBaseUrl}):null;
+const draftReq=(path,opts)=>draftHttp?draftHttp('/portal/drafts'+path,opts):unavailable('CRM drafts');
 const schoolOn=integrationConfig.baseConfigured&&integrationConfig.catalystAuth&&import.meta.env.VITE_PORTAL_SCHOOL_SERVICES==='true';
 const schoolHttp=schoolOn?createHttpClient({baseUrl:integrationConfig.apiBaseUrl}):null;
 const schoolReq=(path,opts)=>schoolHttp?schoolHttp('/portal/management'+path,opts):unavailable('School and invoice services');
@@ -33,7 +36,7 @@ export const INTEGRATIONS=Object.freeze({
   catalystAuth:integrationConfig.catalystAuth,
   courses:isEnabled(integrationConfig,'courses'),
   address:isEnabled(integrationConfig,'address'),
-  schoolServices:schoolOn,schoolWrites:schoolWritesOn,crmRecords:recordsOn,crmDrafts:false,crmContactMapping:false,pricing:false,
+  schoolServices:schoolOn,schoolWrites:schoolWritesOn,crmRecords:recordsOn,crmDrafts:draftsOn,crmContactMapping:false,pricing:false,
   underwriting:false,stripeCheckout:billingOn,policyIssuance:false,workdrive:documentsOn,
 });
 export const portalApi=Object.freeze({
@@ -61,11 +64,11 @@ export const portalApi=Object.freeze({
   listCourses:options=>gateway.listCourses(options),
   findAddresses:(text,container,options)=>gateway.findAddresses(text,container,options),
   retrieveAddress:(id,options)=>gateway.retrieveAddress(id,options),
-  createDraft:async()=>unavailable('CRM draft creation'),
-  updateDraft:async()=>unavailable('CRM draft update'),
-  getDraft:async()=>unavailable('CRM draft retrieval'),
-  listDrafts:async()=>unavailable('CRM draft listing'),
-  discardDraft:async()=>unavailable('CRM draft deletion'),
+  createDraft:async data=>(await draftReq('/',{method:'POST',body:data})).draft,
+  updateDraft:async (service,id,data)=>(await draftReq('/'+service+'/'+encodeURIComponent(id),{method:'PUT',body:data})).draft,
+  getDraft:async (service,id)=>(await draftReq('/'+service+'/'+encodeURIComponent(id))).draft,
+  listDrafts:async ()=>(await draftReq('/')).drafts,
+  discardDraft:async (service,id)=>draftReq('/'+service+'/'+encodeURIComponent(id),{method:'DELETE'}),
   quote:async id=>(await billingReq('/quotes/'+encodeURIComponent(id))).quote,
   submit:async()=>unavailable('CRM submission'),
   checkout:async quoteId=>billingReq('/checkout',{method:'POST',body:{quoteId}}),

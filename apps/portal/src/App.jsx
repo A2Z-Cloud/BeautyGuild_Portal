@@ -12,6 +12,7 @@ import { PaymentPreview,PaymentReturn } from './PaymentPreview.jsx';
 import { INTEGRATIONS } from './services/api.js';
 import { CourseCatalogue } from './components/CourseCatalogue.jsx';
 import PublicSchoolVerification from './PublicSchoolVerification.jsx';
+import SavedDrafts from './SavedDrafts.jsx';
 import {SchoolsList,SchoolWorkspace,AccountInvoices,MembershipManagement,AccountDocuments} from './SchoolWorkspace.jsx';
 
 function NotReady({ area }) {
@@ -47,6 +48,7 @@ export default function App() {
     <Route path="/verify" element={<PublicSchoolVerification />} />
     <Route path="/verify/:number" element={<PublicSchoolVerification />} />
     <Route path="/records" element={<Records />} />
+    <Route path="/drafts" element={<SavedDrafts/>} />
     <Route path="/schools" element={<SchoolsList/>} />
     <Route path="/schools/:id/:section" element={<SchoolWorkspace/>} />
     <Route path="/invoices" element={<AccountInvoices/>} />

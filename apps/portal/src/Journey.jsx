@@ -6,7 +6,7 @@ import {Field,Notice,PageHeading,Stages} from './UiParts.jsx';
 import {accreditationType,validate} from './logic.mjs';
 import {usePreviewState} from './journeys/previewState.jsx';
 import AddressLookup from './components/AddressLookup.jsx';
-import {INTEGRATIONS} from './services/api.js';
+import {INTEGRATIONS,portalApi} from './services/api.js';
 
 function ReviewDetails({steps,values,kind}){
   const all=steps.flatMap(s=>s.fields).filter(f=>!f.when||f.when(values));
@@ -34,13 +34,29 @@ function CheckpointNotice({kind}) {
 export function Journey({kind}){
   const navigate=useNavigate();
   const config=JOURNEYS[kind];
-  const {answers,steps:storedSteps,setAnswer,setJourneyStep,clearAnswers}=usePreviewState();
+  const {answers,steps:storedSteps,draftMeta,setDraft,setAnswer,setJourneyStep,clearAnswers}=usePreviewState();
   const values=answers[kind]||{};
   const visible=useMemo(()=>config.steps.filter(step=>!step.when||step.when(values)),[config,values]);
   const index=Math.min(storedSteps[kind]||0,visible.length-1);
   const current=visible[index];
   const last=index===visible.length-1;
   const [errors,setErrors]=useState({});
+  const [saving,setSaving]=useState(false),[saveStatus,setSaveStatus]=useState('');
+  async function saveDraft(){
+    if(!INTEGRATIONS.crmDrafts){checkpoint('save');return;}
+    if(saving)return;
+    setSaving(true);setSaveStatus('');
+    try{
+      const old=draftMeta[kind],service=kind==='membership'&&values.insuranceWanted==='yes'?'combined':kind;
+      const journeyId=old?.journeyId||crypto.randomUUID();
+      if(!old?.journeyId)setDraft(kind,{journeyId,service,revision:0});
+      const payload={service,journeyId,step:index,answers:service==='combined'?{membership:values,insurance:{insuranceWanted:values.insuranceWanted,liability:values.liability,professional:values.professional,contents:values.contents,coverNotes:values.coverNotes}}:values,...(old?{revision:old.revision}:{})};
+      const next=old?.id&&old.service===service?await portalApi.updateDraft(service,old.id,payload):await portalApi.createDraft(payload);
+      setDraft(kind,{id:next.id,revision:next.revision,journeyId:next.journeyId,service});
+      setSaveStatus('Your application has been saved. You can finish it later from Saved applications.');
+    }catch(e){if(e.status===401||e.code==='NOT_AUTHENTICATED'){checkpoint('save');return;}setSaveStatus(e.code==='REVISION_CONFLICT'?'This application has changed elsewhere. Please reload the page before saving.':'We could not save your application. Please try again.');}
+    finally{setSaving(false);}
+  }
   const update=(name,value)=>{setAnswer(kind,name,value);setErrors(previous=>({...previous,[name]:undefined}));};
   const move=position=>{setJourneyStep(kind,position);setErrors({});window.scrollTo({top:0,behavior:'smooth'});};
   const checkpoint=intent=>navigate('/account/checkpoint?returnTo='+encodeURIComponent('/'+kind+'/new')+'&intent='+intent);
@@ -73,7 +89,7 @@ export function Journey({kind}){
     <PageHeading eyebrow={config.kicker} title={config.title+' application'} description={config.intro}>
       <span className="journey-counter">Step {index+1} of {visible.length}</span>
     </PageHeading>
-    <Notice title="Applications are opening soon">You can complete this form to see the questions, but your answers are not submitted or saved, and nothing is charged. Please do not enter payment or confidential information.</Notice>
+    <Notice title={INTEGRATIONS.crmDrafts?'Save your application':'Applications are opening soon'}>{INTEGRATIONS.crmDrafts?'Saving keeps your answers so you can finish later. It does not submit your application or take payment.':'You can complete this form to see the questions, but your answers are not submitted or saved, and nothing is charged.'}</Notice>
     <div className="journey-shell">
       <section className="journey-card">
         <Stages steps={visible} current={index}/>
@@ -90,8 +106,8 @@ export function Journey({kind}){
       <aside className="journey-aside">
         <div className="aside-card"><span className="eyebrow">YOUR PROGRESS</span><div className="progress-track"><div style={{width:Math.round(((index+1)/visible.length)*100)+'%'}}/></div>
           <strong>{Math.round(((index+1)/visible.length)*100)}% through this journey</strong><p>Your answers stay in this browser tab only. They are not saved or submitted.</p></div>
-        <div className="aside-card muted-card"><LockKeyhole size={22}/><h3>Save and finish later</h3><p>You will soon be able to save your application and come back to it later. This is not available yet.</p>
-          <button type="button" className="text-button" onClick={()=>checkpoint('save')}><Save size={15}/> Create an account or sign in</button></div>
+        <div className="aside-card muted-card"><LockKeyhole size={22}/><h3>Save and finish later</h3><p>{INTEGRATIONS.crmDrafts?'Sign in to save your application and finish it later.':'You will soon be able to save your application and come back to it later. This is not available yet.'}</p>
+          <button type="button" className="text-button" disabled={saving} onClick={saveDraft}><Save size={15}/>{saving?'Saving…':INTEGRATIONS.crmDrafts?'Save my application':'Create an account or sign in'}</button>{saveStatus&&<p role="status">{saveStatus}</p>}</div>
         <div className="aside-card"><CreditCard size={21}/><h3>Payment information</h3><p>Prices and payment are not available yet. You will not be charged.</p></div>
         <button type="button" className="text-button restart-button" onClick={()=>{clearAnswers(kind);setErrors({});}}>Clear my answers and start again</button>
         <div className="aside-help"><ShieldAlert size={18}/><span>Please do not enter card details or confidential information yet.</span></div>

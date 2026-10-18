@@ -28,6 +28,7 @@ const sections = [
   {label:'Insurance',path:'/insurance',icon:ShieldCheck},
   {label:'Accreditation',path:'/accreditation',icon:GraduationCap},
   {label:'My records',path:'/records',icon:ClipboardList},
+  {label:'Saved applications',path:'/drafts',icon:ClipboardList,when:()=>INTEGRATIONS.crmDrafts},
   {label:'My schools',path:'/schools',icon:Building2,when:()=>INTEGRATIONS.schoolServices},
 ];
 const secondary = [
