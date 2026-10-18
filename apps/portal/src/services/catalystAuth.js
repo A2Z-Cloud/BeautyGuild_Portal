@@ -49,7 +49,8 @@ export function createCatalystAuth(enabled){
     },
     async signInEmbed(containerId){
       const auth=await requireSDK();
-      return auth.signIn(containerId,{redirect_url:import.meta.env.BASE_URL});
+      // css_url points at our branded copy of Catalyst's sign-in stylesheet (see auth-css/).
+      return auth.signIn(containerId,{redirect_url:import.meta.env.BASE_URL,css_url:import.meta.env.BASE_URL+'auth/embedded_signin.css'});
     },
     async signUp({firstName,lastName,email}){
       if(!firstName?.trim()||!lastName?.trim()||!email?.trim())throw new Error('Name and email are required.');
