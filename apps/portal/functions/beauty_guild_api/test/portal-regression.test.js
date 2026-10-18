@@ -21,7 +21,7 @@ function rows() {
 async function withApp(overrides,fn){
  const quotes=rows(),payments=rows();
  const app=createApp({
-  config:loadConfig({PORTAL_RECORDS_ENABLED:'true',PORTAL_BILLING_ENABLED:'true',PORTAL_DOCUMENTS_ENABLED:'true'}),
+  config:loadConfig({PORTAL_RECORDS_ENABLED:'true',PORTAL_BILLING_ENABLED:'true',PORTAL_DOCUMENTS_ENABLED:'true',STRIPE_SECRET_KEY:'sk_test_example_only',STRIPE_WEBHOOK_SECRET:'whsec_example_only',PORTAL_PUBLIC_ORIGIN:'https://preview.example.test'}),
   getCurrentUser:async()=>({id:'user-1',email:'alice@example.test'}),
   getCrmHeaders:async()=>({Authorization:'Bearer test'}),
   getWorkdriveHeaders:async()=>({Authorization:'Bearer wd-test'}),
