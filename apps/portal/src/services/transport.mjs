@@ -6,6 +6,12 @@ export class ApiError extends Error {
   }
 }
 const allowedMethods=new Set(['GET','POST','PUT','PATCH','DELETE']);
+const SAFE_MESSAGES=Object.freeze({
+  NOT_AUTHENTICATED:'Please sign in to continue.',
+  NOT_AUTHORISED:'You do not have permission to do that.',
+  RATE_LIMIT:'Too many requests. Please wait a moment and try again.',
+  HTTP_ERROR:'The service is unavailable. Please try again.',
+});
 export function createHttpClient({baseUrl,fetchImpl=fetch,timeoutMs=15000}) {
   if(!baseUrl || !/^\/(?!\/)|^https:\/\//.test(baseUrl))throw new ApiError('Set a same-origin path or an HTTPS API base URL before enabling live integrations.',{code:'NOT_CONFIGURED'});
   return async function request(path,{method='GET',body,signal}={}) {
@@ -27,9 +33,9 @@ export function createHttpClient({baseUrl,fetchImpl=fetch,timeoutMs=15000}) {
       let data={};
       if(raw){try{data=JSON.parse(raw);}catch{throw new ApiError('The service returned an unexpected non-JSON response.',{status:response.status,code:'INVALID_RESPONSE'});}}
       if(!response.ok){
+        // Backend error text is never shown to customers: it may carry internal detail.
         const code=response.status===401?'NOT_AUTHENTICATED':response.status===403?'NOT_AUTHORISED':response.status===429?'RATE_LIMIT':'HTTP_ERROR';
-        const safe=data?.error && typeof data.error==='string'?data.error:'The service is unavailable. Please try again.';
-        throw new ApiError(safe,{status:response.status,code});
+        throw new ApiError(SAFE_MESSAGES[code],{status:response.status,code});
       }
       return data;
     }catch(error){

@@ -69,6 +69,13 @@ test('address search text containing ".." is allowed, path traversal is not',asy
   assert.equal(isSafePath('/address/find?text=..'),true);
   assert.throws(()=>appendPath('/base','/a/../b'));
 });
+test('backend error text is never surfaced to users',async()=>{
+  const leak='ORA-00942 at /srv/app/crm.js:88';
+  for(const [status,code] of [[401,'NOT_AUTHENTICATED'],[403,'NOT_AUTHORISED'],[429,'RATE_LIMIT'],[500,'HTTP_ERROR']]){
+    const api=createHttpClient({baseUrl:'/server/beauty_guild_api',fetchImpl:async()=>({ok:false,status,text:async()=>JSON.stringify({error:leak})})});
+    await assert.rejects(()=>api('/courses'),e=>e.code===code&&!e.message.includes('ORA-')&&e.message.length>0);
+  }
+});
 test('API mode never falls back to the demo viewer',async()=>{
   const demoUser={name:'Demo'},auth={currentUser:async()=>({userId:'42'})};
   assert.deepEqual(await resolveViewer({config:parseIntegrationConfig({}),auth,demoUser}),demoUser);

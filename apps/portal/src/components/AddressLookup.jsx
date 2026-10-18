@@ -38,7 +38,7 @@ export default function AddressLookup({query,onSelect}){
     <button type="button" className="btn btn-secondary" disabled={busy||!String(query||'').trim()||String(query||'').trim().length<3} onClick={()=>search(String(query).trim())}>
       <Search size={15}/>{busy?'Searching addresses':'Find address'}
     </button>
-    <span><MapPin size={14}/> Verified V1 Loqate API · manual entry is always available</span>
+    <span><MapPin size={14}/> Address lookup is optional · you can always enter it manually</span>
     {error&&<div className="address-search-error" role="alert">{error}</div>}
     {matches.length>0&&<div className="address-results" aria-label="Address suggestions">{matches.map((item,index)=>
       <button type="button" key={(item.Id||'')+index} onClick={()=>choose(item)} disabled={busy}>

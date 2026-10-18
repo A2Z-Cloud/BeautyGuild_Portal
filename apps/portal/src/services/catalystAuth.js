@@ -1,24 +1,35 @@
 import {IntegrationUnavailableError} from './legacy.mjs';
 
 let readyPromise;
-function loadScript(src){
+// Pinned SDK version with a Subresource Integrity hash: if the CDN file ever changes, the
+// browser refuses it and sign-in fails closed. Recompute the hash when bumping the version.
+const SDK_URL='https://static.zohocdn.com/catalyst/sdk/js/4.6.1/catalystWebSDK.js';
+const SDK_INTEGRITY='sha384-N45BD52JNBULILyzXT1syFPnINEBnKXFwFFFMqWtjuoW1j/6SHkBY+wZTq3KWnAV';
+const LOAD_TIMEOUT_MS=15000;
+// isReady covers a matching tag that already finished loading before we could attach listeners.
+function loadScript(src,{integrity,isReady=()=>false}={}){
   return new Promise((resolve,reject)=>{
     const existing=[...document.scripts].find(s=>s.src===new URL(src,window.location.origin).href);
-    if(existing?.dataset.loaded==='true')return resolve();
+    if(existing?.dataset.loaded==='true'||(existing&&isReady()))return resolve();
     const script=existing||document.createElement('script');
-    const done=()=>{script.dataset.loaded='true';resolve();};
-    const fail=()=>reject(new IntegrationUnavailableError('Catalyst Web SDK loading'));
+    const timer=setTimeout(()=>fail(),LOAD_TIMEOUT_MS);
+    const done=()=>{clearTimeout(timer);script.dataset.loaded='true';resolve();};
+    const fail=()=>{clearTimeout(timer);reject(new IntegrationUnavailableError('Catalyst Web SDK loading'));};
     script.addEventListener('load',done,{once:true});
     script.addEventListener('error',fail,{once:true});
-    if(!existing){script.src=src;script.async=false;document.head.appendChild(script);}
+    if(!existing){
+      script.src=src;script.async=false;
+      if(integrity){script.integrity=integrity;script.crossOrigin='anonymous';}
+      document.head.appendChild(script);
+    }
   });
 }
 async function sdk(){
   if(typeof window==='undefined'||typeof document==='undefined')throw new IntegrationUnavailableError('Catalyst browser runtime');
   if(window.catalyst?.auth)return window.catalyst.auth;
   if(!readyPromise)readyPromise=(async()=>{
-    await loadScript('https://static.zohocdn.com/catalyst/sdk/js/4.6.1/catalystWebSDK.js');
-    await loadScript('/__catalyst/sdk/init.js');
+    await loadScript(SDK_URL,{integrity:SDK_INTEGRITY,isReady:()=>Boolean(window.catalyst)});
+    await loadScript('/__catalyst/sdk/init.js',{isReady:()=>Boolean(window.catalyst?.auth)});
     if(!window.catalyst?.auth)throw new IntegrationUnavailableError('Catalyst Authentication SDK');
     return window.catalyst.auth;
   })().catch(e=>{readyPromise=undefined;throw e;});

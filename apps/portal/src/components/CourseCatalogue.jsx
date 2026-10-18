@@ -13,7 +13,7 @@ export function CourseCatalogue(){
   },[]);
   if(!INTEGRATIONS.courses)return null;
   return <section className="surface padded live-courses"><div className="subheading"><BookOpen size={23}/><h2>GTi course catalogue</h2></div>
-    <p>Live course titles from the existing Beauty Guild V1 API. These are reference data only and are not yet linked to a V2 Accreditation draft.</p>
+    <p>Current GTi courses, for reference only. They are not yet linked to an accreditation application.</p>
     {state.loading&&<p role="status">Retrieving course catalogue…</p>}
     {state.error&&<div className="notice" role="alert"><strong>Course service unavailable</strong><span>{state.error}</span></div>}
     {!state.loading&&!state.error&&(state.items.length?
