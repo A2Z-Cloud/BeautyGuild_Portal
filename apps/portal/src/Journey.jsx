@@ -51,9 +51,12 @@ export function Journey({kind}){
     if(last){checkpoint('complete');return;}
     move(index+1);
   };
-  const addressBindings={
+  const addressBindings=kind==='membership'?{
+    postcode:{line1:'address1',line2:'address2',town:'town',county:'county',postcode:'postcode'}
+  }:kind==='accreditation'?{
     postcode:{line1:'address1',line2:'address2',town:'town',county:'county',postcode:'postcode'},
-    centrePostcode:{line1:'centreAddress',town:'centreTown',county:'centreCounty',postcode:'centrePostcode'},
+    centrePostcode:{line1:'centreAddress',town:'centreTown',county:'centreCounty',postcode:'centrePostcode'}
+  }:{
     premisesPostcode:{line1:'premisesAddress',town:'premisesTown',postcode:'premisesPostcode'}
   };
   const applyAddress=(key,address)=>{
