@@ -238,6 +238,11 @@ function registerSchoolRoutes(app,{enabled,writesEnabled,getCurrentUser,getCrmHe
   if(body.availabilityType==='Fixed Date'&&!body.sessionStart)fail('A start date is required.',422,'INVALID_DATE');
   const max=body.maximumPlaces==null||body.maximumPlaces===''?undefined:Number(body.maximumPlaces);
   if(max!==undefined&&(!Number.isInteger(max)||max<1||max>1000))fail('Invalid maximum places.',422,'INVALID_PLACES');
+  if(body.tutorId){
+   if(!ID.test(String(body.tutorId)))fail('Tutor selection is invalid.',422,'INVALID_TUTOR');
+   const tutor=(await api.crm(req,'Tutor_Relationships/'+body.tutorId+'?fields='+esc('Account,Status')))[0];
+   if(!tutor||String(tutor.Account?.id)!==String(acc.Account.id)||tutor.Status!=='Active')fail('Tutor is not linked to this school.',404,'NOT_FOUND');
+  }
   const data={
    course_offering:offeringId,training_centre:offering.Training_Centre.id,account1:acc.Account.id,
    tutor:body.tutorId||undefined,availability_type:body.availabilityType,status:'Open',
