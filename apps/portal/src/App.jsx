@@ -12,6 +12,7 @@ import { PaymentPreview,PaymentReturn } from './PaymentPreview.jsx';
 import { INTEGRATIONS } from './services/api.js';
 import { CourseCatalogue } from './components/CourseCatalogue.jsx';
 import PublicSchoolVerification from './PublicSchoolVerification.jsx';
+import {SchoolsList,SchoolWorkspace,AccountInvoices,MembershipManagement} from './SchoolWorkspace.jsx';
 
 function NotReady({ area }) {
   return <div className="page narrow-page">
@@ -46,6 +47,10 @@ export default function App() {
     <Route path="/verify" element={<PublicSchoolVerification />} />
     <Route path="/verify/:number" element={<PublicSchoolVerification />} />
     <Route path="/records" element={<Records />} />
+    <Route path="/schools" element={<SchoolsList/>} />
+    <Route path="/schools/:id/:section" element={<SchoolWorkspace/>} />
+    <Route path="/invoices" element={<AccountInvoices/>} />
+    <Route path="/membership/manage/:id" element={<MembershipManagement/>} />
     <Route path="/records/:kind/:id" element={<RecordDetail />} />
     <Route path="/membership/:id" element={<RecordDetail kindOverride="membership" />} />
     <Route path="/insurance/:id" element={<RecordDetail kindOverride="insurance" />} />
