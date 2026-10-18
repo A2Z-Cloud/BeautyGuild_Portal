@@ -3,6 +3,8 @@ import {Link, useSearchParams} from 'react-router-dom';
 import {ArrowLeft,ArrowRight,CheckCircle2,KeyRound,Lock,Mail,Shield,UserRound,UserPlus} from 'lucide-react';
 import {Logo,Notice,PageHeading} from './UiParts.jsx';
 import {DEMO_USER} from './data/demo.js';
+import {INTEGRATIONS} from './services/api.js';
+import {CatalystSignIn,CatalystRegistration,CatalystAccountOverview} from './components/CatalystAuthViews.jsx';
 
 const validReturn = path => ['/membership/new','/insurance/new','/accreditation/new'].includes(path) ? path : '/';
 function useReturn(){
@@ -39,6 +41,7 @@ export function LoginPage() {
   const {route,tail}=useReturn();
   const [message,setMessage]=useState('');
   const submit=e=>{e.preventDefault();setMessage('Catalyst Authentication is not connected. No sign-in attempt was made. Your example journey is still available.');};
+  if(INTEGRATIONS.catalystAuth)return <Shell eyebrow="WELCOME BACK" title="Secure member sign in" description="Catalyst Authentication verifies your identity; CRM record access requires separate Contact matching."><CatalystSignIn returnTo={route}/></Shell>;
   return <Shell eyebrow="WELCOME BACK" title="Sign in to your account" description="Access your Guild services, saved applications and account details.">
     <form className="auth-card" onSubmit={submit} autoComplete="off"><h2>Member sign in</h2>
       <label htmlFor="signin-email">Email address</label><input id="signin-email" type="email" placeholder="you@example.com" autoComplete="off" required/>
@@ -56,6 +59,7 @@ export function SignupPage() {
   const [message,setMessage]=useState('');
   const [agreed,setAgreed]=useState(false);
   const submit=e=>{e.preventDefault();setMessage('Catalyst sign-up and CRM Contact matching are not connected. No account was registered or saved.');};
+  if(INTEGRATIONS.catalystAuth)return <Shell eyebrow="JOIN THE GUILD" title="Create your Catalyst account" description="Registration sends a verified invitation; CRM linkage follows separately."><CatalystRegistration returnTo={route}/></Shell>;
   return <Shell eyebrow="JOIN THE GUILD" title="Create your account" description="Complete your application first, then register once. You won't need to start your answers again.">
     <form className="auth-card" onSubmit={submit} autoComplete="off"><h2>Your account details</h2>
       <div className="auth-double"><div><label htmlFor="reg-first">First name</label><input id="reg-first" required placeholder="First name"/></div><div><label htmlFor="reg-last">Surname</label><input id="reg-last" required placeholder="Surname"/></div></div>
@@ -88,6 +92,7 @@ export function AccountManagement() {
   const [form,setForm]=useState({name:DEMO_USER.name,email:'alex@example.invalid',mobile:'',business:'',postcode:'',contactByEmail:true,marketing:false});
   const update=(key,value)=>setForm(old=>({...old,[key]:value}));
   const save=e=>{e.preventDefault();setNotice('Preview only. Changes are not saved to CRM or an account.');};
+  if(INTEGRATIONS.catalystAuth)return <CatalystAccountOverview/>;
   return <div className="page account-page">
     <PageHeading eyebrow="MY ACCOUNT" title="Account management" description="Review the member profile, communication preferences and account access settings."/>
     <Notice title="Sample account">This is an illustrative member profile. You are not authenticated and no CRM Contact record is being loaded or updated.</Notice>

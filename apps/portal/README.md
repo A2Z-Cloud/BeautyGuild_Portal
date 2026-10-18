@@ -77,3 +77,15 @@ You own all backend integration endpoints, authenticated Contact association, CR
 - Sample record details, statuses and dates are fictional, with URL-persistent tabs.
 - Login, sign-up, password reset, account checkpoint and account management are navigable frontend demonstrations. No real account creation, authentication, emails, CRM changes or payments occur. Sample journey answers remain in React memory when navigating between screens, but are lost after a full page refresh.
 - Fonts are loaded from Google Fonts (fallbacks are provided); confirm branding assets/licensing before Production.
+
+## Milestone 2: explicitly gated integrations
+
+Milestone 2 introduces opt-in Catalyst identity/registration and the verified V1 read-side course/Loqate adapters. These are off by default so your Milestone 1 deployment remains a predictable demo. The backend owner must confirm the V2 deployment origin, security and relevant API contracts before enabling services.
+
+1. Leave `VITE_DATA_MODE=demo` for your first deployment and smoke tests.
+2. Once `/server/beauty_guild_api` is confirmed on **this** hosting origin, set `VITE_DATA_MODE=api`, `VITE_API_BASE_URL=/server/beauty_guild_api` and `VITE_ENABLED_LEGACY_APIS=courses,address` to test course data and address lookups.
+3. To test actual Catalyst auth, set `VITE_CATALYST_AUTH=true` (requires API mode and Catalyst hosting). This loads the official Catalyst SDK on demand, presents the embedded sign-in widget and invokes Catalyst sign-up. No custom password HTTP endpoint is used.
+4. For Slate deployments on a separate origin, a relative `/server/` path is insufficient. Get a verified full HTTPS function URL with a proper cross-origin auth/CORS design first.
+5. **Do not enable CRM draft, records, Stripe, underwriting or WorkDrive operations.** They remain unconnected until the backend delivers verified Contact permissions and service-specific payloads.
+
+Test using [INTEGRATION-TEST.md](INTEGRATION-TEST.md) and see [Milestone 2 Contract Register](../../docs/api-contracts/milestone-2.md). All Vite variables are build-time public information.

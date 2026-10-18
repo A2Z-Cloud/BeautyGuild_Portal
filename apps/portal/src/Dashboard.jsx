@@ -3,6 +3,7 @@ import { ArrowRight, ArrowUpRight, Sparkles } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { DEMO_RECORDS, DEMO_SERVICES } from './data/demo.js';
 import { IconFor, ServiceArrow, Status } from './UiParts.jsx';
+import IntegrationStatus from './components/IntegrationStatus.jsx';
 export default function Dashboard(){
  return <div className="page dashboard">
   <div className="eyebrow welcome">WELCOME TO YOUR PORTAL <span>October 2026 · Example date</span></div>
@@ -13,5 +14,6 @@ export default function Dashboard(){
   <div className="services-grid">{DEMO_SERVICES.map(s=><Link key={s.kind} className={'service-card '+s.theme} to={'/'+s.kind}><span className="service-icon"><IconFor kind={s.kind}/></span><small>GUILD SERVICES</small><strong>{s.title}</strong><p>{s.description}</p><ServiceArrow>{s.action}</ServiceArrow></Link>)}</div>
   <div className="section-row section-row-lower"><div><small className="eyebrow">AT A GLANCE</small><h2>Recent sample activity</h2></div><Link className="text-link" to="/records">All records <ArrowRight size={16}/></Link></div>
   <div className="surface"><div className="table-scroll"><table className="record-table"><thead><tr><th>Reference</th><th>Application</th><th>Status</th><th>Updated</th></tr></thead><tbody>{DEMO_RECORDS.slice(0,3).map(r=><tr key={r.id}><td><Link className="reference" to={'/records/'+r.kind+'/'+r.id+'?tab=overview'}>{r.reference}</Link><small>{r.category}</small></td><td><strong>{r.title}</strong><small>{r.subtitle}</small></td><td><Status value={r.status}/></td><td className="muted">{r.updated}</td></tr>)}</tbody></table></div></div>
+ <IntegrationStatus/>
  </div>;
 }
