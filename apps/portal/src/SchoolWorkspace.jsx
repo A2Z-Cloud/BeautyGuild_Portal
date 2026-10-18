@@ -76,7 +76,7 @@ function SchoolSection({id,section}){
  {key:'isMain',label:'Type',render:r=>r.isMain?'Main centre':'Additional venue'},col('courseCount','Courses'),
  {key:'visible',label:'Directory',render:r=>r.visible?'Visible':'Hidden'}]}/></>;
  case 'tutors':return <><h2>Accredited tutors</h2><p>Tutors should hold current Guild membership, appropriate qualifications and insurance.</p>
- <SimpleTable rows={x.tutors||[]} columns={[col('name','Tutor'),col('status','Membership / link'),col('membershipDealId','Membership Deal')]}/></>;
+ <SimpleTable rows={x.tutors||[]} columns={[col('name','Tutor'),col('membershipNumber','Membership number'),col('membershipExpiry','Membership expiry'),col('status','Status')]}/></>;
  case 'qualifications':return <><div className="school-dialog-head"><h2>Qualifications</h2>{INTEGRATIONS.schoolWrites&&<button type="button" className="btn btn-primary" onClick={()=>setEditing(v=>!v)}>{editing?'Cancel':'Add qualification'}</button>}</div>{editing&&<QualificationForm schoolId={id} onDone={saved}/>}<SimpleTable rows={x.qualifications||[]} columns={[col('name','Qualification'),
  {key:'month',label:'Completed',render:r=>[r.month,r.year].filter(Boolean).join('/')||'—'},col('status','Verification')]}/></>;
  case 'sessions':return <><div className="school-dialog-head"><h2>Course dates and bookings</h2>{INTEGRATIONS.schoolWrites&&<button type="button" className="btn btn-primary" onClick={()=>setEditing(v=>!v)}>{editing?'Cancel':'Create session'}</button>}</div><p>Published fixed and flexible sessions from Zoho Creator. Student booking submission requires its separate write integration.</p>{editing&&<SessionForm schoolId={id} onDone={saved}/>}
