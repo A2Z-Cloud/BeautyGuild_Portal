@@ -22,3 +22,9 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Validate unit tests and static build
         run: npm run check
+      - name: Install API dependencies
+        working-directory: apps/portal/functions/beauty_guild_api
+        run: npm ci --no-audit --no-fund
+      - name: Validate API tests
+        working-directory: apps/portal/functions/beauty_guild_api
+        run: npm test

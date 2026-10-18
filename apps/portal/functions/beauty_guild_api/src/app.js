@@ -4,6 +4,7 @@ const { HttpError } = require('./errors');
 const { createLoqate } = require('./loqate');
 const { createCourses } = require('./courses');
 const { createRateLimiter } = require('./rateLimit');
+const {registerRecordRoutes}=require('./records');
 
 const TEXT_MIN = 3;
 const TEXT_MAX = 100;
@@ -21,7 +22,7 @@ function cleanText(value) {
 
 function createApp({
   config, getCrmHeaders, fetchImpl = fetch, now = Date.now, log = console.log,
-  addressLimit = 60, addressWindowMs = 60 * 1000,
+  addressLimit = 60, addressWindowMs = 60 * 1000, getCurrentUser,
 }) {
   const loqate = createLoqate({ config, fetchImpl, log });
   const courses = createCourses({ config, getCrmHeaders, fetchImpl, now, log });
@@ -68,6 +69,7 @@ function createApp({
     res.json({ address: await loqate.retrieve(id) });
   }));
 
+  registerRecordRoutes(app,{enabled:config.recordsEnabled,getCurrentUser,getCrmHeaders,crmApiDomain:config.crmApiDomain,fetchImpl});
   app.use((req, res, next) => next(new HttpError(404, 'NOT_FOUND', 'Not found.')));
   // eslint-disable-next-line no-unused-vars
   app.use((err, req, res, next) => {
