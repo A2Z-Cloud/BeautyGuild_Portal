@@ -177,32 +177,81 @@ function registerDraftRoutes(app,{enabled,getCurrentUser,getCrmHeaders,crmApiDom
   res.status(201).json({draft:result});
  }));
  router.get('/',withAuth(async(req,res)=>{
-  const drafts=[];
+  const drafts=[],perModule={};
   for(const [service,module] of Object.entries(SERVICES)){
-   const r=await request(req,'GET',module+'/search?criteria='+quote('('+(service==='membership'?'Contact_Name':service==='insurance'?'Contact':'Applicant_Contact')+':equals:'+req.draftContact.id+')')+'&page=1&per_page=200');
-   for(const row of r.data||[]){
-    const owner=row.Contact_Name||row.Contact||row.Applicant_Contact;
-    if(String(owner?.id)===String(req.draftContact.id)&&row.Application_Status==='Draft')
-      drafts.push({id:String(row.id),service,journeyId:row.Journey_ID,step:Number(row.Last_Completed_Journey_Step||0),updatedAt:row.Draft_Saved_At||null,status:'Draft'});
+   const rows=[];
+   for(let page=1;page<=10;page++){
+    const response=await request(req,'GET',module+'/search?criteria='+quote('('+(service==='membership'?'Contact_Name':service==='insurance'?'Contact':'Applicant_Contact')+':equals:'+req.draftContact.id+')')+'&page='+page+'&per_page=200');
+    const batch=response.data||[];
+    rows.push(...batch);
+    if(batch.length<200)break;
+    if(page===10)fail('DRAFT_LIST_LIMIT','Too many drafts to list safely.',503);
    }
+   perModule[service]=rows.filter(row=>String((row.Contact_Name||row.Contact||row.Applicant_Contact)?.id)===String(req.draftContact.id)&&row.Application_Status==='Draft');
+  }
+  const linked=new Set();
+  for(const m of perModule.membership){
+   const i=perModule.insurance.find(x=>x.Journey_ID&&x.Journey_ID===m.Journey_ID&&String(x.Membership?.id)===String(m.id));
+   if(i)linked.add(i.id);
+   drafts.push({id:String(m.id),service:i?'combined':'membership',journeyId:m.Journey_ID,
+     step:Number(m.Last_Completed_Journey_Step||0),updatedAt:m.Draft_Saved_At||null,status:'Draft'});
+  }
+  for(const i of perModule.insurance)if(!linked.has(i.id)){
+   drafts.push({id:String(i.id),service:'insurance',journeyId:i.Journey_ID,
+     step:Number(i.Last_Completed_Journey_Step||0),updatedAt:i.Draft_Saved_At||null,status:'Draft'});
+  }
+  for(const a of perModule.accreditation){
+   drafts.push({id:String(a.id),service:'accreditation',journeyId:a.Journey_ID,
+     step:Number(a.Last_Completed_Journey_Step||0),updatedAt:a.Draft_Saved_At||null,status:'Draft'});
   }
   res.json({drafts:drafts.sort((a,b)=>String(b.updatedAt).localeCompare(String(a.updatedAt)))});
  }));
+ async function combined(req,id){
+  const membership=ensureOwnership(await detail(req,'Deals',id),req.draftContact.id);
+  const insurance=await findByJourney(req,'Insurance_Policy',membership.Journey_ID,req.draftContact.id);
+  if(!insurance||String(insurance.Membership?.id)!==String(id))fail('INCOMPLETE_COMBINED','This linked insurance application needs reconciliation.',409);
+  return {membership,insurance};
+ }
  router.get('/:service/:id',withAuth(async(req,res)=>{
+  if(req.params.service==='combined'){
+   const {membership,insurance}=await combined(req,req.params.id);
+   const left=await loadState(req,membership),right=await loadState(req,insurance);
+   if(left.journeyId!==right.journeyId||left.revision!==right.revision)fail('REVISION_CONFLICT','The combined application is out of sync.',409);
+   return res.json({draft:{id:String(membership.id),service:'combined',...left,membershipId:String(membership.id),insuranceId:String(insurance.id)}});
+  }
   const module=kind(req.params.service),row=ensureOwnership(await detail(req,module,req.params.id),req.draftContact.id);
   res.json({draft:{id:String(row.id),service:req.params.service,...await loadState(req,row)}});
  }));
  router.put('/:service/:id',withAuth(async(req,res)=>{
-  const module=kind(req.params.service),d=validateDraft(req.body);
+  const d=validateDraft(req.body);
   if(d.service!==req.params.service)fail('SERVICE_MISMATCH','Application type cannot change.');
-  if(d.service==='accreditation')fail('ACCREDITATION_ADAPTER_REQUIRED','Accreditation CRM relationship adapter not yet migrated.',503);
+  if(d.service==='accreditation')fail('ACCREDITATION_ADAPTER_REQUIRED','Accreditation CRM relationship adapter has not yet been migrated.',503);
+  if(d.service==='combined'){
+   const {membership,insurance}=await combined(req,req.params.id);
+   if(d.journeyId!==membership.Journey_ID)fail('JOURNEY_MISMATCH','Application references do not match.',409);
+   const left=await loadState(req,membership),right=await loadState(req,insurance);
+   if(d.revision!==left.revision||d.revision!==right.revision)fail('REVISION_CONFLICT','Reload before changing this application.',409);
+   const m=await writeOne(req,'Deals',d,req.draftContact,{},membership.id);
+   const i=await writeOne(req,'Insurance_Policy',d,req.draftContact,{Membership:{id:membership.id}},insurance.id);
+   return res.json({draft:{...m,insuranceId:i.id}});
+  }
+  const module=kind(req.params.service);
   res.json({draft:await writeOne(req,module,d,req.draftContact,{},req.params.id)});
  }));
- router.delete('/:service/:id',withAuth(async(req,res)=>{
-  const module=kind(req.params.service),row=ensureOwnership(await detail(req,module,req.params.id),req.draftContact.id);
-  if(req.params.service==='accreditation')fail('ACCREDITATION_ADAPTER_REQUIRED','Accreditation discard requires the existing related record cleanup.',503);
-  const out=await request(req,'DELETE',module+'?ids='+quote(row.id));
+ const remove=async(req,module,id)=>{
+  const out=await request(req,'DELETE',module+'?ids='+quote(id));
   if(!Array.isArray(out.data)||out.data[0]?.status!=='success')fail('DELETE_UNCONFIRMED','CRM did not confirm discard.',502);
+ };
+ router.delete('/:service/:id',withAuth(async(req,res)=>{
+  if(req.params.service==='combined'){
+   const {membership,insurance}=await combined(req,req.params.id);
+   await remove(req,'Insurance_Policy',insurance.id);
+   await remove(req,'Deals',membership.id);
+   return res.json({discarded:true});
+  }
+  const module=kind(req.params.service),row=ensureOwnership(await detail(req,module,req.params.id),req.draftContact.id);
+  if(req.params.service==='accreditation')fail('ACCREDITATION_ADAPTER_REQUIRED','Accreditation discard requires established related-record cleanup.',503);
+  await remove(req,module,row.id);
   res.json({discarded:true});
  }));
  app.use('/portal/drafts',router);
