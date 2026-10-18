@@ -40,7 +40,10 @@ function mapRecord(kind,r){
     endDate:r.Expiry_Date||r.Valid_To||r.Policy_End_Date||null,
     paymentStatus:r.Payment_Status||null,type:r.Membership_Type||r.Accreditation_Level||r.Policy_Type||null};
 }
-function registerRecordRoutes(app,{enabled,getCurrentUser,getCrmHeaders,crmApiDomain,fetchImpl=fetch}){
+function registerRecordRoutes(app,{enabled,getCurrentUser,getCrmHeaders,crmApiDomain,fetchImpl=fetch,hideDrafts=false,draftStatus='Draft'}){
+  // Saved drafts live in the same CRM modules; they are never shown as real memberships, policies or accreditations.
+  const isDraft=row=>hideDrafts&&row&&row.Application_Status===draftStatus;
+  const fieldList=d=>[...new Set([...d.fields,'Modified_Time',...(hideDrafts?['Application_Status']:[])])];
   const router=express.Router();
   const {call}=createCrmClient({getCrmHeaders,crmApiDomain,fetchImpl});
   router.use(async(req,res,next)=>{try{
@@ -53,8 +56,8 @@ function registerRecordRoutes(app,{enabled,getCurrentUser,getCrmHeaders,crmApiDo
     const d=DEFINITIONS[kind],items=[];
     const criteria='('+d.owner+':equals:'+req.portalContact.id+')';
     for(let page=1;page<=10;page++){
-      const result=await call(req,d.module+'/search?criteria='+uri(criteria)+'&fields='+uri([...d.fields,'Modified_Time'].join(','))+'&page='+page+'&per_page=200');
-      for(const record of result)if(String(record[d.owner]?.id)===String(req.portalContact.id))items.push(mapRecord(kind,record));
+      const result=await call(req,d.module+'/search?criteria='+uri(criteria)+'&fields='+uri(fieldList(d).join(','))+'&page='+page+'&per_page=200');
+      for(const record of result)if(String(record[d.owner]?.id)===String(req.portalContact.id)&&!isDraft(record))items.push(mapRecord(kind,record));
       if(result.length<200)return items;
     }
     throw new HttpError(503,'RECORDS_PAGE_LIMIT','This record list requires further pagination.');
@@ -79,9 +82,9 @@ function registerRecordRoutes(app,{enabled,getCurrentUser,getCrmHeaders,crmApiDo
     const {kind,id}=req.params;
     if(!DEFINITIONS[kind]||!ID.test(id))throw new HttpError(404,'NOT_FOUND','Record not found.');
     const d=DEFINITIONS[kind];
-    const rows=await call(req,d.module+'/'+id+'?fields='+uri([...d.fields,'Modified_Time'].join(',')));
+    const rows=await call(req,d.module+'/'+id+'?fields='+uri(fieldList(d).join(',')));
     const row=rows[0];
-    if(!row || String(row[d.owner]?.id)!==String(req.portalContact.id))throw new HttpError(404,'NOT_FOUND','Record not found.');
+    if(!row || String(row[d.owner]?.id)!==String(req.portalContact.id) || isDraft(row))throw new HttpError(404,'NOT_FOUND','Record not found.');
     res.json({record:mapRecord(kind,row)});
   }));
   app.use('/portal/records',router);

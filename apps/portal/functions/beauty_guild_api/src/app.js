@@ -74,7 +74,7 @@ function createApp({
   registerPublicSchoolVerification(app,{enabled:config.publicVerificationEnabled,
     registrationModule:config.schoolRegistrationModule,registrationField:config.schoolRegistrationField,
     activeStatus:config.schoolActiveStatus,getCrmHeaders,crmApiDomain:config.crmApiDomain,fetchImpl,now});
-  registerRecordRoutes(app,{enabled:config.recordsEnabled,getCurrentUser,getCrmHeaders,crmApiDomain:config.crmApiDomain,fetchImpl});
+  registerRecordRoutes(app,{enabled:config.recordsEnabled,getCurrentUser,getCrmHeaders,crmApiDomain:config.crmApiDomain,fetchImpl,hideDrafts:config.crmDraftsEnabled,draftStatus:config.draftStatus});
   registerBillingRoutes(app,{enabled:config.billingEnabled,getCurrentUser,getQuoteTable,getPaymentTable,stripeKey:config.stripeSecretKey,webhookSecret:config.stripeWebhookSecret,publicOrigin:config.portalPublicOrigin,fetchImpl});
   registerDraftRoutes(app,{enabled:config.crmDraftsEnabled,getCurrentUser,getCrmHeaders,crmApiDomain:config.crmApiDomain,config,fetchImpl});
   registerDocumentRoutes(app,{enabled:config.documentsEnabled,getCurrentUser,getCrmHeaders,getWorkdriveHeaders,crmApiDomain:config.crmApiDomain,workdriveApiDomain:config.workdriveApiDomain,fetchImpl});

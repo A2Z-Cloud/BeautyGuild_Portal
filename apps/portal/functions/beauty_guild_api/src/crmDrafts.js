@@ -3,6 +3,7 @@
 const express=require('express');
 const crypto=require('node:crypto');
 const {HttpError}=require('./errors');
+const {resolveContact}=require('./records');
 const SERVICES={membership:'Deals',insurance:'Insurance_Policy',accreditation:'Training_Centre_Accred'};
 const CRMID=/^\d{10,25}$/;
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -90,14 +91,8 @@ function registerDraftRoutes(app,{enabled,getCurrentUser,getCrmHeaders,crmApiDom
   checkMetadata(module,r.fields,config);
   return r.fields;
  };
- const contact=async(req)=>{
-  const user=await getCurrentUser(req);
-  if(!user?.id)fail('SIGN_IN_REQUIRED','Sign in to save an application.',401);
-  const r=await request(req,'GET','Contacts/search?criteria='+quote('(Catalyst_User_ID:equals:'+user.id+')')+'&fields='+quote('Catalyst_User_ID,Email'));
-  const rows=(r.data||[]).filter(c=>String(c.Catalyst_User_ID||'')===String(user.id));
-  if(rows.length!==1)fail(rows.length?'CONTACT_AMBIGUOUS':'CONTACT_UNLINKED','Your account needs to be linked to a verified Guild Contact.',rows.length?409:403);
-  return rows[0];
- };
+ // Same identity rule as member records: the verified Catalyst email must match exactly one CRM Contact.
+ const contact=async(req)=>resolveContact(req,async(r,path)=>(await request(r,'GET',path)).data||[],await getCurrentUser(req));
  const findByJourney=async(req,module,journeyId,contactId)=>{
   const r=await request(req,'GET',module+'/search?criteria='+quote('(Journey_ID:equals:'+journeyId+')'));
   const rows=(r.data||[]).filter(v=>v.Journey_ID===journeyId);
@@ -135,7 +130,8 @@ function registerDraftRoutes(app,{enabled,getCurrentUser,getCrmHeaders,crmApiDom
   if(module==='Deals'){data.Contact_Name={id:person.id};data.Deal_Name='Membership application '+journey.slice(0,8);data.Stage=config.dealStage;}
   if(module==='Insurance_Policy')data.Contact={id:person.id};
   if(module==='Training_Centre_Accred')data.Applicant_Contact={id:person.id};
-  const r=await request(req,'POST',module+'/upsert',{data:[data],duplicate_check_fields:['Journey_ID']});
+  // Plain create, never an upsert: if the unique Journey_ID already exists, CRM rejects it (409) rather than updating that record.
+  const r=await request(req,'POST',module,{data:[data]});
   const id=r.data?.[0]?.details?.id;
   if(!id)fail('CREATE_UNCONFIRMED','CRM did not confirm draft creation.',502);
   return ensureOwnership(await detail(req,module,id),person.id);
@@ -148,7 +144,10 @@ function registerDraftRoutes(app,{enabled,getCurrentUser,getCrmHeaders,crmApiDom
   let previous;
   if(row.Draft_State_Reference)previous=await loadState(req,row);
   const revision=previous?.revision||0;
-  if(body.revision!==undefined&&body.revision!==revision)fail('REVISION_CONFLICT','This draft has changed. Reload before saving.',409);
+  if(previous||refId){
+   if(!Number.isInteger(body.revision))fail('REVISION_REQUIRED','Reload your application before saving.',422);
+   if(body.revision!==revision)fail('REVISION_CONFLICT','This draft has changed. Reload before saving.',409);
+  }
   const next={version:1,journeyId:body.journeyId,service:body.service,step:body.step,
     revision:revision+1,answers:body.answers,savedAt:new Date().toISOString()};
   await saveNote(req,module,row,next);

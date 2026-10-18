@@ -8,7 +8,9 @@ Backend variables: PORTAL_CRM_DRAFTS_ENABLED=true, PORTAL_CRM_DRAFT_STATUS=Draft
 
 Frontend build variables: VITE_DATA_MODE=api, VITE_CATALYST_AUTH=true, VITE_API_BASE_URL=/server/beauty_guild_api, VITE_PORTAL_CRM_DRAFTS=true.
 
-CRM field metadata is validated server-side: Application_Status, Journey_ID (must be unique), Last_Completed_Journey_Step, Draft_State_Reference, Draft_Saved_At, and service-specific Contact/Stage lookups. Contacts.Catalyst_User_ID is used to resolve the signed-in Catalyst account, not the browser's Contact ID or email. Confirm the field is unique and populated.
+CRM field metadata is validated server-side: Application_Status, Journey_ID (must be unique), Last_Completed_Journey_Step, Draft_State_Reference, Draft_Saved_At, and service-specific Contact/Stage lookups. The Contact is found from the signed-in, confirmed Catalyst user's verified email, which must match exactly one Contact (the same rule as member records, documents and school services). A browser-supplied Contact ID is never trusted.
+
+**Safety rules added in review:** a first save is a plain create (never an upsert), so a repeated Journey_ID is rejected instead of updating an existing record; every update must send the current revision (missing gives 422, stale gives 409); and when CRM drafts are on, member record lists and details exclude records whose Application_Status is the draft status, so drafts are never shown as real memberships, policies or accreditations.
 
 ## CRM draft representation
 

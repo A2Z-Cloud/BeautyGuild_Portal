@@ -27,13 +27,13 @@ export default function SavedDrafts(){
   catch(e){setState(s=>({...s,busy:'',error:e.message}));}
  }
  return <div className="page">
-  <PageHeading eyebrow="MY APPLICATIONS" title="Saved applications" description="Resume unfinished applications stored in Zoho CRM."/>
-  {!INTEGRATIONS.crmDrafts?<Notice title="Drafts are not yet enabled">Saving requires verified CRM module fields and a linked Guild Contact.</Notice>:
+  <PageHeading eyebrow="MY APPLICATIONS" title="Saved applications" description="Pick up an unfinished application where you left off."/>
+  {!INTEGRATIONS.crmDrafts?<Notice title="Coming soon">You will soon be able to save your applications and come back to them here.</Notice>:
    state.loading?<p role="status">Loading applications…</p>:<section className="surface padded">
     {state.error&&<Notice title="Could not load application">{state.error}</Notice>}
     {state.items.length===0?<p>You have no saved applications.</p>:state.items.map(d=><div className="security-row" key={d.service+d.id}>
      <div><strong>{d.service==='combined'?'Membership + Insurance':d.service}</strong>
-      <span>{d.status||'Draft'} · Reference {d.id} · Updated {d.updatedAt||'Not available'}</span></div>
+      <span>Saved application · Reference {d.id} · Updated {d.updatedAt?new Date(d.updatedAt).toLocaleString('en-GB'):'recently'}</span></div>
      <button type="button" className="btn btn-primary" disabled={Boolean(state.busy)} onClick={()=>resume(d)}>{state.busy===d.id?'Loading…':'Resume'}</button>
      <button type="button" className="btn btn-secondary" disabled={Boolean(state.busy)} onClick={()=>discard(d)}>Discard</button>
     </div>)}
