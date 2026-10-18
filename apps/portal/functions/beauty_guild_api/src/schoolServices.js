@@ -207,7 +207,7 @@ function registerSchoolRoutes(app,{enabled,writesEnabled,getCurrentUser,getCrmHe
   const acc=await api.acc(req,req.params.id,req.memberContact.id);
   if(!acc.Account?.id)fail('School account not found.',409,'ACCOUNT_REQUIRED');
   const body=req.body||{},name=String(body.name||'').trim(),month=String(body.month||'').trim(),year=Number(body.year);
-  if(!name||name.length>180||!^(?:[1-9]|1[0-2])$/.test(month)||!Number.isInteger(year)||year<1900||year>2200)
+  if(!name||name.length>180||!/^(?:[1-9]|1[0-2])$/.test(month)||!Number.isInteger(year)||year<1900||year>2200)
    fail('A qualification name and valid completion month and year are required.',422,'INVALID_QUALIFICATION');
   if(!Array.isArray(body.delivery)||!body.delivery.length||body.delivery.some(x=>!DELIVERY.includes(x))||
    !Array.isArray(body.assessment)||!body.assessment.length||body.assessment.some(x=>!ASSESS.includes(x)))
