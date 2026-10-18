@@ -1,4 +1,11 @@
 {
+  "functions": {
+    "targets": [
+      "beauty_guild_api"
+    ],
+    "ignore": [],
+    "source": "functions"
+  },
   "client": {
     "source": "dist"
   }
