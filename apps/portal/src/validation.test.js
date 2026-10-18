@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {accreditationType, validate} from './logic.mjs';
-import {JOURNEYS} from './JourneyConfig.js';
+import {JOURNEYS,countryOption,COUNTRY_OPTIONS} from './JourneyConfig.js';
 
 test('all three journeys contain multi-step data collection and review', () => {
   for(const kind of ['membership','accreditation','insurance']){
@@ -53,4 +53,13 @@ test('tutor and premises dependent fields only required when active',()=>{
   const tutors=JOURNEYS.accreditation.steps.find(s=>s.id==='tutors').fields;
   assert.ok(validate(tutors,{otherTutors:'yes',additionalVenues:'no'}).tutorCount);
   assert.deepEqual(validate(tutors,{otherTutors:'no',additionalVenues:'no'}),{});
+});
+
+test('address lookup country maps onto the dropdown options', () => {
+  assert.equal(countryOption('United Kingdom'), 'United Kingdom');
+  assert.equal(countryOption(' ireland '), 'Ireland');
+  assert.equal(countryOption('Germany'), 'Other');
+  assert.equal(countryOption(''), '');
+  assert.equal(countryOption(undefined), '');
+  assert.ok(COUNTRY_OPTIONS.includes(countryOption('France')));
 });

@@ -1,7 +1,7 @@
 import React, {useMemo, useState} from 'react';
 import {ArrowLeft, ArrowRight, CreditCard, FileText, LockKeyhole, MapPin, Save, ShieldAlert} from 'lucide-react';
 import {Link, useNavigate} from 'react-router-dom';
-import {JOURNEYS} from './JourneyConfig.js';
+import {JOURNEYS,countryOption} from './JourneyConfig.js';
 import {Field,Notice,PageHeading,Stages} from './UiParts.jsx';
 import {accreditationType,validate} from './logic.mjs';
 import {usePreviewState} from './journeys/previewState.jsx';
@@ -52,9 +52,9 @@ export function Journey({kind}){
     move(index+1);
   };
   const addressBindings=kind==='membership'?{
-    postcode:{line1:'address1',line2:'address2',town:'town',county:'county',postcode:'postcode'}
+    postcode:{line1:'address1',line2:'address2',town:'town',county:'county',postcode:'postcode',country:'country'}
   }:kind==='accreditation'?{
-    postcode:{line1:'address1',line2:'address2',town:'town',county:'county',postcode:'postcode'},
+    postcode:{line1:'address1',line2:'address2',town:'town',county:'county',postcode:'postcode',country:'contactCountry'},
     centrePostcode:{line1:'centreAddress',town:'centreTown',county:'centreCounty',postcode:'centrePostcode'}
   }:{
     premisesPostcode:{line1:'premisesAddress',town:'premisesTown',postcode:'premisesPostcode'}
@@ -63,7 +63,7 @@ export function Journey({kind}){
     const map=addressBindings[key]; if(!map)return;
     for(const [from,to] of Object.entries(map)){
       const source=from==='line1'?'addressLine1':from==='line2'?'addressLine2':from;
-      const resolved=address[source];
+      const resolved=from==='country'?countryOption(address.country):address[source];
       if(resolved && typeof resolved==='string')update(to,resolved);
     }
   };
@@ -80,7 +80,7 @@ export function Journey({kind}){
         <div className="journey-body" id="journey-fields"><span className="eyebrow">STEP {String(index+1).padStart(2,'0')}</span>
           <h2>{current.title}</h2><p className="journey-intro">{current.description}</p>
           {last?<><ReviewDetails steps={visible} values={values} kind={kind}/><CheckpointNotice kind={kind}/></>:<>
-            {mayNeedLocation&&<div className="address-hint"><MapPin size={17}/><span>Address fields can be entered manually in this preview. Live postcode/address suggestions will use the Loqate backend.</span></div>}
+            {mayNeedLocation&&<div className="address-hint"><MapPin size={17}/><span>{INTEGRATIONS.address?'Enter your postcode and choose Find address, or type your address yourself.':'Address fields can be entered manually in this preview. Live postcode/address suggestions will use the Loqate backend.'}</span></div>}
             <div className="fields-grid">{current.fields.filter(f=>!f.when||f.when(values)).map(f=><React.Fragment key={f.name}><Field field={f} value={values[f.name]} onChange={update} error={errors[f.name]}/>{INTEGRATIONS.address&&addressBindings[f.name]&&<AddressLookup query={values[f.name]||""} onSelect={address=>applyAddress(f.name,address)}/>}</React.Fragment>)}</div>
           </>}
           <div className="journey-footer"><div className="journey-footer-left">{index>0?<button type="button" className="btn btn-secondary" onClick={()=>move(index-1)}><ArrowLeft size={16}/> Previous</button>:<span className="muted">Fields marked * are required</span>}</div>
