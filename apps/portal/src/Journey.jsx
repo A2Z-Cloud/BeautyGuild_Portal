@@ -5,6 +5,8 @@ import {JOURNEYS} from './JourneyConfig.js';
 import {Field,Notice,PageHeading,Stages} from './UiParts.jsx';
 import {accreditationType,validate} from './logic.mjs';
 import {usePreviewState} from './journeys/previewState.jsx';
+import AddressLookup from './components/AddressLookup.jsx';
+import {INTEGRATIONS} from './services/api.js';
 
 function ReviewDetails({steps,values,kind}){
   const all=steps.flatMap(s=>s.fields).filter(f=>!f.when||f.when(values));
@@ -49,6 +51,22 @@ export function Journey({kind}){
     if(last){checkpoint('complete');return;}
     move(index+1);
   };
+  const addressBindings=kind==='membership'?{
+    postcode:{line1:'address1',line2:'address2',town:'town',county:'county',postcode:'postcode'}
+  }:kind==='accreditation'?{
+    postcode:{line1:'address1',line2:'address2',town:'town',county:'county',postcode:'postcode'},
+    centrePostcode:{line1:'centreAddress',town:'centreTown',county:'centreCounty',postcode:'centrePostcode'}
+  }:{
+    premisesPostcode:{line1:'premisesAddress',town:'premisesTown',postcode:'premisesPostcode'}
+  };
+  const applyAddress=(key,address)=>{
+    const map=addressBindings[key]; if(!map)return;
+    for(const [from,to] of Object.entries(map)){
+      const source=from==='line1'?'addressLine1':from==='line2'?'addressLine2':from;
+      const resolved=address[source];
+      if(resolved && typeof resolved==='string')update(to,resolved);
+    }
+  };
   const mayNeedLocation=['contact-address','centre','about','property','details'].includes(current.id);
   return <div className="page journey-page">
     <Link className="back-link" to={'/'+kind}><ArrowLeft size={17}/> Back to {config.title.toLowerCase()}</Link>
@@ -63,7 +81,7 @@ export function Journey({kind}){
           <h2>{current.title}</h2><p className="journey-intro">{current.description}</p>
           {last?<><ReviewDetails steps={visible} values={values} kind={kind}/><CheckpointNotice kind={kind}/></>:<>
             {mayNeedLocation&&<div className="address-hint"><MapPin size={17}/><span>Address fields can be entered manually in this preview. Live postcode/address suggestions will use the Loqate backend.</span></div>}
-            <div className="fields-grid">{current.fields.filter(f=>!f.when||f.when(values)).map(f=><Field key={f.name} field={f} value={values[f.name]} onChange={update} error={errors[f.name]}/>)}</div>
+            <div className="fields-grid">{current.fields.filter(f=>!f.when||f.when(values)).map(f=><React.Fragment key={f.name}><Field field={f} value={values[f.name]} onChange={update} error={errors[f.name]}/>{INTEGRATIONS.address&&addressBindings[f.name]&&<AddressLookup query={values[f.name]||""} onSelect={address=>applyAddress(f.name,address)}/>}</React.Fragment>)}</div>
           </>}
           <div className="journey-footer"><div className="journey-footer-left">{index>0?<button type="button" className="btn btn-secondary" onClick={()=>move(index-1)}><ArrowLeft size={16}/> Previous</button>:<span className="muted">Fields marked * are required</span>}</div>
             <button type="button" className="btn btn-primary" onClick={next}>{last?'Continue to account':'Continue'}<ArrowRight size={16}/></button></div>

@@ -96,3 +96,34 @@
 .checkpoint-footer .auth-inline-link{display:inline;margin:0}
 @media(max-width:800px){.checkout-layout{grid-template-columns:1fr}.checkout-aside{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:600px){.checkout-aside{grid-template-columns:1fr}.checkout-summary>div{align-items:flex-start;flex-direction:column;gap:5px}}
+
+/* Milestone 2 read integrations and Catalyst sign-in */
+.address-lookup{grid-column:1/-1;margin:-10px 0 12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.address-lookup>.btn{min-height:35px;padding:7px 11px}
+.address-lookup>span{display:inline-flex;align-items:center;gap:5px;font-size:10px;color:#90808d}
+.address-search-error{width:100%;font-size:11px;color:#b42362}
+.address-results{width:100%;border:1px solid #eee3eb;border-radius:10px;background:#fff;max-height:280px;overflow:auto;box-shadow:0 10px 35px #2e182014}
+.address-results button{width:100%;text-align:left;border:0;border-bottom:1px solid #f0e9ed;background:white;padding:13px 16px}
+.address-results button:hover{background:#fff4f9}
+.address-results strong,.address-results small{display:block;font-size:12px}
+.address-results small{color:#887783;margin-top:4px}
+.live-courses{margin-top:20px}
+.live-courses>p{font-size:12px;color:#817582}
+.course-chip-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.course-chip{padding:12px;border:1px solid #f0e6eb;border-radius:10px}
+.course-chip strong,.course-chip small{display:block;font-size:12px}
+.course-chip small{font-size:10px;color:#937c8c;margin-top:6px}
+.integration-status{margin-top:30px}
+.integration-status>p{font-size:12px;color:#796f79}
+.integration-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:11px;margin:18px 0}
+.integration-grid>div{border:1px solid #eee4e9;border-radius:10px;padding:14px;display:flex;align-items:center;flex-wrap:wrap;gap:8px;font-size:11px}
+.integration-grid .available{color:#187956;background:#f5fffb}
+.integration-grid .pending{color:#987b8b;background:#faf7f9}
+.integration-grid strong{display:block;width:100%;font-size:10px}
+.integration-status .integration-footnote{font-size:10px}
+.integration-status details{font-size:12px}
+.integration-status summary{cursor:pointer;color:#c32978;font-weight:700}
+.integration-status li{margin:9px 0;color:#807482}
+.catalyst-widget{width:100%;min-height:430px;margin:12px 0}
+.catalyst-widget iframe{width:100%!important;min-height:430px!important;height:500px!important;border:0!important}
+@media(max-width:740px){.integration-grid{grid-template-columns:1fr}}
