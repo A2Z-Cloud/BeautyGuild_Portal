@@ -15,7 +15,7 @@ For the frontend development preview only. Do not enter real customer data or pa
 | Open /records/accreditation/ACC-DEMO-101?tab=documents | Documents tab directly selected, no file download |
 | Switch between Overview/Activity/Documents | URL tab parameter updates |
 | Back to records after filtered list | Filter restored when opening from list |
-| Refresh a direct record URL | Same page opens if host supports SPA fallback; document hosting requirement if 404 |
+| Refresh a direct record URL (hash routing, e.g. /app/#/records/accreditation/ACC-DEMO-101?tab=documents) | Same page opens; no host SPA fallback needed |
 | Desktop sidebar collapse/expand | Changes layout, preserves state locally |
 | Mobile screen | Navigation opens and closes without covering form content permanently |
 | Access /gti-courses or /my-profile | Honest placeholder without fake functionality |
