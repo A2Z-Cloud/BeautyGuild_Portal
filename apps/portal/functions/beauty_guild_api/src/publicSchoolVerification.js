@@ -66,7 +66,7 @@ function registerPublicSchoolVerification(app,{
   }
   router.get('/:number',async(req,res,next)=>{
     try{
-      const number=String(req.params.number||'').trim();
+      const number=String(req.params.number||'');
       if(!REGISTRATION_RE.test(number))
         throw new HttpError(400,'INVALID_SCHOOL_NUMBER','Enter a valid school registration number.');
       const accountSource=registrationModule==='Accounts';
