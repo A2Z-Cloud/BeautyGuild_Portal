@@ -31,6 +31,8 @@ export const portalApi=Object.freeze({
   getIdentity:()=>auth.currentUser(),
   register:profile=>auth.signUp(profile),
   signInEmbed:container=>auth.signInEmbed(container),
+  // Always uses the email of the verified signed-in user, never a typed address.
+  requestPasswordReset:async()=>{const user=await auth.currentUser();return auth.requestPasswordReset(user.email);},
   signOut:()=>auth.signOut(),
   listCourses:options=>gateway.listCourses(options),
   findAddresses:(text,container,options)=>gateway.findAddresses(text,container,options),

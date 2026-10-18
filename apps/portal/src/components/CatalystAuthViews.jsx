@@ -58,6 +58,18 @@ export function CatalystAccountOverview(){
     return ()=>{active=false;};
   },[]);
   const logout=async()=>{try{await portalApi.signOut();}catch(err){setLogoutError(err.message);}};
+  const [reset,setReset]=useState({busy:false,message:'',ok:false});
+  const sendReset=async()=>{
+    if(reset.busy)return;
+    setReset({busy:true,message:'',ok:false});
+    try{
+      await portalApi.requestPasswordReset();
+      setReset({busy:false,ok:true,message:'We have emailed you a link to choose a new password. It can take a few minutes to arrive, so please check your junk folder too.'});
+    }catch(err){
+      console.warn('Password reset request failed:',err&&err.message);
+      setReset({busy:false,ok:false,message:'We could not send the reset email. Please try again shortly.'});
+    }
+  };
   return <div className="page account-page">
     <div className="page-heading"><div><small className="eyebrow">CATALYST IDENTITY</small><h1>My account</h1><p>Authenticated account identity from Zoho Catalyst. CRM profile editing remains unavailable until contact mapping is confirmed.</p></div></div>
     {result.loading&&<p role="status">Checking your signed-in session…</p>}
@@ -66,6 +78,12 @@ export function CatalystAccountOverview(){
       <h2>{[result.user.firstName,result.user.lastName].filter(Boolean).join(' ')||'Guild account'}</h2>
       <dl className="detail-list"><div><dt>Email</dt><dd>{result.user.email}</dd></div><div><dt>Portal ID</dt><dd>{result.user.userId}</dd></div></dl>
       <div className="notice"><strong>CRM linking pending</strong><span>No CRM Contact has been verified. Membership, insurance, accreditation and account updates are intentionally unavailable.</span></div>
+      <section className="account-password" aria-labelledby="password-heading">
+        <h3 id="password-heading">Password</h3>
+        <p>We will email a link to {result.user.email||'your email address'} so you can choose a new password.</p>
+        <button type="button" className="btn btn-secondary" onClick={sendReset} disabled={reset.busy}><KeyRound size={16}/> {reset.busy?'Sending…':'Reset password'}</button>
+        {reset.message&&<div className={reset.ok?'notice':'auth-unavailable'} role={reset.ok?'status':'alert'}>{reset.ok?<span>{reset.message}</span>:reset.message}</div>}
+      </section>
       <button type="button" className="btn btn-secondary" onClick={logout}><KeyRound size={16}/> Sign out</button>
       <p className="auth-small">If you use Catalyst Slate on a separate origin, frontend sign-out may not invalidate the backend session. Confirm the logout design before Production.</p>
     </div>}

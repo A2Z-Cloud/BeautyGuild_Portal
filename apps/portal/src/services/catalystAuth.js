@@ -58,6 +58,15 @@ export function createCatalystAuth(enabled){
       return auth.signUp({first_name:firstName.trim(),last_name:lastName.trim(),email_id:email.trim(),
         platform_type:'web',redirect_url:redirectUrl()});
     },
+    // Sends Catalyst's reset email. Only the address is sent (in the request body); no password
+    // ever appears in a URL, unlike the SDK's changePassword, which puts both in the query string.
+    async requestPasswordReset(email){
+      if(!email?.trim())throw new Error('An email address is required.');
+      await requireSDK();
+      const userManagement=window.catalyst?.userManagement;
+      if(typeof userManagement?.forgotPassword!=='function')throw new IntegrationUnavailableError('Catalyst password reset');
+      return userManagement.forgotPassword({email_id:email.trim(),platform_type:'web',redirect_url:redirectUrl()});
+    },
     async signOut(){
       const auth=await requireSDK();
       auth.signOut(redirectUrl());
