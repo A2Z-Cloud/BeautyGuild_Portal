@@ -66,9 +66,7 @@ function registerSchoolRoutes(app,{enabled,getCurrentUser,getCrmHeaders,getCreat
   creatorAppLinkName:config.creatorAppLinkName,creatorInvoiceReport:config.creatorInvoiceReport,fetchImpl
  });
  const handle=fn=>async(req,res,next)=>{try{await fn(req,res);}catch(e){next(e);}};
- router.use(handle(async(req,res)=>{})); // harmless placeholder removed below
  // Server-side identity verification is required for every member/school/invoice route.
- router.stack.pop();
  router.use(async(req,res,next)=>{try{
   if(!enabled)fail('School and invoice services have not been configured.',503,'SCHOOL_DISABLED');
   req.memberContact=await api.contact(req,await getCurrentUser(req));
