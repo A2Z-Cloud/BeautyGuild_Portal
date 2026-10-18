@@ -1,0 +1,79 @@
+
+
+/* ==========================================================================
+   Beauty Guild overrides. Appended after Catalyst's base stylesheet, which is
+   left untouched above. Edit this file, then run: npm run build:auth-css
+   Tokens match src/styles.css: pink #ee3e96, deep pink #b02c70, ink #25212a.
+   ========================================================================== */
+body {
+  font-family: 'Open Sans', Arial, sans-serif !important;
+  color: #25212a !important;
+  background: transparent !important;
+}
+.bg_one { display: none !important; }
+
+/* The portal page already provides the card, so the widget sits flat inside it. */
+.signin_container {
+  width: 100% !important;
+  max-width: 520px !important;
+  min-height: 0 !important;
+  margin: 0 auto !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+#headtitle, .confirmtitle {
+  font-family: 'Alegreya Sans', Arial, sans-serif !important;
+  font-weight: 700 !important;
+  color: #25212a !important;
+}
+.confirmdesc, .menutext { color: #655a62 !important; }
+.confirm_head { background: #fff !important; box-shadow: none !important; }
+
+/* Inputs: boxed fields to match the rest of the portal */
+#login_id, #password, #cpassword, .text_box {
+  border: 1px solid #e3d8df !important;
+  border-radius: 9px !important;
+  background: #fff !important;
+  color: #322832 !important;
+  min-height: 44px !important;
+  padding-left: 13px !important;
+  padding-right: 13px !important;
+  font-size: 14px !important;
+  box-sizing: border-box !important;
+}
+#login_id:focus, #password:focus, #cpassword:focus, .text_box:focus {
+  border-color: #ee3e96 !important;
+  box-shadow: 0 0 0 3px rgba(238, 62, 150, 0.18) !important;
+  outline: none !important;
+}
+.errorborder, .errorborder:focus, .textbox.errorborder {
+  border-color: #b3261e !important;
+  box-shadow: none !important;
+}
+.errorlabel, .fielderror, .fielderror a { color: #b3261e !important; }
+
+/* Primary button */
+#nextbtn, .blue, .btn.blue {
+  background-color: #ee3e96 !important;
+  border: 0 !important;
+  border-radius: 9px !important;
+  color: #fff !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.02em !important;
+  text-transform: none !important;
+  box-shadow: 0 7px 19px rgba(238, 62, 150, 0.15) !important;
+}
+#nextbtn:hover, .blue:hover, .btn.blue:hover {
+  background-color: #b02c70 !important;
+  box-shadow: 0 7px 19px rgba(176, 44, 112, 0.2) !important;
+}
+
+/* Links */
+#forgotpassword a, #forgotpassword .text16, .bluetext, .blue_text_action, .changeuser, .Notyou {
+  color: #b02c70 !important;
+}
+
+/* No social logins: members sign in with email and password only. Hidden here as well as
+   in the Catalyst console so a provider enabled later cannot appear unreviewed. */
+.fed_div, .zoho_fed_box, .fed_box, .fed_icon { display: none !important; }

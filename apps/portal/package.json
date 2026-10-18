@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
     "test": "node --test src/validation.test.js src/services/integration.test.mjs",
-    "check": "npm run test && npm run build"
+    "check": "npm run test && npm run build",
+    "build:auth-css": "node scripts/build-auth-css.mjs"
   },
   "dependencies": {
     "react": "^19.2.0",

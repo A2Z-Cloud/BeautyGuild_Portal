@@ -49,13 +49,23 @@ export function createCatalystAuth(enabled){
     },
     async signInEmbed(containerId){
       const auth=await requireSDK();
-      return auth.signIn(containerId,{redirect_url:import.meta.env.BASE_URL});
+      // css_url points at our branded copy of Catalyst's sign-in stylesheet (see auth-css/).
+      return auth.signIn(containerId,{redirect_url:import.meta.env.BASE_URL,css_url:import.meta.env.BASE_URL+'auth/embedded_signin.css'});
     },
     async signUp({firstName,lastName,email}){
       if(!firstName?.trim()||!lastName?.trim()||!email?.trim())throw new Error('Name and email are required.');
       const auth=await requireSDK();
       return auth.signUp({first_name:firstName.trim(),last_name:lastName.trim(),email_id:email.trim(),
         platform_type:'web',redirect_url:redirectUrl()});
+    },
+    // Sends Catalyst's reset email. Only the address is sent (in the request body); no password
+    // ever appears in a URL, unlike the SDK's changePassword, which puts both in the query string.
+    async requestPasswordReset(email){
+      if(!email?.trim())throw new Error('An email address is required.');
+      await requireSDK();
+      const userManagement=window.catalyst?.userManagement;
+      if(typeof userManagement?.forgotPassword!=='function')throw new IntegrationUnavailableError('Catalyst password reset');
+      return userManagement.forgotPassword({email_id:email.trim(),platform_type:'web',redirect_url:redirectUrl()});
     },
     async signOut(){
       const auth=await requireSDK();
