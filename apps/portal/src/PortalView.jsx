@@ -34,6 +34,7 @@ const secondary = [
   {label:'GTi Courses',path:'/gti-courses',icon:BookOpen},
   {label:'My Account',path:'/account',icon:UserRound},
   {label:'My Invoices',path:'/invoices',icon:Receipt},
+  {label:'My Documents',path:'/documents',icon:ClipboardList},
   {label:'Help',path:'/help',icon:CircleHelp},
 ];
 function NavItems({items,onNavigate,collapsed}) {
@@ -44,7 +45,7 @@ function NavItems({items,onNavigate,collapsed}) {
 function currentTitle(path) {
   if(path==='/')return 'Dashboard';
   const key=path.split('/').filter(Boolean)[0];
-  return ({membership:'Membership',insurance:'Insurance',accreditation:'Accreditation',records:'My records',schools:'My schools',invoices:'My invoices','gti-courses':'GTi Courses',account:'Account',login:'Sign in',signup:'Sign up','forgot-password':'Password reset',help:'Help'})[key]||'Beauty Guild';
+  return ({membership:'Membership',insurance:'Insurance',accreditation:'Accreditation',records:'My records',schools:'My schools',invoices:'My invoices',documents:'My documents','gti-courses':'GTi Courses',account:'Account',login:'Sign in',signup:'Sign up','forgot-password':'Password reset',help:'Help'})[key]||'Beauty Guild';
 }
 export default function PortalView({children}){
   const [collapsed,setCollapsed]=useState(()=>{try{return window.localStorage.getItem('bg-preview-sidebar')==='collapsed';}catch{return false;}});
