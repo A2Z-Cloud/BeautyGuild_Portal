@@ -89,3 +89,9 @@ Milestone 2 introduces opt-in Catalyst identity/registration and the verified V1
 5. **Do not enable CRM draft, records, Stripe, underwriting or WorkDrive operations.** They remain unconnected until the backend delivers verified Contact permissions and service-specific payloads.
 
 Test using [INTEGRATION-TEST.md](INTEGRATION-TEST.md) and see [Milestone 2 Contract Register](../../docs/api-contracts/milestone-2.md). All Vite variables are build-time public information.
+
+## School Accreditation Verification V1
+
+A public school number search has been added at the standalone hash routes /app/#/verify and /app/#/verify/12345. The lookup is implemented in the existing Catalyst API as GET /server/beauty_guild_api/public/verify/:number and is **disabled until the exact CRM School Registration Number field is configured**. It uses only actual CRM data and never fabricates an accredited result.
+
+The requested beautyguild.com/verify/12345 address needs a separate WordPress route or redirect; QR codes are not part of this change. See [School Verification V1 handover](../../docs/school-accreditation-verification-v1.md) for setup, CRM dependencies, security and testing.
