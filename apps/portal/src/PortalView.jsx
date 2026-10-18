@@ -28,6 +28,7 @@ const sections = [
   {label:'Insurance',path:'/insurance',icon:ShieldCheck},
   {label:'Accreditation',path:'/accreditation',icon:GraduationCap},
   {label:'My records',path:'/records',icon:ClipboardList},
+  {label:'Saved applications',path:'/drafts',icon:ClipboardList},
 ];
 const secondary = [
   {label:'GTi Courses',path:'/gti-courses',icon:BookOpen},
