@@ -28,9 +28,9 @@ export function AccountCheckpoint() {
   const {route,intent,tail}=useReturn();
   const service=route.split('/')[1]||'application';
   return <Shell eyebrow="YOUR ACCOUNT" title={intent==='save'?'Save and finish later':'One more step before you finish'}
-    description={intent==='save'?'You will be able to save your application and come back to it later. This is not available yet, but your answers stay on this page while you browse.':'Sign in or create an account to continue.'}>
+    description={intent==='save'?'Sign in or register to save progress against your verified Guild CRM Contact.':'Sign in or create an account to continue.'}>
     <div className="auth-card"><span className="eyebrow">{intent==='save'?'SAVE APPLICATION':'ACCOUNT CHECKPOINT'}</span><h2>How would you like to continue?</h2>
-      <Notice title="Not available yet">Saving applications and submitting them online are coming soon. Nothing is submitted and no payment is taken.</Notice>
+      <Notice title="Account required">A verified CRM Contact is needed before an application can be saved. Payment and final submission are separate processes.</Notice>
       <div className="account-options"><Link className="account-option" to={'/signup'+tail}><UserPlus size={25}/><strong>Create an account</strong><span>New to the Guild? Set up your account in a few minutes.</span><ArrowRight size={17}/></Link>
       <Link className="account-option" to={'/login'+tail}><KeyRound size={25}/><strong>Sign in</strong><span>Already a member? Continue using your Guild account.</span><ArrowRight size={17}/></Link></div>
       <div className="checkpoint-footer"><Link className="back-link" to={route}><ArrowLeft size={16}/> Return to your {service} answers</Link>{!INTEGRATIONS.catalystAuth&&<Link className="auth-inline-link" to={'/checkout-preview/'+service}>Preview the payment screen (no real checkout)</Link>}</div>
