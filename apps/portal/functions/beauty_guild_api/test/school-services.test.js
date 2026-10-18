@@ -7,7 +7,7 @@ const {mapInvoice}=require('../src/schoolServices');
 const cfg=loadConfig({PORTAL_SCHOOL_SERVICES_ENABLED:'true'});
 function upstream(url) {
  const str=String(url),u=decodeURIComponent(str);
- if(u.includes('Contacts/search'))return {data:[{id:'101',Catalyst_User_ID:'cat-1'}]};
+ if(u.includes('Contacts/search'))return {data:[{id:'101',Email:'owner@example.test'}]};
  if(u.includes('Training_Centre_Accred/search'))return {data:[{id:'301',Applicant_Contact:{id:'101'},Account:{id:'201',name:'Grace School'},Accreditation_Status:'Accredited'}]};
  if(u.includes('Training_Centre_Accred/301'))return {data:[{id:'301',Applicant_Contact:{id:'101'},Account:{id:'201',name:'Grace School'},Accreditation_Status:'Accredited'}]};
  if(u.includes('Training_Centre_Accred/302'))return {data:[{id:'302',Applicant_Contact:{id:'other'},Account:{id:'202',name:'Other School'}}]};
@@ -85,4 +85,69 @@ test('an unverified identity cannot invoke school write endpoints even when writ
   const post={method:'POST',headers:{'content-type':'application/json'},body:'{}'};
   assert.equal((await call('/portal/management/schools/301/qualifications',post)).status,401);
  });
+});
+
+test('a verified account with no matching or several matching Contacts cannot see schools',async()=>{
+ const none=u=>String(u).includes('Contacts/search')?{data:[]}:upstream(u);
+ await withServer({fetchImpl:async u=>({status:200,ok:true,json:async()=>none(u)})},async call=>{
+  assert.equal((await call('/portal/management/schools')).status,404);
+ });
+ const many=u=>String(u).includes('Contacts/search')?{data:[{id:'101',Email:'owner@example.test'},{id:'102',Email:'owner@example.test'}]}:upstream(u);
+ await withServer({fetchImpl:async u=>({status:200,ok:true,json:async()=>many(u)})},async call=>{
+  assert.equal((await call('/portal/management/schools')).status,409);
+ });
+});
+
+const writeCfg=loadConfig({PORTAL_SCHOOL_SERVICES_ENABLED:'true',PORTAL_SCHOOL_WRITES_ENABLED:'true'});
+function writeUpstream(extra={}){
+ return (url,opts={})=>{
+  const u=decodeURIComponent(String(url)),post=(opts.method||'GET')==='POST';
+  if(extra.qualificationsSearch&&u.includes('Qualifications/search'))return extra.qualificationsSearch;
+  if(u.includes('Training_Centre_Accred/1000000000301'))return {data:[{id:'1000000000301',Applicant_Contact:{id:'101'},Account:{id:'1000000000201',name:'Grace School'}}]};
+  if(u.includes('Qualifications/search'))return {data:[]};
+  if(post&&u.includes('/crm/v3/Qualifications'))return {data:[{status:'success',details:{id:'777'}}]};
+  if(u.includes('TC_Course_Offering/1000000000501'))return {data:[{id:'1000000000501',Course:{id:'c1',name:'Gel Polish'},Training_Centre:{id:'401',name:'Main Centre'},Accreditation:{id:'1000000000301'}}]};
+  if(post&&u.includes('/creator/'))return {code:3000,data:{ID:'sess1'}};
+  if(u.includes('Course_Sessions_Report'))return {code:3000,data:extra.sessions||[]};
+  return upstream(url);
+ };
+}
+async function withWrites(extra,action){
+ const calls=[];
+ await withServer({config:writeCfg,fetchImpl:async(u,o)=>{calls.push({url:String(u),method:(o&&o.method)||'GET'});return{status:200,ok:true,json:async()=>writeUpstream(extra)(u,o)};}},
+  async call=>action(call,calls));
+}
+const jpost=body=>({method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});
+const goodQual={name:'Level 3 Beauty',month:'5',year:2020,delivery:['Online only'],assessment:['Other'],assessmentOther:'Practical review'};
+test('qualification create validates free text and blocks an identical repeat',async()=>{
+ await withWrites({},async(call,calls)=>{
+  assert.equal((await call('/portal/management/schools/1000000000301/qualifications',jpost({...goodQual,assessmentOther:'x'.repeat(201)}))).status,422);
+  assert.equal(calls.filter(c=>c.method==='POST').length,0);
+  const ok=await call('/portal/management/schools/1000000000301/qualifications',jpost(goodQual));
+  assert.equal(ok.status,201);assert.equal(ok.body.qualification.id,'777');
+ });
+ const existing={data:[{id:'9',Name:'level 3 beauty',Primary_Accreditation:{id:'1000000000301'},Date_Completed_Month:'5',Date_Completed_Year:'2020'}]};
+ await withWrites({qualificationsSearch:existing},async(call,calls)=>{
+  const r=await call('/portal/management/schools/1000000000301/qualifications',jpost(goodQual));
+  assert.equal(r.status,409);assert.equal(r.body.code,'DUPLICATE_QUALIFICATION');
+  assert.equal(calls.filter(c=>c.method==='POST').length,0);
+ });
+});
+const nextYear=new Date(Date.now()+365*24*3600*1000);
+const goodSession={courseOfferingId:'1000000000501',availabilityType:'Fixed Date',sessionStart:nextYear.toISOString(),
+ sessionEnd:new Date(nextYear.getTime()+3600*1000).toISOString(),maximumPlaces:8,totalAdvertisedPrice:'120.50'};
+test('course date create validates dates, price and days, and blocks a repeat',async()=>{
+ await withWrites({},async(call,calls)=>{
+  const bad=async(patch,code)=>{const r=await call('/portal/management/schools/1000000000301/sessions',jpost({...goodSession,...patch}));assert.equal(r.status,422,JSON.stringify(patch));assert.equal(r.body.code,code);};
+  await bad({totalAdvertisedPrice:'free'},'INVALID_PRICE');
+  await bad({totalAdvertisedPrice:-5},'INVALID_PRICE');
+  await bad({sessionStart:'2001-01-01T10:00:00Z'},'INVALID_DATE');
+  await bad({sessionEnd:new Date(nextYear.getTime()-3600*1000).toISOString()},'INVALID_DATE');
+  await bad({availableDays:'Monday'},'INVALID_SESSION');
+  await bad({flexibleDescription:{a:1}},'INVALID_SESSION');
+  assert.equal(calls.filter(c=>c.method==='POST').length,0,'nothing is written for invalid input');
+  const ok=await call('/portal/management/schools/1000000000301/sessions',jpost(goodSession));
+  assert.equal(ok.status,201);assert.equal(ok.body.session.id,'sess1');
+ });
+ await withWrites({},async(call)=>{await call('/portal/management/schools/1000000000301/sessions',jpost(goodSession));});
 });

@@ -28,17 +28,17 @@ const sections = [
   {label:'Insurance',path:'/insurance',icon:ShieldCheck},
   {label:'Accreditation',path:'/accreditation',icon:GraduationCap},
   {label:'My records',path:'/records',icon:ClipboardList},
-  {label:'My schools',path:'/schools',icon:Building2},
+  {label:'My schools',path:'/schools',icon:Building2,when:()=>INTEGRATIONS.schoolServices},
 ];
 const secondary = [
   {label:'GTi Courses',path:'/gti-courses',icon:BookOpen},
   {label:'My Account',path:'/account',icon:UserRound},
-  {label:'My Invoices',path:'/invoices',icon:Receipt},
-  {label:'My Documents',path:'/documents',icon:ClipboardList},
+  {label:'My Invoices',path:'/invoices',icon:Receipt,when:()=>INTEGRATIONS.schoolServices},
+  {label:'My Documents',path:'/documents',icon:ClipboardList,when:()=>INTEGRATIONS.workdrive&&INTEGRATIONS.crmRecords},
   {label:'Help',path:'/help',icon:CircleHelp},
 ];
 function NavItems({items,onNavigate,collapsed}) {
-  return <div className="nav-group">{items.map(({label,path,icon:Icon,end})=><NavLink onClick={onNavigate} key={path} to={path} end={Boolean(end)}
+  return <div className="nav-group">{items.filter(i=>!i.when||i.when()).map(({label,path,icon:Icon,end})=><NavLink onClick={onNavigate} key={path} to={path} end={Boolean(end)}
     title={collapsed ? label : undefined} className={({isActive})=>'nav-item'+(isActive?' active':'')}>
     <Icon size={20} aria-hidden="true"/><span>{label}</span></NavLink>)}</div>;
 }

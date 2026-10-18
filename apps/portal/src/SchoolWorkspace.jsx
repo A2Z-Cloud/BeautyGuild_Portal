@@ -29,16 +29,16 @@ const col=(key,label)=>({key,label});
 export function SchoolsList(){
  const state=useLoad(()=>portalApi.listSchools(),[]);
  return <div className="page"><PageHeading eyebrow="TRAINING CENTRES" title="My schools" description="Manage accredited courses, venues, tutors, qualifications, dates and invoices."/>
- {!INTEGRATIONS.schoolServices?<Notice title="School management is not connected">The Guild must enable secure CRM and Creator access in Catalyst Development.</Notice>:
+ {!INTEGRATIONS.schoolServices?<Notice title="Coming soon">Managing your school online is coming soon.</Notice>:
  state.loading?<p role="status">Loading your schools…</p>:state.error?<Notice title="Schools unavailable">{state.error}</Notice>:
  <div className="school-list">{state.value.length?state.value.map(s=><Link className="surface padded school-list-card" key={s.id} to={'/schools/'+s.id+'/profile'}>
  <Building2 size={29}/><div><h2>{s.name}</h2><p>{s.level||'Training centre'} · {s.validTo?'Valid until '+s.validTo:'Expiry date unavailable'}</p>
- <Status value={s.status}/></div><ArrowRight size={18}/></Link>):<Empty>No accredited schools are currently linked to your CRM Contact.</Empty>}</div>}
+ <Status value={s.status}/></div><ArrowRight size={18}/></Link>):<Empty>No accredited schools are linked to your account yet.</Empty>}</div>}
  </div>;
 }
 function SchoolProfile({data}){
  const p=data.profile;
- return <><h2>School profile</h2><p className="muted">Read-only, as in the original Guild portal. Contact the Accreditation team to change school details.</p>
+ return <><h2>School profile</h2><p className="muted">You cannot change these details online. Contact the Accreditation team to update them.</p>
  <dl className="detail-list">{Object.entries({'Training centre':p.name,'Town / City':p.town,County:p.county,Country:p.country,Postcode:p.postcode,
  'Accreditation status':p.status,'Valid until':p.expires,'Accreditation level':p.level,'Referral code':p.referralCode}).map(([k,v])=><div key={k}><dt>{k}</dt><dd>{v||'—'}</dd></div>)}</dl>
  {p.referralCode&&p.referralActive&&<p><a className="reference" href={'https://beautyguild.com/Join/'+encodeURIComponent(p.referralCode)} target="_blank" rel="noreferrer">View school referral landing page <ArrowRight size={15}/></a></p>}</>;
@@ -79,7 +79,7 @@ function SchoolSection({id,section}){
  <SimpleTable rows={x.tutors||[]} columns={[col('name','Tutor'),col('membershipNumber','Membership number'),col('membershipExpiry','Membership expiry'),col('status','Status')]}/></>;
  case 'qualifications':return <><div className="school-dialog-head"><h2>Qualifications</h2>{INTEGRATIONS.schoolWrites&&<button type="button" className="btn btn-primary" onClick={()=>setEditing(v=>!v)}>{editing?'Cancel':'Add qualification'}</button>}</div>{editing&&<QualificationForm schoolId={id} onDone={saved}/>}<SimpleTable rows={x.qualifications||[]} columns={[col('name','Qualification'),
  {key:'month',label:'Completed',render:r=>[r.month,r.year].filter(Boolean).join('/')||'—'},col('status','Verification')]}/></>;
- case 'sessions':return <><div className="school-dialog-head"><h2>Course dates and bookings</h2>{INTEGRATIONS.schoolWrites&&<button type="button" className="btn btn-primary" onClick={()=>setEditing(v=>!v)}>{editing?'Cancel':'Create session'}</button>}</div><p>Published fixed and flexible sessions from Zoho Creator. Student booking submission requires its separate write integration.</p>{editing&&<SessionForm schoolId={id} onDone={saved}/>}
+ case 'sessions':return <><div className="school-dialog-head"><h2>Course dates and bookings</h2>{INTEGRATIONS.schoolWrites&&<button type="button" className="btn btn-primary" onClick={()=>setEditing(v=>!v)}>{editing?'Cancel':'Create session'}</button>}</div><p>Your published fixed and flexible course dates, with the places booked so far.</p>{editing&&<SessionForm schoolId={id} onDone={saved}/>}
  <SimpleTable rows={x.sessions||[]} columns={[col('name','Course / session'),col('availabilityType','Availability'),col('start','Date'),
  {key:'placesBooked',label:'Places booked',render:r=>r.maximumPlaces==null?String(r.placesBooked):r.placesBooked+' / '+r.maximumPlaces},
  col('status','Status'),{key:'id',label:'Bookings',render:r=><button type="button" className="text-button" onClick={()=>setSession(r.id)}>View bookings</button>}]}/>
@@ -87,7 +87,7 @@ function SchoolSection({id,section}){
  <div className="school-dialog-head"><h2>Session bookings</h2><button type="button" className="btn btn-secondary" onClick={()=>setSession(null)}>Close</button></div>
  {books.loading?<p>Loading bookings…</p>:books.error?<Notice title="Bookings unavailable">{books.error}</Notice>:
  <SimpleTable rows={books.value?.bookings||[]} columns={[col('name','Student'),col('places','Places'),col('status','Status'),col('message','Notes')]}/>}</section></div>}</>;
- case 'invoices':return <><h2>Invoices</h2><Notice title="Account-wide scope">The existing V1 school invoice endpoint lists invoices belonging to the member Contact, not just this one Accreditation. The same behaviour is retained pending confirmed invoice-to-school filtering.</Notice>
+ case 'invoices':return <><h2>Invoices</h2><Notice title="All your invoices">This list shows every invoice on your account, not only this school's.</Notice>
  <InvoiceTable rows={x.invoices||[]}/></>;
  default:return <Empty>Section unavailable.</Empty>;
  }
@@ -99,7 +99,7 @@ export function SchoolWorkspace(){
  const school=current.value?.find(s=>s.id===id);
  return <div className="page"><Link to="/schools" className="back-link"><ArrowLeft size={16}/> Back to schools</Link>
  <PageHeading eyebrow="SCHOOL MANAGEMENT" title={school?.name||'Training centre'} description={school?school.level+' · '+school.status:'Manage your school'}/>
- {!INTEGRATIONS.schoolServices?<Notice title="Not connected">School management must be enabled in Catalyst Development.</Notice>:
+ {!INTEGRATIONS.schoolServices?<Notice title="Coming soon">Managing your school online is coming soon.</Notice>:
  current.loading?<p>Loading school…</p>:current.error?<Notice title="Unable to load school">{current.error}</Notice>:
  !school?<Notice title="School unavailable">No school linked to your account matches this reference.</Notice>:
  <><nav aria-label="School sections" className="school-tabs">{sections.map(([key,label])=><Link key={key} className={key===section?'active':''} to={'/schools/'+id+'/'+key}>{label}</Link>)}</nav>
@@ -108,8 +108,8 @@ export function SchoolWorkspace(){
 }
 export function AccountInvoices(){
  const state=useLoad(()=>portalApi.getAccountInvoices(),[]);
- return <div className="page"><PageHeading eyebrow="YOUR ACCOUNT" title="My invoices" description="Invoices from Zoho Creator across membership, accreditation and additional venues."/>
- {!INTEGRATIONS.schoolServices?<Notice title="Invoices not yet connected">Creator access must be configured.</Notice>:
+ return <div className="page"><PageHeading eyebrow="YOUR ACCOUNT" title="My invoices" description="Your invoices for membership, accreditation and additional venues."/>
+ {!INTEGRATIONS.schoolServices?<Notice title="Coming soon">Your invoices will appear here soon.</Notice>:
  state.loading?<p role="status">Loading invoices…</p>:state.error?<Notice title="Invoices unavailable">{state.error}</Notice>:
  <section className="surface padded"><InvoiceTable rows={state.value}/></section>}</div>;
 }
@@ -120,7 +120,7 @@ export function MembershipManagement(){
  const record=useLoad(()=>portalApi.getRecord('membership',id),[id]);
  return <div className="page"><Link to="/records" className="back-link"><ArrowLeft size={16}/> Back to records</Link>
  <PageHeading eyebrow="GUILD MEMBERSHIP" title={record.value?.title||'Membership details'} description="Membership details, purchased add-ons and invoices."/>
- {!INTEGRATIONS.schoolServices?<Notice title="Not connected">Member services are not yet enabled.</Notice>:
+ {!INTEGRATIONS.schoolServices?<Notice title="Coming soon">Your membership services will appear here soon.</Notice>:
  <><nav className="school-tabs"><button className={tab==='details'?'active':''} onClick={()=>setQuery({tab:'details'})}>Details</button>
  <button className={tab==='addons'?'active':''} onClick={()=>setQuery({tab:'addons'})}>Add-ons</button>
  <button className={tab==='invoices'?'active':''} onClick={()=>setQuery({tab:'invoices'})}>Invoices</button></nav>
@@ -134,8 +134,8 @@ export function MembershipManagement(){
 
 export function AccountDocuments(){
  const docs=useLoad(()=>portalApi.listRecords('membership'),[]);
- if(!INTEGRATIONS.workdrive||!INTEGRATIONS.crmRecords)return <div className="page"><PageHeading eyebrow="YOUR ACCOUNT" title="My documents"/><Notice title="Documents not connected">The Guild must enable authenticated CRM records and WorkDrive access.</Notice></div>;
- return <div className="page"><PageHeading eyebrow="YOUR ACCOUNT" title="My documents" description="WorkDrive documents linked to your Guild membership."/>
+ if(!INTEGRATIONS.workdrive||!INTEGRATIONS.crmRecords)return <div className="page"><PageHeading eyebrow="YOUR ACCOUNT" title="My documents"/><Notice title="Coming soon">You will be able to view and download your documents here soon.</Notice></div>;
+ return <div className="page"><PageHeading eyebrow="YOUR ACCOUNT" title="My documents" description="Documents linked to your Guild membership."/>
  {docs.loading?<p role="status">Finding your membership documents…</p>:docs.error?<Notice title="Documents unavailable">{docs.error}</Notice>:
  docs.value.length?<DocumentsPanel kind="membership" id={docs.value[0].id}/>:<Notice title="No membership documents">There is no linked membership folder for this account.</Notice>}</div>;
 }

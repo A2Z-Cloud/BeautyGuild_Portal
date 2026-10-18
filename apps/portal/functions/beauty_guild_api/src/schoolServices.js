@@ -1,6 +1,7 @@
 'use strict';
 const express=require('express');
 const {HttpError}=require('./errors');
+const {resolveContact}=require('./records');
 const ID=/^\d{10,25}$/;
 const esc=v=>encodeURIComponent(String(v));
 const fail=(message,status=502,code='SERVICE_UNAVAILABLE')=>{throw new HttpError(status,code,message);};
@@ -34,13 +35,8 @@ function createSchoolApi({getCrmHeaders,getCreatorHeaders,crmApiDomain,creatorAp
   if(!response.ok||body?.code!==3000||!Array.isArray(body?.data))fail('Creator records are unavailable.');
   return body.data;
  };
- async function contact(req,user){
-  if(!user?.id)fail('Please sign in to continue.',401,'SIGN_IN_REQUIRED');
-  const rows=await crm(req,'Contacts/search?criteria='+esc('(Catalyst_User_ID:equals:'+user.id+')')+'&fields='+esc('Catalyst_User_ID'));
-  const matches=rows.filter(x=>String(x.Catalyst_User_ID)===String(user.id));
-  if(matches.length!==1)fail('Your account must be linked to a unique Guild Contact.',403,'CONTACT_LINK_REQUIRED');
-  return matches[0];
- }
+ // Same identity rule as member records: the verified Catalyst email must match exactly one CRM Contact.
+ async function contact(req,user){return resolveContact(req,crm,user);}
  async function acc(req,id,contactId){
   if(!ID.test(String(id)))fail('Training centre not found.',404,'NOT_FOUND');
   const r=(await crm(req,'Training_Centre_Accred/'+id+'?fields='+esc('Applicant_Contact,Account,Accreditation_Status,Accreditation_Level,Application_Stage,Valid_To,Number_of_Tutors')))[0];
@@ -136,8 +132,7 @@ function registerSchoolRoutes(app,{enabled,writesEnabled,getCurrentUser,getCrmHe
   if(section==='tutors'){
    if(!accountId)return res.json({tutors:[]});
    const relationships=await api.crm(req,'Tutor_Relationships/search?criteria='+esc('((Account:equals:'+accountId+')and(Status:equals:Active))')+'&fields='+esc('Tutor_Contact,Tutor_Relationship'));
-   const tutorRows=[];
-   for(const t of relationships.filter(t=>t.Tutor_Contact)){
+   const tutorRows=await Promise.all(relationships.filter(t=>t.Tutor_Contact).slice(0,100).map(async t=>{
     const dealId=t.Tutor_Relationship?.id;
     let member=null;
     if(dealId){
@@ -145,9 +140,9 @@ function registerSchoolRoutes(app,{enabled,writesEnabled,getCurrentUser,getCrmHe
      if(deal?.Member_Profile?.id)member=(await api.crm(req,'Membership/'+deal.Member_Profile.id+'?fields='+esc('Name,Current_Membership_Status,Current_Membership_Expiry')))[0];
     }
     const status=!member?'Pending membership':member.Current_Membership_Status==='Expired'?'Expired':member.Current_Membership_Status==='Current'?'Current':'Pending membership';
-    tutorRows.push({id:t.id,name:t.Tutor_Contact.name||'Tutor',membershipDealId:dealId||null,
-      membershipNumber:member?.Name||null,membershipExpiry:member?.Current_Membership_Expiry||null,status});
-   }
+    return {id:t.id,name:t.Tutor_Contact.name||'Tutor',membershipDealId:dealId||null,
+      membershipNumber:member?.Name||null,membershipExpiry:member?.Current_Membership_Expiry||null,status};
+   }));
    return res.json({tutors:tutorRows});
   }
   if(section==='qualifications'){
@@ -200,6 +195,16 @@ function registerSchoolRoutes(app,{enabled,writesEnabled,getCurrentUser,getCrmHe
  }));
 
  // V1-verified WRITE subset. Disabled separately from read-side school services.
+ const shortText=(v,max,label,code)=>{
+  if(v===undefined||v===null||v==='')return undefined;
+  if(typeof v!=='string'||v.trim().length>max)fail(label+' must be text of up to '+max+' characters.',422,code);
+  return v.trim();
+ };
+ const validDate=(v,label)=>{
+  const d=new Date(v);
+  if(Number.isNaN(d.getTime()))fail(label+' is not a valid date.',422,'INVALID_DATE');
+  return d;
+ };
  const requireWrites=(req,res,next)=>writesEnabled?next():next(new HttpError(503,'SCHOOL_WRITES_DISABLED','School changes are not enabled.'));
  const DELIVERY=['Face to Face In the Classroom','Face to Face via Live Video Link','Online only','Other'];
  const ASSESS=['Face to Face In the Classroom','Face to Face via Live Video Link','Case Studies - Submitting Photographs','Case Studies - Submitting Videos','Other'];
@@ -212,19 +217,26 @@ function registerSchoolRoutes(app,{enabled,writesEnabled,getCurrentUser,getCrmHe
   if(!Array.isArray(body.delivery)||!body.delivery.length||body.delivery.some(x=>!DELIVERY.includes(x))||
    !Array.isArray(body.assessment)||!body.assessment.length||body.assessment.some(x=>!ASSESS.includes(x)))
    fail('Choose valid practical delivery and assessment methods.',422,'INVALID_QUALIFICATION');
+  const deliveryOther=shortText(body.deliveryOther,200,'The other delivery method','INVALID_QUALIFICATION');
+  const assessmentOther=shortText(body.assessmentOther,200,'The other assessment method','INVALID_QUALIFICATION');
   if(body.delivery.includes('Other')&&!String(body.deliveryOther||'').trim())fail('Specify the other delivery method.',422,'INVALID_QUALIFICATION');
   if(body.assessment.includes('Other')&&!String(body.assessmentOther||'').trim())fail('Specify the other assessment method.',422,'INVALID_QUALIFICATION');
   const record={Name:name,Contact:req.memberContact.id,Account:acc.Account.id,Primary_Accreditation:acc.id,
    Date_Completed_Month:month,Date_Completed_Year:year,
-   Practical_Delivery_Type:body.delivery,Practical_Delivery_Other:body.deliveryOther||undefined,
-   Practical_Assessment_Type:body.assessment,Practical_Assessment_Other:body.assessmentOther||undefined,
+   Practical_Delivery_Type:body.delivery,Practical_Delivery_Other:deliveryOther,
+   Practical_Assessment_Type:body.assessment,Practical_Assessment_Other:assessmentOther,
    Verification_Status:'Not Verified'};
+  // Refuse an identical qualification so a double click or retry cannot create it twice.
+  const existing=await api.crm(req,'Qualifications/search?criteria='+esc('(Contact:equals:'+req.memberContact.id+')')+'&fields='+esc('Name,Primary_Accreditation,Date_Completed_Month,Date_Completed_Year'));
+  if(existing.some(x=>String(x.Primary_Accreditation?.id)===String(acc.id)&&String(x.Name||'').trim().toLowerCase()===name.toLowerCase()&&
+     String(x.Date_Completed_Month)===month&&String(x.Date_Completed_Year)===String(year)))
+   fail('This qualification has already been added.',409,'DUPLICATE_QUALIFICATION');
   const id=await api.crmCreate(req,'Qualifications',record);
   res.status(201).json({qualification:{id,name,month,year,status:'Not Verified'}});
  }));
  function toCreatorDateTime(value){
   if(!value)return undefined;
-  const d=new Date(value);if(Number.isNaN(d.getTime()))fail('Invalid session date.',422,'INVALID_DATE');
+  const d=value instanceof Date?value:new Date(value);if(Number.isNaN(d.getTime()))fail('Invalid session date.',422,'INVALID_DATE');
   const mon=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const pad=n=>String(n).padStart(2,'0');
   return pad(d.getDate())+'-'+mon[d.getMonth()]+'-'+d.getFullYear()+' '+pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds());
@@ -246,7 +258,27 @@ function registerSchoolRoutes(app,{enabled,writesEnabled,getCurrentUser,getCrmHe
   const offering=(await api.crm(req,'TC_Course_Offering/'+offeringId+'?fields='+esc('Course,Training_Centre,Accreditation')))[0];
   if(String(offering?.Accreditation?.id)!==String(acc.id)||!offering.Training_Centre?.id)
    fail('Course offering not found for this school.',404,'NOT_FOUND');
-  if(body.availabilityType==='Fixed Date'&&!body.sessionStart)fail('A start date is required.',422,'INVALID_DATE');
+  let startAt,endAt;
+  if(body.availabilityType==='Fixed Date'){
+   if(!body.sessionStart)fail('A start date is required.',422,'INVALID_DATE');
+   startAt=validDate(body.sessionStart,'The start date');
+   if(startAt.getTime()<Date.now()-5*60*1000)fail('The start date cannot be in the past.',422,'INVALID_DATE');
+   if(body.sessionEnd){endAt=validDate(body.sessionEnd,'The end date');if(endAt<=startAt)fail('The end date must be after the start date.',422,'INVALID_DATE');}
+  }
+  let price;
+  if(body.totalAdvertisedPrice!==undefined&&body.totalAdvertisedPrice!==null&&body.totalAdvertisedPrice!==''){
+   price=Number(body.totalAdvertisedPrice);
+   if(!Number.isFinite(price)||price<0||price>100000)fail('Enter a price between 0 and 100000.',422,'INVALID_PRICE');
+  }
+  const flexibleDescription=shortText(body.flexibleDescription,500,'The availability description','INVALID_SESSION');
+  let availableDays=[];
+  if(body.availableDays!==undefined){
+   if(!Array.isArray(body.availableDays)||body.availableDays.length>7||body.availableDays.some(d=>typeof d!=='string'||d.length>20))
+    fail('Choose valid available days.',422,'INVALID_SESSION');
+   availableDays=body.availableDays;
+  }
+  let bookingClosing;
+  if(body.bookingClosing)bookingClosing=validDate(body.bookingClosing,'The booking closing date');
   const max=body.maximumPlaces==null||body.maximumPlaces===''?undefined:Number(body.maximumPlaces);
   if(max!==undefined&&(!Number.isInteger(max)||max<1||max>1000))fail('Invalid maximum places.',422,'INVALID_PLACES');
   if(body.tutorId){
@@ -260,18 +292,23 @@ function registerSchoolRoutes(app,{enabled,writesEnabled,getCurrentUser,getCrmHe
    course_session_name:[offering.Training_Centre.name,offering.Course?.name].filter(Boolean).join(' - '),
    maximum_places:max,instant_booking_available:Boolean(body.instantBookingAvailable),
    request_a_date_available1:Boolean(body.requestADateAvailable),
-   total_advertised_price:body.totalAdvertisedPrice||undefined
+   total_advertised_price:price
   };
   if(body.availabilityType==='Fixed Date'){
-   data.session_start_date_time=toCreatorDateTime(body.sessionStart);
-   data.session_end_date_time=toCreatorDateTime(body.sessionEnd);
+   data.session_start_date_time=toCreatorDateTime(startAt);
+   data.session_end_date_time=toCreatorDateTime(endAt);
   }else{
-   data.flexible_availability_description=body.flexibleDescription||undefined;
-   data.available_days=Array.isArray(body.availableDays)?body.availableDays:[];
+   data.flexible_availability_description=flexibleDescription;
+   data.available_days=availableDays;
    data.weekend_availability=Boolean(body.weekendAvailability);
    data.evening_availability1=Boolean(body.eveningAvailability);
-   data.booking_closing_date_and_time=toCreatorDateTime(body.bookingClosing);
+   data.booking_closing_date_and_time=toCreatorDateTime(bookingClosing);
   }
+  // Refuse an identical session (same name, type and start) so a retry cannot create it twice.
+  const sameSchool=await api.creator(req,'Course_Sessions_Report','account1=="'+acc.Account.id+'"');
+  if(sameSchool.some(x=>String(x.course_session_name||'')===data.course_session_name&&String(x.availability_type||'')===data.availability_type&&
+     String(x.session_start_date_time||'')===String(data.session_start_date_time||'')))
+   fail('This course date has already been added.',409,'DUPLICATE_SESSION');
   const id=await api.creatorCreate(req,'Course_Sessions',data);
   res.status(201).json({session:{id}});
  }));

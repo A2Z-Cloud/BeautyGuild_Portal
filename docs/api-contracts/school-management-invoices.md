@@ -14,7 +14,7 @@ Endpoints:
 - GET /portal/management/memberships/:id/invoices
 - GET /portal/management/memberships/:id/extensions
 
-The function derives CRM Contact from signed-in Catalyst user ID using Contacts.Catalyst_User_ID and verifies each requested school or Deal is owned by this Contact. Browser-supplied Contact IDs are never used for authorisation.
+The function derives the CRM Contact from the signed-in, confirmed Catalyst user's verified email, which must match exactly one Contact (the same rule as member records and documents), and verifies each requested school or Deal is owned by this Contact. Browser-supplied Contact IDs are never used for authorisation.
 
 ## Required Development configuration
 
@@ -22,7 +22,7 @@ Function: PORTAL_SCHOOL_SERVICES_ENABLED=true for reads. For the V1-mapped Quali
 
 Frontend: VITE_DATA_MODE=api, VITE_CATALYST_AUTH=true, VITE_API_BASE_URL=/server/beauty_guild_api, VITE_PORTAL_SCHOOL_SERVICES=true. Separately VITE_PORTAL_SCHOOL_WRITES=true enables the supported create forms only when the backend flag is also on.
 
-Do not activate until Catalyst User to CRM Contact mapping and both connection permissions are verified. Read from real CRM/Creator via the new backend. No fake records are displayed in live mode.
+Do not activate until the verified-email Contact match, the CRM field names and both connection permissions are verified. Course date and qualification creation also reject invalid dates, prices and text and refuse identical repeats. Read from real CRM/Creator via the new backend. No fake records are displayed in live mode.
 
 ## Critical V1 parity still outstanding
 
