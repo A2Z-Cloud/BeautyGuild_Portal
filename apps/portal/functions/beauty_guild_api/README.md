@@ -19,9 +19,10 @@ mapping first (see `docs/api-contracts/milestone-2.md`).
 Responses on failure are `{error, code}` with a fixed message. Upstream bodies, URLs and keys are
 never returned or logged. Address routes are rate limited per client (best effort, per instance).
 
-## Environment variables (set in the Catalyst console, never committed)
+## Environment variables (never committed)
 
-Console: Serverless > Functions > `beauty_guild_api` > Configuration > Environment Variables.
+Sent on deploy by `scripts/deploy-functions.sh` (see below). They can also be viewed in the console:
+Serverless > Functions > `beauty_guild_api` > Configuration > Environment Variables.
 
 | Name | Required | Notes |
 | --- | --- | --- |
@@ -51,8 +52,14 @@ npm test          # unit tests, no network or Catalyst needed
 
 ~~~sh
 cd apps/portal
-catalyst deploy --only functions
+scripts/deploy-functions.sh
 ~~~
+
+The script reads the variables above from a local file outside the repo
+(`~/Documents/GitHub/BGV2-env/Key-Development-Value.txt`, or set `BGV2_ENV_FILE`), sends only the
+variables this function needs through `deployment.env_variables` in `catalyst-config.json`, then
+restores the file so no secrets are left in the repo. A plain `catalyst deploy --only functions`
+also keeps the existing values, but the script is the way to change them.
 
 Then check `https://<project-domain>/server/beauty_guild_api/health`. Build the client with
 `VITE_DATA_MODE=api VITE_API_BASE_URL=/server/beauty_guild_api VITE_ENABLED_LEGACY_APIS=courses,address`
