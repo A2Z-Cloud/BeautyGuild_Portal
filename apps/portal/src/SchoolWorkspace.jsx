@@ -4,6 +4,7 @@ import {ArrowLeft,ArrowRight,Building2,BookOpen,CalendarDays,Users,GraduationCap
 import {PageHeading,Notice,Status} from './UiParts.jsx';
 import {INTEGRATIONS,portalApi} from './services/api.js';
 import {DocumentsPanel} from './DocumentsPanel.jsx';
+import {QualificationForm,SessionForm} from './SchoolActionForms.jsx';
 
 const sections=[
  ['profile','School profile',Building2],['courses','Courses',BookOpen],['venues','Venues',MapPin],
@@ -57,7 +58,9 @@ export function InvoiceTable({rows}){
  </section></div>}</>;
 }
 function SchoolSection({id,section}){
- const state=useLoad(()=>portalApi.getSchoolSection(id,section),[id,section]);
+ const [editing,setEditing]=useState(false),[reload,setReload]=useState(0);
+ const state=useLoad(()=>portalApi.getSchoolSection(id,section),[id,section,reload]);
+ const saved=()=>{setEditing(false);setReload(n=>n+1);};
  const [session,setSession]=useState(null);
  const books=useLoad(()=>session?portalApi.getSessionBookings(id,session):Promise.resolve({bookings:[]}),[id,session]);
  if(state.loading)return <p role="status">Loading {section}…</p>;
@@ -74,9 +77,9 @@ function SchoolSection({id,section}){
  {key:'visible',label:'Directory',render:r=>r.visible?'Visible':'Hidden'}]}/></>;
  case 'tutors':return <><h2>Accredited tutors</h2><p>Tutors should hold current Guild membership, appropriate qualifications and insurance.</p>
  <SimpleTable rows={x.tutors||[]} columns={[col('name','Tutor'),col('status','Membership / link'),col('membershipDealId','Membership Deal')]}/></>;
- case 'qualifications':return <><h2>Qualifications</h2><SimpleTable rows={x.qualifications||[]} columns={[col('name','Qualification'),
+ case 'qualifications':return <><div className="school-dialog-head"><h2>Qualifications</h2>{INTEGRATIONS.schoolWrites&&<button type="button" className="btn btn-primary" onClick={()=>setEditing(v=>!v)}>{editing?'Cancel':'Add qualification'}</button>}</div>{editing&&<QualificationForm schoolId={id} onDone={saved}/>}<SimpleTable rows={x.qualifications||[]} columns={[col('name','Qualification'),
  {key:'month',label:'Completed',render:r=>[r.month,r.year].filter(Boolean).join('/')||'—'},col('status','Verification')]}/></>;
- case 'sessions':return <><h2>Course dates and bookings</h2><p>Published fixed and flexible sessions from Zoho Creator. Booking actions need their write integration.</p>
+ case 'sessions':return <><div className="school-dialog-head"><h2>Course dates and bookings</h2>{INTEGRATIONS.schoolWrites&&<button type="button" className="btn btn-primary" onClick={()=>setEditing(v=>!v)}>{editing?'Cancel':'Create session'}</button>}</div><p>Published fixed and flexible sessions from Zoho Creator. Student booking submission requires its separate write integration.</p>{editing&&<SessionForm schoolId={id} onDone={saved}/>}
  <SimpleTable rows={x.sessions||[]} columns={[col('name','Course / session'),col('availabilityType','Availability'),col('start','Date'),
  {key:'placesBooked',label:'Places booked',render:r=>r.maximumPlaces==null?String(r.placesBooked):r.placesBooked+' / '+r.maximumPlaces},
  col('status','Status'),{key:'id',label:'Bookings',render:r=><button type="button" className="text-button" onClick={()=>setSession(r.id)}>View bookings</button>}]}/>
