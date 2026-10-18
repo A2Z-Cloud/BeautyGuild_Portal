@@ -6,7 +6,7 @@ import {Field,Notice,PageHeading,Stages} from './UiParts.jsx';
 import {accreditationType,validate} from './logic.mjs';
 import {usePreviewState} from './journeys/previewState.jsx';
 import AddressLookup from './components/AddressLookup.jsx';
-import {INTEGRATIONS} from './services/api.js';
+import {INTEGRATIONS,portalApi} from './services/api.js';
 
 function ReviewDetails({steps,values,kind}){
   const all=steps.flatMap(s=>s.fields).filter(f=>!f.when||f.when(values));
@@ -34,13 +34,27 @@ function CheckpointNotice({kind}) {
 export function Journey({kind}){
   const navigate=useNavigate();
   const config=JOURNEYS[kind];
-  const {answers,steps:storedSteps,setAnswer,setJourneyStep,clearAnswers}=usePreviewState();
+  const {answers,steps:storedSteps,draftRefs,setDraftRef,setAnswer,setJourneyStep,clearAnswers}=usePreviewState();
   const values=answers[kind]||{};
   const visible=useMemo(()=>config.steps.filter(step=>!step.when||step.when(values)),[config,values]);
   const index=Math.min(storedSteps[kind]||0,visible.length-1);
   const current=visible[index];
   const last=index===visible.length-1;
   const [errors,setErrors]=useState({});
+  const [saveMessage,setSaveMessage]=useState('');
+  const [saving,setSaving]=useState(false);
+  const save=async()=>{
+    if(!INTEGRATIONS.crmDrafts){checkpoint('save');return;}
+    if(saving)return;
+    setSaving(true);setSaveMessage('');
+    try{
+      const ref=draftRefs[kind];
+      const next=ref?await portalApi.updateDraft(ref.id,{service:kind,step:index,answers:values,revision:ref.revision}):await portalApi.createDraft({service:kind,step:index,answers:values});
+      setDraftRef(kind,{id:next.id,revision:next.revision});
+      setSaveMessage('Draft saved to your authenticated account.');
+    }catch(e){setSaveMessage(e.message||'Unable to save draft.');}
+    finally{setSaving(false);}
+  };
   const update=(name,value)=>{setAnswer(kind,name,value);setErrors(previous=>({...previous,[name]:undefined}));};
   const move=position=>{setJourneyStep(kind,position);setErrors({});window.scrollTo({top:0,behavior:'smooth'});};
   const checkpoint=intent=>navigate('/account/checkpoint?returnTo='+encodeURIComponent('/'+kind+'/new')+'&intent='+intent);
@@ -90,8 +104,8 @@ export function Journey({kind}){
       <aside className="journey-aside">
         <div className="aside-card"><span className="eyebrow">YOUR PROGRESS</span><div className="progress-track"><div style={{width:Math.round(((index+1)/visible.length)*100)+'%'}}/></div>
           <strong>{Math.round(((index+1)/visible.length)*100)}% through this journey</strong><p>Answers are held temporarily in this browser tab while you explore the site. They are not saved to CRM.</p></div>
-        <div className="aside-card muted-card"><LockKeyhole size={22}/><h3>Save and finish later</h3><p>Saving a CRM draft requires a verified account. Explore the account checkpoint before connecting the draft API.</p>
-          <button type="button" className="text-button" onClick={()=>checkpoint('save')}><Save size={15}/> Continue to account checkpoint</button></div>
+        <div className="aside-card muted-card"><LockKeyhole size={22}/><h3>Save and finish later</h3><p>An authenticated account is required for persistent drafts. Unsigned visitors continue to the account checkpoint.</p>
+          <button type="button" className="text-button" disabled={saving} onClick={save}><Save size={15}/> {saving?'Saving…':INTEGRATIONS.crmDrafts?'Save draft securely':'Continue to account checkpoint'}</button>{saveMessage&&<p role="status">{saveMessage}</p>}</div>
         <div className="aside-card"><CreditCard size={21}/><h3>Payment information</h3><p>No prices, card collection, checkout or active cover in this frontend preview.</p></div>
         <button type="button" className="text-button restart-button" onClick={()=>{clearAnswers(kind);setErrors({});}}>Clear example answers and restart</button>
         <div className="aside-help"><ShieldAlert size={18}/><span>Do not enter real personal, payment or confidential insurance information.</span></div>

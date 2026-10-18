@@ -1,27 +1,30 @@
-'use strict';
-
-// Environment variables are set in the Catalyst console for this function. Never commit values.
-// Only the variables for the routes this function serves are read here.
-function httpsUrl(value, fallback, name) {
-  const url = String(value || fallback).trim().replace(/\/+$/, '');
-  if (!/^https:\/\/[^/\s]+$/.test(url)) throw new Error(`${name} must be an https origin with no path`);
-  return url;
-}
-
-function boundedInt(value, fallback, min, max) {
-  const n = Number(value);
-  return Number.isFinite(n) ? Math.min(max, Math.max(min, Math.trunc(n))) : fallback;
-}
-
-function loadConfig(env = process.env) {
+// Public, browser-visible integration switches. Never pass API keys here.
+const known = new Set(['courses','address']);
+export function parseIntegrationConfig(env={}) {
+  const mode=env.VITE_DATA_MODE==='api'?'api':'demo';
+  const base=String(env.VITE_API_BASE_URL||'').trim().replace(/\/+$/,'');
+  const enabled=String(env.VITE_ENABLED_LEGACY_APIS||'').split(',').map(s=>s.trim().toLowerCase()).filter(s=>known.has(s));
+  const configured=mode==='api' && base.length>0;
+  // Other paths must be explicitly configured in the environment by the backend owner.
   return Object.freeze({
-    crmApiDomain: httpsUrl(env.CRM_API_DOMAIN, 'https://www.zohoapis.eu', 'CRM_API_DOMAIN'),
-    crmConnectionName: String(env.CRM_CONNECTION_NAME || 'zohocrm').trim(),
-    loqateBaseUrl: httpsUrl(env.LOQATE_API_BASE_URL, 'https://api.addressy.com', 'LOQATE_API_BASE_URL'),
-    loqateKey: String(env.LOQATE_API_KEY || ''),
-    loqateCountries: String(env.LOQATE_COUNTRY_FILTER || '').trim(),
-    loqateMaxResults: boundedInt(env.LOQATE_MAX_RESULTS, 40, 1, 100),
+    mode,apiBaseUrl:base,enabled:Object.freeze(configured?enabled:[]),
+    catalystAuth:mode==='api' && env.VITE_CATALYST_AUTH==='true',
+    baseConfigured:configured,
   });
 }
-
-module.exports = { loadConfig };
+export function isEnabled(config, feature) {
+  return Boolean(config.baseConfigured && config.enabled.includes(feature));
+}
+// Same-origin, absolute API paths only. Traversal is checked on the path segments, not the
+// query string, so user text such as "Flat 1.." in an address search is still allowed.
+export function isSafePath(path) {
+  if(typeof path!=='string' || !path.startsWith('/') || path.startsWith('//'))return false;
+  const pathname=path.split(/[?#]/,1)[0];
+  let decoded;
+  try{decoded=decodeURIComponent(pathname);}catch{return false;}
+  return !decoded.split(/[\\/]/).includes('..');
+}
+export function appendPath(base,path) {
+  if(!base || !isSafePath(path))throw new Error('Invalid API configuration');
+  return base+path;
+}

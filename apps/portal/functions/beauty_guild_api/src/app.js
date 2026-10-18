@@ -4,6 +4,7 @@ const { HttpError } = require('./errors');
 const { createLoqate } = require('./loqate');
 const { createCourses } = require('./courses');
 const { createRateLimiter } = require('./rateLimit');
+const { registerDraftRoutes } = require('./drafts');
 
 const TEXT_MIN = 3;
 const TEXT_MAX = 100;
@@ -21,7 +22,7 @@ function cleanText(value) {
 
 function createApp({
   config, getCrmHeaders, fetchImpl = fetch, now = Date.now, log = console.log,
-  addressLimit = 60, addressWindowMs = 60 * 1000,
+  addressLimit = 60, addressWindowMs = 60 * 1000, getCurrentUser, getDraftTable,
 }) {
   const loqate = createLoqate({ config, fetchImpl, log });
   const courses = createCourses({ config, getCrmHeaders, fetchImpl, now, log });
@@ -33,9 +34,9 @@ function createApp({
     res.set('X-Content-Type-Options', 'nosniff');
     next();
   });
-  // Read-only function: reject anything but GET before any route logic runs.
+  // Legacy routes remain read-only; the explicit /portal/drafts endpoints require a Catalyst session.
   app.use((req, res, next) => {
-    if (req.method !== 'GET') return next(new HttpError(405, 'METHOD_NOT_ALLOWED', 'Method not allowed.'));
+    if (req.method !== 'GET' && !req.path.startsWith('/portal/drafts')) return next(new HttpError(405, 'METHOD_NOT_ALLOWED', 'Method not allowed.'));
     return next();
   });
 
@@ -67,6 +68,8 @@ function createApp({
     if (!ID_PATTERN.test(id)) throw new HttpError(400, 'INVALID_REQUEST', 'Invalid address.');
     res.json({ address: await loqate.retrieve(id) });
   }));
+
+  registerDraftRoutes(app, { enabled: config.draftsEnabled, getCurrentUser, getDraftTable });
 
   app.use((req, res, next) => next(new HttpError(404, 'NOT_FOUND', 'Not found.')));
   // eslint-disable-next-line no-unused-vars

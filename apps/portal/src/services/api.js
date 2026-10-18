@@ -3,12 +3,16 @@ import {parseIntegrationConfig,isEnabled} from './config.mjs';
 import {createLegacyGateway,IntegrationUnavailableError} from './legacy.mjs';
 import {createCatalystAuth} from './catalystAuth.js';
 import {resolveViewer} from './viewer.mjs';
+import {createHttpClient} from './transport.mjs';
 
 export {IntegrationUnavailableError};
 export const integrationConfig=parseIntegrationConfig(import.meta.env);
 export const DATA_MODE=integrationConfig.mode;
 const gateway=createLegacyGateway(integrationConfig);
 const auth=createCatalystAuth(integrationConfig.catalystAuth);
+const draftsOn=integrationConfig.mode==='api' && integrationConfig.catalystAuth && import.meta.env.VITE_PORTAL_DRAFTS==='true';
+const draftHttp=draftsOn?createHttpClient({baseUrl:integrationConfig.apiBaseUrl}):null;
+const draftReq=(route,opts)=>draftHttp?draftHttp('/portal/drafts'+route,opts):unavailable('Authenticated draft storage');
 const clone=obj=>JSON.parse(JSON.stringify(obj));
 const unavailable=name=>{throw new IntegrationUnavailableError(name);};
 
@@ -19,7 +23,7 @@ export const INTEGRATIONS=Object.freeze({
   catalystAuth:integrationConfig.catalystAuth,
   courses:isEnabled(integrationConfig,'courses'),
   address:isEnabled(integrationConfig,'address'),
-  crmRecords:false,crmDrafts:false,crmContactMapping:false,pricing:false,
+  crmRecords:false,crmDrafts:draftsOn,crmContactMapping:false,pricing:false,
   underwriting:false,stripeCheckout:false,policyIssuance:false,workdrive:false,
 });
 export const portalApi=Object.freeze({
@@ -35,11 +39,11 @@ export const portalApi=Object.freeze({
   listCourses:options=>gateway.listCourses(options),
   findAddresses:(text,container,options)=>gateway.findAddresses(text,container,options),
   retrieveAddress:(id,options)=>gateway.retrieveAddress(id,options),
-  createDraft:async()=>unavailable('CRM draft creation'),
-  updateDraft:async()=>unavailable('CRM draft update'),
-  getDraft:async()=>unavailable('CRM draft retrieval'),
-  listDrafts:async()=>unavailable('CRM draft listing'),
-  discardDraft:async()=>unavailable('CRM draft deletion'),
+  createDraft:async data=>(await draftReq('/',{method:'POST',body:data})).draft,
+  updateDraft:async (id,data)=>(await draftReq('/'+encodeURIComponent(id),{method:'PUT',body:data})).draft,
+  getDraft:async id=>(await draftReq('/'+encodeURIComponent(id))).draft,
+  listDrafts:async ()=>(await draftReq('/')).drafts,
+  discardDraft:async id=>draftReq('/'+encodeURIComponent(id),{method:'DELETE'}),
   quote:async()=>unavailable('Authoritative pricing and underwriting'),
   submit:async()=>unavailable('CRM submission'),
   checkout:async()=>unavailable('Stripe Checkout'),
