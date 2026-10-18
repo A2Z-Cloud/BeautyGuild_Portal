@@ -11,6 +11,7 @@ import { LoginPage, SignupPage, ForgotPasswordPage, AccountCheckpoint, AccountMa
 import { PaymentPreview,PaymentReturn } from './PaymentPreview.jsx';
 import { INTEGRATIONS } from './services/api.js';
 import { CourseCatalogue } from './components/CourseCatalogue.jsx';
+import PublicSchoolVerification from './PublicSchoolVerification.jsx';
 
 function NotReady({ area }) {
   return <div className="page narrow-page">
@@ -31,7 +32,7 @@ function NotFound() {
 const STANDALONE_ROUTES = ['/login', '/signup', '/forgot-password', '/account/checkpoint'];
 function Layout({ children }) {
   const { pathname } = useLocation();
-  return STANDALONE_ROUTES.includes(pathname.replace(/\/+$/, '')) ? children : <PortalView>{children}</PortalView>;
+  return STANDALONE_ROUTES.includes(pathname.replace(/\/+$/, '')) || pathname==='/verify' || pathname.startsWith('/verify/') ? children : <PortalView>{children}</PortalView>;
 }
 export default function App() {
   return <PreviewStateProvider><Layout><Routes>
@@ -42,6 +43,8 @@ export default function App() {
     <Route path="/membership/new" element={<Journey kind="membership" />} />
     <Route path="/insurance/new" element={<Journey kind="insurance" />} />
     <Route path="/accreditation/new" element={<Journey kind="accreditation" />} />
+    <Route path="/verify" element={<PublicSchoolVerification />} />
+    <Route path="/verify/:number" element={<PublicSchoolVerification />} />
     <Route path="/records" element={<Records />} />
     <Route path="/records/:kind/:id" element={<RecordDetail />} />
     <Route path="/membership/:id" element={<RecordDetail kindOverride="membership" />} />
