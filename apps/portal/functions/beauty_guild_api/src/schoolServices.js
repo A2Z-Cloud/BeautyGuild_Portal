@@ -136,8 +136,19 @@ function registerSchoolRoutes(app,{enabled,writesEnabled,getCurrentUser,getCrmHe
   if(section==='tutors'){
    if(!accountId)return res.json({tutors:[]});
    const relationships=await api.crm(req,'Tutor_Relationships/search?criteria='+esc('((Account:equals:'+accountId+')and(Status:equals:Active))')+'&fields='+esc('Tutor_Contact,Tutor_Relationship'));
-   return res.json({tutors:relationships.filter(t=>t.Tutor_Contact).map(t=>({id:t.id,name:t.Tutor_Contact.name||'Tutor',
-    membershipDealId:t.Tutor_Relationship?.id||null,status:t.Tutor_Relationship?'Linked':'Pending membership'}))});
+   const tutorRows=[];
+   for(const t of relationships.filter(t=>t.Tutor_Contact)){
+    const dealId=t.Tutor_Relationship?.id;
+    let member=null;
+    if(dealId){
+     const deal=(await api.crm(req,'Deals/'+dealId+'?fields='+esc('Member_Profile')))[0];
+     if(deal?.Member_Profile?.id)member=(await api.crm(req,'Membership/'+deal.Member_Profile.id+'?fields='+esc('Name,Current_Membership_Status,Current_Membership_Expiry')))[0];
+    }
+    const status=!member?'Pending membership':member.Current_Membership_Status==='Expired'?'Expired':member.Current_Membership_Status==='Current'?'Current':'Pending membership';
+    tutorRows.push({id:t.id,name:t.Tutor_Contact.name||'Tutor',membershipDealId:dealId||null,
+      membershipNumber:member?.Name||null,membershipExpiry:member?.Current_Membership_Expiry||null,status});
+   }
+   return res.json({tutors:tutorRows});
   }
   if(section==='qualifications'){
    const rows=await api.crm(req,'Qualifications/search?criteria='+esc('(Contact:equals:'+req.memberContact.id+')')+'&fields='+esc('Name,Primary_Accreditation,Date_Completed_Month,Date_Completed_Year,Verification_Status'));
