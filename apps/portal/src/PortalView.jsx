@@ -3,7 +3,24 @@ import { Link, NavLink, useLocation } from 'react-router-dom';
 import { Award, BookOpen, ChevronLeft, ChevronRight, CircleHelp, ClipboardList, GraduationCap, House, Menu, ShieldCheck, UserRound, LogIn, X } from 'lucide-react';
 import { DEMO_USER } from './data/demo.js';
 import { Logo, PreviewLabel } from './UiParts.jsx';
-import {DATA_MODE} from './services/api.js';
+import {DATA_MODE,INTEGRATIONS,portalApi} from './services/api.js';
+
+// Shows the signed-in member in the top bar. The check runs once per page load and any failure
+// (not signed in, SDK unavailable) simply leaves the "Sign in" link showing.
+function useSignedInUser(){
+  const [user,setUser]=useState(null);
+  useEffect(()=>{
+    if(!INTEGRATIONS.catalystAuth)return undefined;
+    let active=true;
+    portalApi.getIdentity().then(u=>{if(active)setUser(u);}).catch(()=>{});
+    return()=>{active=false;};
+  },[]);
+  return user;
+}
+function initialsOf(user){
+  const letters=[user.firstName,user.lastName].filter(Boolean).map(s=>s[0]).join('');
+  return (letters||String(user.email||'?')[0]).toUpperCase();
+}
 
 const sections = [
   {label:'Dashboard',path:'/',icon:House,end:true},
@@ -31,6 +48,7 @@ export default function PortalView({children}){
   const [collapsed,setCollapsed]=useState(()=>{try{return window.localStorage.getItem('bg-preview-sidebar')==='collapsed';}catch{return false;}});
   const [mobileOpen,setMobileOpen]=useState(false);
   const location=useLocation();
+  const signedIn=useSignedInUser();
   useEffect(()=>{setMobileOpen(false);},[location.pathname,location.search]);
   const toggle=()=>setCollapsed(old=>{try{window.localStorage.setItem('bg-preview-sidebar',old?'expanded':'collapsed');}catch{}return !old;});
   return <div className={'portal-shell'+(collapsed?' compact':'')}>
@@ -50,7 +68,7 @@ export default function PortalView({children}){
       <header className="topbar"><div className="topbar-left">
           <button className="icon-button mobile-menu" type="button" onClick={()=>setMobileOpen(true)} aria-label="Open navigation" aria-expanded={mobileOpen} aria-controls="portal-navigation"><Menu size={22}/></button>
           <div className="breadcrumb"><Link to="/">Portal</Link><ChevronRight size={15}/><strong>{currentTitle(location.pathname)}</strong></div>
-        </div><div className="topbar-right">{DATA_MODE==='demo'&&<PreviewLabel/>}<Link className="header-login" to="/login"><LogIn size={15}/> Sign in</Link>{DATA_MODE==='demo'&&<><span className="topbar-avatar" aria-label="Sample user">{DEMO_USER.initials}</span><div className="user-label"><strong>{DEMO_USER.name}</strong><span>Sample account</span></div></>}</div>
+        </div><div className="topbar-right">{DATA_MODE==='demo'&&<PreviewLabel/>}{signedIn?<Link className="header-user" to="/account"><span className="topbar-avatar" aria-hidden="true">{initialsOf(signedIn)}</span><div className="user-label"><strong>{[signedIn.firstName,signedIn.lastName].filter(Boolean).join(' ')||signedIn.email}</strong><span>My account</span></div></Link>:<Link className="header-login" to="/login"><LogIn size={15}/> Sign in</Link>}{DATA_MODE==='demo'&&<><span className="topbar-avatar" aria-label="Sample user">{DEMO_USER.initials}</span><div className="user-label"><strong>{DEMO_USER.name}</strong><span>Sample account</span></div></>}</div>
       </header>
       <main id="main-content">{children}</main>
       <footer className="page-footer"><span>Beauty Guild Portal V2</span><span>{DATA_MODE==='demo'?'Sample information only':'Authenticated services · Live data subject to backend availability'}</span></footer>

@@ -6,7 +6,14 @@ const pick=(name,label,x,extra={})=>f(name,label,'radio',true,{options:list(x),.
 const multi=(name,label,x,required=false,extra={})=>f(name,label,'multi',required,{options:list(x),...extra});
 const select=(name,label,x,required=true)=>f(name,label,'select',required,{options:list(x)});
 const yn=(name,label,extra={})=>pick(name,label,[{value:'yes',label:'Yes'},{value:'no',label:'No'}],extra);
-const UK=['United Kingdom','England','Scotland','Wales','Northern Ireland','Ireland','France','Spain','Other'];
+export const COUNTRY_OPTIONS=['United Kingdom','England','Scotland','Wales','Northern Ireland','Ireland','France','Spain','Other'];
+const UK=COUNTRY_OPTIONS;
+// Maps a country name from address lookup onto the form's dropdown ("Other" when not listed).
+export function countryOption(name){
+  const wanted=String(name||'').trim().toLowerCase();
+  if(!wanted)return '';
+  return COUNTRY_OPTIONS.find(o=>o.toLowerCase()===wanted)||'Other';
+}
 const yes=name=>v=>v[name]==='yes';
 const salon=v=>(v.workingMethods||[]).includes('salon');
 export const JOURNEYS={

@@ -11,7 +11,7 @@ const TABS=[{id:'overview',label:'Overview'},{id:'activity',label:'Activity'},{i
 const routeFor=(record,tab='overview')=>'/records/'+record.kind+'/'+encodeURIComponent(record.id)+'?tab='+tab;
 export function Records(){
   if(INTEGRATIONS.crmRecords)return <LiveRecords/>;
-  if(DATA_MODE==='api')return <div className="page"><PageHeading title="My records"/><Notice title="Record connection pending">Secure CRM record access is not configured.</Notice></div>;
+  if(DATA_MODE==='api')return <div className="page"><PageHeading title="My records"/><Notice title="Coming soon">Your memberships, accreditations and insurance will appear here soon.</Notice></div>;
 
   const [params,setParams]=useSearchParams();
   const type=TYPES.some(x=>x.value===params.get('type'))?params.get('type'):'all';
@@ -30,7 +30,7 @@ export function Records(){
 }
 export function RecordDetail({kindOverride}){
   if(INTEGRATIONS.crmRecords)return <LiveRecordDetail kindOverride={kindOverride}/>;
-  if(DATA_MODE==='api')return <div className="page"><PageHeading title="Record unavailable"/><Notice title="Not connected">Real record access is not configured.</Notice></div>;
+  if(DATA_MODE==='api')return <div className="page"><PageHeading title="Record unavailable"/><Notice title="Not available yet">This record is not available to view online yet.</Notice></div>;
 
   const path=useParams(),location=useLocation();
   const kind=kindOverride||path.kind;

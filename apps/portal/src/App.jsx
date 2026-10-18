@@ -9,12 +9,19 @@ import { Notice, PageHeading } from './UiParts.jsx';
 import { PreviewStateProvider } from './journeys/previewState.jsx';
 import { LoginPage, SignupPage, ForgotPasswordPage, AccountCheckpoint, AccountManagement } from './AccountPages.jsx';
 import { PaymentPreview,PaymentReturn } from './PaymentPreview.jsx';
+import { INTEGRATIONS } from './services/api.js';
+import { CourseCatalogue } from './components/CourseCatalogue.jsx';
 
 function NotReady({ area }) {
   return <div className="page narrow-page">
-    <PageHeading eyebrow="PORTAL V2" title={area} description="This section is not connected in the frontend preview." />
-    <Notice title="Available in a later milestone">The live account, CRM record and backend functionality will be connected after the preview has been reviewed.</Notice>
+    <PageHeading eyebrow="COMING SOON" title={area} description="This part of the portal is not available yet." />
+    <Notice title="Coming soon">We are still building this section. Please check back later.</Notice>
   </div>;
+}
+// GTi Courses shows the live catalogue when course lookup is switched on, otherwise a placeholder.
+function GtiCourses() {
+  if (!INTEGRATIONS.courses) return <NotReady area="GTi Courses" />;
+  return <div className="page"><PageHeading eyebrow="GTi COURSES" title="GTi courses" description="Courses currently offered through the Guild." /><CourseCatalogue /></div>;
 }
 function NotFound() {
   return <div className="page narrow-page"><PageHeading eyebrow="404" title="Page not found" description="This address does not match an available portal page." /><Link to="/" className="btn btn-primary">Return to dashboard</Link></div>;
@@ -47,7 +54,7 @@ export default function App() {
     <Route path="/payment-return" element={<PaymentReturn/>} />
     <Route path="/checkout-preview/:kind" element={<PaymentPreview />} />
     <Route path="/account" element={<AccountManagement />} />
-    <Route path="/gti-courses" element={<NotReady area="GTi Courses" />} />
+    <Route path="/gti-courses" element={<GtiCourses />} />
     <Route path="/my-profile" element={<Navigate to="/account" replace />} />
     <Route path="/help" element={<NotReady area="Help and support" />} />
     <Route path="/apply" element={<Navigate to="/accreditation/new" replace />} />
