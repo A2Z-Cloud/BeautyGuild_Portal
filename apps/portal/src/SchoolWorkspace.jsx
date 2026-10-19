@@ -44,6 +44,7 @@ export function SchoolsList(){
 function SchoolProfile({data}){
  const p=data.profile;
  return <><h2>School profile</h2><p className="muted">You cannot change these details online. Contact the Accreditation team to update them.</p>
+ {INTEGRATIONS.stripeCheckout&&<p><Link className="btn btn-secondary" to={'/pay/accreditation/'+p.id}>Pay for accreditation</Link></p>}
  <dl className="detail-list">{Object.entries({'Training centre':p.name,'Town / City':p.town,County:p.county,Country:p.country,Postcode:p.postcode,
  'Accreditation status':p.status,'Valid until':formatDate(p.expires),'Accreditation level':p.level,'Referral code':p.referralCode}).map(([k,v])=><div key={k}><dt>{k}</dt><dd>{v||'—'}</dd></div>)}</dl>
  {p.referralCode&&p.referralActive&&<p><a className="reference" href={'https://beautyguild.com/Join/'+encodeURIComponent(p.referralCode)} target="_blank" rel="noreferrer">View school referral landing page <ArrowRight size={15}/></a></p>}</>;
@@ -137,7 +138,7 @@ export function MembershipManagement(){
  <section className="surface padded">{tab==='details'?(record.error?<Notice title="Unavailable">{record.error}</Notice>:
  record.loading?<p>Loading membership…</p>:<dl className="detail-list">{Object.entries(record.value||{}).map(([k,v])=><div key={k}><dt>{k}</dt><dd>{v==null?'—':String(v)}</dd></div>)}</dl>):
  tab==='addons'?(extension.loading?<p>Loading add-ons…</p>:extension.error?<Notice title="Unavailable">{extension.error}</Notice>:
- <SimpleTable rows={extension.value||[]} columns={[col('type','Add-on'),col('branch','Branch'),col('quantity','Quantity'),col('finalPrice','Amount'),col('status','Status')]}/>):
+ <><SimpleTable rows={extension.value||[]} columns={[col('type','Add-on'),col('branch','Branch'),col('quantity','Quantity'),col('finalPrice','Amount'),col('status','Status')]}/>{INTEGRATIONS.stripeCheckout&&<p><Link className="btn btn-primary" to={'/pay/membership_addon/'+id}>Buy add-ons</Link></p>}</>):
  invoices.loading?<p>Loading invoices…</p>:invoices.error?<Notice title="Unavailable">{invoices.error}</Notice>:<InvoiceTable rows={invoices.value||[]}/>}</section></>}
  </div>;
 }

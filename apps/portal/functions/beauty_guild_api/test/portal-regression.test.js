@@ -4,7 +4,6 @@ const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const {createApp} = require('../src/app');
 const {loadConfig} = require('../src/config');
-const {verifyStripe, money} = require('../src/billing');
 const {parsePath, folderIdFromLink} = require('../src/documents');
 
 function rows() {
@@ -19,13 +18,11 @@ function rows() {
  };
 }
 async function withApp(overrides,fn){
- const quotes=rows(),payments=rows();
  const app=createApp({
-  config:loadConfig({PORTAL_RECORDS_ENABLED:'true',PORTAL_BILLING_ENABLED:'true',PORTAL_DOCUMENTS_ENABLED:'true',STRIPE_SECRET_KEY:'sk_test_example_only',STRIPE_WEBHOOK_SECRET:'whsec_example_only',PORTAL_PUBLIC_ORIGIN:'https://preview.example.test'}),
+  config:loadConfig({PORTAL_RECORDS_ENABLED:'true',PORTAL_BILLING_ENABLED:'true',PORTAL_DOCUMENTS_ENABLED:'true',STRIPE_SECRET_KEY:'sk_test_example_only',PORTAL_PUBLIC_ORIGIN:'https://preview.example.test'}),
   getCurrentUser:async()=>({id:'user-1',email:'alice@example.test'}),
   getCrmHeaders:async()=>({Authorization:'Bearer test'}),
   getWorkdriveHeaders:async()=>({Authorization:'Bearer wd-test'}),
-  getQuoteTable:async()=>quotes,getPaymentTable:async()=>payments,
   ...overrides,
  });
  const server=await new Promise(resolve=>{
@@ -37,7 +34,7 @@ async function withApp(overrides,fn){
     const body=await response.json();
     return {status:response.status,body};
    };
-   await fn({call,quotes,payments});
+   await fn({call});
  }finally{await new Promise(resolve=>server.close(resolve));}
 }
 test('Record reads require an authenticated account and never accept a browser contactId',async()=>{
@@ -78,27 +75,6 @@ test('CRM individual record with mismatched owner returns 404',async()=>{
  };
  await withApp({fetchImpl},async({call})=>{
   assert.equal((await call('/portal/records/membership/501')).status,404);
- });
-});
-test('Stripe signature verifies timestamp and cannot be forged or replayed late',()=>{
- const payload='{"type":"checkout.session.completed"}',secret='whsec_demo';
- const ts=Math.floor(Date.now()/1000);
- const signature=crypto.createHmac('sha256',secret).update(ts+'.'+payload).digest('hex');
- assert.equal(verifyStripe(payload,'t='+ts+',v1='+signature,secret),true);
- assert.equal(verifyStripe(payload,'t='+ts+',v1='+'f'.repeat(64),secret),false);
- assert.equal(verifyStripe(payload,'t=1,v1='+signature,secret),false);
-});
-test('Server refuses unapproved or malformed payable amounts',()=>{
- assert.equal(money({Amount_Pence:1250}),1250);
- assert.throws(()=>money({Amount_Pence:0}));
- assert.throws(()=>money({Amount_Pence:-20}));
- assert.throws(()=>money({Amount_Pence:'something'}));
-});
-test('Stripe quote is not payable when referral decision is not PASS',async()=>{
- await withApp({stripeKey:'sk_test_fake',webhookSecret:'whsec_fake',publicOrigin:'https://preview.example.test'},async({call,quotes})=>{
-  const quote=await quotes.insertRow({Owner_User_ID:'user-1',Service:'insurance',Status:'APPROVED',Decision:'REFER',Amount_Pence:1234});
-  const r=await call('/portal/billing/checkout',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({quoteId:quote.ROWID})});
-  assert.equal(r.status,409);
  });
 });
 test('Documents reject traversal and non-WorkDrive roots',()=>{

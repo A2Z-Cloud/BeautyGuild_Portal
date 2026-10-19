@@ -11,6 +11,7 @@ import { LoginPage, SignupPage, ForgotPasswordPage, AccountCheckpoint, AccountMa
 import { PaymentPreview,PaymentReturn } from './PaymentPreview.jsx';
 import { INTEGRATIONS } from './services/api.js';
 import { CourseCatalogue } from './components/CourseCatalogue.jsx';
+import CheckoutPage from './CheckoutPage.jsx';
 import PublicSchoolVerification from './PublicSchoolVerification.jsx';
 import SavedDrafts from './SavedDrafts.jsx';
 import {SchoolsList,SchoolWorkspace,AccountInvoices,MembershipManagement,AccountDocuments} from './SchoolWorkspace.jsx';
@@ -62,6 +63,7 @@ export default function App() {
     <Route path="/signup" element={<SignupPage />} />
     <Route path="/forgot-password" element={<ForgotPasswordPage />} />
     <Route path="/account/checkpoint" element={<AccountCheckpoint />} />
+    <Route path="/pay/:service/:recordId" element={<CheckoutPage />} />
     <Route path="/payment-return" element={<PaymentReturn/>} />
     <Route path="/checkout-preview/:kind" element={<PaymentPreview />} />
     <Route path="/account" element={<AccountManagement />} />

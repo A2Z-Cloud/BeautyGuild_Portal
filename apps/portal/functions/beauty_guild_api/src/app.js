@@ -5,7 +5,7 @@ const { createLoqate } = require('./loqate');
 const { createCourses } = require('./courses');
 const { createRateLimiter, clientKey } = require('./rateLimit');
 const {registerRecordRoutes}=require('./records');
-const {registerBillingRoutes}=require('./billing');
+const {registerCheckoutRoutes}=require('./checkout');
 const {registerDocumentRoutes}=require('./documents');
 const {registerDiagnosticsRoutes}=require('./diagnostics');
 const {registerPublicSchoolVerification}=require('./publicSchoolVerification');
@@ -24,7 +24,7 @@ function cleanText(value) {
 
 function createApp({
   config, getCrmHeaders, fetchImpl = fetch, now = Date.now, log = console.log,
-  addressLimit = 60, addressWindowMs = 60 * 1000, getCurrentUser, getQuoteTable, getPaymentTable, getWorkdriveHeaders, getCreatorHeaders,
+  addressLimit = 60, addressWindowMs = 60 * 1000, getCurrentUser, getWorkdriveHeaders, getCreatorHeaders,
 }) {
   const loqate = createLoqate({ config, fetchImpl, log });
   const courses = createCourses({ config, getCrmHeaders, fetchImpl, now, log });
@@ -38,7 +38,7 @@ function createApp({
   });
   // Read-only function: reject anything but GET before any route logic runs.
   app.use((req, res, next) => {
-    if (req.method !== 'GET' && !req.path.startsWith('/portal/billing') && req.path!=='/portal/stripe/webhook' && !req.path.startsWith('/portal/drafts') && !req.path.startsWith('/portal/management')) return next(new HttpError(405, 'METHOD_NOT_ALLOWED', 'Method not allowed.'));
+    if (req.method !== 'GET' && !req.path.startsWith('/portal/checkout') && !req.path.startsWith('/portal/drafts') && !req.path.startsWith('/portal/management')) return next(new HttpError(405, 'METHOD_NOT_ALLOWED', 'Method not allowed.'));
     return next();
   });
 
@@ -76,7 +76,7 @@ function createApp({
     registrationModule:config.schoolRegistrationModule,registrationField:config.schoolRegistrationField,
     activeStatus:config.schoolActiveStatus,getCrmHeaders,crmApiDomain:config.crmApiDomain,fetchImpl,now});
   registerRecordRoutes(app,{enabled:config.recordsEnabled,getCurrentUser,getCrmHeaders,crmApiDomain:config.crmApiDomain,fetchImpl,hideDrafts:config.crmDraftsEnabled,draftStatus:config.draftStatus});
-  registerBillingRoutes(app,{enabled:config.billingEnabled,getCurrentUser,getQuoteTable,getPaymentTable,stripeKey:config.stripeSecretKey,webhookSecret:config.stripeWebhookSecret,publicOrigin:config.portalPublicOrigin,fetchImpl});
+  registerCheckoutRoutes(app,{enabled:config.billingEnabled,getCurrentUser,getCrmHeaders,crmApiDomain:config.crmApiDomain,stripeKey:config.stripeSecretKey,prices:config.stripePrices,publicOrigin:config.portalPublicOrigin,fetchImpl,now});
   registerDraftRoutes(app,{enabled:config.crmDraftsEnabled,getCurrentUser,getCrmHeaders,crmApiDomain:config.crmApiDomain,config,fetchImpl});
   registerDiagnosticsRoutes(app,{enabled:config.diagnosticsEnabled,allowedEmails:config.diagnosticsEmails,getCurrentUser,getCrmHeaders,crmApiDomain:config.crmApiDomain,fetchImpl});
   registerDocumentRoutes(app,{enabled:config.documentsEnabled,getCurrentUser,getCrmHeaders,getWorkdriveHeaders,crmApiDomain:config.crmApiDomain,workdriveApiDomain:config.workdriveApiDomain,fetchImpl});

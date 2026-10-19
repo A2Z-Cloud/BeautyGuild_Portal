@@ -22,7 +22,7 @@ const recordHttp=recordsOn?createHttpClient({baseUrl:integrationConfig.apiBaseUr
 const recordReq=path=>recordHttp?recordHttp('/portal/records'+path):unavailable('Authenticated CRM records');
 const billingOn=integrationConfig.baseConfigured && integrationConfig.catalystAuth && import.meta.env.VITE_PORTAL_BILLING==='true';
 const billingHttp=billingOn?createHttpClient({baseUrl:integrationConfig.apiBaseUrl}):null;
-const billingReq=(path,options)=>billingHttp?billingHttp('/portal/billing'+path,options):unavailable('Authorised pricing and checkout');
+const billingReq=(path,options)=>billingHttp?billingHttp('/portal/checkout'+path,options):unavailable('Authorised pricing and checkout');
 const documentsOn=integrationConfig.baseConfigured && integrationConfig.catalystAuth && import.meta.env.VITE_PORTAL_DOCUMENTS==='true';
 const documentHttp=documentsOn?createHttpClient({baseUrl:integrationConfig.apiBaseUrl}):null;
 const documentPath=(kind,id)=>'/portal/documents/'+encodeURIComponent(kind)+'/'+encodeURIComponent(id);
@@ -71,9 +71,9 @@ export const portalApi=Object.freeze({
   getDraft:async (service,id)=>(await draftReq('/'+service+'/'+encodeURIComponent(id))).draft,
   listDrafts:async ()=>(await draftReq('/')).drafts,
   discardDraft:async (service,id)=>draftReq('/'+service+'/'+encodeURIComponent(id),{method:'DELETE'}),
-  quote:async id=>(await billingReq('/quotes/'+encodeURIComponent(id))).quote,
+  checkoutQuote:async params=>(await billingReq('/quote?'+new URLSearchParams(params).toString())).quote,
   submit:async()=>unavailable('CRM submission'),
-  checkout:async quoteId=>billingReq('/checkout',{method:'POST',body:{quoteId}}),
+  startCheckout:async body=>billingReq('/',{method:'POST',body}),
   getDocuments:async(kind,id,path='')=>documentHttp?documentHttp(documentPath(kind,id)+(path?'?path='+encodeURIComponent(path):'')):unavailable('Authorised document listing'),
   getDocumentDownloadUrl:(kind,id,fileId,path='')=>documentsOn?integrationConfig.apiBaseUrl+documentPath(kind,id)+'/file/'+encodeURIComponent(fileId)+(path?'?path='+encodeURIComponent(path):''):null,
 });

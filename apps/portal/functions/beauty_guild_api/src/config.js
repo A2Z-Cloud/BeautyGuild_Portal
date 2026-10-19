@@ -44,7 +44,8 @@ function loadConfig(env = process.env) {
     workdriveApiDomain:httpsUrl(env.WORKDRIVE_API_DOMAIN,'https://www.zohoapis.eu','WORKDRIVE_API_DOMAIN'),
     workdriveConnectionName:String(env.WORKDRIVE_CONNECTION_NAME||'zohoworkdrive'),
     stripeSecretKey:String(env.STRIPE_SECRET_KEY||''),
-    stripeWebhookSecret:String(env.STRIPE_WEBHOOK_SECRET||''),
+    // Stripe price IDs for the checkout catalogue (see catalogue.js). Anything else is ignored.
+    stripePrices:Object.fromEntries(Object.entries(env).filter(([k,v])=>/^STRIPE_PRICE_[A-Z0-9_]+$/.test(k)&&/^price_[A-Za-z0-9]+$/.test(String(v).trim())).map(([k,v])=>[k,String(v).trim()])),
     portalPublicOrigin:String(env.PORTAL_PUBLIC_ORIGIN||''),
   });
 }

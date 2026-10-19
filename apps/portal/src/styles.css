@@ -252,3 +252,6 @@ img,svg,video,iframe{max-width:100%}
 @media(max-width:600px){.course-group-list li{flex-direction:column;gap:2px}.course-meta{text-align:left}}
 
 @media(max-width:640px){.table-scroll .record-table{min-width:460px}}
+
+/* Checkout */
+.addon-picker{margin-bottom:18px}.addon-row{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:10px 0;border-bottom:1px solid #f3edf0;font-size:13px}.addon-row input{width:72px;border:1px solid #e3d8df;border-radius:9px;padding:9px 10px;min-height:42px}
