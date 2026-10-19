@@ -94,11 +94,18 @@ function registerSchoolRoutes(app,{enabled,writesEnabled,getCurrentUser,getCrmHe
   next();
  }catch(e){next(e);}});
  router.get('/schools',handle(async(req,res)=>{
-  const rows=await api.crm(req,'Training_Centre_Accred/search?criteria='+esc('(Applicant_Contact:equals:'+req.memberContact.id+')')+'&fields='+esc('Applicant_Contact,Account,Accreditation_Status,Accreditation_Level,Valid_To,Application_Stage')+'&per_page=200');
-  const schools=rows.filter(x=>String(x.Applicant_Contact?.id)===String(req.memberContact.id))
-  .map(a=>({id:String(a.id),name:a.Account?.name||'Training centre',accountId:a.Account?.id||null,
-   status:a.Accreditation_Status||a.Application_Stage||'Unknown',level:a.Accreditation_Level||null,
-   validTo:a.Valid_To||null}));
+  const rows=await api.crm(req,'Training_Centre_Accred/search?criteria='+esc('(Applicant_Contact:equals:'+req.memberContact.id+')')+'&fields='+esc('Applicant_Contact,Account,Accreditation_Status,Accreditation_Level,Valid_To,Application_Stage,Payment_Status')+'&per_page=200');
+  const mine=rows.filter(x=>String(x.Applicant_Contact?.id)===String(req.memberContact.id));
+  // How many qualifications each application has, so the portal can say whether any are still outstanding.
+  const counts={};
+  if(mine.length){
+   const quals=await api.crm(req,'Qualifications/search?criteria='+esc('(Contact:equals:'+req.memberContact.id+')')+'&fields='+esc('Primary_Accreditation')+'&per_page=200');
+   for(const q of quals){const k=String(q.Primary_Accreditation?.id||'');if(k)counts[k]=(counts[k]||0)+1;}
+  }
+  const schools=mine.map(a=>({id:String(a.id),name:a.Account?.name||'Training centre',accountId:a.Account?.id||null,
+   status:a.Accreditation_Status||a.Application_Stage||'Unknown',stage:a.Application_Stage||null,level:a.Accreditation_Level||null,
+   validTo:a.Valid_To||null,paymentStatus:a.Payment_Status||null,paid:isPaidStatus(a.Payment_Status),payable:isPayableAccreditation(a),
+   qualificationCount:counts[String(a.id)]||0}));
   res.json({schools});
  }));
  // Registered before the catch-all section route below, which would otherwise swallow it as an unknown section.
