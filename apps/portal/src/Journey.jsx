@@ -11,14 +11,14 @@ import {INTEGRATIONS,portalApi} from './services/api.js';
 function ReviewDetails({steps,values,kind}){
   const all=steps.flatMap(s=>s.fields).filter(f=>!f.when||f.when(values));
   const entries=all.filter(f=>f.type!=='checkbox'&&values[f.name]!==undefined&&values[f.name]!==''&&values[f.name]!==false&&!(Array.isArray(values[f.name])&&!values[f.name].length));
-  const concern=kind==='insurance'&&['claimsHistory','potentialClaims','priorDecline','bankruptcy','convictions'].some(k=>values[k]==='yes');
+  const concern=kind==='insurance'&&([1,2,3,4,5].some(i=>values['insDecl'+i]==='yes')||[6,7].some(i=>values['insDecl'+i]==='no'));
   return <div className="review-box">
     <div className="review-head"><h3>Your answers</h3><span>Not yet submitted</span></div>
     {kind==='accreditation'&&values.country&&<div className="classification"><strong>{accreditationType(values.country)}</strong><small>Your centre's country decides which accreditation route applies. The Guild confirms eligibility and prices when your application is reviewed.</small></div>}
     {kind==='membership'&&<Notice title="Membership and fees">Your membership type, joining fee, optional cover and any monthly instalments will be confirmed by the Guild. No price has been calculated yet.</Notice>}
     {kind==='insurance'&&<Notice title="Insurance quotation not yet calculated">Your cover choices and declarations are shown here for review only. No quote has been calculated and no cover is in place.</Notice>}
     {concern&&<div className="classification"><strong>Manual review may be required</strong><small>You answered yes to one of the declarations. The Guild's insurance team may need to review your application before offering cover.</small></div>}
-    <dl className="review-list">{entries.map(f=><div key={f.name}><dt>{f.label}</dt><dd>{Array.isArray(values[f.name])?values[f.name].join(', '):String(values[f.name])}</dd></div>)}</dl>
+    <dl className="review-list">{entries.map(f=><div key={f.name}><dt>{f.label}</dt><dd>{Array.isArray(values[f.name])?values[f.name].map(x=>typeof x==='object'?[x.type,x.firstName,x.lastName].filter(Boolean).join(' '):x).join(', '):String(values[f.name])}</dd></div>)}</dl>
     <div className="review-docs"><h3><FileText size={18}/> Information and documents</h3>
       <div className="doc-list"><a href="https://www.beautyguild.com/Membership/Code-Of-Ethics" target="_blank" rel="noopener noreferrer">Guild Code of Ethics <ArrowRight size={15}/></a>
       {kind==='insurance'&&<a href="https://www.beautyguild.com/Membership/Treatments-We-Cover" target="_blank" rel="noopener noreferrer">Treatments We Cover <ArrowRight size={15}/></a>}
@@ -73,7 +73,7 @@ export function Journey({kind}){
     postcode:{line1:'address1',line2:'address2',town:'town',county:'county',postcode:'postcode',country:'contactCountry'},
     centrePostcode:{line1:'centreAddress',town:'centreTown',county:'centreCounty',postcode:'centrePostcode'}
   }:{
-    premisesPostcode:{line1:'premisesAddress',town:'premisesTown',postcode:'premisesPostcode'}
+    insPremPostcode:{line1:'insPremL1',town:'insPremTown',county:'insPremCounty',postcode:'insPremPostcode'}
   };
   const applyAddress=(key,address)=>{
     const map=addressBindings[key]; if(!map)return;
