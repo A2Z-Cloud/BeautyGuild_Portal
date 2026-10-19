@@ -24,7 +24,7 @@ function NotReady({ area }) {
 // GTi Courses shows the live catalogue when course lookup is switched on, otherwise a placeholder.
 function GtiCourses() {
   if (!INTEGRATIONS.courses) return <NotReady area="GTi Courses" />;
-  return <div className="page"><PageHeading eyebrow="GTi COURSES" title="GTi courses" description="Courses currently offered through the Guild." /><CourseCatalogue /></div>;
+  return <div className="page"><PageHeading eyebrow="GTi COURSES" title="GTi courses" description="Courses currently offered through the Guild." /><CourseCatalogue searchable title="All GTi courses" /></div>;
 }
 function NotFound() {
   return <div className="page narrow-page"><PageHeading eyebrow="404" title="Page not found" description="This address does not match an available portal page." /><Link to="/" className="btn btn-primary">Return to dashboard</Link></div>;

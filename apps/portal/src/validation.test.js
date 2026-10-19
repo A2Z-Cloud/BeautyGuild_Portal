@@ -65,6 +65,7 @@ test('address lookup country maps onto the dropdown options', () => {
 });
 
 import {formatDate,serviceLabel} from './format.js';
+import {groupCourses} from './courseGroups.js';
 test('dates read naturally for customers', () => {
   assert.equal(formatDate('2026-10-15'), '15 Oct 2026');
   assert.equal(formatDate('2026-10-15T11:26:51+01:00'), '15 Oct 2026');
@@ -74,4 +75,16 @@ test('dates read naturally for customers', () => {
   assert.equal(formatDate(null), '—');
   assert.equal(formatDate('not a date'), 'not a date');
   assert.equal(serviceLabel('accreditation'), 'Accreditation');
+});
+
+test('courses are grouped by category, sorted, searchable, with Other last', () => {
+  const list=[{id:'1',name:'Waxing',category:'Beauty',treatmentGroup:'Waxing & Threading'},{id:'2',name:'Gel Polish',category:'Nails'},
+    {id:'3',name:'Basic Hair Cutting',category:'Hairdressing'},{id:'4',name:'Facial Treatment',category:'Beauty'},{id:'5',name:'Mystery'},{id:'6',name:'Reiki',category:'Holistic'}];
+  const g=groupCourses(list);
+  assert.deepEqual(g.map(x=>x.category),['Beauty','Hairdressing','Holistic','Nails','Other']);
+  assert.deepEqual(g[0].items.map(x=>x.name),['Facial Treatment','Waxing']);
+  assert.deepEqual(groupCourses(list,'wax').map(x=>x.category),['Beauty']);
+  assert.deepEqual(groupCourses(list,'threading')[0].items.map(x=>x.name),['Waxing'],'treatment group is searchable');
+  assert.deepEqual(groupCourses(list,'zzz'),[]);
+  assert.deepEqual(groupCourses(null),[]);
 });

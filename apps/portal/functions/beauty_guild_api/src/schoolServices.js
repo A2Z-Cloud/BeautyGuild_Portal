@@ -100,6 +100,14 @@ function registerSchoolRoutes(app,{enabled,writesEnabled,getCurrentUser,getCrmHe
    validTo:a.Valid_To||null}));
   res.json({schools});
  }));
+ // Registered before the catch-all section route below, which would otherwise swallow it as an unknown section.
+ router.get('/schools/:id/course-options',handle(async(req,res)=>{
+  const a=await api.acc(req,req.params.id,req.memberContact.id);
+  const offerings=await api.crm(req,'TC_Course_Offering/search?criteria='+esc('(Accreditation:equals:'+a.id+')')+'&fields='+esc('Course,Training_Centre,Accreditation'));
+  const tutors=a.Account?.id?await api.crm(req,'Tutor_Relationships/search?criteria='+esc('((Account:equals:'+a.Account.id+')and(Status:equals:Active))')+'&fields='+esc('Tutor_Contact')):[];
+  res.json({offerings:offerings.filter(o=>o.Course?.id&&o.Training_Centre?.id).map(o=>({id:o.id,name:o.Course.name,trainingCentre:o.Training_Centre.name})),
+   tutors:tutors.filter(t=>t.Tutor_Contact?.id).map(t=>({id:t.id,name:t.Tutor_Contact.name}))});
+ }));
  router.get('/schools/:id/:section',handle(async(req,res)=>{
   const {id,section}=req.params;
   const a=await api.acc(req,id,req.memberContact.id);
@@ -116,9 +124,9 @@ function registerSchoolRoutes(app,{enabled,writesEnabled,getCurrentUser,getCrmHe
   if(section==='courses'){
    const offerings=await api.crm(req,'TC_Course_Offering/search?criteria='+esc('(Accreditation:equals:'+id+')')+'&fields='+esc('Course,Training_Centre'));
    const unique=[...new Map(offerings.filter(o=>o.Course?.id).map(o=>[o.Course.id,{id:o.Course.id,name:o.Course.name||'Course'}])).values()];
-   const active=await api.crm(req,'Courses/search?criteria='+esc('((Status:equals:Active)and(Course_Type:equals:GTI))')+'&fields='+esc('Name,Duration,CPD_Points'));
+   const active=await api.crm(req,'Courses/search?criteria='+esc('((Status:equals:Active)and(Course_Type:equals:GTI))')+'&fields='+esc('Name,Duration,CPD_Points,Course_Category,Treatment_Group'));
    const taken=new Set(unique.map(c=>String(c.id)));
-   return res.json({courses:unique,available:active.filter(c=>!taken.has(String(c.id))).map(c=>({id:c.id,name:c.Name,duration:c.Duration,cpdPoints:c.CPD_Points}))});
+   return res.json({courses:unique,available:active.filter(c=>!taken.has(String(c.id))).map(c=>({id:c.id,name:c.Name,duration:c.Duration,cpdPoints:c.CPD_Points,category:c.Course_Category||null,treatmentGroup:c.Treatment_Group||null}))});
   }
   if(section==='venues'){
    const links=await api.crm(req,'Accreditation_Centre_Link/search?criteria='+esc('(Accreditation:equals:'+id+')')+'&fields='+esc('Training_Centre,Centre_Relationship_Type'));
@@ -132,7 +140,7 @@ function registerSchoolRoutes(app,{enabled,writesEnabled,getCurrentUser,getCrmHe
   }
   if(section==='tutors'){
    if(!accountId)return res.json({tutors:[]});
-   const relationships=await api.crm(req,'Tutor_Relationships/search?criteria='+esc('((Account:equals:'+accountId+')and(Status:equals:Active))')+'&fields='+esc('Tutor_Contact,Tutor_Relationship'));
+   const relationships=await api.crm(req,'Tutor_Relationships/search?criteria='+esc('(Account:equals:'+accountId+')')+'&fields='+esc('Tutor_Contact,Tutor_Relationship,Status'));
    const tutorRows=await Promise.all(relationships.filter(t=>t.Tutor_Contact).slice(0,100).map(async t=>{
     const dealId=t.Tutor_Relationship?.id;
     let member=null;
@@ -141,7 +149,7 @@ function registerSchoolRoutes(app,{enabled,writesEnabled,getCurrentUser,getCrmHe
      if(deal?.Member_Profile?.id)member=(await api.crm(req,'Membership/'+deal.Member_Profile.id+'?fields='+esc('Name,Current_Membership_Status,Current_Membership_Expiry')))[0];
     }
     const status=!member?'Pending membership':member.Current_Membership_Status==='Expired'?'Expired':member.Current_Membership_Status==='Current'?'Current':'Pending membership';
-    return {id:t.id,name:t.Tutor_Contact.name||'Tutor',membershipDealId:dealId||null,
+    return {id:t.id,name:t.Tutor_Contact.name||'Tutor',active:t.Status==='Active',membershipDealId:dealId||null,
       membershipNumber:member?.Name||null,membershipExpiry:member?.Current_Membership_Expiry||null,status};
    }));
    return res.json({tutors:tutorRows});
@@ -269,13 +277,6 @@ function registerSchoolRoutes(app,{enabled,writesEnabled,getCurrentUser,getCrmHe
   const pad=n=>String(n).padStart(2,'0');
   return pad(d.getDate())+'-'+mon[d.getMonth()]+'-'+d.getFullYear()+' '+pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds());
  }
- router.get('/schools/:id/course-options',handle(async(req,res)=>{
-  const a=await api.acc(req,req.params.id,req.memberContact.id);
-  const offerings=await api.crm(req,'TC_Course_Offering/search?criteria='+esc('(Accreditation:equals:'+a.id+')')+'&fields='+esc('Course,Training_Centre,Accreditation'));
-  const tutors=a.Account?.id?await api.crm(req,'Tutor_Relationships/search?criteria='+esc('((Account:equals:'+a.Account.id+')and(Status:equals:Active))')+'&fields='+esc('Tutor_Contact')):[];
-  res.json({offerings:offerings.filter(o=>o.Course?.id&&o.Training_Centre?.id).map(o=>({id:o.id,name:o.Course.name,trainingCentre:o.Training_Centre.name})),
-   tutors:tutors.filter(t=>t.Tutor_Contact?.id).map(t=>({id:t.id,name:t.Tutor_Contact.name}))});
- }));
  router.post('/schools/:id/sessions',requireWrites,handle(async(req,res)=>{
   const acc=await api.acc(req,req.params.id,req.memberContact.id);
   if(!acc.Account?.id)fail('Accreditation is not linked to a school.',409,'ACCOUNT_REQUIRED');
