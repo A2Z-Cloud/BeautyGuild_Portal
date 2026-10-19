@@ -3,6 +3,8 @@ import {ArrowLeft,LockKeyhole} from 'lucide-react';
 import {Link} from 'react-router-dom';
 import {Notice,PageHeading} from './UiParts.jsx';
 import {INTEGRATIONS,portalApi} from './services/api.js';
+import PricePanel from './PricePanel.jsx';
+import {dueToday} from './priceSummary.js';
 import {COUNTRY_OPTIONS} from './JourneyConfig.js';
 import {countryFor} from './prefill.js';
 import {START_WINDOW_DAYS,isFuture,startLimits} from './startDate.js';
@@ -50,23 +52,24 @@ export default function BuyInsurance(){
     }catch(e){setPayError(e.message);setBusy(false);}
   }
   const quote=q.quote,payable=quote&&quote.payable;
-  return <div className="page narrow-page"><Link to="/insurance" className="back-link"><ArrowLeft size={16}/> Back to insurance</Link>
+  return <div className="page buy-page"><Link to="/insurance" className="back-link"><ArrowLeft size={16}/> Back to insurance</Link>
     <PageHeading eyebrow="BEAUTY GUILD INSURANCE" title="Buy insurance" description="Answer a few questions, see your price, then pay securely on Stripe. We never see your card details."/>
     {!INTEGRATIONS.stripeCheckout?<Notice title="Not available yet">Online insurance purchase is not available yet.</Notice>:who.state==='loading'?<p role="status">Checking your account…</p>:
-    who.state==='out'?<Notice title="Please sign in">Sign in or create an account to buy insurance. <Link className="text-link" to="/login">Sign in</Link></Notice>:<>
+    who.state==='out'?<Notice title="Please sign in">Sign in or create an account to buy insurance. <Link className="text-link" to="/login">Sign in</Link></Notice>:<div className="buy-layout"><div className="buy-main">
     <section className="surface padded buy-section"><h2>About your business</h2><InsuranceForm values={values} onChange={set} errors={errors} country={country} onCountry={v=>{setCountry(v);setCountryError('');}} countryError={countryError}/></section>
     <section className="surface padded buy-section"><h2>When should your cover start?</h2>
       <div className="field"><label htmlFor="ins-start">Start date</label><input id="ins-start" type="date" value={start||startLimits().min} min={startLimits().min} max={startLimits().max} onChange={e=>setStart(e.target.value===startLimits().min?'':e.target.value)}/>
         <small>Cover starts today unless you choose a later date, up to {START_WINDOW_DAYS} days ahead. You pay now, and it shows as Coming soon until it starts.</small></div></section>
-    <section className="surface padded buy-section"><h2>Summary</h2>
-      {!enabled?<p className="muted">Choose where you are based and how you work to see your price.</p>:q.loading?<p role="status">Working out your price…</p>:q.error?<Notice title="Unable to price this">{q.error}</Notice>:quote?<>
+    <section className="surface padded buy-section"><h2>Review and pay</h2>
+      {!enabled?<p className="muted">Choose where you are based and how you work to see your price.</p>:q.error&&!quote?<Notice title="Unable to price this">{q.error}</Notice>:!quote?<p className="muted" role="status">Working out your price…</p>:<>
         <BlockedNotice quote={quote}/>
-        {isFuture(start)&&<p className="muted">Cover starts on {formatDate(start)}. It shows as Coming soon until then.</p>}
-        {quote.lines.length>0&&<div className="checkout-summary"><InsuranceLines quote={quote}/><div className="checkout-total"><span>Total including Insurance Premium Tax</span><strong>{money(quote.totalPence)}</strong></div></div>}
         {payable&&<>
+          <p className="muted">You pay {money(dueToday(quote))} today, including Insurance Premium Tax.</p>
           <label className="check-choice"><input type="checkbox" checked={accepted} onChange={e=>setAccepted(e.target.checked)}/><span>I accept the <a href="https://www.beautyguild.com/Membership/Code-Of-Ethics" target="_blank" rel="noopener noreferrer">Code of Ethics</a> and the Guild's terms and privacy information.</span></label>
           {payError&&<Notice title="Payment unavailable">{payError}</Notice>}
-          <button type="button" className="btn btn-primary btn-block" disabled={busy||!accepted||!(who.firstName||who.lastName)} onClick={pay}><LockKeyhole size={16}/>{busy?'Opening secure payment…':'Pay '+money(quote.totalPence)+' securely with Stripe'}</button>
-          {!(who.firstName||who.lastName)&&<p className="muted">Add your name to your account before buying.</p>}</>}</>:null}</section></>}
+          <button type="button" className="btn btn-primary btn-block" disabled={busy||!accepted||!(who.firstName||who.lastName)} onClick={pay}><LockKeyhole size={16}/>{busy?'Opening secure payment…':'Pay '+money(dueToday(quote))+' securely with Stripe'}</button>
+          {!(who.firstName||who.lastName)&&<p className="muted">Add your name to your account before buying.</p>}</>}</>}
+    </section></div>
+    <PricePanel quote={quote&&quote.lines.length?quote:null} loading={q.loading} error={q.error} ready={enabled} emptyText="Choose where you are based and how you work to see your price." note={quote&&quote.payable===false?'This cover cannot be bought online. See the message beside the form.':''} start={start}/></div>}
   </div>;
 }
