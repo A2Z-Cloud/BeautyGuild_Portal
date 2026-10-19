@@ -42,7 +42,6 @@ Accreditation_Level is International Accreditation Annual when the centre countr
 - GET /portal/drafts/accreditation/:id: resume. Rebuilds the answers from the Contact, Training_Centres, the accreditation and its offerings. Draft stage only.
 - DELETE /portal/drafts/accreditation/:id: discard, only while Application_Stage is Draft. Deletes the accreditation, its offerings and its link. The Account and Training Centre are left alone, as V1, because they may be shared records (a placeholder Account can remain).
 - POST /portal/drafts/accreditation/submit: body as a save plus optional id. Applies the submit rules (school name, country, address, UK postcode, all three declarations Yes, terms accepted, at least one course, tutor and venue answers), writes everything, then sets Application_Stage to Awaiting Payment last, with Terms_Accepted_Date, Purchase_Type New Accreditation, Application_Source Portal. Repeating a submit for an application already at Awaiting Payment (and not paid) writes nothing and returns it again. A paid or otherwise advanced application returns 409 NOT_DRAFT. Response: accreditation with id, level, international, applicationStage, validFrom, validTo, schoolName. The portal then links to /pay/accreditation/:id (POST /portal/checkout, service accreditation).
-- GET /portal/drafts/accreditation/prefill: the applicant's own Contact details (Salutation, First_Name, Last_Name, Email, Phone, Mobile, correspondence address) to start a new application.
 
 Every route resolves the Contact from the verified Catalyst email (exactly one match), never accepts a Contact id, and checks Applicant_Contact on the accreditation (and Contact on the centre) before reading or writing. The function also checks the Application_Stage picklist holds Draft and Awaiting Payment and fails closed (503 STAGE_NOT_READY) otherwise. Customer-facing errors use fixed wording.
 
@@ -59,3 +58,10 @@ Every route resolves the Contact from the verified Catalyst email (exactly one m
 - Revision checking is read-then-write, not atomic. Conflict prevention requires a verified CRM conditional-update strategy before Production.
 - CRM search-index lag, partial writes, list pagination, orphan Notes cleanup, Catalyst account-to-Contact provisioning, Creator/Stripe completion against existing draft IDs all need end-to-end testing.
 - No end-to-end Catalyst or CRM writes have been performed by this PR. Do not merge/deploy as a complete production implementation.
+
+## Readiness check changes (Development)
+- `PORTAL_CRM_DRAFT_REQUIRE_UNIQUE=false` lets drafts run while `Journey_ID` is not yet a unique CRM field. Default is `true`; use `false` on a test system only, because a repeated save could then create a duplicate.
+- The Deal draft stage (`PORTAL_CRM_DRAFT_DEAL_STAGE`) is trusted rather than checked against the module-level Stage list, which omits stages that layouts or pipelines add (Active and Paid are also missing from it). CRM refuses an unknown stage, so a wrong value fails the save without writing.
+
+## Prefill
+`GET /portal/records/me` returns the signed-in member's own Contact details (Salutation, names, email, Phone, Mobile, correspondence address, country, Interests) for filling forms. The Contact is resolved from the verified email, never from a browser-supplied id.

@@ -44,7 +44,8 @@ export function SchoolsList(){
 function SchoolProfile({data}){
  const p=data.profile;
  return <><h2>School profile</h2><p className="muted">You cannot change these details online. Contact the Accreditation team to update them.</p>
- {INTEGRATIONS.stripeCheckout&&<p><Link className="btn btn-secondary" to={'/pay/accreditation/'+p.id}>Pay for accreditation</Link></p>}
+ {INTEGRATIONS.stripeCheckout&&p.payable&&<p><Link className="btn btn-primary" to={'/pay/accreditation/'+p.id}>Pay for accreditation</Link></p>}
+ {p.paid&&<p><Status value="Paid"/></p>}
  <dl className="detail-list">{Object.entries({'Training centre':p.name,'Town / City':p.town,County:p.county,Country:p.country,Postcode:p.postcode,
  'Accreditation status':p.status,'Valid until':formatDate(p.expires),'Accreditation level':p.level,'Referral code':p.referralCode}).map(([k,v])=><div key={k}><dt>{k}</dt><dd>{v||'—'}</dd></div>)}</dl>
  {p.referralCode&&p.referralActive&&<p><a className="reference" href={'https://beautyguild.com/Join/'+encodeURIComponent(p.referralCode)} target="_blank" rel="noreferrer">View school referral landing page <ArrowRight size={15}/></a></p>}</>;

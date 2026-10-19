@@ -332,10 +332,7 @@ function createAccreditation({request, listCourses, now = Date.now, sleep = ms =
       return rows.filter(r => String(r.Applicant_Contact?.id) === String(person.id) && r.Application_Stage === DRAFT).map(r => ({
         id: String(r.id), service: 'accreditation', journeyId: null, step: 0, updatedAt: r.Modified_Time || r.Created_Time || null,
         title: stripPlaceholder(r.Account?.name), status: 'Draft'}));
-    },
-    async prefill(req, person) {
-      return contactAnswers(await get(req, 'Contacts', person.id, CONTACT_FIELDS));
-    },
+    }
   };
 }
 
@@ -343,7 +340,7 @@ function summary(acc) {
   return {id: String(acc.id), level: acc.Accreditation_Level, international: acc.Accreditation_Level === INTERNATIONAL, applicationStage: acc.Application_Stage,
     validFrom: acc.Valid_From || null, validTo: acc.Valid_To || null, schoolName: stripPlaceholder(acc.Account?.name)};
 }
-// The applicant's details as held on the CRM Contact (also used to prefill a new application).
+// The applicant's details as held on the CRM Contact (resume shows the current Contact values).
 function contactAnswers(c) {
   const v = x => (x === undefined || x === null ? '' : String(x));
   return {title: v(c?.Salutation), firstName: v(c?.First_Name), lastName: v(c?.Last_Name), email: v(c?.Email), phone: v(c?.Phone), mobile: v(c?.Mobile),

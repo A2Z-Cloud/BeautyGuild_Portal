@@ -42,3 +42,20 @@ test('Journey_ID uniqueness is read the way CRM reports it',()=>{
  assert.doesNotThrow(()=>checkMetadata('Insurance_Policy',make({casesensitive:true}),{draftStatus:'Draft'}));
  assert.doesNotThrow(()=>checkMetadata('Insurance_Policy',make(true),{draftStatus:'Draft'}));
 });
+
+test('Journey_ID may be non-unique only when explicitly allowed (test systems)',()=>{
+ const fields=['Application_Status','Journey_ID','Last_Completed_Journey_Step','Draft_State_Reference','Draft_Saved_At','Contact','Membership'].map(api_name=>({
+  api_name,data_type:['Contact','Membership'].includes(api_name)?'lookup':'text',unique:{},pick_list_values:api_name==='Application_Status'?[{actual_value:'Draft'}]:[]}));
+ assert.throws(()=>checkMetadata('Insurance_Policy',fields,{draftStatus:'Draft'}));
+ assert.throws(()=>checkMetadata('Insurance_Policy',fields,{draftStatus:'Draft',draftRequireUnique:true}));
+ assert.doesNotThrow(()=>checkMetadata('Insurance_Policy',fields,{draftStatus:'Draft',draftRequireUnique:false}));
+ assert.equal(require('../src/config').loadConfig({}).draftRequireUnique,true);
+ assert.equal(require('../src/config').loadConfig({PORTAL_CRM_DRAFT_REQUIRE_UNIQUE:'false'}).draftRequireUnique,false);
+});
+test('the Deal draft stage is the configured one, even when the module-level Stage list does not show it',()=>{
+ const dealFields=['Application_Status','Journey_ID','Last_Completed_Journey_Step','Draft_State_Reference','Draft_Saved_At','Contact_Name','Stage','Deal_Name'].map(api_name=>({
+  api_name,data_type:api_name==='Contact_Name'?'lookup':api_name==='Stage'?'picklist':'text',unique:{id:'1'},
+  pick_list_values:api_name==='Application_Status'?[{actual_value:'Draft'}]:api_name==='Stage'?[{actual_value:'Qualification'}]:[]}));
+ assert.doesNotThrow(()=>checkMetadata('Deals',dealFields,{draftStatus:'Draft',dealStage:'Draft'}));
+ assert.throws(()=>checkMetadata('Deals',dealFields,{draftStatus:'Draft',dealStage:''}));
+});

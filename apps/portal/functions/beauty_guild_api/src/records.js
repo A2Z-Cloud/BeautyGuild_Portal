@@ -9,6 +9,16 @@ const DEFINITIONS={
 };
 const DRAFT_STAGE='Draft';
 const uri=(s)=>encodeURIComponent(String(s));
+// The member's own contact details, used to fill in forms. Same Contact fields V1 read for its wizards.
+const MY_FIELDS=['Salutation','First_Name','Last_Name','Email','Phone','Mobile','Interests','Correspondence_Address_Line_1','Correspondence_Address_Line_2',
+  'Correspondence_Address_Line_3','Correspondence_Town','Correspondence_County','Correspondence_Postcode','Correspondence_Country'];
+const text=v=>(v==null?'':String(v).trim());
+function mapDetails(row){
+  return {title:text(row.Salutation),firstName:text(row.First_Name),lastName:text(row.Last_Name),email:text(row.Email),phone:text(row.Phone),mobile:text(row.Mobile),
+    addressLine1:text(row.Correspondence_Address_Line_1),addressLine2:text(row.Correspondence_Address_Line_2),addressLine3:text(row.Correspondence_Address_Line_3),
+    town:text(row.Correspondence_Town),county:text(row.Correspondence_County),postcode:text(row.Correspondence_Postcode),country:text(row.Correspondence_Country),
+    interests:Array.isArray(row.Interests)?row.Interests.map(text).filter(Boolean):[]};
+}
 function createCrmClient({getCrmHeaders,crmApiDomain,fetchImpl=fetch}){
   async function call(req,path){
     const headers=await getCrmHeaders(req);
@@ -90,6 +100,11 @@ function registerRecordRoutes(app,{enabled,getCurrentUser,getCrmHeaders,crmApiDo
       memberships:groups[0].length,accreditations:groups[1].length,insurance:groups[2].length},
       recent:records.sort((a,b)=>String(b.updated).localeCompare(String(a.updated))).slice(0,8)});
   }));
+  router.get('/me',safe(async(req,res)=>{
+    const row=(await call(req,'Contacts/'+req.portalContact.id+'?fields='+uri(MY_FIELDS.join(','))))[0];
+    if(!row||String(row.id)!==String(req.portalContact.id))throw new HttpError(404,'NOT_FOUND','Details not found.');
+    res.json({details:mapDetails(row)});
+  }));
   router.get('/:kind/:id',safe(async(req,res)=>{
     const {kind,id}=req.params;
     if(!DEFINITIONS[kind]||!ID.test(id))throw new HttpError(404,'NOT_FOUND','Record not found.');
@@ -101,4 +116,4 @@ function registerRecordRoutes(app,{enabled,getCurrentUser,getCrmHeaders,crmApiDo
   }));
   app.use('/portal/records',router);
 }
-module.exports={registerRecordRoutes,resolveContact,mapRecord,DEFINITIONS,createCrmClient};
+module.exports={mapDetails,registerRecordRoutes,resolveContact,mapRecord,DEFINITIONS,createCrmClient};

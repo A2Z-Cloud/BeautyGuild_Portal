@@ -1,14 +1,15 @@
-import React, {useEffect, useMemo, useRef, useState} from 'react';
+import React, {useEffect, useMemo, useState} from 'react';
 import {ArrowLeft, ArrowRight, CreditCard, FileText, LockKeyhole, MapPin, Save, ShieldAlert} from 'lucide-react';
 import {Link, useNavigate} from 'react-router-dom';
-import {COUNTRY_OPTIONS,JOURNEYS,countryOption} from './JourneyConfig.js';
+import {JOURNEYS,countryOption} from './JourneyConfig.js';
 import {Field,Notice,PageHeading,Stages} from './UiParts.jsx';
-import {centreCountry,resolveFields,restoreAccreditationAnswers} from './accreditationInputs.js';
+import {centreCountry,resolveFields} from './accreditationInputs.js';
 import {startLimits} from './startDate.js';
 import {accreditationType,validate} from './logic.mjs';
 import {usePreviewState} from './journeys/previewState.jsx';
 import AddressLookup from './components/AddressLookup.jsx';
 import {INTEGRATIONS,portalApi} from './services/api.js';
+import {prefillFor} from './prefill.js';
 
 const reviewValue=(f,value)=>f.type==='courses'?value.length+(value.length===1?' course selected':' courses selected'):f.type==='radio'&&f.options?(f.options.find(o=>o.value===value)?.label||value):Array.isArray(value)?value.map(x=>typeof x==='object'?[x.type,x.firstName,x.lastName].filter(Boolean).join(' '):x).join(', '):String(value);
 function ReviewDetails({steps,values,kind}){
@@ -53,22 +54,8 @@ export function Journey({kind}){
   const last=index===visible.length-1;
   const [errors,setErrors]=useState({});
   const [saving,setSaving]=useState(false),[saveStatus,setSaveStatus]=useState(''),[submitted,setSubmitted]=useState(null);
-  const prefilled=useRef(false);
-  // A new accreditation application starts from what the CRM holds for the signed-in Contact, and a start date of today.
-  useEffect(()=>{
-    if(kind!=='accreditation'||prefilled.current)return undefined;
-    prefilled.current=true;
-    if(draftMeta[kind]?.id)return undefined;
-    let alive=true;
-    (async()=>{
-      let held={};
-      if(live){try{held=restoreAccreditationAnswers(await portalApi.getAccreditationPrefill(),COUNTRY_OPTIONS);}catch{held={};}}
-      if(!alive)return;
-      for(const [name,value] of Object.entries(held))if(value&&!values[name])setAnswer(kind,name,value);
-      if(!values.startDate)setAnswer(kind,'startDate',startLimits().min);
-    })();
-    return()=>{alive=false;};
-  },[]);// eslint-disable-line react-hooks/exhaustive-deps
+  // A new accreditation application starts today. The Contact's details are filled in below, as for the other journeys.
+  useEffect(()=>{if(kind==='accreditation'&&!values.startDate)setAnswer(kind,'startDate',startLimits().min);},[kind]);// eslint-disable-line react-hooks/exhaustive-deps
   async function saveDraft(){
     if(!live){checkpoint('save');return;}
     if(saving)return;
@@ -84,6 +71,19 @@ export function Journey({kind}){
     }catch(e){if(e.status===401||e.code==='NOT_AUTHENTICATED'){checkpoint('save');return;}setSaveStatus(e.code==='REVISION_CONFLICT'?'This application has changed elsewhere. Please reload the page before saving.':'We could not save your application. Please try again.');}
     finally{setSaving(false);}
   }
+  // Fill in what the Guild already holds about the member, once, without overwriting anything they have typed.
+  const [prefilled,setPrefilled]=useState(false);
+  useEffect(()=>{
+    if(!INTEGRATIONS.crmRecords)return undefined;
+    let alive=true;
+    portalApi.getMyDetails().then(details=>{
+      if(!alive)return;
+      const filled=prefillFor(kind,details,config.steps.flatMap(s=>s.fields),answers[kind]||{});
+      Object.entries(filled).forEach(([name,value])=>setAnswer(kind,name,value));
+      if(Object.keys(filled).length)setPrefilled(true);
+    }).catch(()=>{});
+    return()=>{alive=false;};
+  },[kind]);// eslint-disable-line react-hooks/exhaustive-deps
   const update=(name,value)=>{setAnswer(kind,name,value);setErrors(previous=>({...previous,[name]:undefined}));};
   const move=position=>{setJourneyStep(kind,position);setErrors({});window.scrollTo({top:0,behavior:'smooth'});};
   const checkpoint=intent=>navigate('/account/checkpoint?returnTo='+encodeURIComponent('/'+kind+'/new')+'&intent='+intent);
@@ -131,6 +131,7 @@ export function Journey({kind}){
     <PageHeading eyebrow={config.kicker} title={config.title+' application'} description={config.intro}>
       <span className="journey-counter">Step {index+1} of {visible.length}</span>
     </PageHeading>
+    {prefilled&&<p className="muted" role="status">We have filled in the details the Guild already holds for you. Please check them and change anything that is out of date.</p>}
     <Notice title={live?'Save your application':'Applications are opening soon'}>{live?'Saving keeps your answers so you can finish later. It does not submit your application or take payment.':'You can complete this form to see the questions, but your answers are not submitted or saved, and nothing is charged.'}</Notice>
     <div className="journey-shell">
       <section className="journey-card">

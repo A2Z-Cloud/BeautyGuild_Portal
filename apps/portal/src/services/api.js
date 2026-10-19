@@ -59,6 +59,8 @@ export const portalApi=Object.freeze({
   getMembershipInvoices:async(id)=>(await schoolReq('/memberships/'+encodeURIComponent(id)+'/invoices')).invoices,
   getMembershipExtensions:async(id)=>(await schoolReq('/memberships/'+encodeURIComponent(id)+'/extensions')).extensions,
   getIdentity:()=>auth.currentUser(),
+  // The signed-in member's contact details from the CRM, to fill in forms. Resolved on the server from the verified email.
+  getMyDetails:async()=>(await recordReq('/me')).details,
   register:profile=>auth.signUp(profile),
   signInEmbed:container=>auth.signInEmbed(container),
   // Always uses the email of the verified signed-in user, never a typed address.
@@ -71,7 +73,6 @@ export const portalApi=Object.freeze({
   updateDraft:async (service,id,data)=>(await draftReq('/'+service+'/'+encodeURIComponent(id),{method:'PUT',body:data})).draft,
   getDraft:async (service,id)=>(await draftReq('/'+service+'/'+encodeURIComponent(id))).draft,
   listDrafts:async ()=>(await draftReq('/')).drafts,
-  getAccreditationPrefill:async ()=>(await draftReq('/accreditation/prefill')).prefill,
   submitAccreditation:async data=>(await draftReq('/accreditation/submit',{method:'POST',body:data})).accreditation,
   discardDraft:async (service,id)=>draftReq('/'+service+'/'+encodeURIComponent(id),{method:'DELETE'}),
   checkoutQuote:async params=>(await billingReq('/quote?'+new URLSearchParams(params).toString())).quote,

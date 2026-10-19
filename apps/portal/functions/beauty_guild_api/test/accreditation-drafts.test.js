@@ -355,17 +355,6 @@ test('it is off unless the accreditation switch is on', async () => {
   assert.equal(crm.writes().length, 0);
 });
 
-test('prefill returns the applicant details held on the Contact', async () => {
-  const crm = fakeCrm();
-  await withApp(crm, async call => {
-    const res = await call('/portal/drafts/accreditation/prefill');
-    assert.equal(res.status, 200);
-    assert.equal(res.body.prefill.firstName, 'Ada');
-    assert.equal(res.body.prefill.town, 'Derby');
-    assert.equal(res.body.prefill.email, ME.email);
-  });
-});
-
 test('a CRM failure part way is reported with our own wording and no CRM text', async () => {
   const crm = fakeCrm();
   const real = crm.fetchImpl;
