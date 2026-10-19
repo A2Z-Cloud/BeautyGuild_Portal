@@ -7,13 +7,13 @@ const express = require('express');
 const crypto = require('node:crypto');
 const {HttpError} = require('./errors');
 const {resolveContact, createCrmClient} = require('./records');
-const {createRateLimiter} = require('./rateLimit');
+const {createRateLimiter, clientKey} = require('./rateLimit');
 const {ITEMS, SERVICES, pounds} = require('./catalogue');
 
 const STRIPE = 'https://api.stripe.com/v1';
 const PRICE_ID = /^price_[A-Za-z0-9]{6,}$/;
 
-function registerCheckoutRoutes(app, {enabled, getCurrentUser, getCrmHeaders, crmApiDomain, stripeKey, prices = {}, publicOrigin, riskChecks = null, fetchImpl = fetch, now = Date.now}) {
+function registerCheckoutRoutes(app, {publicQuotesEnabled = false, enabled, getCurrentUser, getCrmHeaders, crmApiDomain, stripeKey, prices = {}, publicOrigin, riskChecks = null, fetchImpl = fetch, now = Date.now}) {
   const router = express.Router();
   const {call: crm} = createCrmClient({getCrmHeaders, crmApiDomain, fetchImpl});
   const limiter = createRateLimiter({limit: 20, windowMs: 60 * 1000, now});
@@ -53,13 +53,16 @@ function registerCheckoutRoutes(app, {enabled, getCurrentUser, getCrmHeaders, cr
     return price;
   }
 
-  async function build(req, input) {
+  async function build(req, input, {guest = false} = {}) {
     const service = SERVICES[input.service];
     if (!service) throw new HttpError(422, 'INVALID_REQUEST', 'Choose something to pay for.');
     let contact = null;
-    try { contact = await resolveContact(req, crm, req.portalUser); }
-    catch (e) { if (!(service.allowNoContact && e.code === 'CONTACT_UNLINKED')) throw e; }
-    const prepared = await service.prepare({req, crm, contact, input, user: req.portalUser, risk: riskChecks});
+    // A guest (no account) has no contact and is never risk screened: their price is a guide, and the checks run when they pay.
+    if (!guest) {
+      try { contact = await resolveContact(req, crm, req.portalUser); }
+      catch (e) { if (!(service.allowNoContact && e.code === 'CONTACT_UNLINKED')) throw e; }
+    }
+    const prepared = await service.prepare({req, crm, contact, input, user: guest ? null : req.portalUser, risk: guest ? null : riskChecks});
     if (prepared.alreadyPaid) return {service, contact, alreadyPaid: true};
     const lines = [];
     for (const l of prepared.lines) {
@@ -132,6 +135,17 @@ function registerCheckoutRoutes(app, {enabled, getCurrentUser, getCrmHeaders, cr
       next();
     } catch (e) { next(e); }
   });
+  // Price a membership without an account, so the form can be filled in and priced before anyone signs up. Membership only: renewals and
+  // standalone insurance need a signed-in member. Nothing is read from or written to the CRM, and it is rate limited per client.
+  const guestLimiter = createRateLimiter({limit: 30, windowMs: 60 * 1000, now});
+  app.post('/public/quote', express.json({limit: '40kb'}), send(async (req, res) => {
+    if (!enabled || !publicQuotesEnabled || !stripeKey) throw unavailable();
+    if (!guestLimiter(clientKey(req))) throw new HttpError(429, 'RATE_LIMIT', 'Too many requests. Please wait a moment and try again.');
+    const input = {...inputFrom(req.body || {}), quote: true};
+    if (input.service !== 'membership') throw new HttpError(422, 'SIGN_IN_FOR_PRICE', 'Sign in to see this price.');
+    if (input.previousId) throw new HttpError(422, 'SIGN_IN_FOR_PRICE', 'Sign in to renew or upgrade your membership.');
+    res.json({quote: {...view(await build(req, input, {guest: true})), indicative: true}});
+  }));
   router.get('/quote', send(async (req, res) => {
     if (!stripeKey) throw unavailable();
     res.json({quote: view(await build(req, {...inputFrom(req.query), quote: true}))});

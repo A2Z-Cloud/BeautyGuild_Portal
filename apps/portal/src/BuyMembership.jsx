@@ -4,6 +4,7 @@ import {Link,useSearchParams} from 'react-router-dom';
 import {Notice,PageHeading} from './UiParts.jsx';
 import {INTEGRATIONS,portalApi} from './services/api.js';
 import PricePanel from './PricePanel.jsx';
+import {useStoredState} from './storedState.js';
 import {dueToday} from './priceSummary.js';
 import {COUNTRY_OPTIONS} from './JourneyConfig.js';
 import {countryFor} from './prefill.js';
@@ -21,10 +22,19 @@ const money=pence=>'£'+(pence/100).toFixed(2);
 // Buy or renew a membership. The server decides every amount from the Stripe prices; this page
 // only sends choices, shows the server's summary, and sends the member to Stripe.
 export default function BuyMembership(){
-  const [query]=useSearchParams(),previousId=query.get('renew')||'',changeType=query.get('change')==='upgrade'?'upgrade':'renewal';
+  const [query]=useSearchParams(),changeType=query.get('change')==='upgrade'?'upgrade':'renewal';
   const [who,setWho]=useState({state:'loading',firstName:'',lastName:''});
-  const [f,setF]=useState({level:'',branch:'',branches:[],billing:'annual',addons:{},accepted:false,insurance:false,start:''});
-  const [iv,setIv]=useState({}),[country,setCountry]=useState(''),[iErrors,setIErrors]=useState({}),[countryError,setCountryError]=useState('');
+  // Renewing or upgrading needs the member's own account; a guest is always buying new.
+  const previousId=who.state==='out'?'':(query.get('renew')||'');
+  // The answers are kept in this tab, so a visitor can leave to sign in or sign up and come back to them. Consent is never restored.
+  const [f,setF]=useStoredState('membership',{level:'',branch:'',branches:[],billing:'annual',addons:{},accepted:false,insurance:false,start:''},x=>({...x,accepted:false,start:x.start&&x.start>=startLimits().min?x.start:''}));
+  const [kept,setKept]=useStoredState('membership_insurance',{iv:{},country:''});
+  const iv=kept.iv,country=kept.country;
+  const setIv=next=>setKept(o=>({...o,iv:typeof next==='function'?next(o.iv):next}));
+  const setCountry=next=>setKept(o=>({...o,country:typeof next==='function'?next(o.country):next}));
+  const [iErrors,setIErrors]=useState({}),[countryError,setCountryError]=useState('');
+  const guest=who.state==='out'&&INTEGRATIONS.publicQuotes;
+  const loginTo='/account/checkpoint?returnTo='+encodeURIComponent('/membership/buy')+'&intent=complete';
   const [q,setQ]=useState({loading:false,quote:null,error:''}),[busy,setBusy]=useState(false),[payError,setPayError]=useState('');
   useEffect(()=>{
     let alive=true;
@@ -47,14 +57,14 @@ export default function BuyMembership(){
   const base=()=>({service:'membership',level:f.level,branch:f.branch,billing:f.billing,...(f.branches.length?{branches:f.branches.join(',')}:{}),
     ...(f.start?{start:f.start}:{}),...(previousId?{previousId,changeType}:{})});
   useEffect(()=>{
-    if(!INTEGRATIONS.stripeCheckout||who.state!=='in'||!ready){setQ({loading:false,quote:null,error:''});return undefined;}
+    if(!INTEGRATIONS.stripeCheckout||(who.state!=='in'&&!guest)||!ready){setQ({loading:false,quote:null,error:''});return undefined;}
     let alive=true;setQ(s=>({...s,loading:true,error:''}));
-    portalApi.checkoutQuote({...base(),...(addonText?{addons:addonText}:{})}).then(quote=>alive&&setQ({loading:false,quote,error:''})).catch(e=>alive&&setQ({loading:false,quote:null,error:e.message}));
+    (guest?portalApi.publicQuote({...base(),addons:f.addons}):portalApi.checkoutQuote({...base(),...(addonText?{addons:addonText}:{})})).then(quote=>alive&&setQ({loading:false,quote,error:''})).catch(e=>alive&&setQ({loading:false,quote:null,error:e.message}));
     return()=>{alive=false;};
   },[who.state,f.level,f.branch,f.billing,f.start,f.branches.join(','),addonText,previousId,f.insurance]);// eslint-disable-line react-hooks/exhaustive-deps
   // With insurance the answers are too large for a query string, so the server prices them from a POST.
   const ins=toRequest(iv);
-  const iq=useInsuranceQuote({enabled:INTEGRATIONS.stripeCheckout&&who.state==='in'&&ready&&f.insurance&&Boolean(country)&&(iv.insWorking||[]).length>0,
+  const iq=useInsuranceQuote({enabled:INTEGRATIONS.stripeCheckout&&(who.state==='in'||guest)&&ready&&f.insurance&&Boolean(country)&&(iv.insWorking||[]).length>0,send:guest?portalApi.publicQuote:portalApi.checkoutQuotePost,
     request:()=>({...base(),addons:f.addons,country,insurance:toRequest(iv)}),key:JSON.stringify([f.level,f.branch,f.billing,f.start,f.branches,f.addons,previousId,country,ins])});
   const setI=(name,value)=>{setIv(v=>({...v,[name]:value}));setIErrors(e=>({...e,[name]:undefined}));};
   const set=patch=>setF(old=>({...old,...patch,...(patch.level==='associate'?{insurance:false}:{})}));
@@ -77,7 +87,8 @@ export default function BuyMembership(){
   return <div className="page buy-page"><Link to="/membership" className="back-link"><ArrowLeft size={16}/> Back to membership</Link>
     <PageHeading eyebrow="GUILD MEMBERSHIP" title={previousId?(changeType==='upgrade'?'Upgrade your membership':'Renew your membership'):'Join the Guild'} description="Choose your membership, then pay securely on Stripe. We never see your card details."/>
     {!INTEGRATIONS.stripeCheckout?<Notice title="Not available yet">Online membership purchase is not available yet.</Notice>:who.state==='loading'?<p role="status">Checking your account…</p>:
-    who.state==='out'?<Notice title="Please sign in">Sign in or create an account to buy a membership. <Link className="text-link" to="/login">Sign in</Link></Notice>:<div className="buy-layout"><div className="buy-main">
+    who.state==='out'&&!INTEGRATIONS.publicQuotes?<Notice title="Please sign in">Sign in or create an account to buy a membership. <Link className="text-link" to="/login">Sign in</Link></Notice>:<div className="buy-layout"><div className="buy-main">
+    {guest&&<Notice title="No account needed to look">Choose your membership and see the price as you go. You sign in or create an account when you are ready to pay, and your answers are kept while you do.</Notice>}
     <section className="surface padded buy-section"><h2>Your membership</h2>
       <div className="buy-options">{LEVELS.map(([id,name,hint])=><label key={id} className={'radio-choice'+(f.level===id?' selected':'')}><input type="radio" name="level" checked={f.level===id} onChange={()=>set({level:id})}/><span><strong>{name}</strong><small>{hint}</small></span></label>)}
         <p className="muted">International membership is priced individually. Please contact the Guild to join from outside the UK.</p></div>
@@ -98,8 +109,10 @@ export default function BuyMembership(){
         <p className="muted">You pay {money(dueToday(priced))} today.</p>
         <label className="check-choice"><input type="checkbox" checked={f.accepted} onChange={e=>set({accepted:e.target.checked})}/><span>I accept the <a href="https://www.beautyguild.com/Membership/Code-Of-Ethics" target="_blank" rel="noopener noreferrer">Code of Ethics</a> and the Guild's terms and privacy information.</span></label>
         {payError&&<Notice title="Payment unavailable">{payError}</Notice>}
-        <button type="button" className="btn btn-primary btn-block" disabled={busy||!f.accepted||!(who.firstName||who.lastName)||priced.payable===false} onClick={pay}><LockKeyhole size={16}/>{busy?'Opening secure payment…':'Pay '+money(dueToday(priced))+' securely with Stripe'}</button>
-        {!(who.firstName||who.lastName)&&<p className="muted">Add your name to your account before buying.</p>}</>}
+        {guest?<><p className="muted">To pay you need an account. Your answers are kept while you sign in or sign up. Final checks, including any insurance checks, are done when you pay.</p>
+          <Link className="btn btn-primary btn-block" to={loginTo}><LockKeyhole size={16}/> Sign in or create an account to continue</Link></>:
+        <button type="button" className="btn btn-primary btn-block" disabled={busy||!f.accepted||!(who.firstName||who.lastName)||priced.payable===false} onClick={pay}><LockKeyhole size={16}/>{busy?'Opening secure payment…':'Pay '+money(dueToday(priced))+' securely with Stripe'}</button>}
+        {!guest&&!(who.firstName||who.lastName)&&<p className="muted">Add your name to your account before buying.</p>}</>}
     </section></div>
     <PricePanel quote={shown} loading={q.loading||(f.insurance&&iq.loading)} error={f.insurance&&iq.error?iq.error:q.error} ready={Boolean(ready)} emptyText="Choose a membership level and branch to see your price."
       note={insuranceWaiting?'Insurance is not included yet. Answer the insurance questions to add it.':''} billing={f.billing} onBilling={b=>set({billing:b})} start={f.start}/></div>}
