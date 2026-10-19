@@ -3,6 +3,8 @@ import {ArrowLeft,LockKeyhole} from 'lucide-react';
 import {Link} from 'react-router-dom';
 import {Notice,PageHeading} from './UiParts.jsx';
 import {INTEGRATIONS,portalApi} from './services/api.js';
+import {COUNTRY_OPTIONS} from './JourneyConfig.js';
+import {countryFor} from './prefill.js';
 import {START_WINDOW_DAYS,isFuture,startLimits} from './startDate.js';
 import {formatDate} from './format.js';
 import {validate} from './logic.mjs';
@@ -19,7 +21,18 @@ export default function BuyInsurance(){
   const [errors,setErrors]=useState({}),[countryError,setCountryError]=useState(''),[busy,setBusy]=useState(false),[payError,setPayError]=useState('');
   useEffect(()=>{
     let alive=true;
-    portalApi.getIdentity().then(u=>alive&&setWho({state:'in',firstName:u.firstName,lastName:u.lastName})).catch(()=>alive&&setWho({state:'out',firstName:'',lastName:''}));
+    portalApi.getIdentity().then(u=>alive&&setWho(w=>({state:'in',firstName:u.firstName||w.firstName,lastName:u.lastName||w.lastName}))).catch(()=>alive&&setWho({state:'out',firstName:'',lastName:''}));
+    return()=>{alive=false;};
+  },[]);
+  // Use what the Guild holds: the country for the insurance questions, and the name if the sign-in has none.
+  useEffect(()=>{
+    if(!INTEGRATIONS.crmRecords)return undefined;
+    let alive=true;
+    portalApi.getMyDetails().then(d=>{
+      if(!alive)return;
+      setCountry(c=>c||countryFor(d,COUNTRY_OPTIONS));
+      setWho(w=>(w.firstName||w.lastName)?w:{...w,firstName:d.firstName,lastName:d.lastName});
+    }).catch(()=>{});
     return()=>{alive=false;};
   },[]);
   const ins=toRequest(values),enabled=INTEGRATIONS.stripeCheckout&&who.state==='in'&&Boolean(country)&&(values.insWorking||[]).length>0;

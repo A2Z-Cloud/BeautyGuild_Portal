@@ -1,4 +1,4 @@
-import React, {useMemo, useState} from 'react';
+import React, {useEffect, useMemo, useState} from 'react';
 import {ArrowLeft, ArrowRight, CreditCard, FileText, LockKeyhole, MapPin, Save, ShieldAlert} from 'lucide-react';
 import {Link, useNavigate} from 'react-router-dom';
 import {JOURNEYS,countryOption} from './JourneyConfig.js';
@@ -7,6 +7,7 @@ import {accreditationType,validate} from './logic.mjs';
 import {usePreviewState} from './journeys/previewState.jsx';
 import AddressLookup from './components/AddressLookup.jsx';
 import {INTEGRATIONS,portalApi} from './services/api.js';
+import {prefillFor} from './prefill.js';
 
 function ReviewDetails({steps,values,kind}){
   const all=steps.flatMap(s=>s.fields).filter(f=>!f.when||f.when(values));
@@ -57,6 +58,19 @@ export function Journey({kind}){
     }catch(e){if(e.status===401||e.code==='NOT_AUTHENTICATED'){checkpoint('save');return;}setSaveStatus(e.code==='REVISION_CONFLICT'?'This application has changed elsewhere. Please reload the page before saving.':'We could not save your application. Please try again.');}
     finally{setSaving(false);}
   }
+  // Fill in what the Guild already holds about the member, once, without overwriting anything they have typed.
+  const [prefilled,setPrefilled]=useState(false);
+  useEffect(()=>{
+    if(!INTEGRATIONS.crmRecords)return undefined;
+    let alive=true;
+    portalApi.getMyDetails().then(details=>{
+      if(!alive)return;
+      const filled=prefillFor(kind,details,config.steps.flatMap(s=>s.fields),answers[kind]||{});
+      Object.entries(filled).forEach(([name,value])=>setAnswer(kind,name,value));
+      if(Object.keys(filled).length)setPrefilled(true);
+    }).catch(()=>{});
+    return()=>{alive=false;};
+  },[kind]);// eslint-disable-line react-hooks/exhaustive-deps
   const update=(name,value)=>{setAnswer(kind,name,value);setErrors(previous=>({...previous,[name]:undefined}));};
   const move=position=>{setJourneyStep(kind,position);setErrors({});window.scrollTo({top:0,behavior:'smooth'});};
   const checkpoint=intent=>navigate('/account/checkpoint?returnTo='+encodeURIComponent('/'+kind+'/new')+'&intent='+intent);
@@ -89,6 +103,7 @@ export function Journey({kind}){
     <PageHeading eyebrow={config.kicker} title={config.title+' application'} description={config.intro}>
       <span className="journey-counter">Step {index+1} of {visible.length}</span>
     </PageHeading>
+    {prefilled&&<p className="muted" role="status">We have filled in the details the Guild already holds for you. Please check them and change anything that is out of date.</p>}
     <Notice title={INTEGRATIONS.crmDrafts?'Save your application':'Applications are opening soon'}>{INTEGRATIONS.crmDrafts?'Saving keeps your answers so you can finish later. It does not submit your application or take payment.':'You can complete this form to see the questions, but your answers are not submitted or saved, and nothing is charged.'}</Notice>
     <div className="journey-shell">
       <section className="journey-card">

@@ -39,6 +39,8 @@ function loadConfig(env = process.env) {
     crmDraftsEnabled:env.PORTAL_CRM_DRAFTS_ENABLED === 'true',
     draftStatus:String(env.PORTAL_CRM_DRAFT_STATUS||'Draft'),
     dealStage:String(env.PORTAL_CRM_DRAFT_DEAL_STAGE||''),
+    // Journey_ID should be a unique CRM field so a repeated save cannot create a duplicate. Set this to 'false' only on a test system.
+    draftRequireUnique:env.PORTAL_CRM_DRAFT_REQUIRE_UNIQUE !== 'false',
     schoolServicesEnabled:env.PORTAL_SCHOOL_SERVICES_ENABLED === 'true',
     schoolWritesEnabled:env.PORTAL_SCHOOL_WRITES_ENABLED === 'true',
     creatorApiDomain:httpsUrl(env.CREATOR_API_DOMAIN,'https://www.zohoapis.eu','CREATOR_API_DOMAIN'),

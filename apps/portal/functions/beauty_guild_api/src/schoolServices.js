@@ -2,6 +2,7 @@
 const express=require('express');
 const {HttpError}=require('./errors');
 const {resolveContact}=require('./records');
+const {isPaidStatus,isPayableAccreditation}=require('./catalogue');
 const {assess}=require('./publicSchoolVerification');
 const ID=/^\d{10,25}$/;
 const esc=v=>encodeURIComponent(String(v));
@@ -40,7 +41,7 @@ function createSchoolApi({getCrmHeaders,getCreatorHeaders,crmApiDomain,creatorAp
  async function contact(req,user){return resolveContact(req,crm,user);}
  async function acc(req,id,contactId){
   if(!ID.test(String(id)))fail('Training centre not found.',404,'NOT_FOUND');
-  const r=(await crm(req,'Training_Centre_Accred/'+id+'?fields='+esc('Applicant_Contact,Account,Accreditation_Status,Accreditation_Level,Application_Stage,Valid_To,Number_of_Tutors')))[0];
+  const r=(await crm(req,'Training_Centre_Accred/'+id+'?fields='+esc('Applicant_Contact,Account,Accreditation_Status,Accreditation_Level,Application_Stage,Valid_To,Number_of_Tutors,Payment_Status')))[0];
   if(!r||String(r.Applicant_Contact?.id)!==String(contactId))fail('Training centre not found.',404,'NOT_FOUND');
   return r;
  }
@@ -119,7 +120,8 @@ function registerSchoolRoutes(app,{enabled,writesEnabled,getCurrentUser,getCrmHe
    const account=accountId?(await api.crm(req,'Accounts/'+accountId+'?fields='+esc('Referral_Code,Referral_Code_Active')))[0]:null;
    return res.json({profile:{id,name:centre?.Name||a.Account?.name||'Training centre',town:centre?.Town||null,county:centre?.County||null,
     country:centre?.Country||null,postcode:centre?.Postcode||null,status:a.Accreditation_Status,expires:a.Valid_To,level:a.Accreditation_Level,
-    referralCode:account?.Referral_Code||null,referralActive:account?.Referral_Code_Active||false}});
+    referralCode:account?.Referral_Code||null,referralActive:account?.Referral_Code_Active||false,
+    paymentStatus:a.Payment_Status||null,paid:isPaidStatus(a.Payment_Status),payable:isPayableAccreditation(a)}});
   }
   if(section==='courses'){
    const offerings=await api.crm(req,'TC_Course_Offering/search?criteria='+esc('(Accreditation:equals:'+id+')')+'&fields='+esc('Course,Training_Centre'));

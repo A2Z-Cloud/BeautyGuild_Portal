@@ -57,6 +57,8 @@ export const portalApi=Object.freeze({
   getMembershipInvoices:async(id)=>(await schoolReq('/memberships/'+encodeURIComponent(id)+'/invoices')).invoices,
   getMembershipExtensions:async(id)=>(await schoolReq('/memberships/'+encodeURIComponent(id)+'/extensions')).extensions,
   getIdentity:()=>auth.currentUser(),
+  // The signed-in member's contact details from the CRM, to fill in forms. Resolved on the server from the verified email.
+  getMyDetails:async()=>(await recordReq('/me')).details,
   register:profile=>auth.signUp(profile),
   signInEmbed:container=>auth.signInEmbed(container),
   // Always uses the email of the verified signed-in user, never a typed address.

@@ -53,12 +53,12 @@ function checkMetadata(module,fields,config){
  const options=(status.pick_list_values||[]).map(x=>x.actual_value||x.display_value);
  if(!options.includes(config.draftStatus))fail('STATUS_NOT_READY','CRM draft status is not configured.',503);
  const j=metaField(fields,'Journey_ID');
- if(!isUnique(j.unique))fail('JOURNEY_UNIQUE_REQUIRED','Journey_ID must be a CRM unique field to prevent duplicate saves.',503);
+ if(config.draftRequireUnique!==false&&!isUnique(j.unique))fail('JOURNEY_UNIQUE_REQUIRED','Journey_ID must be a CRM unique field to prevent duplicate saves.',503);
  if(module==='Deals'){
   textField(fields,'Contact_Name');textField(fields,'Stage');textField(fields,'Deal_Name');
-  const stage=metaField(fields,'Stage');
-  const stages=(stage.pick_list_values||[]).map(x=>x.actual_value||x.display_value);
-  if(!config.dealStage||!stages.includes(config.dealStage))fail('DEAL_STAGE_REQUIRED','Configure an existing Deal Stage for CRM drafts.',503);
+  // The module-level Stage list does not show every stage a layout or pipeline offers (it omits Active and Paid, for example), so the
+  // configured stage is trusted here. CRM itself refuses a stage it does not know, and the save then fails without writing anything.
+  if(!config.dealStage)fail('DEAL_STAGE_REQUIRED','Configure the Deal Stage used for CRM drafts.',503);
  }
  if(module==='Insurance_Policy'){textField(fields,'Contact');textField(fields,'Membership');}
  if(module==='Training_Centre_Accred')textField(fields,'Applicant_Contact');
