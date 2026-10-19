@@ -3,7 +3,9 @@ import {ArrowLeft, ArrowRight, CreditCard, FileText, LockKeyhole, MapPin, Save, 
 import {Link, useNavigate} from 'react-router-dom';
 import {JOURNEYS,countryOption} from './JourneyConfig.js';
 import {Field,Notice,PageHeading,Stages} from './UiParts.jsx';
-import {centreCountry,resolveFields,COPY_HOME_MAP,LEGAL_LINKS,DECLARATIONS_WARNING} from './accreditationInputs.js';
+import {centreCountry,resolveFields,COPY_HOME_MAP,DECLARATIONS_WARNING} from './accreditationInputs.js';
+import {LEGAL} from './legal.js';
+import {PolicyDocuments} from './LegalLinks.jsx';
 import {startLimits} from './startDate.js';
 import {accreditationType,validate} from './logic.mjs';
 import {usePreviewState} from './journeys/previewState.jsx';
@@ -22,11 +24,11 @@ function ReviewDetails({steps,values,kind}){
     {kind==='membership'&&<Notice title="Membership and fees">Your membership type, joining fee, optional cover and any monthly instalments will be confirmed by the Guild. No price has been calculated yet.</Notice>}
     {kind==='insurance'&&<Notice title="Insurance quotation not yet calculated">Your cover choices and declarations are shown here for review only. No quote has been calculated and no cover is in place.</Notice>}
     {concern&&<div className="classification"><strong>Manual review may be required</strong><small>You answered yes to one of the declarations. The Guild's insurance team may need to review your application before offering cover.</small></div>}
+    {kind==='insurance'&&<PolicyDocuments values={values}/>}
     <dl className="review-list">{entries.map(f=><div key={f.name}><dt>{f.label}</dt><dd>{reviewValue(f,values[f.name])}</dd></div>)}</dl>
     <div className="review-docs"><h3><FileText size={18}/> Information and documents</h3>
-      <div className="doc-list"><a href="https://www.beautyguild.com/Membership/Code-Of-Ethics" target="_blank" rel="noopener noreferrer">Guild Code of Ethics <ArrowRight size={15}/></a>
-      {kind==='accreditation'&&Object.entries(LEGAL_LINKS).map(([label,href])=><a key={label} href={href} target="_blank" rel="noopener noreferrer">{label} <ArrowRight size={15}/></a>)}
-      {kind==='insurance'&&<a href="https://www.beautyguild.com/Membership/Treatments-We-Cover" target="_blank" rel="noopener noreferrer">Treatments We Cover <ArrowRight size={15}/></a>}
+      <div className="doc-list"><a href={LEGAL.terms.href} target="_blank" rel="noopener noreferrer">{LEGAL.terms.label} <ArrowRight size={15}/></a><a href={LEGAL.privacy.href} target="_blank" rel="noopener noreferrer">{LEGAL.privacy.label} <ArrowRight size={15}/></a><a href={LEGAL.ethics.href} target="_blank" rel="noopener noreferrer">{LEGAL.ethics.label} <ArrowRight size={15}/></a>
+      {kind!=='membership'&&kind!=='accreditation'&&<a href={LEGAL.treatments.href} target="_blank" rel="noopener noreferrer">{LEGAL.treatments.label} <ArrowRight size={15}/></a>}
       <span>Your policy documents will be available here once your application is complete.</span></div>
     </div>
   </div>;

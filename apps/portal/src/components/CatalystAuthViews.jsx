@@ -1,4 +1,5 @@
 import React,{useEffect,useState} from 'react';
+import {ReviewedLabel} from '../LegalLinks.jsx';
 import {ArrowLeft,KeyRound,ShieldAlert} from 'lucide-react';
 import {Link} from 'react-router-dom';
 import {portalApi} from '../services/api.js';
@@ -42,7 +43,7 @@ export function CatalystRegistration({returnTo='/'}) {
       <div><label htmlFor="live-last">Surname</label><input id="live-last" name="lastName" required autoComplete="family-name"/></div>
     </div>
     <label htmlFor="live-email">Email address</label><input id="live-email" name="email" type="email" required autoComplete="email"/>
-    <label className="auth-checkbox"><input type="checkbox" required/><span>I have reviewed the Guild terms and privacy information.</span></label>
+    <label className="auth-checkbox"><input type="checkbox" required/><ReviewedLabel/></label>
     <button type="submit" className="btn btn-primary btn-block" disabled={busy}>{busy?'Creating account…':'Create account'}</button>
     {message&&<div className="auth-unavailable" role="status">{message}</div>}
     <p className="auth-small">Already have an account? <Link to="/login">Sign in</Link></p>

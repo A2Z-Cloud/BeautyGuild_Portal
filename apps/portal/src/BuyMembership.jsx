@@ -1,4 +1,6 @@
 import React,{useEffect,useState} from 'react';
+import {LEGAL} from './legal.js';
+import {PolicyDocuments} from './LegalLinks.jsx';
 import {ArrowLeft,LockKeyhole} from 'lucide-react';
 import {Link,useSearchParams} from 'react-router-dom';
 import {Notice,PageHeading} from './UiParts.jsx';
@@ -107,7 +109,8 @@ export default function BuyMembership(){
       {!ready?<p className="muted">Choose a membership level and branch to see your price.</p>:insuranceWaiting?<p className="muted">Answer the insurance questions, including where you are based, so your price includes them.</p>:!priced?<p className="muted" role="status">{(q.error)?q.error:'Working out your price…'}</p>:<>
         {f.insurance&&<BlockedNotice quote={priced}/>}
         <p className="muted">You pay {money(dueToday(priced))} today.</p>
-        <label className="check-choice"><input type="checkbox" checked={f.accepted} onChange={e=>set({accepted:e.target.checked})}/><span>I accept the <a href="https://www.beautyguild.com/Membership/Code-Of-Ethics" target="_blank" rel="noopener noreferrer">Code of Ethics</a> and the Guild's <a href="https://www.beautyguild.com/Legal/Terms-Of-Business" target="_blank" rel="noopener noreferrer">Terms of Business</a> and <a href="https://www.beautyguild.com/Legal/Privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.</span></label>
+        {f.insurance&&<PolicyDocuments values={iv}/>}
+        <label className="check-choice"><input type="checkbox" checked={f.accepted} onChange={e=>set({accepted:e.target.checked})}/><span>I accept the <a href={LEGAL.ethics.href} target="_blank" rel="noopener noreferrer">Code of Ethics</a> and the Guild's <a href={LEGAL.terms.href} target="_blank" rel="noopener noreferrer">Terms of Business</a> and <a href={LEGAL.privacy.href} target="_blank" rel="noopener noreferrer">Privacy Policy</a>.</span></label>
         {payError&&<Notice title="Payment unavailable">{payError}</Notice>}
         {guest?<><p className="muted">To pay you need an account. Your answers are kept while you sign in or sign up. Final checks, including any insurance checks, are done when you pay.</p>
           <Link className="btn btn-primary btn-block" to={loginTo}><LockKeyhole size={16}/> Sign in or create an account to continue</Link></>:

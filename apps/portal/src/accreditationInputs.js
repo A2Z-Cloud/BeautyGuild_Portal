@@ -2,13 +2,14 @@
 // The server maps these answers onto the same CRM records V1 writes (functions/beauty_guild_api/src/accreditationDrafts.js).
 import {UK_COUNTRIES} from './logic.mjs';
 import {startLimits} from './startDate.js';
+import {LEGAL_LINKS} from './legal.js';
 
 const f=(name,label,type='text',required=true,extra={})=>({name,label,type,required,...extra});
 const list=x=>x.map(o=>typeof o==='string'?{value:o,label:o}:o);
 const yn=(name,label,extra={})=>f(name,label,'radio',true,{options:list([{value:'yes',label:'Yes'},{value:'no',label:'No'}]),...extra});
 const yes=name=>v=>v[name]==='yes';
 const PHONE_HINT='Choose the country code, then enter the number without the first 0.';
-export const LEGAL_LINKS={'Terms of Business':'https://www.beautyguild.com/Legal/Terms-Of-Business','Privacy Policy':'https://www.beautyguild.com/Legal/Privacy'};
+export {LEGAL_LINKS};
 // What "copy my details" fills in on the training centre step, from the applicant's own answers.
 export const COPY_HOME_MAP={address1:'centreAddress1',address2:'centreAddress2',address3:'centreAddress3',town:'centreTown',county:'centreCounty',postcode:'centrePostcode',
   contactCountry:'country',contactCountryOther:'countryOther',mobile:'centreMobile',phone:'centrePhone',email:'centreEmail'};

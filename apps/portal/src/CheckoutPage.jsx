@@ -1,4 +1,5 @@
 import React,{useEffect,useState} from 'react';
+import {LegalLinks} from './LegalLinks.jsx';
 import {ArrowLeft,LockKeyhole} from 'lucide-react';
 import {Link,useParams,useSearchParams} from 'react-router-dom';
 import {Notice,PageHeading} from './UiParts.jsx';
@@ -45,6 +46,7 @@ export default function CheckoutPage(){
         <div className="checkout-summary">{q.lines.map(l=><div key={l.name}><span>{l.name}{l.quantity>1?' × '+l.quantity:''}</span><strong>{money(l.totalPence)}{l.interval?' / '+l.interval:''}</strong></div>)}
           <div className="checkout-total"><span>Amount to pay</span><strong>{money(q.totalPence)}</strong></div></div>
         <button type="button" className="btn btn-primary btn-block" disabled={state.busy} onClick={pay}><LockKeyhole size={16}/>{state.busy?'Opening secure payment…':'Pay securely with Stripe'}</button>
+        <p className="muted legal-note">By paying you accept the Guild's <LegalLinks keys={['terms','privacy']}/>.</p>
       </>:null}
     </section>}</div>;
 }
