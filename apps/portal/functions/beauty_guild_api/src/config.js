@@ -55,6 +55,8 @@ function loadConfig(env = process.env) {
     schoolRegistrationField:String(env.PUBLIC_SCHOOL_REGISTRATION_FIELD||'').trim(),
     schoolActiveStatus:String(env.PUBLIC_SCHOOL_ACTIVE_STATUS||'Verified').trim(),
     billingEnabled:env.PORTAL_BILLING_ENABLED === 'true',
+    // Lets signed-out visitors price a membership (no account, no CRM access). Needs billing on as well.
+    publicQuotesEnabled:env.PUBLIC_QUOTES_ENABLED === 'true',
     documentsEnabled:env.PORTAL_DOCUMENTS_ENABLED === 'true',
     workdriveApiDomain:httpsUrl(env.WORKDRIVE_API_DOMAIN,'https://www.zohoapis.eu','WORKDRIVE_API_DOMAIN'),
     workdriveConnectionName:String(env.WORKDRIVE_CONNECTION_NAME||'zohoworkdrive'),

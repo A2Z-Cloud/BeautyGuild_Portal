@@ -17,12 +17,12 @@ export function InsuranceForm({values,onChange,errors,country,onCountry,countryE
   </>;
 }
 // The server's price for the answers so far, refreshed shortly after they stop changing. `extra` is the rest of the request.
-export function useInsuranceQuote({enabled,request,key}){
+export function useInsuranceQuote({enabled,request,key,send=portalApi.checkoutQuotePost}){
   const [state,setState]=useState({loading:false,quote:null,error:''}),latest=useRef(0);
   useEffect(()=>{
     if(!enabled){setState({loading:false,quote:null,error:''});return undefined;}
     const mine=++latest.current;setState(s=>({...s,loading:true,error:''}));
-    const timer=setTimeout(()=>{portalApi.checkoutQuotePost(request()).then(quote=>mine===latest.current&&setState({loading:false,quote,error:''}))
+    const timer=setTimeout(()=>{send(request()).then(quote=>mine===latest.current&&setState({loading:false,quote,error:''}))
       .catch(e=>mine===latest.current&&setState({loading:false,quote:null,error:e.message}));},500);
     return()=>clearTimeout(timer);
   },[enabled,key]);// eslint-disable-line react-hooks/exhaustive-deps
