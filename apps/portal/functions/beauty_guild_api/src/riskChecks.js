@@ -87,7 +87,7 @@ function createRiskChecks({config, getAnalyticsHeaders, getCreatorHeaders, fetch
 
   // ---- Flood and subsidence ------------------------------------------------------------------
   async function creatorRows(req, report, criteria) {
-    const url = c.creator.apiDomain + '/creator/v2.1/data/' + esc(c.creator.owner) + '/' + esc(c.creator.app) + '/report/' + esc(report) + '?field_config=all&max_records=1&criteria=' + esc(criteria);
+    const url = c.creator.apiDomain + '/creator/v2.1/data/' + esc(c.creator.owner) + '/' + esc(c.creator.app) + '/report/' + esc(report) + '?field_config=all&max_records=200&criteria=' + esc(criteria);
     let r;
     try { r = await fetchImpl(url, {headers: await getCreatorHeaders(req), signal: AbortSignal.timeout(10000)}); } catch { throw new CheckError('Creator could not be reached.'); }
     const body = await r.json().catch(() => null);

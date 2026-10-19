@@ -77,13 +77,13 @@ function registerDiagnosticsRoutes(app,{enabled,allowedEmails=[],allowedDomains=
         const sample=await analytics.sql(req,'SELECT * FROM "'+table+'" LIMIT 1');
         const count=await analytics.sql(req,'SELECT COUNT(*) AS n FROM "'+table+'"');
         res.json({orgs,workspaceId:risk.analytics.workspaceId,table,viewId:view.id,lastModified:view.lastModified?view.lastModified.toISOString():null,
-          detailKeys:Object.keys(view.details||{}),columns:Object.keys(sample[0]||{}),rows:Number(Object.values(count[0]||{})[0])});
+          detailKeys:Object.keys(view.details||{}),times:{created:view.details?.createdTime||null,lastDesignModified:view.details?.lastDesignModifiedTime||null},columns:Object.keys(sample[0]||{}),rows:Number(Object.values(count[0]||{})[0])});
       }catch(e){throw new HttpError(502,'ANALYTICS_UNAVAILABLE','Analytics said: '+String(e.message).slice(0,200));}
     }));
     router.get('/creator-report',run(async(req,res)=>{
       const report=String(req.query.report||'');
       if(![risk.creator.floodReport,risk.creator.subsidenceReport].includes(report))throw new HttpError(400,'INVALID_REQUEST','Use the flood or subsidence report name.');
-      const url=risk.creator.apiDomain+'/creator/v2.1/data/'+encodeURIComponent(risk.creator.owner)+'/'+encodeURIComponent(risk.creator.app)+'/report/'+encodeURIComponent(report)+'?field_config=all&max_records=1';
+      const url=risk.creator.apiDomain+'/creator/v2.1/data/'+encodeURIComponent(risk.creator.owner)+'/'+encodeURIComponent(risk.creator.app)+'/report/'+encodeURIComponent(report)+'?field_config=all&max_records=200';
       let r,body;
       try{r=await fetchImpl(url,{headers:await getCreatorHeaders(req),signal:AbortSignal.timeout(15000)});body=await r.json().catch(()=>null);}
       catch{throw new HttpError(502,'CREATOR_UNAVAILABLE','Creator could not be reached.');}
