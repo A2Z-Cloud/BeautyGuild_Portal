@@ -69,7 +69,7 @@ function registerDocumentRoutes(app,{enabled,getCurrentUser,getCrmHeaders,getWor
  });
  router.get('/:kind/:id',safe(async(req,res)=>{
    const root=await authorisedRoot(req);
-   if(!root)return res.json({items:[],folderId:null,message:'No WorkDrive folder is linked to this record.'});
+   if(!root)return res.json({items:[],folderId:null,message:'There are no documents for this record yet.'});
    const folder=await verifiedFolder(req,root);
    res.json({folderId:folder,items:await children(req,folder)});
  }));

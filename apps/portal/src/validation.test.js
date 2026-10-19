@@ -63,3 +63,15 @@ test('address lookup country maps onto the dropdown options', () => {
   assert.equal(countryOption(undefined), '');
   assert.ok(COUNTRY_OPTIONS.includes(countryOption('France')));
 });
+
+import {formatDate,serviceLabel} from './format.js';
+test('dates read naturally for customers', () => {
+  assert.equal(formatDate('2026-10-15'), '15 Oct 2026');
+  assert.equal(formatDate('2026-10-15T11:26:51+01:00'), '15 Oct 2026');
+  assert.equal(formatDate('2026-10-15T11:26:51+01:00',{time:true}), '15 Oct 2026, 11:26');
+  assert.equal(formatDate('18-Aug-2026'), '18 Aug 2026');
+  assert.equal(formatDate('01-Nov-2026 09:00:00',{time:true}), '1 Nov 2026, 09:00');
+  assert.equal(formatDate(null), '—');
+  assert.equal(formatDate('not a date'), 'not a date');
+  assert.equal(serviceLabel('accreditation'), 'Accreditation');
+});

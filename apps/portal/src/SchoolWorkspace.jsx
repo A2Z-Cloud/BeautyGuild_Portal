@@ -2,6 +2,7 @@ import React,{useEffect,useState} from 'react';
 import {Link,useParams,useSearchParams} from 'react-router-dom';
 import {ArrowLeft,ArrowRight,Building2,BookOpen,CalendarDays,Users,GraduationCap,FileText,Receipt,MapPin} from 'lucide-react';
 import {PageHeading,Notice,Status} from './UiParts.jsx';
+import {formatDate} from './format.js';
 import {INTEGRATIONS,portalApi} from './services/api.js';
 import {DocumentsPanel} from './DocumentsPanel.jsx';
 import {QualificationForm,SessionForm} from './SchoolActionForms.jsx';
@@ -25,14 +26,15 @@ function SimpleTable({columns,rows}) {
  return <div className="school-table-scroll"><table className="record-table"><thead><tr>{columns.map(c=><th key={c.key}>{c.label}</th>)}</tr></thead>
  <tbody>{rows.map((r,i)=><tr key={r.id||i}>{columns.map(c=><td key={c.key}>{c.render?c.render(r):r[c.key]??'—'}</td>)}</tr>)}</tbody></table></div>;
 }
-const col=(key,label)=>({key,label});
+const col=(key,label,render)=>({key,label,...(render?{render}:{})});
+const dateCol=(key,label,opts)=>col(key,label,r=>formatDate(r[key],opts));
 export function SchoolsList(){
  const state=useLoad(()=>portalApi.listSchools(),[]);
  return <div className="page"><PageHeading eyebrow="TRAINING CENTRES" title="My schools" description="Manage accredited courses, venues, tutors, qualifications, dates and invoices."/>
  {!INTEGRATIONS.schoolServices?<Notice title="Coming soon">Managing your school online is coming soon.</Notice>:
  state.loading?<p role="status">Loading your schools…</p>:state.error?<Notice title="Schools unavailable">{state.error}</Notice>:
  <div className="school-list">{state.value.length?state.value.map(s=><Link className="surface padded school-list-card" key={s.id} to={'/schools/'+s.id+'/profile'}>
- <Building2 size={29}/><div><h2>{s.name}</h2><p>{s.level||'Training centre'} · {s.validTo?'Valid until '+s.validTo:'Expiry date unavailable'}</p>
+ <Building2 size={29}/><div><h2>{s.name}</h2><p>{s.level||'Training centre'} · {s.validTo?'Valid until '+formatDate(s.validTo):'Expiry date unavailable'}</p>
  <Status value={s.status}/></div><ArrowRight size={18}/></Link>):<Empty>No accredited schools are linked to your account yet.</Empty>}</div>}
  </div>;
 }
@@ -40,21 +42,21 @@ function SchoolProfile({data}){
  const p=data.profile;
  return <><h2>School profile</h2><p className="muted">You cannot change these details online. Contact the Accreditation team to update them.</p>
  <dl className="detail-list">{Object.entries({'Training centre':p.name,'Town / City':p.town,County:p.county,Country:p.country,Postcode:p.postcode,
- 'Accreditation status':p.status,'Valid until':p.expires,'Accreditation level':p.level,'Referral code':p.referralCode}).map(([k,v])=><div key={k}><dt>{k}</dt><dd>{v||'—'}</dd></div>)}</dl>
+ 'Accreditation status':p.status,'Valid until':formatDate(p.expires),'Accreditation level':p.level,'Referral code':p.referralCode}).map(([k,v])=><div key={k}><dt>{k}</dt><dd>{v||'—'}</dd></div>)}</dl>
  {p.referralCode&&p.referralActive&&<p><a className="reference" href={'https://beautyguild.com/Join/'+encodeURIComponent(p.referralCode)} target="_blank" rel="noreferrer">View school referral landing page <ArrowRight size={15}/></a></p>}</>;
 }
 export function InvoiceTable({rows}){
  const [selected,setSelected]=useState(null);
  return <>{rows.length?<SimpleTable columns={[
  {key:'invoiceNumber',label:'Invoice',render:r=><button type="button" className="text-button" onClick={()=>setSelected(r)}>#{r.invoiceNumber||r.id}</button>},
- col('type','Type'),col('invoiceDate','Date'),col('dueDate','Due'),
+ col('type','Type'),dateCol('invoiceDate','Date'),dateCol('dueDate','Due'),
  {key:'amount',label:'Amount',render:r=>Number.isFinite(r.amount)?'£'+r.amount.toFixed(2):'—'},
  {key:'status',label:'Status',render:r=><Status value={r.status||'Unknown'}/>}
  ]} rows={rows}/>:<Empty>No invoices were returned for this account.</Empty>}
  {selected&&<div className="school-dialog-overlay" role="presentation" onClick={()=>setSelected(null)}><section className="school-dialog surface padded" role="dialog" aria-modal="true" aria-label="Invoice details" onClick={e=>e.stopPropagation()}>
  <div className="school-dialog-head"><h2>Invoice #{selected.invoiceNumber||selected.id}</h2><button className="btn btn-secondary" type="button" onClick={()=>setSelected(null)}>Close</button></div>
  <dl className="detail-list">{Object.entries({'Type':selected.type,'Status':selected.status,'Amount':Number.isFinite(selected.amount)?'£'+selected.amount.toFixed(2):null,
- 'Invoice date':selected.invoiceDate,'Due date':selected.dueDate,'Payment date':selected.paymentDate}).map(([k,v])=><div key={k}><dt>{k}</dt><dd>{v||'—'}</dd></div>)}</dl>
+ 'Invoice date':formatDate(selected.invoiceDate),'Due date':formatDate(selected.dueDate),'Payment date':formatDate(selected.paymentDate)}).map(([k,v])=><div key={k}><dt>{k}</dt><dd>{v||'—'}</dd></div>)}</dl>
  </section></div>}</>;
 }
 function SchoolSection({id,section}){
@@ -76,11 +78,11 @@ function SchoolSection({id,section}){
  {key:'isMain',label:'Type',render:r=>r.isMain?'Main centre':'Additional venue'},col('courseCount','Courses'),
  {key:'visible',label:'Directory',render:r=>r.visible?'Visible':'Hidden'}]}/></>;
  case 'tutors':return <><h2>Accredited tutors</h2><p>Tutors should hold current Guild membership, appropriate qualifications and insurance.</p>
- <SimpleTable rows={x.tutors||[]} columns={[col('name','Tutor'),col('membershipNumber','Membership number'),col('membershipExpiry','Membership expiry'),col('status','Status')]}/></>;
+ <SimpleTable rows={x.tutors||[]} columns={[col('name','Tutor'),col('membershipNumber','Membership number'),dateCol('membershipExpiry','Membership expiry'),col('status','Status')]}/></>;
  case 'qualifications':return <><div className="school-dialog-head"><h2>Qualifications</h2>{INTEGRATIONS.schoolWrites&&<button type="button" className="btn btn-primary" onClick={()=>setEditing(v=>!v)}>{editing?'Cancel':'Add qualification'}</button>}</div>{editing&&<QualificationForm schoolId={id} onDone={saved}/>}<SimpleTable rows={x.qualifications||[]} columns={[col('name','Qualification'),
  {key:'month',label:'Completed',render:r=>[r.month,r.year].filter(Boolean).join('/')||'—'},col('status','Verification')]}/></>;
  case 'sessions':return <><div className="school-dialog-head"><h2>Course dates and bookings</h2>{INTEGRATIONS.schoolWrites&&<button type="button" className="btn btn-primary" onClick={()=>setEditing(v=>!v)}>{editing?'Cancel':'Create session'}</button>}</div><p>Your published fixed and flexible course dates, with the places booked so far.</p>{editing&&<SessionForm schoolId={id} onDone={saved}/>}
- <SimpleTable rows={x.sessions||[]} columns={[col('name','Course / session'),col('availabilityType','Availability'),col('start','Date'),
+ <SimpleTable rows={x.sessions||[]} columns={[col('name','Course / session'),col('availabilityType','Availability'),dateCol('start','Date',{time:true}),
  {key:'placesBooked',label:'Places booked',render:r=>r.maximumPlaces==null?String(r.placesBooked):r.placesBooked+' / '+r.maximumPlaces},
  col('status','Status'),{key:'id',label:'Bookings',render:r=><button type="button" className="text-button" onClick={()=>setSession(r.id)}>View bookings</button>}]}/>
  {session&&<div className="school-dialog-overlay" role="presentation" onClick={()=>setSession(null)}><section className="school-dialog surface padded" role="dialog" aria-modal="true" aria-label="Session bookings" onClick={e=>e.stopPropagation()}>

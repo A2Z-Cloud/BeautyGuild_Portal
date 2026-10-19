@@ -96,3 +96,12 @@ test('recognised Contact codes get a fixed friendly message and unknown codes ne
   await assert.rejects(()=>make(409,{error:'x',code:'CONTACT_AMBIGUOUS'})('/portal/records/'),e=>e.code==='CONTACT_AMBIGUOUS'&&/check your details/.test(e.message));
   await assert.rejects(()=>make(500,{error:'ORA-00942 internal',code:'SOMETHING_INTERNAL'})('/x'),e=>e.code==='HTTP_ERROR'&&!/ORA-/.test(e.message));
 });
+
+test('our own validation messages (422, 409) are shown but upstream failures never are',async()=>{
+  const make=(status,body)=>createHttpClient({baseUrl:'/server/beauty_guild_api',fetchImpl:async()=>({ok:false,status,text:async()=>JSON.stringify(body)})});
+  await assert.rejects(()=>make(422,{error:'The start date cannot be in the past.',code:'INVALID_DATE'})('/x',{method:'POST',body:{}}),
+    e=>e.message==='The start date cannot be in the past.'&&e.code==='INVALID_DATE');
+  await assert.rejects(()=>make(409,{error:'This course date has already been added.',code:'DUPLICATE_SESSION'})('/x',{method:'POST',body:{}}),e=>e.code==='DUPLICATE_SESSION');
+  await assert.rejects(()=>make(502,{error:'CRM did not confirm the record was saved.',code:'SERVICE_UNAVAILABLE'})('/x'),e=>!/CRM/.test(e.message));
+  await assert.rejects(()=>make(422,{error:'x'.repeat(300)})('/x',{method:'POST',body:{}}),e=>!/xxxx/.test(e.message));
+});
