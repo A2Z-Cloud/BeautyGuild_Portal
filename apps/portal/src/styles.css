@@ -303,3 +303,8 @@ img,svg,video,iframe{max-width:100%}
 .course-requirements{white-space:pre-wrap;font-size:13px;line-height:1.55;margin:0}.course-modal-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
 @media(max-width:600px){.tutor-row{grid-template-columns:1fr}.phone-input{grid-template-columns:1fr}.course-view{margin-left:0}}
 .quote-action{margin-top:18px}.quote-action .error{margin-top:8px}
+.my-service-records{margin:0 0 26px}.my-service-records .section-row{margin-top:0}.service-record-list{display:grid;gap:12px}
+.service-record{display:flex;align-items:center;gap:16px;border:1px solid #eee6eb;background:#fff;border-radius:14px;padding:16px 18px;transition:box-shadow .2s,transform .2s}.service-record:hover{transform:translateY(-1px);box-shadow:0 8px 20px #38213110}
+.service-record .service-icon{margin:0;flex-shrink:0;background:#fff0f8}.service-record-copy{flex:1;min-width:0}.service-record-copy strong,.service-record-copy small{display:block}.service-record-copy small{margin-top:4px;font-size:12px}
+.service-record>span:nth-of-type(3){text-align:right}.service-record>span small{display:block;margin-top:4px;font-size:11px}.service-record>svg{color:#d32a7d;flex-shrink:0}.service-record.expired{background:#faf8f9}.service-record.expired .service-icon{background:#f1edf0}
+@media(max-width:600px){.service-record{flex-wrap:wrap}.service-record>span:nth-of-type(3){text-align:left;flex-basis:100%}}
