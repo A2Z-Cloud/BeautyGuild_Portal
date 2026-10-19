@@ -7,7 +7,7 @@
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
-    "test": "node --test src/validation.test.js src/repoHygiene.test.js src/startDate.test.js src/sectionKey.test.js src/typography.test.js src/services/integration.test.mjs",
+    "test": "node --test src/validation.test.js src/repoHygiene.test.js src/startDate.test.js src/accreditationInputs.test.js src/sectionKey.test.js src/typography.test.js src/services/integration.test.mjs",
     "check": "npm run test && npm run build",
     "build:auth-css": "node scripts/build-auth-css.mjs"
   },

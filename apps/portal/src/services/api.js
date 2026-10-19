@@ -35,7 +35,9 @@ export const INTEGRATIONS=Object.freeze({
   catalystAuth:integrationConfig.catalystAuth,
   courses:isEnabled(integrationConfig,'courses'),
   address:isEnabled(integrationConfig,'address'),
-  schoolServices:schoolOn,schoolWrites:schoolWritesOn,crmRecords:recordsOn,crmDrafts:draftsOn,crmContactMapping:recordsOn,pricing:false,
+  schoolServices:schoolOn,schoolWrites:schoolWritesOn,crmRecords:recordsOn,crmDrafts:draftsOn,
+  // The accreditation application writes the V1 record set, so it has its own switch on top of saved drafts.
+  crmAccreditation:draftsOn&&import.meta.env.VITE_PORTAL_CRM_ACCREDITATION==='true',crmContactMapping:recordsOn,pricing:false,
   underwriting:false,stripeCheckout:billingOn,policyIssuance:false,workdrive:documentsOn,
 });
 export const portalApi=Object.freeze({
@@ -69,6 +71,8 @@ export const portalApi=Object.freeze({
   updateDraft:async (service,id,data)=>(await draftReq('/'+service+'/'+encodeURIComponent(id),{method:'PUT',body:data})).draft,
   getDraft:async (service,id)=>(await draftReq('/'+service+'/'+encodeURIComponent(id))).draft,
   listDrafts:async ()=>(await draftReq('/')).drafts,
+  getAccreditationPrefill:async ()=>(await draftReq('/accreditation/prefill')).prefill,
+  submitAccreditation:async data=>(await draftReq('/accreditation/submit',{method:'POST',body:data})).accreditation,
   discardDraft:async (service,id)=>draftReq('/'+service+'/'+encodeURIComponent(id),{method:'DELETE'}),
   checkoutQuote:async params=>(await billingReq('/quote?'+new URLSearchParams(params).toString())).quote,
   checkoutQuotePost:async body=>(await billingReq('/quote',{method:'POST',body})).quote,

@@ -38,6 +38,7 @@ function loadConfig(env = process.env) {
     diagnosticsDomains:String(env.PORTAL_DIAGNOSTICS_DOMAINS||'').split(',').map(s=>s.trim().toLowerCase().replace(/^@/,'')).filter(d=>/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(d)),
     crmDraftsEnabled:env.PORTAL_CRM_DRAFTS_ENABLED === 'true',
     draftStatus:String(env.PORTAL_CRM_DRAFT_STATUS||'Draft'),
+    accreditationEnabled:env.PORTAL_CRM_DRAFTS_ENABLED === 'true' && env.PORTAL_CRM_ACCREDITATION_ENABLED === 'true',
     dealStage:String(env.PORTAL_CRM_DRAFT_DEAL_STAGE||''),
     schoolServicesEnabled:env.PORTAL_SCHOOL_SERVICES_ENABLED === 'true',
     schoolWritesEnabled:env.PORTAL_SCHOOL_WRITES_ENABLED === 'true',
