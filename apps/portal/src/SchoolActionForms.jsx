@@ -72,3 +72,51 @@ export function SessionForm({schoolId,onDone}){
  </>}
  </form>;
 }
+
+export function TutorForm({schoolId,onDone}){
+ const [values,setValues]=useState({name:'',email:''});
+ const [busy,setBusy]=useState(false),[error,setError]=useState(''),[result,setResult]=useState(null);
+ const set=(k,v)=>setValues(p=>({...p,[k]:v}));
+ async function submit(e){
+  e.preventDefault();if(busy)return;setBusy(true);setError('');setResult(null);
+  try{const r=await portalApi.addSchoolTutor(schoolId,values);setResult(r);if(!r.alreadyLinked)setTimeout(onDone,1800);}
+  catch(err){setError(err.message||'The tutor could not be added.');}
+  finally{setBusy(false);}
+ }
+ return <form className="school-ops-form" onSubmit={submit}>
+ <h3>Add a tutor</h3><p>Tutors need a current Guild membership to be active. If they do not have one yet they are added as inactive until they join.</p>
+ <label>Full name *{formField('name',values.name,set)}</label>
+ <label>Email address *<input type="email" required value={values.email} onChange={e=>set('email',e.target.value)}/></label>
+ {error&&<Notice title="Not added">{error}</Notice>}
+ {result&&<Notice title={result.alreadyLinked?'Already added':'Tutor added'}>{result.alreadyLinked?'This tutor is already linked to your school.':'Status: '+result.status+'.'}</Notice>}
+ <button type="submit" className="btn btn-primary" disabled={busy||!values.name||!values.email}>{busy?'Adding…':'Add tutor'}</button>
+ </form>;
+}
+const DAYS=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+export function BookingForm({schoolId,session,onDone}){
+ const flexible=session.availabilityType!=='Fixed Date';
+ const [values,setValues]=useState({studentName:'',studentEmail:'',numberOfStudents:'1',message:'',preferredDateFrom:'',preferredDateTo:'',preferredDays:[]});
+ const [busy,setBusy]=useState(false),[error,setError]=useState('');
+ const set=(k,v)=>setValues(p=>({...p,[k]:v}));
+ async function submit(e){
+  e.preventDefault();if(busy)return;setBusy(true);setError('');
+  try{
+   const body={...values,numberOfStudents:Number(values.numberOfStudents)||1};
+   if(!flexible){delete body.preferredDateFrom;delete body.preferredDateTo;delete body.preferredDays;}
+   await portalApi.createSessionBooking(schoolId,session.id,body);onDone();
+  }catch(err){setError(err.message||'The booking could not be saved.');}
+  finally{setBusy(false);}
+ }
+ return <form className="school-ops-form" onSubmit={submit}>
+ <h3>Add a booking</h3>
+ <label>Student name *{formField('studentName',values.studentName,set)}</label>
+ <label>Student email *<input type="email" required value={values.studentEmail} onChange={e=>set('studentEmail',e.target.value)}/></label>
+ <label>Places <input type="number" min="1" max="50" value={values.numberOfStudents} onChange={e=>set('numberOfStudents',e.target.value)}/></label>
+ {flexible&&<><div className="auth-double"><label>Earliest date<input type="date" value={values.preferredDateFrom} onChange={e=>set('preferredDateFrom',e.target.value)}/></label>
+  <label>Latest date<input type="date" value={values.preferredDateTo} onChange={e=>set('preferredDateTo',e.target.value)}/></label></div>
+  <MultiOptions label="Preferred days" values={values.preferredDays} options={DAYS} onChange={v=>set('preferredDays',v)}/></>}
+ <label>Notes or special requirements{formField('message',values.message,set)}</label>
+ {error&&<Notice title="Not saved">{error}</Notice>}
+ <button type="submit" className="btn btn-primary" disabled={busy||!values.studentName||!values.studentEmail}>{busy?'Saving…':'Save booking'}</button>
+ </form>;
+}

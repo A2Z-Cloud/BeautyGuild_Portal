@@ -205,3 +205,6 @@
 img,svg,video,iframe{max-width:100%}
 /* Notices stack their title above the text at every width, so they never squeeze into a narrow card. */
 .notice{flex-direction:column;gap:4px}
+.school-verify-preview{margin:18px 0}.school-verify-share{margin-top:22px;padding-top:18px;border-top:1px solid #f0e7ed}.school-verify-share h3{margin-bottom:8px}.school-verify-share small{display:block;margin-top:8px;color:#807984}
+.school-verify-share .school-verify-input-row input{min-width:0}
+.school-verify-qr{margin-top:20px;display:grid;justify-items:center;gap:6px;text-align:center;padding:24px 18px;border:2px dashed #e3d8df;border-radius:14px;color:#807984;background:#fdfafc}.school-verify-qr strong{color:#25212a}.school-verify-qr span{font-size:12px;max-width:340px}

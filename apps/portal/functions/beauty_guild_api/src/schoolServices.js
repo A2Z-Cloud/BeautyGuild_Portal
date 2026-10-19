@@ -2,6 +2,7 @@
 const express=require('express');
 const {HttpError}=require('./errors');
 const {resolveContact}=require('./records');
+const {assess}=require('./publicSchoolVerification');
 const ID=/^\d{10,25}$/;
 const esc=v=>encodeURIComponent(String(v));
 const fail=(message,status=502,code='SERVICE_UNAVAILABLE')=>{throw new HttpError(status,code,message);};
@@ -170,6 +171,28 @@ function registerSchoolRoutes(app,{enabled,writesEnabled,getCurrentUser,getCrmHe
    return res.json({invoices:await api.invoices(req,'crm_contact_id == "'+req.memberContact.id+'"'),
     scope:'account',note:'This is the member account invoice list, as in V1.'});
   }
+  if(section==='verification'){
+   // The same assessment the public page uses, for this school's own accreditation records.
+   if(!accountId)return res.json({school:{name:a.Account?.name||'Training centre',registrationNumber:null},verification:{status:'not_accredited',isCurrentlyAccredited:false,expiryDate:null,checkedAt:new Date().toISOString()}});
+   const rows=await api.crm(req,'Training_Centre_Accred/search?criteria='+esc('(Account:equals:'+accountId+')')+'&fields='+esc('Account,Accreditation_Status,Application_Stage,Valid_From,Valid_To'));
+   const own=rows.filter(r=>String(r.Account?.id)===String(accountId));
+   let registrationNumber=null;
+   const field=config.schoolRegistrationField;
+   if(field&&/^[A-Za-z][A-Za-z0-9_]{0,79}$/.test(field)){
+    if(config.schoolRegistrationModule==='Accounts'){
+     const acct=(await api.crm(req,'Accounts/'+accountId+'?fields='+esc(field)))[0];
+     registrationNumber=acct&&acct[field]?String(acct[field]).trim()||null:null;
+    }else if(config.schoolRegistrationModule==='Training_Centres'){
+     const links=await api.crm(req,'Accreditation_Centre_Link/search?criteria='+esc('((Accreditation:equals:'+id+')and(Centre_Relationship_Type:equals:Main Centre))')+'&fields='+esc('Training_Centre'));
+     const centreId=links[0]?.Training_Centre?.id;
+     const centre=centreId&&ID.test(String(centreId))?(await api.crm(req,'Training_Centres/'+centreId+'?fields='+esc(field)))[0]:null;
+     registrationNumber=centre&&centre[field]?String(centre[field]).trim()||null:null;
+    }
+   }
+   const checkedAt=new Date();
+   return res.json({school:{name:a.Account?.name||'Training centre',registrationNumber},
+    verification:{...assess(own,checkedAt.toISOString().slice(0,10),config.schoolActiveStatus||'Verified'),checkedAt:checkedAt.toISOString()}});
+  }
   fail('Unknown school section.',404,'NOT_FOUND');
  }));
  router.get('/schools/:id/sessions/:sessionId/bookings',handle(async(req,res)=>{
@@ -311,6 +334,91 @@ function registerSchoolRoutes(app,{enabled,writesEnabled,getCurrentUser,getCrmHe
    fail('This course date has already been added.',409,'DUPLICATE_SESSION');
   const id=await api.creatorCreate(req,'Course_Sessions',data);
   res.status(201).json({session:{id}});
+ }));
+ // ---- Tutors and student bookings (ported from V1, with ownership, validation, duplicate and capacity checks)
+ const EMAIL=/^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/;
+ const cleanName=(v,label)=>{
+  const t=typeof v==='string'?v.replace(/[\u0000-\u001f\u007f]/g,' ').replace(/\s+/g,' ').trim():'';
+  if(t.length<2||t.length>120)fail(label+' must be between 2 and 120 characters.',422,'INVALID_NAME');
+  return t;
+ };
+ const cleanEmail=v=>{
+  const t=typeof v==='string'?v.trim().toLowerCase():'';
+  if(t.length>254||!EMAIL.test(t))fail('Enter a valid email address.',422,'INVALID_EMAIL');
+  return t;
+ };
+ const splitName=name=>{const [first,...rest]=name.split(' ');return {First_Name:first,Last_Name:rest.join(' ')||first};};
+ // The Contact for an email: reuse the one that exists, refuse when several share it, create it when none does.
+ async function findOrCreateContact(req,email,name){
+  const rows=(await api.crm(req,'Contacts/search?email='+esc(email)+'&fields='+esc('Email'))).filter(c=>String(c.Email||'').trim().toLowerCase()===email);
+  if(rows.length>1)fail('More than one record uses this email address. Please contact the Guild.',409,'CONTACT_AMBIGUOUS');
+  if(rows.length===1)return {id:String(rows[0].id),existing:true};
+  return {id:await api.crmCreate(req,'Contacts',{Email:email,...splitName(name)}),existing:false};
+ }
+ const TIERS=['associate','full','international'];
+ const currentMembership=(deal,today)=>deal.Stage==='Active'&&TIERS.some(p=>String(deal.Membership_Type||'').toLowerCase().startsWith(p))&&
+  !(deal.Start_Date&&deal.Start_Date>today)&&!(deal.Expiry_Date&&deal.Expiry_Date<today);
+ router.post('/schools/:id/tutors',requireWrites,handle(async(req,res)=>{
+  const acc=await api.acc(req,req.params.id,req.memberContact.id);
+  if(!acc.Account?.id)fail('This school has no linked account yet.',409,'ACCOUNT_REQUIRED');
+  const name=cleanName(req.body?.name,'The tutor name'),email=cleanEmail(req.body?.email);
+  const tutor=await findOrCreateContact(req,email,name);
+  if(tutor.existing){
+   const already=(await api.crm(req,'Tutor_Relationships/search?criteria='+esc('((Account:equals:'+acc.Account.id+')and(Tutor_Contact:equals:'+tutor.id+'))')+'&fields='+esc('Status')))[0];
+   if(already)return res.json({alreadyLinked:true,status:already.Status||null,tutor:{name}});
+  }
+  // A tutor becomes Active only if they already hold a current Guild membership; everyone else starts Inactive.
+  let status='Inactive';
+  if(tutor.existing){
+   const today=new Date().toISOString().slice(0,10);
+   const deals=await api.crm(req,'Deals/search?criteria='+esc('(Contact_Name:equals:'+tutor.id+')')+'&fields='+esc('Stage,Membership_Type,Start_Date,Expiry_Date'));
+   if(deals.some(d=>currentMembership(d,today)))status='Active';
+  }
+  await api.crmCreate(req,'Tutor_Relationships',{Name:name,Account:acc.Account.id,Tutor_Contact:tutor.id,Status:status});
+  res.status(201).json({alreadyLinked:false,status,tutor:{name}});
+ }));
+ function toCreatorDate(value,label){
+  if(value===undefined||value===null||value==='')return undefined;
+  const m=String(value).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const d=m&&new Date(m[1]+'-'+m[2]+'-'+m[3]+'T00:00:00Z');
+  if(!m||Number.isNaN(d.getTime())||d.toISOString().slice(0,10)!==value)fail(label+' is not a valid date.',422,'INVALID_DATE');
+  return Number(m[3])+'-'+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][Number(m[2])-1]+'-'+m[1];
+ }
+ router.post('/schools/:id/sessions/:sessionId/bookings',requireWrites,handle(async(req,res)=>{
+  const acc=await api.acc(req,req.params.id,req.memberContact.id);
+  const sessionId=req.params.sessionId;
+  if(!acc.Account?.id||!ID.test(sessionId))fail('Course date not found.',404,'NOT_FOUND');
+  const body=req.body||{};
+  const studentName=cleanName(body.studentName,'The student name'),studentEmail=cleanEmail(body.studentEmail);
+  const places=body.numberOfStudents===undefined||body.numberOfStudents===''?1:Number(body.numberOfStudents);
+  if(!Number.isInteger(places)||places<1||places>50)fail('Places must be a whole number from 1 to 50.',422,'INVALID_PLACES');
+  const message=shortText(body.message,500,'The message','INVALID_BOOKING');
+  const from=toCreatorDate(body.preferredDateFrom,'The earliest date'),to=toCreatorDate(body.preferredDateTo,'The latest date');
+  let days;
+  if(body.preferredDays!==undefined){
+   if(!Array.isArray(body.preferredDays)||body.preferredDays.length>7||body.preferredDays.some(d=>typeof d!=='string'||d.length>20))fail('Choose valid days.',422,'INVALID_BOOKING');
+   days=body.preferredDays;
+  }
+  const session=(await api.creator(req,'Course_Sessions_Report','ID=='+sessionId))[0];
+  if(!session||String(session.account1?.ID)!==String(acc.Account.id))fail('Course date not found.',404,'NOT_FOUND');
+  const existing=await api.creator(req,'All_Diary_Date_Bookings','course_session=='+sessionId);
+  const live=existing.filter(b=>!['Cancelled','Refunded'].includes(b.booking_status)&&String(b.training_school?.ID)===String(acc.Account.id));
+  const booked=live.reduce((n,b)=>n+(Number(b.number_of_students)||1),0);
+  const max=session.maximum_places==null||session.maximum_places===''?null:Number(session.maximum_places);
+  if(Number.isFinite(max)&&booked+places>max)fail('There are not enough places left on this course date.',409,'NO_PLACES');
+  const student=await findOrCreateContact(req,studentEmail,studentName);
+  if(live.some(b=>String(b.student_contact?.ID)===student.id))fail('This student already has a booking on this course date.',409,'DUPLICATE_BOOKING');
+  const instant=session.availability_type==='Fixed Date'&&String(session.instant_booking_available)==='true';
+  const data={training_school:acc.Account.id,course_session:sessionId,student_contact:student.id,number_of_students:places,
+   student_message_special_requirements:message,booking_status:instant?'Confirmed':'Date Requested'};
+  if(instant){
+   const [d,t]=String(session.session_start_date_time||'').split(' ');
+   data.agreed_course_date=d||undefined;data.agreed_start_time=t||undefined;
+  }else{
+   data.preferred_date_from=from;data.preferred_date_to1=to;data.preferred_days1=days;
+  }
+  const id=await api.creatorCreate(req,'Diary_Date_Bookings',data);
+  res.status(201).json({booking:{id,status:data.booking_status}});
  }));
  app.use('/portal/management',router);
 }

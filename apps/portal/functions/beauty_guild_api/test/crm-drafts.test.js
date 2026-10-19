@@ -32,3 +32,13 @@ test('invalid requests fail without a CRM write',()=>{
  assert.throws(()=>validateDraft({service:'insurance',journeyId:uuid,step:-1,answers:{}}));
  assert.throws(()=>validateDraft({service:'combined',journeyId:uuid,step:3,answers:{membership:{}}}));
 });
+
+test('Journey_ID uniqueness is read the way CRM reports it',()=>{
+ const make=unique=>['Application_Status','Journey_ID','Last_Completed_Journey_Step','Draft_State_Reference','Draft_Saved_At','Contact','Membership'].map(api_name=>({
+  api_name,data_type:['Contact','Membership'].includes(api_name)?'lookup':'text',
+  ...(api_name==='Journey_ID'?{unique}:{}),pick_list_values:api_name==='Application_Status'?[{actual_value:'Draft'}]:[]}));
+ assert.throws(()=>checkMetadata('Insurance_Policy',make({}),{draftStatus:'Draft'}),'an empty object means duplicates are allowed');
+ assert.throws(()=>checkMetadata('Insurance_Policy',make(null),{draftStatus:'Draft'}));
+ assert.doesNotThrow(()=>checkMetadata('Insurance_Policy',make({casesensitive:true}),{draftStatus:'Draft'}));
+ assert.doesNotThrow(()=>checkMetadata('Insurance_Policy',make(true),{draftStatus:'Draft'}));
+});

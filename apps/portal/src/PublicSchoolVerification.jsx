@@ -29,7 +29,7 @@ function date(value){
   const [y,m,d]=value.split('-');
   return d+'/'+m+'/'+y;
 }
-function SchoolResult({data}){
+export function SchoolResult({data}){
   const {school,verification}=data;
   const ok=verification.status==='accredited';
   const Icon=ok?CheckCircle2:XCircle;
