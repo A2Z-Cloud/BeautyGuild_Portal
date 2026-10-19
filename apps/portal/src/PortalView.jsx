@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {LegalLinks} from './LegalLinks.jsx';
 import { Link, NavLink, useLocation } from 'react-router-dom';
-import { Award, BookOpen, Receipt, Building2, ChevronLeft, ChevronRight, CircleHelp, ClipboardList, GraduationCap, House, Menu, ShieldCheck, UserRound, LogIn, X } from 'lucide-react';
+import { Award, Bookmark, BookOpen, FileText, Receipt, Building2, ChevronLeft, ChevronRight, CircleHelp, ClipboardList, GraduationCap, House, Menu, ShieldCheck, UserRound, LogIn, X } from 'lucide-react';
 import { DEMO_USER } from './data/demo.js';
 import { Logo, PreviewLabel } from './UiParts.jsx';
 import {DATA_MODE,INTEGRATIONS,portalApi} from './services/api.js';
@@ -29,14 +29,14 @@ const sections = [
   {label:'Insurance',path:'/insurance',icon:ShieldCheck},
   {label:'Accreditation',path:'/accreditation',icon:GraduationCap},
   {label:'My records',path:'/records',icon:ClipboardList},
-  {label:'Saved applications',path:'/drafts',icon:ClipboardList,when:()=>INTEGRATIONS.crmDrafts},
+  {label:'Saved applications',path:'/drafts',icon:Bookmark,when:()=>INTEGRATIONS.crmDrafts},
   {label:'My schools',path:'/schools',icon:Building2,when:()=>INTEGRATIONS.schoolServices},
 ];
 const secondary = [
   {label:'GTi Courses',path:'/gti-courses',icon:BookOpen},
   {label:'My Account',path:'/account',icon:UserRound},
   {label:'My Invoices',path:'/invoices',icon:Receipt,when:()=>INTEGRATIONS.schoolServices},
-  {label:'My Documents',path:'/documents',icon:ClipboardList,when:()=>INTEGRATIONS.workdrive&&INTEGRATIONS.crmRecords},
+  {label:'My Documents',path:'/documents',icon:FileText,when:()=>INTEGRATIONS.workdrive&&INTEGRATIONS.crmRecords},
   {label:'Help',path:'/help',icon:CircleHelp},
 ];
 function NavItems({items,onNavigate,collapsed}) {
