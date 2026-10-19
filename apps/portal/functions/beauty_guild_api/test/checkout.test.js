@@ -512,3 +512,34 @@ test('insurance pay attempts have a lower limit than quotes: 3 a minute, 10 an h
     assert.equal(ok, 10);
   } finally { await new Promise(resolve => server.close(resolve)); }
 });
+
+// ---- Start dates and payment status values ----
+test('a membership start date outside the window is refused with a message, not reset to today', async () => {
+  const w = world({priceOverride: RECURRING});
+  await withApp(w, async ({post}) => {
+    const day = n => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10);
+    for (const start of ['2000-01-01', day(-1), day(91), 'tomorrow']) {
+      const r = await post({...BUY, previousId: DEAL, start});
+      assert.equal(r.status, 422, start);
+      assert.match(r.body.error, /^Choose a start date from today up to \d{4}-\d{2}-\d{2}\.$/);
+    }
+    assert.equal(w.stripePosts.length, 0);
+    assert.equal((await post({...BUY, previousId: DEAL, start: day(30)})).status, 201);
+    assert.equal(w.stripePosts[0].params.get('metadata[membership_start]'), day(30));
+    assert.equal((await post({...BUY, previousId: DEAL})).status, 201);
+    assert.equal(w.stripePosts[1].params.get('metadata[membership_start]'), day(0));
+  }, MEM_ENV);
+});
+test('only modules with a payment-in-progress value are written to; Deals get no Payment_Status', async () => {
+  const {PROCESSING_STATUS} = require('../src/catalogue');
+  assert.deepEqual(Object.keys(PROCESSING_STATUS), ['Training_Centre_Accred']);
+  const w = world({deals: [activeDeal], priceOverride: RECURRING});
+  await withApp(w, async ({post}) => {
+    assert.equal((await post({...BUY, previousId: DEAL})).status, 201);
+    assert.equal((await post({service: 'membership_addon', recordId: DEAL, addons: {badge: 1}})).status, 201);
+    assert.equal(w.crmPuts.length, 0);
+    assert.equal((await post({service: 'accreditation', recordId: ACC})).status, 201);
+    assert.equal(w.crmPuts.length, 1);
+    assert.equal(w.crmPuts[0].body.data[0].Payment_Status, PROCESSING_STATUS.Training_Centre_Accred);
+  }, MEM_ENV);
+});

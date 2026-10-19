@@ -2,7 +2,7 @@
   "name": "beauty_guild_api",
   "version": "2.0.0",
   "private": true,
-  "description": "Beauty Guild Portal V2 API: read-only course, address and authenticated member records",
+  "description": "Beauty Guild Portal V2 API: courses, addresses, member records, school services, checkout and saved applications",
   "main": "index.js",
   "scripts": {
     "test": "node --test test/*.test.js"

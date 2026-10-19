@@ -49,7 +49,7 @@ export default function App() {
     <Route path="/accreditation" element={<ServiceHome kind="accreditation" />} />
     <Route path="/membership/buy" element={<BuyMembership />} />
     <Route path="/insurance/buy" element={<BuyInsurance />} />
-    <Route path="/membership/new" element={<Journey kind="membership" />} />
+    <Route path="/membership/new" element={INTEGRATIONS.stripeCheckout ? <Navigate to="/membership/buy" replace /> : <Journey kind="membership" />} />
     <Route path="/insurance/new" element={<Journey kind="insurance" />} />
     <Route path="/accreditation/new" element={<Journey kind="accreditation" />} />
     <Route path="/verify" element={<PublicSchoolVerification />} />

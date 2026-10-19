@@ -84,7 +84,6 @@ test('REFER rules: people limit, multiple salons, premises history, declarations
   assert.equal(rules({insNamedPeopleCover: true, insNamedPeople: five.slice(0, 4)}).overall, 'PASS');
   assert.ok(codes(rules({insSalon: true, insSalonCount: 2})).includes('MULTIPLE_SALONS'));
   assert.ok(codes(rules({insSalon: true, insContents: true, insSoleOccupation: 'no'})).includes('SOLE_OCCUPATION'));
-  assert.ok(codes(rules({insSalon: true, insFloodHistory: 'yes', insBasement: 'yes'})).includes('FLOOD_BASEMENT'));
   assert.ok(codes(rules({insSalon: true, insSubsidenceHistory: 'yes'})).includes('SUBSIDENCE_HISTORY'));
   assert.ok(codes(rules({insEquipmentTier: 5000, insStandardConstruction: 'no', insNonStandardOver15: 'yes'})).includes('NON_STANDARD_CONSTRUCTION'));
   assert.ok(codes(rules({insEquipmentTier: 5000, insMultipleAddresses: 'yes'})).includes('MULTIPLE_ADDRESSES'));
@@ -108,4 +107,28 @@ test('paying needs every declaration and confirmation answered; a quote does not
 test('UK nations and Crown dependencies are supported territories', () => {
   for (const c of ['', 'United Kingdom', 'England', 'Scotland', 'Wales', 'Northern Ireland', 'Jersey', 'Guernsey', 'Isle of Man']) assert.notEqual(territory(c), 'other', c);
   for (const c of ['France', 'Ireland', 'Other']) assert.equal(territory(c), 'other', c);
+});
+
+test('AL-INS-045: one salon passes, two or three refer, more than three stop', () => {
+  assert.equal(rules({insSalon: true, insSalonCount: 1}).overall, 'PASS');
+  assert.equal(rules({insSalon: true, insSalonCount: 2}).overall, 'REFER');
+  assert.equal(rules({insSalon: true, insSalonCount: 3}).overall, 'REFER');
+  const four = rules({insSalon: true, insSalonCount: 4});
+  assert.equal(four.overall, 'STOP');
+  assert.ok(codes(four).includes('SALON_COUNT_LIMIT'));
+  assert.ok(!codes(four).includes('MULTIPLE_SALONS'));
+});
+test('AL-INS-053: flood history alone refers', () => {
+  const r = rules({insSalon: true, insFloodHistory: 'yes', insBasement: 'no'});
+  assert.equal(r.overall, 'REFER');
+  assert.deepEqual(codes(r), ['FLOOD_HISTORY']);
+});
+test('AL-INS-054: a basement alone refers', () => {
+  const r = rules({insSalon: true, insFloodHistory: 'no', insBasement: 'yes'});
+  assert.equal(r.overall, 'REFER');
+  assert.deepEqual(codes(r), ['BASEMENT']);
+});
+test('AL-INS-057: premises that may be empty for more than 30 days refer; occupied premises pass', () => {
+  assert.deepEqual(codes(rules({insSalon: true, insUnoccupiedDeclaration: 'no'})), ['UNOCCUPIED_30_DAYS']);
+  assert.equal(rules({insSalon: true, insUnoccupiedDeclaration: 'yes', insFloodHistory: 'no', insBasement: 'no'}).overall, 'PASS');
 });

@@ -8,6 +8,11 @@ const {HttpError} = require('./errors');
 const insurance = require('./insurance');
 
 const ID = /^\d{10,25}$/;
+// How far ahead a start date may be, per service. Membership is the only service with a start date today.
+const START_WINDOW_DAYS = Object.freeze({membership: 90});
+// The Payment_Status value each CRM module accepts while a payment is in progress. A module with no entry has no such value
+// (Deals use Pending, Paid, Not Paid and Failed), so nothing is written there.
+const PROCESSING_STATUS = Object.freeze({Training_Centre_Accred: 'Payment Processing'});
 const ITEMS = Object.freeze({
   accreditation: {name: 'Accreditation', env: 'STRIPE_PRICE_ACCREDITATION'},
   accreditation_associate_bundle: {name: 'Accreditation and Associate Membership', env: 'STRIPE_PRICE_ASSOCIATE_MEMBERSHIP'},
@@ -54,7 +59,7 @@ const SERVICES = {
       return {
         lines: [{item: bundle ? 'accreditation_associate_bundle' : 'accreditation', quantity: 1}],
         existingSessionId: acc.Stripe_Checkout_Session_ID || null,
-        record: {module: 'Training_Centre_Accred', id},
+        record: {module: 'Training_Centre_Accred', id, update: sessionId => ({Stripe_Checkout_Session_ID: sessionId, Payment_Status: PROCESSING_STATUS.Training_Centre_Accred})},
         metadata: ({total}) => ({
           type: 'accreditation', accreditation_id: id, application_id: id, contact_id: contact.id,
           product_amount: total, product_details: label, product_name: bundle ? label : international ? 'International Accreditation' : 'Standard Accreditation',
@@ -224,8 +229,13 @@ SERVICES.membership = {
       previous = String(input.previousId);
       change = input.changeType === 'upgrade' ? 'upgrade' : 'renewal';
     } else if (member) bad('You already have an active membership. Renew or upgrade it instead of buying a new one.', 409, 'MEMBERSHIP_EXISTS');
-    let start = String(input.start || '') || today;
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || start < today || start > isoDay(new Date(Date.now() + 90 * 864e5))) start = today;
+    // A start date outside the window is refused with a message, never silently changed to today.
+    let start = today;
+    if (input.start) {
+      const wanted = String(input.start), latest = isoDay(new Date(Date.now() + START_WINDOW_DAYS.membership * 864e5));
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(wanted) || wanted < today || wanted > latest) bad('Choose a start date from today up to ' + latest + '.');
+      start = wanted;
+    }
     const expiry = annualPeriodEnd(start);
 
     const lines = [{item: 'membership_' + level + '_' + billing, quantity: 1}];
@@ -267,4 +277,4 @@ SERVICES.membership = {
 };
 const list = v => (Array.isArray(v) ? v : String(v || '').split(',')).map(x => String(x).trim()).filter(Boolean);
 
-module.exports = {ITEMS, SERVICES, ADDONS, pounds, ID};
+module.exports = {ITEMS, SERVICES, ADDONS, pounds, ID, START_WINDOW_DAYS, PROCESSING_STATUS};

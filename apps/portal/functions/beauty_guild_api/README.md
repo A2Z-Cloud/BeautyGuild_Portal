@@ -3,21 +3,28 @@
 Express function served at `/server/beauty_guild_api/*` on the BeautyGuildPortal Catalyst project.
 It is a new, deliberately small function, not a copy of the V1 `beauty_guild_api`.
 
-## Scope (Milestone 2, read-only)
+## Routes
 
-| Route | Purpose | Upstream |
-| --- | --- | --- |
-| `GET /courses` | Active GTi courses | Zoho CRM `Courses` via a Catalyst Connection (cached 5 minutes) |
-| `GET /address/find?text=&container=` | Address suggestions | Loqate |
-| `GET /address/retrieve?id=` | One address, mapped to portal fields | Loqate |
-| `GET /health` | Liveness, returns `{ok:true}` | none |
+Everything is served under `/server/beauty_guild_api`. Routes behind a switch return 503 (or 404 for diagnostics) while it is off.
+"Signed in" means a confirmed Catalyst user whose verified email matches exactly one CRM Contact; every record is also checked to belong to that Contact.
 
-Anything other than GET returns 405 and every other path returns 404. There are no CRM writes,
-payments, documents or contact lookups. Those need the verified Catalyst user to CRM Contact
-mapping first (see `docs/api-contracts/milestone-2.md`).
+| Method and path | Switch | Auth | Touches | Purpose |
+| --- | --- | --- | --- | --- |
+| `GET /health` | none | public | none | Liveness |
+| `GET /courses` | none | public | CRM `Courses` | Active GTi courses (cached 5 minutes) |
+| `GET /address/find`, `GET /address/retrieve` | none | public, rate limited | Loqate | Address suggestions and one address |
+| `GET /public/verify/:number` | `PUBLIC_SCHOOL_VERIFICATION_ENABLED` | public, rate limited | CRM accreditation records | Public school status by registration number |
+| `GET /portal/records`, `/portal/records/summary`, `/portal/records/:kind/:id` | `PORTAL_RECORDS_ENABLED` | signed in | CRM `Deals`, `Training_Centre_Accred`, `Insurance_Policy` | The member's memberships, accreditations and insurance (saved drafts hidden) |
+| `GET /portal/documents/:kind/:id`, `.../file/:fileId` | `PORTAL_DOCUMENTS_ENABLED` | signed in | CRM, WorkDrive | Document folders and downloads for an owned record |
+| `GET /portal/management/schools`, `/schools/:id/:section`, `/schools/:id/course-options`, `/schools/:id/sessions/:sessionId/bookings`, `/invoices`, `/memberships/:id/invoices`, `/memberships/:id/extensions` | `PORTAL_SCHOOL_SERVICES_ENABLED` | signed in | CRM, Creator | School workspace, invoices and membership add-ons |
+| `POST /portal/management/schools/:id/qualifications`, `/sessions`, `/tutors`, `/sessions/:sessionId/bookings` | `PORTAL_SCHOOL_SERVICES_ENABLED` and `PORTAL_SCHOOL_WRITES_ENABLED` | signed in | CRM, Creator | Add qualifications, course dates, tutors and bookings |
+| `GET /portal/checkout/quote`, `POST /portal/checkout/quote` | `PORTAL_BILLING_ENABLED` | signed in | CRM, Stripe (prices) | Server-built price summary; the POST form carries insurance answers |
+| `POST /portal/checkout` | `PORTAL_BILLING_ENABLED` | signed in, rate limited | CRM, Stripe | Creates the Stripe Checkout Session for an accreditation, venue, membership add-ons, membership or insurance. Creator handles payment afterwards. Needs a `sk_test_` key |
+| `POST/GET/PUT/DELETE /portal/drafts...` | `PORTAL_CRM_DRAFTS_ENABLED` | signed in | CRM | Saved applications (membership and insurance) |
+| `GET /portal/diagnostics/modules`, `/fields`, `/find` | `PORTAL_DIAGNOSTICS_ENABLED` and an email allow-list | signed in, allow-listed | CRM metadata only | Read-only field and module names while connecting the CRM |
 
-Responses on failure are `{error, code}` with a fixed message. Upstream bodies, URLs and keys are
-never returned or logged. Address routes are rate limited per client (best effort, per instance).
+Failures return `{error, code}` with a fixed message. Upstream bodies, URLs and keys are never returned or logged. Pricing and
+checkout are described in `docs/api-contracts/pricing-payments.md`.
 
 ## Environment variables (never committed)
 
@@ -61,7 +68,7 @@ variables this function needs through `deployment.env_variables` in `catalyst-co
 restores the file so no secrets are left in the repo. A plain `catalyst deploy --only functions`
 also keeps the existing values, but the script is the way to change them.
 
-**Switching features on and off:** on/off switches live in `~/Documents/GitHub/BGV2-env/feature-flags.env` (or `BGV2_FLAGS_FILE`), outside the repo, for example `PORTAL_RECORDS_ENABLED=true`. The script sends only the switches it knows about; billing is deliberately excluded. To switch a feature off, remove its line and run the script again. Client-side switches are `VITE_` flags set when building (for example `VITE_PORTAL_RECORDS=true`), so rebuild and redeploy the client too.
+**Switching features on and off:** on/off switches live in `~/Documents/GitHub/BGV2-env/feature-flags.env` (or `BGV2_FLAGS_FILE`), outside the repo, for example `PORTAL_RECORDS_ENABLED=true`. The script sends only the switches and settings it knows about, including `PORTAL_BILLING_ENABLED`, `PORTAL_PUBLIC_ORIGIN`, `STRIPE_SECRET_KEY` and `STRIPE_PRICE_*` (never the Stripe webhook secret: Creator owns the webhook). To switch a feature off, remove its line and run the script again. Client-side switches are `VITE_` flags set when building (for example `VITE_PORTAL_RECORDS=true`), so rebuild and redeploy the client too.
 
 Then check `https://<project-domain>/server/beauty_guild_api/health`. Build the client with
 `VITE_DATA_MODE=api VITE_API_BASE_URL=/server/beauty_guild_api VITE_ENABLED_LEGACY_APIS=courses,address`

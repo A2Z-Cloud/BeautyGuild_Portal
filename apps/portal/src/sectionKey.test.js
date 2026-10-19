@@ -11,3 +11,8 @@ test('the app has an error boundary around the routes so one screen cannot blank
   const src=readFileSync('src/App.jsx','utf8');
   assert.match(src,/<ErrorBoundary resetKey=\{pathname\}>\{children\}<\/ErrorBoundary>/);
 });
+
+test('the old membership preview form redirects to the real purchase page once checkout is on',()=>{
+  const src=readFileSync('src/App.jsx','utf8');
+  assert.match(src,/path="\/membership\/new" element=\{INTEGRATIONS\.stripeCheckout \? <Navigate to="\/membership\/buy" replace \/> : <Journey kind="membership" \/>\}/);
+});

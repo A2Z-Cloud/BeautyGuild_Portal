@@ -29,14 +29,13 @@ const documentPath=(kind,id)=>'/portal/documents/'+encodeURIComponent(kind)+'/'+
 const clone=obj=>JSON.parse(JSON.stringify(obj));
 const unavailable=name=>{throw new IntegrationUnavailableError(name);};
 
-// No CRM identity resolution exists in V2 yet; obtaining a Catalyst user does not
-// establish ownership of CRM records. Do not pass a Contact ID supplied by the browser
-// to legacy V1 write APIs until backend identity resolution + ownership checks are verified.
+// Contact identity is resolved on the server from the verified Catalyst email (src/records.js resolveContact), and every record is
+// ownership-checked there. Never pass a Contact ID from the browser to the API.
 export const INTEGRATIONS=Object.freeze({
   catalystAuth:integrationConfig.catalystAuth,
   courses:isEnabled(integrationConfig,'courses'),
   address:isEnabled(integrationConfig,'address'),
-  schoolServices:schoolOn,schoolWrites:schoolWritesOn,crmRecords:recordsOn,crmDrafts:draftsOn,crmContactMapping:false,pricing:false,
+  schoolServices:schoolOn,schoolWrites:schoolWritesOn,crmRecords:recordsOn,crmDrafts:draftsOn,crmContactMapping:recordsOn,pricing:false,
   underwriting:false,stripeCheckout:billingOn,policyIssuance:false,workdrive:documentsOn,
 });
 export const portalApi=Object.freeze({
