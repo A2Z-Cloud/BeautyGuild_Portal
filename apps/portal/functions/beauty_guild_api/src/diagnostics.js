@@ -83,7 +83,10 @@ function registerDiagnosticsRoutes(app,{enabled,allowedEmails=[],allowedDomains=
     router.get('/creator-report',run(async(req,res)=>{
       const report=String(req.query.report||'');
       if(![risk.creator.floodReport,risk.creator.subsidenceReport].includes(report))throw new HttpError(400,'INVALID_REQUEST','Use the flood or subsidence report name.');
-      const url=risk.creator.apiDomain+'/creator/v2.1/data/'+encodeURIComponent(risk.creator.owner)+'/'+encodeURIComponent(risk.creator.app)+'/report/'+encodeURIComponent(report)+'?field_config=all&max_records=200';
+      // Optional test criteria (e.g. Active==true && Postcode_Key=="AB101AU"): plain comparison characters only.
+      const criteria=String(req.query.criteria||'');
+      if(criteria&&!/^[A-Za-z0-9_=&|()". ]{1,120}$/.test(criteria))throw new HttpError(400,'INVALID_REQUEST','Use a simple criteria.');
+      const url=risk.creator.apiDomain+'/creator/v2.1/data/'+encodeURIComponent(risk.creator.owner)+'/'+encodeURIComponent(risk.creator.app)+'/report/'+encodeURIComponent(report)+'?field_config=all&max_records=200'+(criteria?'&criteria='+encodeURIComponent(criteria):'');
       let r,body;
       try{r=await fetchImpl(url,{headers:await getCreatorHeaders(req),signal:AbortSignal.timeout(15000)});body=await r.json().catch(()=>null);}
       catch{throw new HttpError(502,'CREATOR_UNAVAILABLE','Creator could not be reached.');}

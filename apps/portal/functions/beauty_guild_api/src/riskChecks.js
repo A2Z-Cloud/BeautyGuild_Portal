@@ -73,7 +73,7 @@ function createRiskChecks({config, getAnalyticsHeaders, getCreatorHeaders, fetch
         const rows = await analytics.sql(req, candidateSql({prefixes: [...new Set(screenable.flatMap(s => terms(s).prefixes))], exact: [...new Set(screenable.flatMap(s => terms(s).exact))]}));
         if (rows.length > CANDIDATE_LIMIT) throw new CheckError('Too many candidate rows were returned.');
         groups = groupRows(rows);
-      } catch (e) { problem = e; log('risk check failed', 'sanctions', e.name); }
+      } catch (e) { problem = e; log('risk check failed', 'sanctions', e.name, e.message); }
       for (const s of screenable) {
         if (problem) { findings.push(failed(s, 'The sanctions check could not run.', problem.message)); continue; }
         const hits = screenSubject({name: s.name, dob: s.dob, country: s.country}, groups, {threshold: c.sanctionsThreshold});
@@ -123,7 +123,7 @@ function createRiskChecks({config, getAnalyticsHeaders, getCreatorHeaders, fetch
           detail: 'Postcode ' + pc.display + ' is on the ' + check.toLowerCase() + ' list (' + (stop ? 'Stop' : 'Refer') + ').'}];
       }
     } catch (e) {
-      log('risk check failed', check, e.name);
+      log('risk check failed', check, e.name, e.message);
       return [{...base, result: 'Error', status: 'REFER', code: 'RISK_CHECK_UNAVAILABLE', customerMessage: MESSAGE.unavailable, dataVersion: '', detail: 'The ' + check.toLowerCase() + ' check could not run. ' + e.message}];
     }
     return remember(key, findings);
