@@ -3,10 +3,11 @@ const express=require('express');
 const {HttpError}=require('./errors');
 const ID=/^\d{10,25}$/;
 const DEFINITIONS={
- membership:{module:'Deals',owner:'Contact_Name',fields:['Deal_Name','Stage','Membership_Type','Membership_Branch','Expiry_Date','Start_Date','Contact_Name','Amount','Payment_Status','Created_Time'],label:'Deal_Name',status:'Stage'},
- accreditation:{module:'Training_Centre_Accred',owner:'Applicant_Contact',fields:['Name','Account','Accreditation_Status','Application_Stage','Accreditation_Level','Valid_From','Valid_To','Applicant_Contact','Payment_Status','Created_Time'],label:'Account',status:'Accreditation_Status'},
- insurance:{module:'Insurance_Policy',owner:'Contact',fields:['Application_Status','Policy_Type','Policy_Start_Date','Policy_End_Date','Contact','Created_Time'],label:'Policy_Type',status:'Application_Status'}
+ membership:{module:'Deals',draftField:'Application_Status',owner:'Contact_Name',fields:['Deal_Name','Stage','Membership_Type','Membership_Branch','Expiry_Date','Start_Date','Contact_Name','Amount','Payment_Status','Created_Time'],label:'Deal_Name',status:'Stage'},
+ accreditation:{module:'Training_Centre_Accred',draftField:'Application_Stage',owner:'Applicant_Contact',fields:['Name','Account','Accreditation_Status','Application_Stage','Accreditation_Level','Valid_From','Valid_To','Applicant_Contact','Payment_Status','Created_Time'],label:'Account',status:'Accreditation_Status'},
+ insurance:{module:'Insurance_Policy',draftField:'Application_Status',owner:'Contact',fields:['Application_Status','Policy_Type','Policy_Start_Date','Policy_End_Date','Contact','Created_Time'],label:'Policy_Type',status:'Application_Status'}
 };
+const DRAFT_STAGE='Draft';
 const uri=(s)=>encodeURIComponent(String(s));
 function createCrmClient({getCrmHeaders,crmApiDomain,fetchImpl=fetch}){
   async function call(req,path){
@@ -49,9 +50,12 @@ function mapRecord(kind,r){
 }
 function registerRecordRoutes(app,{enabled,getCurrentUser,getCrmHeaders,crmApiDomain,fetchImpl=fetch,hideDrafts=false,draftStatus='Draft'}){
   // Saved drafts live in the same CRM modules; they are never shown as real memberships, policies or accreditations.
+  // Each module marks a draft in its own field: Deals and Insurance_Policy use Application_Status, Training_Centre_Accred uses
+  // Application_Stage. V1 saves accreditation applications at stage Draft, so those are hidden even before V2 drafts are switched on.
   // Insurance applications the Insurance team is reviewing (Referred) are not shown to the member as a policy.
-  const isDraft=(row,kind)=>row&&((hideDrafts&&row.Application_Status===draftStatus)||(kind==='insurance'&&row.Application_Status==='Referred'));
-  const fieldList=(d,kind)=>[...new Set([...d.fields,'Modified_Time',...(hideDrafts||kind==='insurance'?['Application_Status']:[])])];
+  const reviewing=(row,d)=>d.module==='Insurance_Policy'&&row.Application_Status==='Referred';
+  const isDraft=(row,d)=>Boolean(row)&&(reviewing(row,d)||(d.draftField==='Application_Stage'?row.Application_Stage===DRAFT_STAGE:hideDrafts&&row[d.draftField]===draftStatus));
+  const fieldList=d=>[...new Set([...d.fields,'Modified_Time',...(hideDrafts||d.draftField==='Application_Stage'||d.module==='Insurance_Policy'?[d.draftField]:[])])];
   const router=express.Router();
   const {call}=createCrmClient({getCrmHeaders,crmApiDomain,fetchImpl});
   router.use(async(req,res,next)=>{try{
@@ -64,8 +68,8 @@ function registerRecordRoutes(app,{enabled,getCurrentUser,getCrmHeaders,crmApiDo
     const d=DEFINITIONS[kind],items=[];
     const criteria='('+d.owner+':equals:'+req.portalContact.id+')';
     for(let page=1;page<=10;page++){
-      const result=await call(req,d.module+'/search?criteria='+uri(criteria)+'&fields='+uri(fieldList(d,kind).join(','))+'&page='+page+'&per_page=200');
-      for(const record of result)if(String(record[d.owner]?.id)===String(req.portalContact.id)&&!isDraft(record,kind))items.push(mapRecord(kind,record));
+      const result=await call(req,d.module+'/search?criteria='+uri(criteria)+'&fields='+uri(fieldList(d).join(','))+'&page='+page+'&per_page=200');
+      for(const record of result)if(String(record[d.owner]?.id)===String(req.portalContact.id)&&!isDraft(record,d))items.push(mapRecord(kind,record));
       if(result.length<200)return items;
     }
     throw new HttpError(503,'RECORDS_PAGE_LIMIT','This record list requires further pagination.');
@@ -90,9 +94,9 @@ function registerRecordRoutes(app,{enabled,getCurrentUser,getCrmHeaders,crmApiDo
     const {kind,id}=req.params;
     if(!DEFINITIONS[kind]||!ID.test(id))throw new HttpError(404,'NOT_FOUND','Record not found.');
     const d=DEFINITIONS[kind];
-    const rows=await call(req,d.module+'/'+id+'?fields='+uri(fieldList(d,kind).join(',')));
+    const rows=await call(req,d.module+'/'+id+'?fields='+uri(fieldList(d).join(',')));
     const row=rows[0];
-    if(!row || String(row[d.owner]?.id)!==String(req.portalContact.id) || isDraft(row,kind))throw new HttpError(404,'NOT_FOUND','Record not found.');
+    if(!row || String(row[d.owner]?.id)!==String(req.portalContact.id) || isDraft(row,d))throw new HttpError(404,'NOT_FOUND','Record not found.');
     res.json({record:mapRecord(kind,row)});
   }));
   app.use('/portal/records',router);

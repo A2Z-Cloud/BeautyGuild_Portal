@@ -3,6 +3,8 @@ import {ArrowLeft,LockKeyhole} from 'lucide-react';
 import {Link,useSearchParams} from 'react-router-dom';
 import {Notice,PageHeading} from './UiParts.jsx';
 import {INTEGRATIONS,portalApi} from './services/api.js';
+import {START_WINDOW_DAYS,isFuture,startLimits} from './startDate.js';
+import {formatDate} from './format.js';
 import {validate} from './logic.mjs';
 import {toRequest,visibleFields} from './insuranceInputs.js';
 import {BlockedNotice,InsuranceForm,useInsuranceQuote} from './InsuranceForm.jsx';
@@ -17,7 +19,7 @@ const money=pence=>'£'+(pence/100).toFixed(2);
 export default function BuyMembership(){
   const [query]=useSearchParams(),previousId=query.get('renew')||'',changeType=query.get('change')==='upgrade'?'upgrade':'renewal';
   const [who,setWho]=useState({state:'loading',firstName:'',lastName:''});
-  const [f,setF]=useState({level:'',branch:'',branches:[],billing:'annual',addons:{},accepted:false,insurance:false});
+  const [f,setF]=useState({level:'',branch:'',branches:[],billing:'annual',addons:{},accepted:false,insurance:false,start:''});
   const [iv,setIv]=useState({}),[country,setCountry]=useState(''),[iErrors,setIErrors]=useState({}),[countryError,setCountryError]=useState('');
   const [q,setQ]=useState({loading:false,quote:null,error:''}),[busy,setBusy]=useState(false),[payError,setPayError]=useState('');
   useEffect(()=>{
@@ -28,17 +30,17 @@ export default function BuyMembership(){
   const addonText=Object.entries(f.addons).filter(([,n])=>n>0).map(([k,n])=>k+':'+n).join(',');
   const ready=f.level&&f.branch;
   const base=()=>({service:'membership',level:f.level,branch:f.branch,billing:f.billing,...(f.branches.length?{branches:f.branches.join(',')}:{}),
-    ...(previousId?{previousId,changeType}:{})});
+    ...(f.start?{start:f.start}:{}),...(previousId?{previousId,changeType}:{})});
   useEffect(()=>{
     if(!INTEGRATIONS.stripeCheckout||who.state!=='in'||!ready||f.insurance){setQ({loading:false,quote:null,error:''});return undefined;}
     let alive=true;setQ(s=>({...s,loading:true,error:''}));
     portalApi.checkoutQuote({...base(),...(addonText?{addons:addonText}:{})}).then(quote=>alive&&setQ({loading:false,quote,error:''})).catch(e=>alive&&setQ({loading:false,quote:null,error:e.message}));
     return()=>{alive=false;};
-  },[who.state,f.level,f.branch,f.billing,f.branches.join(','),addonText,previousId,f.insurance]);// eslint-disable-line react-hooks/exhaustive-deps
+  },[who.state,f.level,f.branch,f.billing,f.start,f.branches.join(','),addonText,previousId,f.insurance]);// eslint-disable-line react-hooks/exhaustive-deps
   // With insurance the answers are too large for a query string, so the server prices them from a POST.
   const ins=toRequest(iv);
   const iq=useInsuranceQuote({enabled:INTEGRATIONS.stripeCheckout&&who.state==='in'&&ready&&f.insurance&&Boolean(country)&&(iv.insWorking||[]).length>0,
-    request:()=>({...base(),addons:f.addons,country,insurance:toRequest(iv)}),key:JSON.stringify([f.level,f.branch,f.billing,f.branches,f.addons,previousId,country,ins])});
+    request:()=>({...base(),addons:f.addons,country,insurance:toRequest(iv)}),key:JSON.stringify([f.level,f.branch,f.billing,f.start,f.branches,f.addons,previousId,country,ins])});
   const setI=(name,value)=>{setIv(v=>({...v,[name]:value}));setIErrors(e=>({...e,[name]:undefined}));};
   const set=patch=>setF(old=>({...old,...patch,...(patch.level==='associate'?{insurance:false}:{})}));
   const toggleBranch=id=>set({branches:f.branches.includes(id)?f.branches.filter(b=>b!==id):[...f.branches,id]});
@@ -65,6 +67,8 @@ export default function BuyMembership(){
         <p className="muted">International membership is priced individually. Please contact the Guild to join from outside the UK.</p></div>
       <div className="field"><label htmlFor="branch">Your professional branch</label><select id="branch" value={f.branch} onChange={e=>set({branch:e.target.value,branches:f.branches.filter(b=>b!==e.target.value)})}><option value="">Choose a branch</option>{BRANCHES.map(([id,name])=><option key={id} value={id}>{name}</option>)}</select></div>
       <fieldset className="buy-fieldset"><legend>Additional branches (optional)</legend>{BRANCHES.filter(([id])=>id!==f.branch).map(([id,name])=><label key={id} className="check-choice"><input type="checkbox" checked={f.branches.includes(id)} onChange={()=>toggleBranch(id)}/>{name}</label>)}</fieldset>
+      <div className="field"><label htmlFor="start">Start date</label><input id="start" type="date" value={f.start||startLimits().min} min={startLimits().min} max={startLimits().max} onChange={e=>set({start:e.target.value===startLimits().min?'':e.target.value})}/>
+        <small>Starts today unless you choose a later date, up to {START_WINDOW_DAYS} days ahead.{f.insurance?' Your insurance starts on the same date.':''} You pay now, and it shows as Coming soon until it starts.</small></div>
       <fieldset className="buy-fieldset"><legend>Pay</legend>{[['annual','Annually'],['monthly','Monthly']].map(([id,name])=><label key={id} className="check-choice"><input type="radio" name="billing" checked={f.billing===id} onChange={()=>set({billing:id})}/>{name}</label>)}</fieldset></section>
     <section className="surface padded buy-section"><h2>Extras (optional)</h2>{ADDONS.map(([key,label])=><label key={key} className="addon-row"><span>{label}</span>
       <input type="number" min="0" max="10" inputMode="numeric" value={f.addons[key]||0} onChange={e=>set({addons:{...f.addons,[key]:Math.max(0,Math.min(10,Number(e.target.value)||0))}})}/></label>)}</section>
@@ -77,6 +81,7 @@ export default function BuyMembership(){
         {f.insurance&&<BlockedNotice quote={quote}/>}
         <div className="checkout-summary">{quote.lines.map(l=><div key={l.name}><span>{l.name}{l.quantity>1?' × '+l.quantity:''}</span><strong>{money(l.totalPence)}{l.interval?' / '+l.interval:''}</strong></div>)}
           <div className="checkout-total"><span>Due today</span><strong>{money(quote.totalPence)}</strong></div></div>
+        {isFuture(f.start)&&<p className="muted">Starts on {formatDate(f.start)}. It shows as Coming soon until then.</p>}
         {recurring&&<p className="muted">Then {money(recurring.unitPence)} each {recurring.interval}, until you cancel. Prices include VAT where it applies.</p>}
         <label className="check-choice"><input type="checkbox" checked={f.accepted} onChange={e=>set({accepted:e.target.checked})}/><span>I accept the <a href="https://www.beautyguild.com/Membership/Code-Of-Ethics" target="_blank" rel="noopener noreferrer">Code of Ethics</a> and the Guild's terms and privacy information.</span></label>
         {payError&&<Notice title="Payment unavailable">{payError}</Notice>}

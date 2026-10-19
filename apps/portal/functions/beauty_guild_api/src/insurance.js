@@ -124,7 +124,9 @@ function evaluateRules(ins, country, {complete = false} = {}) {
   if (ins.insRoute === 'salon') {
     if (ins.insTurnover > 250000) push('STOP', 'SALON_TURNOVER_LIMIT', 'Your annual turnover is above the current online quotation limit.');
     if (ins.insWageRoll > 125000) push('STOP', 'WAGE_ROLL_LIMIT', 'Your annual wage roll is above the current online quotation limit.');
-    if (ins.insSalonCount > 1) push('REFER', 'MULTIPLE_SALONS', 'More than one salon needs to be reviewed by the Insurance team.');
+    // One salon passes, two or three go to the Insurance team, more than three cannot be quoted online (UAT AL-INS-045).
+    if (ins.insSalonCount > 3) push('STOP', 'SALON_COUNT_LIMIT', 'The number of salons is above the current online quotation limit.');
+    else if (ins.insSalonCount > 1) push('REFER', 'MULTIPLE_SALONS', 'More than one salon needs to be reviewed by the Insurance team.');
     if (ins.insContents) {
       const total = ['insComputers', 'insEquipment', 'insStock', 'insGeneralContents', 'insTenantImprovements', 'insRentPayable'].reduce((s, k) => s + positive(ins[k]), 0);
       if (total > 250000) push('STOP', 'CONTENTS_LIMIT', 'Your Contents sum insured is above £250,000.');
@@ -135,7 +137,10 @@ function evaluateRules(ins, country, {complete = false} = {}) {
     if (ins.insBuildingsCover && positive(ins.insBuildingsSI) + positive(ins.insFixturesSI) + positive(ins.insRentReceivableSI) > 500000) push('STOP', 'BUILDINGS_LIMIT', 'Your Buildings sum insured is above £500,000.');
     if (ins.insBiCover && positive(ins.insBiIncome) + positive(ins.insBiDebts) > 300000) push('STOP', 'BI_LIMIT', 'Your Business Interruption sum insured is above £300,000.');
     if (ins.insPropertyAwayCover && ins.insPropertyAwaySI > 25000) push('STOP', 'PROPERTY_AWAY_LIMIT', 'Your Property Away sum insured is above £25,000.');
-    if (ins.insFloodHistory === 'yes' && ins.insBasement === 'yes') push('REFER', 'FLOOD_BASEMENT', 'The Insurance team needs to review the flood history for this premises.');
+    // Each of these refers on its own (UAT AL-INS-053, AL-INS-054, AL-INS-057); V1 only referred flood together with a basement.
+    if (ins.insFloodHistory === 'yes') push('REFER', 'FLOOD_HISTORY', 'The Insurance team needs to review the flood history for this premises.');
+    if (ins.insBasement === 'yes') push('REFER', 'BASEMENT', 'The Insurance team needs to review the basement at this premises.');
+    if (ins.insUnoccupiedDeclaration === 'no') push('REFER', 'UNOCCUPIED_30_DAYS', 'The Insurance team needs to review premises that may be empty for more than 30 days in a row.');
     if (ins.insSubsidenceHistory === 'yes') push('REFER', 'SUBSIDENCE_HISTORY', 'The Insurance team needs to review the subsidence history for this premises.');
   } else if (ins.insEquipmentTier > 0) {
     if (ins.insStandardConstruction === 'no' && ins.insNonStandardOver15 === 'yes') push('REFER', 'NON_STANDARD_CONSTRUCTION', 'The construction of the premises needs to be reviewed by the Insurance team.');
@@ -176,11 +181,12 @@ const money2 = pence => Math.round(pence) / 100;
 // A quote that is REFER or STOP also gets these records ({referral}: Application_Status Referred, Risk_Status
 // Referred or Stopped) so the Insurance team can pick it up; it never reaches Stripe. {audits} are the risk checks
 // run for this application: each becomes a staff-only Risk_Screenings row linked to the policy.
-async function createRecords(create, {contactId, membershipDealId, ins, quote, entryRoute, termsAccepted, referral = null, audits = []}) {
+async function createRecords(create, {contactId, membershipDealId, ins, quote, start, end, entryRoute, termsAccepted, referral = null, audits = []}) {
   const description = Object.entries(BUSINESS_DESCRIPTION_BY_FLAG).filter(([flag]) => ins[flag]).map(([, label]) => label);
   const policyId = await create('Insurance_Policy', {
     Contact: contactId || undefined, Membership: membershipDealId || undefined, Policy_Type: ins.insRoute === 'salon' ? 'Salon' : 'Non Salon',
     Business_Description: description.length ? description : undefined, Annual_Turnover: ins.insRoute === 'salon' ? ins.insTurnover : undefined,
+    Policy_Start_Date: start || undefined, Policy_End_Date: end || undefined,
     Application_Status: referral ? 'Referred' : 'Ready for Payment', Application_Source: 'Website', Entry_Route: entryRoute,
     ...(referral ? {Risk_Status: referral.status, Risk_Summary: referral.summary} : audits.length ? {Risk_Status: 'Clear'} : {}),
   });

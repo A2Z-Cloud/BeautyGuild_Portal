@@ -44,3 +44,10 @@ Ported from V1 (`calculateInsuranceQuote`, `evaluateInsuranceRules`, `createInsu
 - **Known limit**: a payment abandoned for more than 5 minutes leaves the policy at `Ready for Payment`, and a new attempt creates a new set of records. Creator can expire stale ones.
 - Pages: `/insurance/buy` and the "Add insurance" section of `/membership/buy`. The questions live in `src/insuranceInputs.js` and also drive the saved-application journey.
 - Sanctions checks and policy documents are not part of this checkout.
+
+## Start dates
+- Membership and insurance take an optional `start` (ISO date). No date means today. A date from today up to 30 days ahead (UTC days, `START_WINDOW_DAYS` in `catalogue.js`) is accepted; anything else is refused with 422 and the allowed range, never silently changed.
+- A membership bought with insurance uses one date for both. The term and the policy year each end the day before the anniversary.
+- The date goes to Creator as `membership_start` and `membership_expiry`, and for insurance as `insurance_start_date` and `insurance_end_date`. The insurance policy record is created with `Policy_Start_Date` and `Policy_End_Date`.
+- The member pays now. The portal shows any record whose start date is after today as Coming soon with the date, until that day.
+- Whether Creator and the CRM treat a future-dated record as pending until its start date is Creator's side to confirm.
