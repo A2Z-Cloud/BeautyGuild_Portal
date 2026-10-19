@@ -35,8 +35,8 @@ Each Creator form has `Postcode`, `Postcode_Key` (unique, uppercase with no spac
 
 - Every pay attempt that is REFER or STOP creates the usual records with Insurance_Policy `Application_Status = Referred`, `Risk_Status` Referred or Stopped, `Risk_Summary` (rule and check codes), and Declarations `Referral_Required = true`. Nothing goes to Stripe. The same application within 5 minutes is recorded once; recording counts against the insurance attempt limits and a recording that fails is an error (502), never skipped.
 - A payable pay attempt records `Risk_Status = Clear`.
-- Each check run writes a `Risk_Screening` row: Policy, Contact, Check, Subject, Result (Clear, Potential match, Listed postcode, Error), Screened_At, Data_Version (list load time and rows, or list date), Inputs_Hash (SHA-256 of the normalised inputs), Match_Detail (staff only: the top matches with ids, names and scores), and Investigation_Status (Open, or Cleared for a clear result). If the rows cannot be written the member is not sent to pay.
-- Referred policies are hidden from the member's records (`records.js`). Staff investigation fields on `Risk_Screening` (`Investigated_By`, `Investigated_At`, `Investigation_Note`) are for CRM only.
+- Each check run writes a `Risk_Screenings` row: Policy, Contact, Check, Subject, Result (Clear, Potential match, Listed postcode, Error), Screened_At, Data_Version (list load time and rows, or list date), Inputs_Hash (SHA-256 of the normalised inputs), Match_Detail (staff only: the top matches with ids, names and scores), and Investigation_Status (Open, or Cleared for a clear result). If the rows cannot be written the member is not sent to pay.
+- Referred policies are hidden from the member's records (`records.js`). Staff investigation fields on `Risk_Screenings` (`Investigation_By`, `Investigated_At`, `Investigation_Note`) are for CRM only.
 - Quotes (`/quote`) run the checks but write nothing. Results are cached per instance for 10 minutes by inputs hash; errors are not cached.
 
 ## Environment
@@ -46,7 +46,7 @@ Connection settings: `ANALYTICS_CONNECTION_NAME` (default `analytics`), `ANALYTI
 
 ## CRM and Creator set-up (done by the owner)
 
-Insurance_Policy: `Risk_Status` (Clear, Referred, Stopped), `Risk_Summary`, and `Referred` in the `Application_Status` picklist. Module `Risk_Screening` with the fields named above plus `Name`, `Investigated_By`, `Investigated_At`, `Investigation_Note`. Verify the API names with the diagnostics routes before switching a check on: `/portal/diagnostics/fields?module=Risk_Screening`, `/portal/diagnostics/analytics` (organisations, table columns, last-modified time, row count) and `/portal/diagnostics/creator-report?report=...` (field names only).
+Insurance_Policy: `Risk_Status` (Clear, Referred, Stopped), `Risk_Summary`, and `Referred` in the `Application_Status` picklist. Module `Risk_Screenings` with the fields named above plus `Name`, `Investigation_By`, `Investigated_At`, `Investigation_Note`. Verify the API names with the diagnostics routes before switching a check on: `/portal/diagnostics/fields?module=Risk_Screenings`, `/portal/diagnostics/analytics` (organisations, table columns, last-modified time, row count) and `/portal/diagnostics/creator-report?report=...` (field names only).
 
 ## Diagnostics access
 

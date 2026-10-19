@@ -546,7 +546,7 @@ function riskSources(w, {listed = {}, sanctions = [], analyticsDown = false} = {
 const person = (id, first, last) => ({'Unique ID': id, 'OFSI Group ID': '9' + id, 'Name 1': first, 'Name 6': last, 'Name type': 'Primary name', 'Designation Type': 'Individual', 'Regime Name': 'Secret regime'});
 const SALON_PREMISES = {...INS_OK, insRoute: 'salon', insSalon: true, insTurnover: 90000, insContents: true, insComputers: 2000, insEquipment: 5000,
   insPremisesAddress: {l1: '1 High St', postcode: 'ab10 1au'}, insSoleOccupation: 'yes', insStandardConstruction: 'yes'};
-const screeningRows = w => (w.crmPosts || []).filter(c => c.module === 'Risk_Screening').map(c => c.record);
+const screeningRows = w => (w.crmPosts || []).filter(c => c.module === 'Risk_Screenings').map(c => c.record);
 
 test('risk checks all clear: payable, the checks are recorded against the policy, nothing says Referred', async () => {
   const w = fullWorld();
@@ -631,7 +631,7 @@ test('if the audit rows cannot be written the member is not sent to pay', async 
   const w = fullWorld();
   riskSources(w);
   const original = w.fetchImpl;
-  w.fetchImpl = async (url, init = {}) => (init.method === 'POST' && String(url).endsWith('/crm/v3/Risk_Screening')
+  w.fetchImpl = async (url, init = {}) => (init.method === 'POST' && String(url).endsWith('/crm/v3/Risk_Screenings')
     ? {status: 400, ok: false, json: async () => ({data: [{status: 'error'}]})} : original(url, init));
   await withApp(w, async ({post}) => {
     const r = await post(INSURE);

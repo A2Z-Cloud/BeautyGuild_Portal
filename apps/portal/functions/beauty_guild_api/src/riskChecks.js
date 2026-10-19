@@ -131,7 +131,7 @@ function createRiskChecks({config, getAnalyticsHeaders, getCreatorHeaders, fetch
 
   // ---- Entry point ---------------------------------------------------------------------------
   // Returns {ran, results, audits, riskMessage}. results join the underwriting rules (STOP/REFER/INCOMPLETE);
-  // audits are one row per check run, for the Risk_Screening records (see insurance.js createRecords).
+  // audits are one row per check run, for the Risk_Screenings records (see insurance.js createRecords).
   async function screen({req, ins, country, contact, input = {}, premises}) {
     if (!enabled) return {ran: false, results: [], audits: [], riskMessage: null};
     const subjects = [], buyer = contact ? [contact.First_Name, contact.Last_Name].filter(Boolean).join(' ') : [input.firstName, input.lastName].map(x => clean(x)).filter(Boolean).join(' ');

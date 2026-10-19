@@ -175,7 +175,7 @@ const money2 = pence => Math.round(pence) / 100;
 //
 // A quote that is REFER or STOP also gets these records ({referral}: Application_Status Referred, Risk_Status
 // Referred or Stopped) so the Insurance team can pick it up; it never reaches Stripe. {audits} are the risk checks
-// run for this application: each becomes a staff-only Risk_Screening row linked to the policy.
+// run for this application: each becomes a staff-only Risk_Screenings row linked to the policy.
 async function createRecords(create, {contactId, membershipDealId, ins, quote, entryRoute, termsAccepted, referral = null, audits = []}) {
   const description = Object.entries(BUSINESS_DESCRIPTION_BY_FLAG).filter(([flag]) => ins[flag]).map(([, label]) => label);
   const policyId = await create('Insurance_Policy', {
@@ -225,7 +225,7 @@ async function createRecords(create, {contactId, membershipDealId, ins, quote, e
   });
   const screeningIds = [];
   for (const a of audits) {
-    screeningIds.push(await create('Risk_Screening', {
+    screeningIds.push(await create('Risk_Screenings', {
       Name: (a.check + ' - ' + a.subject).slice(0, 120), Policy: policyId, Contact: contactId || undefined, Check: a.check, Subject: a.subject.slice(0, 200), Result: a.result,
       Screened_At: a.screenedAt, Data_Version: String(a.dataVersion || '').slice(0, 200), Inputs_Hash: a.inputsHash, Match_Detail: a.detail || undefined,
       Investigation_Status: a.result === 'Clear' ? 'Cleared' : 'Open',
