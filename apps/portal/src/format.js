@@ -23,3 +23,6 @@ export const serviceLabel=kind=>SERVICE_LABELS[kind]||String(kind||'');
 export function comingSoon(record,now=Date.now()){
   return isFuture(record?.startDate,now)?{label:'Coming soon',note:'Starts '+formatDate(record.startDate)}:null;
 }
+
+// A record has ended when its end date has passed or the Guild has marked it expired, lapsed or cancelled.
+export const isExpired=(record,now=new Date().toISOString().slice(0,10))=>Boolean((record?.endDate&&String(record.endDate).slice(0,10)<now)||/expired|lapsed|cancel/i.test(String(record?.status||'')));
