@@ -6,10 +6,10 @@
 // route or eligibility is trusted: the server rates and rules on the cleaned answers only.
 const IPT_RATE = 0.12;
 const TREATMENT_EXTENSIONS = Object.freeze([
-  {id: 'advanced_electrolysis', name: 'Advanced Electrolysis', premium: 28},
-  {id: 'microneedling', name: 'Microneedling / Dermarolling', premium: 179.25},
-  {id: 'piercing', name: 'Nose / Cartilage Piercing', premium: 14.15},
-  {id: 'spmu', name: 'Microblading / SPMU / Micropigmentation', premium: 179.25},
+  {id: 'advanced_electrolysis', name: 'Red Veins, Skin Tags, Milia, Warts & Moles by Advanced Electrolysis', premium: 28},
+  {id: 'microneedling', name: 'Microneedling or Dermarolling', premium: 179.25},
+  {id: 'piercing', name: 'Nose and Cartilage Piercing', premium: 14.15},
+  {id: 'spmu', name: 'Microblading, Semi-Permanent Make Up & Micropigmentation', premium: 179.25},
   {id: 'dermaplaning', name: 'Dermaplaning', premium: 179.25},
 ]);
 const NON_SALON_EQUIPMENT = Object.freeze([{value: 0, premium: 0}, {value: 5000, premium: 65}, {value: 10000, premium: 100}, {value: 15000, premium: 150}, {value: 20000, premium: 200}]);
@@ -35,8 +35,8 @@ const BUSINESS_DESCRIPTION_BY_FLAG = Object.freeze({
 const FLAGS = ['insWorkingFromHome', 'insMobile', 'insRentedRoom', 'insSubcontractor', 'insSalon', 'insNamedPeopleCover', 'insContents', 'insMoneyCover',
   'insBuildingsCover', 'insBiCover', 'insPropertyAwayCover', 'insSalonEL', 'insNonSalonEL'];
 const MONEY_KEYS = ['insTurnover', 'insWageRoll', 'insSalonCount', 'insComputers', 'insEquipment', 'insStock', 'insGeneralContents', 'insTenantImprovements',
-  'insRentPayable', 'insBuildingsSI', 'insFixturesSI', 'insRentReceivableSI', 'insBiIncome', 'insBiDebts', 'insPropertyAwaySI'];
-const YES_NO_KEYS = ['insStandardConstruction', 'insNonStandardOver15', 'insMultipleAddresses', 'insSoleOccupation', 'insUnoccupiedDeclaration', 'insFlatRoof',
+  'insRentPayable', 'insBuildingsSI', 'insFixturesSI', 'insRentReceivableSI', 'insBiIncome', 'insBiDebts', 'insPropertyAwaySI', 'insPropertyAwayMaxItem'];
+const YES_NO_KEYS = ['insWageRollOver125k', 'insStandardConstruction', 'insNonStandardOver15', 'insMultipleAddresses', 'insSoleOccupation', 'insUnoccupiedDeclaration', 'insFlatRoof',
   'insFloodHistory', 'insSubsidenceHistory', 'insBasement', 'insBuildingsSubsidenceDeclaration', 'insQualifiedForTreatments', 'insPatchTesting',
   'insInformationAccurate', 'insEthicsAccepted', 'insDemandsNeedsAccepted', 'insNonAdvisedAccepted'];
 const MAX_PEOPLE = 10;
@@ -123,7 +123,8 @@ function evaluateRules(ins, country, {complete = false} = {}) {
   if (namedPeople(ins).length > 4) push('REFER', 'NAMED_PEOPLE_LIMIT', 'The Insurance team needs to review the number of people working in your business.');
   if (ins.insRoute === 'salon') {
     if (ins.insTurnover > 250000) push('STOP', 'SALON_TURNOVER_LIMIT', 'Your annual turnover is above the current online quotation limit.');
-    if (ins.insWageRoll > 125000) push('STOP', 'WAGE_ROLL_LIMIT', 'Your annual wage roll is above the current online quotation limit.');
+    // The wage roll is asked as a yes/no (over £125,000); the figure itself is only collected with Employers' Liability (UAT AL-INS-044, AL-INS-049).
+    if (ins.insWageRollOver125k === 'yes' || ins.insWageRoll > 125000) push('STOP', 'WAGE_ROLL_LIMIT', 'Please call the office to discuss your application.');
     // One salon passes, two or three go to the Insurance team, more than three cannot be quoted online (UAT AL-INS-045).
     if (ins.insSalonCount > 3) push('STOP', 'SALON_COUNT_LIMIT', 'The number of salons is above the current online quotation limit.');
     else if (ins.insSalonCount > 1) push('REFER', 'MULTIPLE_SALONS', 'More than one salon needs to be reviewed by the Insurance team.');
@@ -137,6 +138,7 @@ function evaluateRules(ins, country, {complete = false} = {}) {
     if (ins.insBuildingsCover && positive(ins.insBuildingsSI) + positive(ins.insFixturesSI) + positive(ins.insRentReceivableSI) > 500000) push('STOP', 'BUILDINGS_LIMIT', 'Your Buildings sum insured is above £500,000.');
     if (ins.insBiCover && positive(ins.insBiIncome) + positive(ins.insBiDebts) > 300000) push('STOP', 'BI_LIMIT', 'Your Business Interruption sum insured is above £300,000.');
     if (ins.insPropertyAwayCover && ins.insPropertyAwaySI > 25000) push('STOP', 'PROPERTY_AWAY_LIMIT', 'Your Property Away sum insured is above £25,000.');
+    if (ins.insPropertyAwayCover && ins.insPropertyAwayMaxItem > 10000) push('STOP', 'PROPERTY_AWAY_ITEM_LIMIT', 'We cannot provide cover if the value of any single item exceeds £10,000.');
     // Each of these refers on its own (UAT AL-INS-053, AL-INS-054, AL-INS-057); V1 only referred flood together with a basement.
     if (ins.insFloodHistory === 'yes') push('REFER', 'FLOOD_HISTORY', 'The Insurance team needs to review the flood history for this premises.');
     if (ins.insBasement === 'yes') push('REFER', 'BASEMENT', 'The Insurance team needs to review the basement at this premises.');

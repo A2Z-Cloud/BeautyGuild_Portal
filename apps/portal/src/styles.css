@@ -322,6 +322,22 @@ img,svg,video,iframe{max-width:100%}
 .accreditation-status{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;border:1px solid #f4cce0;background:#fff5fa;border-radius:14px;padding:18px 20px;margin:0 0 20px}
 .accreditation-status strong{display:block;font-size:15px}.accreditation-status p{margin:4px 0 0;font-size:13px;color:#726b74}
 .accreditation-status.status-approved{background:#f6fbf7;border-color:#cfe8d5}.accreditation-status.status-review{background:#f0ebf7;border-color:#ddd2ee}
+
+/* Insurance journey (UAT AL-INS): question pop-ups, wording blocks, price lists and the quote summary. */
+.ins-field{grid-column:1/-1}
+.ins-label{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px;font-size:12px;font-weight:700}.ins-label label{margin:0}
+.ins-tip{position:relative;display:inline-flex;align-items:center;vertical-align:middle}
+.ins-tip-btn{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border:0;border-radius:50%;background:transparent;color:#a92a70;cursor:pointer;padding:0}.ins-tip-btn:hover,.ins-tip-btn[aria-expanded=true]{background:#fff2f8}
+.ins-tip-box{position:absolute;z-index:30;top:100%;left:-8px;width:min(380px,calc(100vw - 56px));max-height:60vh;overflow:auto;margin-top:4px;padding:14px 16px;background:#fff;border:1px solid #ed6fab;border-radius:11px;box-shadow:0 12px 28px #38213122;font-size:12px;font-weight:400;line-height:1.55;color:#25212a}
+.ins-tip-box p,.ins-note p,.ins-intro p{margin:0 0 8px;font-size:12px;line-height:1.55}.ins-tip-box ul,.ins-note ul,.ins-intro ul{margin:0 0 8px;padding-left:18px;font-size:12px;line-height:1.55}.ins-tip-box>:last-child,.ins-note>:last-child,.ins-intro>:last-child{margin-bottom:0}
+.ins-option{display:flex;align-items:center;gap:4px}.ins-option .radio-choice{flex:1;min-width:0}
+.ins-list{display:grid;gap:8px}
+.ins-price{margin-left:6px;color:#a92a70}.ins-price small{display:inline;font-weight:400;color:#726b74}
+.ins-note,.ins-intro{margin-top:8px;padding:12px 14px;background:#fbf7fa;border:1px solid #efe7ed;border-radius:10px}.ins-intro{margin:0 0 4px}
+.ins-doc{font-weight:700}.ins-check{display:flex;align-items:flex-start;gap:4px}.ins-check .check-choice{flex:1}
+.cover-summary{list-style:none;margin:0 0 14px;padding:0;display:grid}.cover-summary li{display:grid;grid-template-columns:1fr auto auto;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid #f3edf0;font-size:13px}
+.cover-actions{display:inline-flex;gap:12px;min-width:90px;justify-content:flex-end}
+@media(max-width:600px){.cover-summary li{grid-template-columns:1fr auto}.cover-actions{grid-column:1/-1;justify-content:flex-start}}
 /* UAT membership feedback (MEM-016, 033, 034): Join the Guild page only. Pink titles and outlines to match the accreditation form.
    Brand pink #ee3e96 is 3.4:1 on white, enough for the large titles and the outlines; smaller question text uses #b02c70 (5.9:1). */
 .membership-journey .buy-section h2{color:#ee3e96}.membership-journey .buy-section h3.buy-subtitle{color:#b02c70;font-size:1.15rem;margin:22px 0 8px}

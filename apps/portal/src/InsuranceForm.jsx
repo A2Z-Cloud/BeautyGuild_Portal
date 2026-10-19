@@ -1,7 +1,8 @@
 import React,{useEffect,useRef,useState} from 'react';
-import {Field,Notice} from './UiParts.jsx';
+import {Notice} from './UiParts.jsx';
+import {Blocks,InsField} from './InsuranceFields.jsx';
 import {COUNTRY_OPTIONS} from './JourneyConfig.js';
-import {visibleSteps} from './insuranceInputs.js';
+import {coverAction,demandsAndNeeds,visibleSteps} from './insuranceInputs.js';
 import {portalApi} from './services/api.js';
 
 const money=pence=>'£'+(pence/100).toFixed(2);
@@ -12,8 +13,12 @@ export function InsuranceForm({values,onChange,errors,country,onCountry,countryE
     <div className="field"><label htmlFor="ins-country">Where are you based? *</label>
       <select id="ins-country" value={country} onChange={e=>onCountry(e.target.value)} aria-invalid={Boolean(countryError)}><option value="">Choose a country</option>{COUNTRY_OPTIONS.map(c=><option key={c} value={c}>{c}</option>)}</select>
       {countryError&&<small className="error" role="alert">{countryError}</small>}</div>
-    {visibleSteps(values).map(step=><fieldset key={step.id} className="buy-fieldset ins-step"><legend>{step.title}</legend><p className="muted">{step.description}</p>
-      <div className="fields-grid">{step.fields.filter(f=>!f.when||f.when(values)).map(f=><Field key={f.name} field={f} value={values[f.name]} onChange={onChange} error={errors[f.name]}/>)}</div></fieldset>)}
+    {visibleSteps(values).map(step=>{
+      const intro=typeof step.intro==='function'?step.intro(values):step.intro,demands=step.demands&&demandsAndNeeds(values);
+      return <fieldset key={step.id} id={'ins-step-'+step.id} className="buy-fieldset ins-step"><legend>{step.title}</legend>{step.description&&<p className="muted">{step.description}</p>}
+        {intro&&<div className="ins-intro"><Blocks blocks={intro}/></div>}
+        {demands&&<div className="ins-intro"><p>{demands.intro}</p><ul>{demands.items.map(x=><li key={x}>{x}</li>)}</ul></div>}
+        {step.fields.length>0&&<div className="fields-grid">{step.fields.filter(f=>!f.when||f.when(values)).map(f=><InsField key={f.name} field={f} value={values[f.name]} onChange={onChange} error={errors[f.name]} values={values}/>)}</div>}</fieldset>;})}
   </>;
 }
 // The server's price for the answers so far, refreshed shortly after they stop changing. `extra` is the rest of the request.
@@ -35,3 +40,10 @@ export function BlockedNotice({quote}){
     {(quote.blocked?.reasons||[]).join(' ')}{!incomplete&&' You cannot pay for this cover online. Please contact the Guild Insurance team and we will help you.'}</Notice>;
 }
 export const InsuranceLines=({quote})=><>{(quote.lines||[]).map(l=><div key={l.name}><span>{l.name}</span><strong>{money(l.totalPence)}</strong></div>)}</>;
+// The quote summary: each cover with its price and, where it can be changed, Edit (back to its section) and Remove (takes it off the quote).
+export function CoverSummary({quote,values,onRemove}){
+  const goTo=section=>{const el=document.getElementById('ins-step-'+section);if(el){el.scrollIntoView({behavior:'smooth',block:'start'});const first=el.querySelector('input,select,button');if(first)first.focus({preventScroll:true});}};
+  return <ul className="cover-summary">{(quote.lines||[]).map(l=>{const a=coverAction(l.name,values);
+    return <li key={l.name}><span>{l.name.replace(/^Insurance - /,'')}</span><strong>{money(l.totalPence)}</strong>
+      {a&&<span className="cover-actions"><button type="button" className="text-button" onClick={()=>goTo(a.section)}>Edit</button>{a.remove&&<button type="button" className="text-button" onClick={()=>onRemove(a.remove())}>Remove</button>}</span>}</li>;})}</ul>;
+}

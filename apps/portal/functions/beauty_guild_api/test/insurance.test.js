@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const {clean, calculateQuote, evaluateRules, territory} = require('../src/insurance');
+const {clean, calculateQuote, evaluateRules, territory, TREATMENT_EXTENSIONS, IPT_RATE} = require('../src/insurance');
 
 const DECL = ['no', 'no', 'no', 'no', 'no', 'yes', 'yes'];
 const CONFIRM = {insInformationAccurate: 'yes', insEthicsAccepted: 'yes', insDemandsNeedsAccepted: 'yes', insNonAdvisedAccepted: 'yes'};
@@ -131,4 +131,38 @@ test('AL-INS-054: a basement alone refers', () => {
 test('AL-INS-057: premises that may be empty for more than 30 days refer; occupied premises pass', () => {
   assert.deepEqual(codes(rules({insSalon: true, insUnoccupiedDeclaration: 'no'})), ['UNOCCUPIED_30_DAYS']);
   assert.equal(rules({insSalon: true, insUnoccupiedDeclaration: 'yes', insFloodHistory: 'no', insBasement: 'no'}).overall, 'PASS');
+});
+
+// UAT AL-INS-043, 044, 049, 073, 008.
+test('the three turnover bands the portal sends rate at £75, £100 and £150', () => {
+  const med = turnover => quote({insSalon: true, insTurnover: turnover}).rows.find(r => r.code === 'MEDMAL')?.premiumPence;
+  assert.deepEqual([100000, 175000, 250000].map(med), [7500, 10000, 15000]);
+});
+test('a wage roll over £125,000 answered yes stops the quote and asks the customer to call the office', () => {
+  const r = rules({insSalon: true, insWageRollOver125k: 'yes'});
+  assert.equal(r.overall, 'STOP');
+  assert.equal(r.stop.find(x => x.code === 'WAGE_ROLL_LIMIT').customerMessage, 'Please call the office to discuss your application.');
+  assert.ok(!codes(rules({insSalon: true, insWageRollOver125k: 'no'})).includes('WAGE_ROLL_LIMIT'));
+  assert.equal(clean({insWageRollOver125k: 'maybe'}).insWageRollOver125k, '');
+});
+test('the Employers Liability wage roll figure is still rated at 0.2%, minimum £75, and stops above £125,000', () => {
+  const el = wage => quote({insSalon: true, insSalonEL: true, insWageRoll: wage}).rows.find(r => r.code === 'EMPLOYERS_LIABILITY').premiumPence;
+  assert.equal(el(10000), 7500);
+  assert.equal(el(100000), 20000);
+  assert.ok(codes(rules({insSalon: true, insSalonEL: true, insWageRoll: 125001})).includes('WAGE_ROLL_LIMIT'));
+  assert.ok(!codes(rules({insSalon: true, insSalonEL: true, insWageRoll: 125000})).includes('WAGE_ROLL_LIMIT'));
+});
+test('a single property away item over £10,000 stops the quote', () => {
+  const base = {insSalon: true, insPropertyAwayCover: true, insPropertyAwaySI: 20000};
+  assert.ok(codes(rules({...base, insPropertyAwayMaxItem: 10001})).includes('PROPERTY_AWAY_ITEM_LIMIT'));
+  assert.ok(!codes(rules({...base, insPropertyAwayMaxItem: 10000})).includes('PROPERTY_AWAY_ITEM_LIMIT'));
+  assert.ok(!codes(rules({insSalon: true, insPropertyAwayMaxItem: 50000})).includes('PROPERTY_AWAY_ITEM_LIMIT'));
+});
+test('treatment extensions carry the customer\'s names and their prices with IPT are the ones the portal shows', () => {
+  const gross = id => { const t = TREATMENT_EXTENSIONS.find(x => x.id === id); return Math.round(t.premium * 100 * (1 + IPT_RATE)) / 100; };
+  assert.deepEqual(TREATMENT_EXTENSIONS.map(t => t.name), ['Red Veins, Skin Tags, Milia, Warts & Moles by Advanced Electrolysis', 'Microneedling or Dermarolling', 'Nose and Cartilage Piercing',
+    'Microblading, Semi-Permanent Make Up & Micropigmentation', 'Dermaplaning']);
+  // The customer's list says £33.60 for electrolysis, which is £30 net: the table has £28 (£31.36), held for the customer (AL-INS-021).
+  assert.deepEqual(['advanced_electrolysis', 'microneedling', 'piercing', 'spmu', 'dermaplaning'].map(gross), [31.36, 200.76, 15.85, 200.76, 200.76]);
+  assert.deepEqual([75, 150].map(n => Math.round(n * 100 * (1 + IPT_RATE)) / 100), [84, 168]);
 });
