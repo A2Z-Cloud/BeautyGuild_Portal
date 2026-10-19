@@ -48,13 +48,13 @@ test('insurance premises questions only for a salon with property cover, as V1',
 });
 test('insurance answers become the V1 request shape and hidden answers are not sent',()=>{
   const r=toRequest({insWorking:['insSalon','insMobile'],insTurnover:'90000',insSalonCount:'1',insNamedPeopleCover:'yes',insNamedPeople:[{type:'employee',firstName:'Ada',lastName:'Lee'},{type:'employee',firstName:'',lastName:''}],
-    insContents:'yes',insStock:'2000',insEquipmentTier:'5000',insPremL1:'1 High St',insPremPostcode:'AB1 2CD',insSoleOccupation:'yes',insDecl1:'no',insDecl6:'yes',insEthicsAccepted:true,insTreatmentExtensions:['spmu']});
+    insContents:'yes',insStock:'2000',insEquipmentTier:'5000',insPremL1:'1 High St',insPremPostcode:'AB1 2CD',insSoleOccupation:'yes',insDecl1:'agree',insDecl6:'disagree',insEthicsAccepted:true,insTreatmentExtensions:['spmu']});
   assert.equal(r.insSalon,true);assert.equal(r.insMobile,true);assert.equal(r.insWorkingFromHome,undefined);
   assert.equal(r.insTurnover,90000);assert.equal(r.insContents,true);assert.equal(r.insMoneyCover,false);assert.equal(r.insStock,2000);
   assert.equal(r.insEquipmentTier,undefined);
   assert.deepEqual(r.insNamedPeople,[{type:'employee',firstName:'Ada',lastName:'Lee'}]);
   assert.deepEqual(r.insPremisesAddress,{l1:'1 High St',l2:'',town:'',county:'',postcode:'AB1 2CD'});
-  assert.deepEqual(r.insDeclarations,['no','','','','','yes','']);
+  assert.deepEqual(r.insDeclarations,['no','','','','','no','']);
   assert.equal(r.insEthicsAccepted,'yes');assert.equal(r.insInformationAccurate,'');
   assert.deepEqual(r.insTreatmentExtensions,['spmu']);
   const non=toRequest({insWorking:['insMobile'],insEquipmentTier:'10000',insTurnover:'5'});
