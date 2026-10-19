@@ -132,7 +132,7 @@ export function MembershipManagement(){
  return <div className="page"><Link to="/records" className="back-link"><ArrowLeft size={16}/> Back to records</Link>
  <PageHeading eyebrow="GUILD MEMBERSHIP" title={record.value?.title||'Membership details'} description="Membership details, purchased add-ons and invoices."/>
  {!INTEGRATIONS.schoolServices?<Notice title="Coming soon">Your membership services will appear here soon.</Notice>:
- <><nav className="school-tabs"><button className={tab==='details'?'active':''} onClick={()=>setQuery({tab:'details'})}>Details</button>
+ <>{INTEGRATIONS.stripeCheckout&&<p><Link className="btn btn-secondary" to={'/membership/buy?renew='+id}>Renew membership</Link></p>}<nav className="school-tabs"><button className={tab==='details'?'active':''} onClick={()=>setQuery({tab:'details'})}>Details</button>
  <button className={tab==='addons'?'active':''} onClick={()=>setQuery({tab:'addons'})}>Add-ons</button>
  <button className={tab==='invoices'?'active':''} onClick={()=>setQuery({tab:'invoices'})}>Invoices</button></nav>
  <section className="surface padded">{tab==='details'?(record.error?<Notice title="Unavailable">{record.error}</Notice>:

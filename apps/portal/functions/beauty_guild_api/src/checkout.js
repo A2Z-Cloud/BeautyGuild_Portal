@@ -39,6 +39,9 @@ function registerCheckoutRoutes(app, {enabled, getCurrentUser, getCrmHeaders, cr
     const p = await stripe('GET', '/prices/' + id);
     if (!p.active || p.currency !== 'gbp' || !Number.isSafeInteger(p.unit_amount) || p.unit_amount < 50 || p.unit_amount > 10000000)
       throw new HttpError(409, 'ITEM_NOT_AVAILABLE', ITEMS[itemKey].name + ' cannot be bought online yet.');
+    // The catalogue says whether an item is one-off or recurring; a mismatched Stripe price is refused.
+    if ((ITEMS[itemKey].interval || null) !== (p.recurring?.interval || null) || (p.recurring && p.recurring.interval_count !== 1))
+      throw new HttpError(409, 'ITEM_NOT_AVAILABLE', ITEMS[itemKey].name + ' cannot be bought online yet.');
     const price = {id, unit: p.unit_amount, interval: p.recurring?.interval || null};
     priceCache.set(id, {price, at: now()});
     return price;
@@ -47,8 +50,10 @@ function registerCheckoutRoutes(app, {enabled, getCurrentUser, getCrmHeaders, cr
   async function build(req, input) {
     const service = SERVICES[input.service];
     if (!service) throw new HttpError(422, 'INVALID_REQUEST', 'Choose something to pay for.');
-    const contact = await resolveContact(req, crm, req.portalUser);
-    const prepared = await service.prepare({req, crm, contact, input});
+    let contact = null;
+    try { contact = await resolveContact(req, crm, req.portalUser); }
+    catch (e) { if (!(service.allowNoContact && e.code === 'CONTACT_UNLINKED')) throw e; }
+    const prepared = await service.prepare({req, crm, contact, input, user: req.portalUser});
     if (prepared.alreadyPaid) return {service, contact, alreadyPaid: true};
     const lines = [];
     for (const l of prepared.lines) {
@@ -63,7 +68,10 @@ function registerCheckoutRoutes(app, {enabled, getCurrentUser, getCrmHeaders, cr
     {service: b.service.title, alreadyPaid: false, currency: 'GBP', totalPence: b.totalPence, mode: b.mode,
       lines: b.lines.map(({name, quantity, unitPence, totalPence, interval}) => ({name, quantity, unitPence, totalPence, interval}))};
   const inputFrom = src => ({service: String(src.service || ''), recordId: String(src.recordId || ''), centreId: String(src.centreId || ''),
-    addons: src.addons && typeof src.addons === 'object' ? src.addons : parseAddons(src.addons)});
+    addons: src.addons && typeof src.addons === 'object' ? src.addons : parseAddons(src.addons),
+    level: String(src.level || ''), branch: String(src.branch || ''), branches: src.branches || '', billing: String(src.billing || ''),
+    previousId: String(src.previousId || ''), changeType: String(src.changeType || ''), start: String(src.start || ''),
+    accepted: String(src.accepted || ''), firstName: String(src.firstName || ''), lastName: String(src.lastName || '')});
   function parseAddons(text) {
     const out = {};
     for (const part of String(text || '').split(',').filter(Boolean)) { const [k, v] = part.split(':'); out[k] = Number(v); }
@@ -89,7 +97,7 @@ function registerCheckoutRoutes(app, {enabled, getCurrentUser, getCrmHeaders, cr
   });
   router.get('/quote', send(async (req, res) => {
     if (!stripeKey) throw unavailable();
-    res.json({quote: view(await build(req, inputFrom(req.query)))});
+    res.json({quote: view(await build(req, {...inputFrom(req.query), quote: true}))});
   }));
   router.post('/', send(async (req, res) => {
     if (!stripeKey.startsWith('sk_test_') || !/^https:\/\/[a-z0-9.-]+$/i.test(publicOrigin || '')) throw unavailable();
@@ -106,17 +114,17 @@ function registerCheckoutRoutes(app, {enabled, getCurrentUser, getCrmHeaders, cr
     const amounts = {};
     for (const l of b.lines) amounts[l.item] = pounds(l.totalPence);
     const meta = {
-      email: req.portalUser.email, name: [b.contact.First_Name, b.contact.Last_Name].filter(Boolean).join(' '),
+      email: req.portalUser.email, name: b.contact ? [b.contact.First_Name, b.contact.Last_Name].filter(Boolean).join(' ') : '',
       currency: 'GBP', status: 'pending', source: 'portal_v2',
-      ...b.prepared.metadata({amounts, total: pounds(b.totalPence)}),
+      ...b.prepared.metadata({amounts, total: pounds(b.totalPence), lines: b.lines}),
     };
     const params = new URLSearchParams({mode: b.mode, customer_email: req.portalUser.email,
       success_url: publicOrigin + '/app/#/payment-return?result=success&service=' + encodeURIComponent(input.service),
       cancel_url: publicOrigin + '/app/#/payment-return?result=cancelled&service=' + encodeURIComponent(input.service),
-      client_reference_id: String(b.contact.id)});
+      ...(b.contact ? {client_reference_id: String(b.contact.id)} : {})});
     b.lines.forEach((l, i) => { params.set('line_items[' + i + '][price]', l.priceId); params.set('line_items[' + i + '][quantity]', String(l.quantity)); });
     for (const [k, v] of Object.entries(meta)) params.set('metadata[' + k + ']', String(v).slice(0, 500));
-    const key = crypto.createHash('sha256').update([b.contact.id, input.service, input.recordId, input.centreId,
+    const key = crypto.createHash('sha256').update([b.contact?.id || req.portalUser.id, input.service, input.recordId, input.centreId,
       JSON.stringify(b.lines.map(l => [l.priceId, l.quantity])), Math.floor(now() / 120000)].join('|')).digest('hex').slice(0, 40);
     const session = await stripe('POST', '/checkout/sessions', {body: params, key: 'portal-v2-' + key});
     if (!session.id || typeof session.url !== 'string' || !session.url.startsWith('https://checkout.stripe.com/'))

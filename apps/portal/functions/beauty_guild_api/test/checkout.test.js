@@ -166,3 +166,86 @@ test('checkout is off unless billing is enabled', async () => {
     assert.equal((await post({service: 'accreditation', recordId: ACC})).status, 503);
   }, {PORTAL_BILLING_ENABLED: 'false'});
 });
+
+// ---- Membership purchases ----
+const MEM_ENV = {STRIPE_PRICE_MEMBERSHIP_ASSOCIATE_ANNUAL: 'price_assocY1111', STRIPE_PRICE_MEMBERSHIP_ASSOCIATE_MONTHLY: 'price_assocM1111',
+  STRIPE_PRICE_MEMBERSHIP_FULL_NON_SALON_ANNUAL: 'price_fullY11111', STRIPE_PRICE_MEMBERSHIP_JOINING_FEE: 'price_join111111', STRIPE_PRICE_MEMBERSHIP_BRANCH: 'price_branch1111'};
+Object.assign(PRICES, {price_assocY1111: 5500, price_assocM1111: 458, price_fullY11111: 4860, price_join111111: 1000, price_branch1111: 1500});
+const RECURRING = {price_assocY1111: {recurring: {interval: 'year', interval_count: 1}}, price_assocM1111: {recurring: {interval: 'month', interval_count: 1}},
+  price_fullY11111: {recurring: {interval: 'year', interval_count: 1}}};
+const BUY = {service: 'membership', level: 'associate', branch: 'beauty', billing: 'annual', accepted: 'yes', firstName: 'Nia', lastName: 'New'};
+const unlinked = w => { const f = w.fetchImpl; w.fetchImpl = async (u, i) => String(u).includes('Contacts/search') ? {status: 200, ok: true, json: async () => ({data: []})} : f(u, i); return w; };
+
+test('a signed-in member without a Contact can buy: subscription, joining fee, V1 metadata, no contact id', async () => {
+  const w = unlinked(world({priceOverride: RECURRING}));
+  await withApp(w, async ({post}) => {
+    const r = await post({...BUY, branches: 'nails', addons: {badge: 2}});
+    assert.equal(r.status, 201);
+    const p = w.stripePosts[0].params;
+    assert.equal(p.get('mode'), 'subscription');
+    assert.equal(p.get('line_items[0][price]'), 'price_assocY1111');
+    assert.equal(p.get('line_items[1][price]'), 'price_join111111');
+    assert.equal(p.get('line_items[2][price]'), 'price_branch1111');
+    assert.equal(p.get('line_items[3][price]'), 'price_badge44444');
+    assert.equal(p.get('metadata[type]'), 'membership');
+    assert.equal(p.get('metadata[contact_id]'), '');
+    assert.equal(p.get('metadata[entry_point]'), 'public');
+    assert.equal(p.get('metadata[name]'), 'Nia New');
+    assert.equal(p.get('metadata[membership_level]'), 'associate');
+    assert.equal(p.get('metadata[base_membership_amount]'), '55.00');
+    assert.equal(p.get('metadata[base_membership_amount_net]'), '51.78');
+    assert.equal(p.get('metadata[joining_fee_amount_net]'), '8.33');
+    assert.equal(p.get('metadata[branch_addon_amount]'), '15.00');
+    assert.equal(p.get('metadata[badge_amount]'), '8.00');
+    assert.equal(p.get('metadata[total_amount]'), '88.00');
+    assert.equal(p.get('metadata[change_type]'), 'new');
+    assert.equal(p.has('client_reference_id'), false);
+  }, MEM_ENV);
+});
+test('monthly uses the monthly price; Full non-salon net splits the zero-rated element', async () => {
+  const w = world({priceOverride: {...RECURRING, price_fullY11111: {recurring: {interval: 'year', interval_count: 1}}}});
+  await withApp(w, async ({post}) => {
+    assert.equal((await post({...BUY, billing: 'monthly'})).status, 201);
+    assert.equal(w.stripePosts[0].params.get('line_items[0][price]'), 'price_assocM1111');
+    assert.equal((await post({...BUY, level: 'full_non_salon'})).status, 201);
+    const p = w.stripePosts[1].params;
+    assert.equal(p.get('metadata[base_membership_amount]'), '48.60');
+    assert.equal(p.get('metadata[base_membership_amount_net]'), '46.45');
+  }, MEM_ENV);
+});
+test('renewal waives the joining fee, needs an owned previous membership, and links it', async () => {
+  const w = world({deals: [activeDeal], priceOverride: RECURRING});
+  await withApp(w, async ({post}) => {
+    assert.equal((await post(BUY)).status, 409);
+    assert.equal((await post({...BUY, previousId: '1011174000000000088'})).status, 404);
+    assert.equal((await post({...BUY, previousId: DEAL})).status, 201);
+    const p = w.stripePosts[0].params;
+    assert.equal(p.get('metadata[change_type]'), 'renewal');
+    assert.equal(p.get('metadata[previous_membership_id]'), DEAL);
+    assert.equal(p.get('metadata[joining_fee_amount]'), '0.00');
+    assert.equal(p.get('metadata[membership_profile_id]'), 'prof1');
+    assert.equal(p.get('line_items[1][price]'), null);
+  }, MEM_ENV);
+});
+test('membership input is validated', async () => {
+  const w = world({priceOverride: RECURRING});
+  await withApp(w, async ({post, get}) => {
+    assert.equal((await post({...BUY, level: 'international'})).status, 422);
+    assert.equal((await post({...BUY, level: 'platinum'})).status, 422);
+    assert.equal((await post({...BUY, branch: 'spa'})).status, 422);
+    assert.equal((await post({...BUY, branches: 'beauty'})).status, 422);
+    assert.equal((await post({...BUY, branches: 'nails,nails'})).status, 422);
+    assert.equal((await post({...BUY, billing: 'weekly'})).status, 422);
+    assert.equal((await post({...BUY, accepted: ''})).status, 422);
+    assert.equal(w.stripePosts.length, 0);
+    const q = await get('service=membership&level=associate&branch=beauty&billing=annual');
+    assert.equal(q.status, 200);
+    assert.equal(q.body.quote.totalPence, 6500);
+  }, MEM_ENV);
+});
+test('a membership price set up with the wrong billing interval is refused', async () => {
+  const w = world({priceOverride: {price_assocY1111: {recurring: {interval: 'month', interval_count: 1}}}});
+  await withApp(w, async ({post}) => {
+    assert.equal((await post(BUY)).status, 409);
+  }, MEM_ENV);
+});

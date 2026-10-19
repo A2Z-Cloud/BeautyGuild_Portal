@@ -12,7 +12,14 @@ Follows V1 (`beauty-guild-catalyst`): the portal function creates the Stripe Che
 - Only `sk_test_` keys are accepted until live use is agreed.
 
 ## Services now
-`accreditation` (bundle price when the Contact has no current membership, international price rule as V1), `additional_venue`, `membership_addon`.
+`accreditation` (bundle price when the Contact has no current membership, international price rule as V1), `additional_venue`, `membership_addon`, and `membership` (new, renewal, upgrade).
+
+### Membership purchase
+- Levels `associate`, `full_non_salon`, `full_salon` (international is refused: priced individually). Branches `beauty|holistic|nails|hair`; additional branches and add-ons optional. Annual or monthly.
+- Subscription mode: the membership item is recurring; joining fee (new members only), additional branches and add-ons are one-off lines on the first invoice. Stripe prices must have the interval the catalogue expects (year/month, count 1) or the item is refused.
+- Price IDs (env): `STRIPE_PRICE_MEMBERSHIP_{ASSOCIATE|FULL_NON_SALON|FULL_SALON}_{ANNUAL|MONTHLY}`, `STRIPE_PRICE_MEMBERSHIP_JOINING_FEE`, `STRIPE_PRICE_MEMBERSHIP_BRANCH`, plus the `STRIPE_PRICE_ADDON_*` items.
+- A signed-in user with no CRM Contact may buy (V1 public path): `contact_id` is empty and Creator creates the Contact after payment. A Contact with an active membership must renew or upgrade (`previousId`, owned Deal), which waives the joining fee. Metadata keys match V1 including net amounts (the zero-rated element of the fee is split out for Creator).
+- Page: `/membership/buy` (renew: `?renew=<dealId>`).
 
 ## Adding a service
 1. Add its items to `ITEMS` and set `STRIPE_PRICE_*` env vars (a new Books item synced to Stripe gives the price ID).
@@ -23,4 +30,4 @@ Follows V1 (`beauty-guild-catalyst`): the portal function creates the Stripe Che
 `PORTAL_BILLING_ENABLED=true`, `STRIPE_SECRET_KEY` (test), `PORTAL_PUBLIC_ORIGIN`, `STRIPE_PRICE_*`. Client: `VITE_PORTAL_BILLING=true`. Not sent: the Stripe webhook secret.
 
 ## Not built yet
-New membership and insurance purchases (rating tables, VAT/IPT split, declarations, sanctions check, CRM record creation, subscription pricing) are not ported from V1. The checkout already supports recurring prices (subscription mode) for when they are.
+Insurance purchases and membership with insurance (rating tables and rules, IPT, declarations, sanctions check, creation of the insurance CRM records before payment) are not ported from V1.
