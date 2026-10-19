@@ -169,7 +169,7 @@ function registerCheckoutRoutes(app, {enabled, getCurrentUser, getCrmHeaders, cr
       const session = await stripe('POST', '/checkout/sessions', {body: params, key: 'portal-v2-' + key});
       if (!session.id || typeof session.url !== 'string' || !session.url.startsWith('https://checkout.stripe.com/'))
         throw new HttpError(502, 'PAYMENT_UNAVAILABLE', 'Secure checkout is unavailable.');
-      if (b.prepared.record) await crmUpdate(req, b.prepared.record.module, b.prepared.record.id, {Stripe_Checkout_Session_ID: session.id, Payment_Status: 'Payment Processing'});
+      if (b.prepared.record) await crmUpdate(req, b.prepared.record.module, b.prepared.record.id, b.prepared.record.update(session.id));
       return session;
     };
     if (b.prepared.beforePay) {

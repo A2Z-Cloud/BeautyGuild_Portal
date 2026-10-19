@@ -1,12 +1,12 @@
-name: Portal V2 frontend checks
+name: Portal V2 checks
 on:
   push:
     branches:
-      - feature/portal-v2-m1-preview
+      - main
   pull_request:
     paths:
       - "apps/portal/**"
-      - ".github/workflows/portal-v2-m1-check.yml"
+      - ".github/workflows/portal-v2-checks.yml"
 jobs:
   test-and-build:
     runs-on: ubuntu-latest
