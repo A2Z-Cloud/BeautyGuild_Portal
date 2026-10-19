@@ -92,7 +92,7 @@ function createRiskChecks({config, getAnalyticsHeaders, getCreatorHeaders, fetch
     try { r = await fetchImpl(url, {headers: await getCreatorHeaders(req), signal: AbortSignal.timeout(10000)}); } catch { throw new CheckError('Creator could not be reached.'); }
     const body = await r.json().catch(() => null);
     if (r.ok && body?.code === 3000 && Array.isArray(body.data)) return body.data;
-    if (body?.code === 3100 && /no records/i.test(String(body.message || ''))) return [];
+    if ((body?.code === 9280 || body?.code === 3100) && /no records/i.test(String(body.message || ''))) return [];
     throw new CheckError('Creator did not return the postcode list (' + r.status + ').');
   }
   // An empty list, a wrong report name or a lost permission would otherwise look like "no postcode listed".
@@ -114,7 +114,7 @@ function createRiskChecks({config, getAnalyticsHeaders, getCreatorHeaders, fetch
     let findings;
     try {
       const version = await listVersion(req, report);
-      const rows = await retry(() => creatorRows(req, report, '(Active==true && Postcode_Key=="' + pc.key + '")'));
+      const rows = await retry(() => creatorRows(req, report, '(Active==true && Postcode=="' + pc.display + '")'));
       if (!rows.length) findings = [{...base, result: 'Clear', status: 'PASS', dataVersion: version, detail: ''}];
       else {
         const stop = /^stop/i.test(String(rows[0].Outcome?.display_value ?? rows[0].Outcome ?? ''));

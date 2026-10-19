@@ -119,9 +119,9 @@ function creatorFake(state) {
     if (state.broken) return res({code: 2945, message: 'Invalid report'}, 400);
     // Creator only accepts 200, 500 or 1000 here (found against the real API).
     if (!['200', '500', '1000'].includes(new URL(url).searchParams.get('max_records'))) return res({code: 9250, message: "Please enter a valid input for 'max_records' key."}, 400);
-    if (criteria === 'Active==true') return res(state.empty ? {code: 3100, message: 'No records found'} : {code: 3000, data: [{Postcode_Key: 'XX', List_Date: '2024-01-01'}]});
-    const key = /"([A-Z0-9]+)"/.exec(criteria)[1], hit = state[kind] && state[kind][key];
-    return hit ? res({code: 3000, data: [{Postcode_Key: key, Outcome: hit}]}) : res({code: 3100, message: 'No records found'});
+    if (criteria === 'Active==true') return res(state.empty ? {code: 9280, message: 'No records found matching the given criteria.'} : {code: 3000, data: [{Postcode_Key: 'XX', List_Date: '2024-01-01'}]});
+    const key = /"([A-Z0-9 ]+)"/.exec(criteria)[1].replace(/ /g, ''), hit = state[kind] && state[kind][key];
+    return hit ? res({code: 3000, data: [{Postcode_Key: key, Outcome: hit}]}) : res({code: 9280, message: 'No records found matching the given criteria.'}, 400);
   };
   return {fetchImpl, calls};
 }
@@ -203,7 +203,7 @@ test('flood and subsidence: a listed postcode refers or stops, an unlisted one p
   assert.match(r.results[0].customerMessage, /review the flood risk/);
   assert.match(r.results[1].customerMessage, /cannot continue this quotation online based on the subsidence risk/);
   assert.match(r.audits[0].dataVersion, /list 2024-01-01/);
-  assert.ok(w.c.calls.some(u => decodeURIComponent(u).includes('Postcode_Key=="AB101AU"')));
+  assert.ok(w.c.calls.some(u => decodeURIComponent(u).includes('Postcode=="AB10 1AU"')));
   const other = await screen(w, {ins: INS({insPremisesAddress: {postcode: 'AB10 1AV'}})});
   assert.deepEqual(other.results, [], 'a neighbouring postcode is not listed');
 });
