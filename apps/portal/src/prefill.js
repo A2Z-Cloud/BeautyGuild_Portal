@@ -4,7 +4,7 @@ const phoneOrMobile=d=>d.mobile||d.phone;
 const COMMON={title:'title',firstName:'firstName',lastName:'lastName',email:'email'};
 const MAPS={
   membership:{...COMMON,mobile:phoneOrMobile,address1:'addressLine1',address2:'addressLine2',town:'town',county:'county',postcode:'postcode',territory:'country'},
-  accreditation:{...COMMON,phone:'phone',mobile:'mobile',contactCountry:'country',address1:'addressLine1',address2:'addressLine2',town:'town',county:'county',postcode:'postcode'},
+  accreditation:{...COMMON,phone:'phone',mobile:'mobile',contactCountry:'country',address1:'addressLine1',address2:'addressLine2',address3:'addressLine3',town:'town',county:'county',postcode:'postcode'},
   insurance:{firstName:'firstName',lastName:'lastName',email:'email',mobile:phoneOrMobile,country:'country',postcode:'postcode'},
 };
 export function prefillFor(kind,details,fields,answers={}){

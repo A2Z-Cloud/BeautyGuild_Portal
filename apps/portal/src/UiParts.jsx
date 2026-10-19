@@ -1,5 +1,7 @@
 import React from 'react';
 import { BadgeCheck, BookOpen, ShieldCheck, ArrowUpRight } from 'lucide-react';
+import CoursePicker from './components/CoursePicker.jsx';
+import {startLimits} from './startDate.js';
 
 export function Logo() {
   return <div className="brand">beauty<span>guild</span><small>Member portal</small></div>;
@@ -31,10 +33,12 @@ export function Field({field,value,onChange,error}) {
       <input aria-label={'Person '+(i+1)+' surname'} placeholder="Surname" maxLength={60} value={p.lastName||''} onChange={e=>set(i,{lastName:e.target.value})}/>
       <button type="button" className="text-button" onClick={()=>onChange(field.name,people.filter((_,j)=>j!==i))}>Remove</button></div>)}
       {people.length<10&&<button type="button" className="btn btn-secondary" onClick={()=>onChange(field.name,[...people,{type:'employee',firstName:'',lastName:''}])}>Add a person</button>}</div>;}
+  else if(field.type==='courses') control=<CoursePicker value={value} onChange={v=>onChange(field.name,v)}/>;
+  else if(field.type==='date'){const {min,max}=startLimits();control=<input {...common} type="date" value={value||''} min={min} max={max} onChange={update}/>;}
   else if(field.type==='select') control=<select {...common} value={value||''} onChange={update}><option value="">Choose an option</option>{options.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}</select>;
   else if(field.type==='textarea') control=<textarea {...common} value={value||''} onChange={update} rows={4} placeholder={field.placeholder||''}/>;
-  else control=<input {...common} value={value??''} type={field.type||'text'} min={field.type==='number'?0:undefined} placeholder={field.placeholder||''} onChange={update}/>;
-  return <div className={'field'+(error?' invalid':'')}>{field.type!=='checkbox'&&<label htmlFor={id}>{field.label}{field.required?' *':''}</label>}{control}{field.hint&&<small>{field.hint}</small>}{error&&<small id={id+'-error'} className="error" role="alert">{error}</small>}</div>;
+  else control=<input {...common} readOnly={Boolean(field.readOnly&&value)} value={value??''} type={field.type||'text'} min={field.type==='number'?0:undefined} placeholder={field.placeholder||''} onChange={update}/>;
+  return <div className={'field'+(error?' invalid':'')}>{field.type!=='checkbox'&&<label htmlFor={id}>{field.label}{field.required?' *':''}</label>}{control}{field.noMessage&&value==='no'&&<small className="field-warning" role="alert">{field.noMessage}</small>}{field.hint&&<small>{field.hint}</small>}{error&&<small id={id+'-error'} className="error" role="alert">{error}</small>}</div>;
 }
 export function Notice({title,children}) {
   return <div className="notice"><strong>{title}</strong><span>{children}</span></div>;

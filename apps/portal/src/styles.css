@@ -265,6 +265,7 @@ img,svg,video,iframe{max-width:100%}
 .people-list{display:grid;gap:10px}.people-row{display:grid;grid-template-columns:150px 1fr 1fr auto;gap:8px;align-items:center}.people-row select,.people-row input{border:1px solid #e3d8df;border-radius:9px;padding:9px 10px;min-height:42px}
 @media(max-width:600px){.people-row{grid-template-columns:1fr}}
 
+.field-warning{display:block;border:1.5px solid #ee3e96;border-radius:10px;padding:12px 14px;margin-top:10px;color:#633b51;font-size:12px;line-height:1.55}.course-check{display:flex;align-items:center;gap:10px;cursor:pointer}.course-check input{accent-color:#ee3e96}.course-picker-count{font-size:12px;font-weight:700;margin:0 0 10px}.course-help{margin-top:14px;font-size:12px}.course-help summary{cursor:pointer;color:#d02b7c;font-weight:700}.submitted-card{text-align:center;padding:40px 24px}.submitted-card .btn{margin-top:14px}
 /* Running price beside the buy forms (V1 style): sticky on desktop, a bar at the foot of the screen on a phone. */
 .buy-page{max-width:1080px}
 .buy-layout{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:20px;align-items:start}

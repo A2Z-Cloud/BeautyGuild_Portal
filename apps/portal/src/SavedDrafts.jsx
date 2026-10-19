@@ -32,7 +32,7 @@ export default function SavedDrafts(){
    state.loading?<p role="status">Loading applications…</p>:<section className="surface padded">
     {state.error&&<Notice title="Could not load application">{state.error}</Notice>}
     {state.items.length===0?<p>You have no saved applications.</p>:state.items.map(d=><div className="security-row" key={d.service+d.id}>
-     <div><strong>{d.service==='combined'?'Membership + Insurance':d.service}</strong>
+     <div><strong>{d.service==='combined'?'Membership + Insurance':d.service==='accreditation'?'Accreditation'+(d.title?' · '+d.title:''):d.service}</strong>
       <span>Saved application · Reference {d.id} · Updated {d.updatedAt?new Date(d.updatedAt).toLocaleString('en-GB'):'recently'}</span></div>
      <button type="button" className="btn btn-primary" disabled={Boolean(state.busy)} onClick={()=>resume(d)}>{state.busy===d.id?'Loading…':'Resume'}</button>
      <button type="button" className="btn btn-secondary" disabled={Boolean(state.busy)} onClick={()=>discard(d)}>Discard</button>

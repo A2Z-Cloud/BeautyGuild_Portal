@@ -1,4 +1,5 @@
 import {INSURANCE_STEPS} from './insuranceInputs.js';
+import {accreditationSteps} from './accreditationInputs.js';
 // Preview fields grounded in V1's membership, accreditation and insurance journeys.
 // The backend remains authoritative for prices, eligibility, underwriting and CRM status.
 const f=(name,label,type='text',required=true,extra={})=>({name,label,type,required,...extra});
@@ -45,37 +46,8 @@ f('ethics','I have reviewed the Guild Code of Ethics.','checkbox'),
 f('privacy','I acknowledge the privacy information.','checkbox')]},
 {id:'review',title:'Review and account',description:'Check your answers before you continue. Nothing is submitted yet.',fields:[]}
 ]},
-accreditation:{title:'Accreditation',kicker:'TRAINING CENTRE ACCREDITATION',intro:'Training centre, tutor, course and evidence declarations.',steps:[
-{id:'applicant',title:'Your details',description:'Contact information for the person applying.',fields:[
-select('title','Title',['Mr','Mrs','Miss','Ms','Mx','Dr'],false),
-f('firstName','First name'),f('lastName','Surname'),f('email','Email address','email'),f('phone','Telephone','tel'),
-f('mobile','Mobile','tel',false)]},
-{id:'contact-address',title:'Correspondence address',description:'This may differ from the teaching location.',fields:[
-select('contactCountry','Country',UK),f('address1','Address line 1'),f('address2','Address line 2','text',false),
-f('town','Town / city'),f('county','County','text',false),f('postcode','Postcode')]},
-{id:'centre',title:'Training centre',description:'The country of your centre decides whether UK or international accreditation applies.',fields:[
-f('centre','Training school name'),select('country','Training centre country',UK),
-f('centreContact','Contact name'),f('centreEmail','Centre email','email'),f('centreMobile','Centre mobile','tel'),
-f('centreAddress','Centre address line 1'),f('centreTown','Centre town'),f('centreCounty','Centre county','text',false),
-f('centrePostcode','Centre postcode')]},
-{id:'tutors',title:'Tutors and venues',description:'Indicate additional teaching staff and venues.',fields:[
-yn('otherTutors','Do you engage other tutors?'),yn('tutorQualified','Do tutors hold relevant qualifications for six months?',{when:yes('otherTutors')}),
-f('tutorCount','Number of tutors','number',true,{when:yes('otherTutors')}),
-f('tutorDetails','Tutor names, qualifications and emails','textarea',true,{when:yes('otherTutors')}),
-yn('additionalVenues','Do you teach at additional venues?'),
-f('venueDetails','Other venue details','textarea',false,{when:yes('additionalVenues')})]},
-{id:'courses',title:'Courses and delivery',description:'Select the subject areas you teach.',fields:[
-multi('courses','Course subjects',['Beauty Therapy','Nail Technology','Holistic Therapy','Make-up','Massage','Lashes and Brows','Hair','Other'],true),
-f('courseDetails','Course / qualification details','textarea'),
-multi('delivery','Delivery methods',['Classroom','Live online','Blended','Self-paced'],true),
-multi('assessment','Assessment methods',['Practical','Theory','Portfolio','Other'],true)]},
-{id:'declarations',title:'Accreditation declarations',description:'Confirm training and qualification standards.',fields:[
-yn('qualifiedSixMonths','Have you held the qualification for six months?'),
-yn('teachingQualification','Do you hold a teaching qualification?'),
-yn('evidenceAvailable','Can you provide evidence if requested?'),
-f('terms','I accept the application terms and privacy information.','checkbox')]},
-{id:'review',title:'Review and account',description:'Check your answers before you continue.',fields:[]}
-]},
+accreditation:{title:'Accreditation',kicker:'TRAINING CENTRE ACCREDITATION',intro:'Training centre, tutor, course and evidence declarations.',steps:accreditationSteps(COUNTRY_OPTIONS)
+},
 insurance:{title:'Insurance',kicker:'BEAUTY GUILD INSURANCE',intro:'How you work, your cover, premises and declarations. The same questions as the online quotation.',steps:[
 {id:'about',title:'About you',description:'Applicant details for your insurance quotation.',fields:[
 f('firstName','First name'),f('lastName','Surname'),f('email','Email address','email'),
