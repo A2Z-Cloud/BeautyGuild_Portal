@@ -15,8 +15,19 @@ const ITEMS = Object.freeze({
   addon_certificate: {name: 'Additional certificate', env: 'STRIPE_PRICE_ADDON_CERTIFICATE'},
   addon_badge: {name: 'Additional badge', env: 'STRIPE_PRICE_ADDON_BADGE'},
   addon_sticker: {name: 'Additional window sticker', env: 'STRIPE_PRICE_ADDON_STICKER'},
+  joining_fee: {name: 'Membership joining fee', env: 'STRIPE_PRICE_MEMBERSHIP_JOINING_FEE'},
+  membership_branch: {name: 'Additional branch', env: 'STRIPE_PRICE_MEMBERSHIP_BRANCH'},
+  // Memberships are subscriptions. Each level has an annual and a monthly Stripe price (interval is checked).
+  // zeroRatedPence is the zero-rated part of the fee, used only to split net from gross for Creator.
+  ...Object.fromEntries(Object.entries({associate: 'Associate Member', full_non_salon: 'Full Member (Non-Salon)', full_salon: 'Full Member (Salon)'})
+    .flatMap(([id, name]) => [
+      ['membership_' + id + '_annual', {name: name + ' membership (annual)', env: 'STRIPE_PRICE_MEMBERSHIP_' + id.toUpperCase() + '_ANNUAL', interval: 'year', zeroRatedPence: 3570}],
+      ['membership_' + id + '_monthly', {name: name + ' membership (monthly)', env: 'STRIPE_PRICE_MEMBERSHIP_' + id.toUpperCase() + '_MONTHLY', interval: 'month', zeroRatedPence: 297.5}],
+    ])),
 });
 const ADDONS = Object.freeze({bundle: 'addon_bundle', certificate: 'addon_certificate', badge: 'addon_badge', sticker: 'addon_sticker'});
+const LEVELS = Object.freeze({associate: 'Associate Member', full_non_salon: 'Full Member (Non-Salon)', full_salon: 'Full Member (Salon)'});
+const BRANCHES = Object.freeze({beauty: 'Guild of Beauty Therapists', holistic: 'Guild of Holistic Therapists', nails: 'Guild of Nail Technicians', hair: 'Guild of Hairdressers & Barbers'});
 const PAID = new Set(['paid', 'succeeded', 'completed', 'payment received']);
 const INTERNATIONAL = 'International Accreditation Annual';
 const esc = encodeURIComponent;
@@ -98,6 +109,19 @@ const SERVICES = {
   },
 };
 
+// Net (ex VAT) pounds for a priced line: standard rate 20%, except the zero-rated part of a membership fee.
+function netPounds(item, totalPence, quantity = 1) {
+  const zr = (ITEMS[item].zeroRatedPence || 0) * quantity;
+  return ((zr + (totalPence - zr) / 1.2) / 100).toFixed(2);
+}
+const isoDay = d => d.toISOString().slice(0, 10);
+function annualPeriodEnd(start) {
+  const d = new Date(start + 'T00:00:00Z');
+  d.setUTCFullYear(d.getUTCFullYear() + 1);
+  d.setUTCDate(d.getUTCDate() - 1);
+  return isoDay(d);
+}
+
 // A current membership is an Active Deal that has started and not expired.
 async function activeMembership(req, crm, contactId) {
   const today = new Date().toISOString().slice(0, 10);
@@ -107,7 +131,84 @@ async function activeMembership(req, crm, contactId) {
     .sort((a, b) => String(b.Start_Date || '').localeCompare(String(a.Start_Date || '')))[0];
   if (!current) return null;
   const full = (await crm(req, 'Deals/' + current.id))[0];
-  return {id: current.id, start: current.Start_Date || null, expiry: current.Expiry_Date || null, profileId: full?.Member_Profile?.id || null};
+  return {id: current.id, type: current.Membership_Type, start: current.Start_Date || null, expiry: current.Expiry_Date || null, profileId: full?.Member_Profile?.id || null};
 }
+
+
+SERVICES.membership = {
+  title: 'Membership',
+  allowNoContact: true,
+  async prepare({req, crm, contact, input, user}) {
+    const level = String(input.level || ''), branch = String(input.branch || '');
+    if (level === 'international') bad('International membership has no fixed price. Please contact the Guild to join.');
+    if (!LEVELS[level]) bad('Choose a membership level.');
+    if (!BRANCHES[branch]) bad('Choose your professional branch.');
+    const secondary = list(input.branches);
+    for (const b of secondary) if (!BRANCHES[b] || b === branch) bad('Choose each additional branch once, other than your main branch.');
+    if (new Set(secondary).size !== secondary.length) bad('Choose each additional branch once.');
+    const billing = input.billing === 'monthly' ? 'monthly' : input.billing === 'annual' ? 'annual' : bad('Choose annual or monthly payment.');
+    const asked = input.addons && typeof input.addons === 'object' ? input.addons : {};
+    const addons = {};
+    for (const [key, raw] of Object.entries(asked)) {
+      if (!ADDONS[key]) bad('Unknown add-on: ' + key + '.');
+      const quantity = Number(raw);
+      if (!Number.isInteger(quantity) || quantity < 0 || quantity > 10) bad('Choose between 0 and 10 of each add-on.');
+      if (quantity) addons[key] = quantity;
+    }
+    // A quote is only a summary; paying needs the consents and a name.
+    if (!input.quote && input.accepted !== 'yes') bad('Please accept the Code of Ethics and terms to continue.');
+    const name = contact ? [contact.First_Name, contact.Last_Name].filter(Boolean).join(' ')
+      : [input.firstName, input.lastName].map(x => String(x || '').trim().slice(0, 60)).filter(Boolean).join(' ');
+    if (!name && !input.quote) bad('Enter your first name and surname.');
+
+    const today = isoDay(new Date());
+    const member = contact ? await activeMembership(req, crm, contact.id) : null;
+    let previous = null, change = 'new';
+    if (input.previousId) {
+      if (!contact || !ID.test(String(input.previousId))) notFound('Membership');
+      const deal = (await crm(req, 'Deals/' + input.previousId + '?fields=Contact_Name'))[0];
+      if (!deal || String(deal.Contact_Name?.id) !== String(contact.id)) notFound('Membership');
+      previous = String(input.previousId);
+      change = input.changeType === 'upgrade' ? 'upgrade' : 'renewal';
+    } else if (member) bad('You already have an active membership. Renew or upgrade it instead of buying a new one.', 409, 'MEMBERSHIP_EXISTS');
+    let start = String(input.start || '') || today;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || start < today || start > isoDay(new Date(Date.now() + 90 * 864e5))) start = today;
+    const expiry = annualPeriodEnd(start);
+
+    const lines = [{item: 'membership_' + level + '_' + billing, quantity: 1}];
+    if (!previous) lines.push({item: 'joining_fee', quantity: 1});
+    if (secondary.length) lines.push({item: 'membership_branch', quantity: secondary.length});
+    for (const [key, quantity] of Object.entries(addons)) lines.push({item: ADDONS[key], quantity});
+    return {
+      lines, noContact: !contact,
+      metadata: ({lines: priced, total}) => {
+        const by = item => priced.find(l => l.item === item);
+        const gross = item => by(item) ? pounds(by(item).totalPence) : '0.00';
+        const net = item => by(item) ? netPounds(item, by(item).totalPence, by(item).quantity) : '0.00';
+        const base = priced[0].item;
+        const totalNet = priced.reduce((t, l) => t + Number(netPounds(l.item, l.totalPence, l.quantity)), 0).toFixed(2);
+        return {
+          type: 'membership', quote_reference: 'BGP-' + Date.now().toString(36).toUpperCase(), entry_point: contact ? 'member' : 'public',
+          contact_id: contact?.id || '', membership_profile_id: member?.profileId || '',
+          existing_membership: member ? JSON.stringify({type: member.type, start_date: member.start, expiry_date: member.expiry, deal_id: member.id}) : '',
+          previous_membership_id: previous || '', change_type: change,
+          name, membership_level: level, primary_branch: branch, secondary_branches: secondary.join(','), addons: JSON.stringify(addons),
+          insurance_requested: 'false', subscription_type: billing, membership_start: start, membership_expiry: expiry,
+          base_membership_amount: gross(base), base_membership_amount_net: net(base),
+          joining_fee_amount: gross('joining_fee'), joining_fee_amount_net: net('joining_fee'),
+          branch_addon_amount: gross('membership_branch'), branch_addon_amount_net: net('membership_branch'),
+          bundle_amount: gross('addon_bundle'), bundle_amount_net: net('addon_bundle'),
+          certificate_amount: gross('addon_certificate'), certificate_amount_net: net('addon_certificate'),
+          badge_amount: gross('addon_badge'), badge_amount_net: net('addon_badge'),
+          sticker_amount: gross('addon_sticker'), sticker_amount_net: net('addon_sticker'),
+          insurance_amount: 'not_requested', insurance_net_amount: '', insurance_ipt_amount: '', insurance_route: '',
+          insurance_policy_id: '', insured_premises_id: '', insured_people_ids: '', insurance_extension_ids: '', insurance_declarations_id: '',
+          total_amount: total, total_amount_net: totalNet,
+        };
+      },
+    };
+  },
+};
+const list = v => (Array.isArray(v) ? v : String(v || '').split(',')).map(x => String(x).trim()).filter(Boolean);
 
 module.exports = {ITEMS, SERVICES, ADDONS, pounds, ID};
