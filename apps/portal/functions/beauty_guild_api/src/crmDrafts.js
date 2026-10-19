@@ -125,10 +125,12 @@ function registerDraftRoutes(app,{enabled,getCurrentUser,getCrmHeaders,crmApiDom
   if(state.journeyId!==row.Journey_ID)fail('DRAFT_MISMATCH','CRM draft references do not match.',409);
   return state;
  };
+ // CRM text fields want strings, and date-times want a numeric offset without milliseconds.
+ const crmTime=(iso=new Date().toISOString())=>iso.replace(/\.\d{3}Z$/,'Z').replace(/Z$/,'+00:00');
  const saveParent=async(req,module,journey,person,old,more={})=>{
   const status=config.draftStatus;
   const data={Journey_ID:journey,Application_Status:status,
-    Last_Completed_Journey_Step:0,Draft_Saved_At:new Date().toISOString(),...more};
+    Last_Completed_Journey_Step:'0',Draft_Saved_At:crmTime(),...more};
   if(module==='Deals'){data.Contact_Name={id:person.id};data.Deal_Name='Membership application '+journey.slice(0,8);data.Stage=config.dealStage;}
   if(module==='Insurance_Policy')data.Contact={id:person.id};
   if(module==='Training_Centre_Accred')data.Applicant_Contact={id:person.id};
@@ -154,7 +156,7 @@ function registerDraftRoutes(app,{enabled,getCurrentUser,getCrmHeaders,crmApiDom
     revision:revision+1,answers:body.answers,savedAt:new Date().toISOString()};
   await saveNote(req,module,row,next);
   const update=await request(req,'PUT',module+'/'+row.id,{data:[{
-    Last_Completed_Journey_Step:body.step,Draft_Saved_At:next.savedAt
+    Last_Completed_Journey_Step:String(body.step),Draft_Saved_At:crmTime(next.savedAt)
   }]});
   if(update.data?.[0]?.status!=='success')fail('SAVE_INCOMPLETE','CRM did not confirm the last step.',502);
   return {id:row.id,service:body.service,journeyId:body.journeyId,revision:next.revision,step:body.step,savedAt:next.savedAt,answers:body.answers};

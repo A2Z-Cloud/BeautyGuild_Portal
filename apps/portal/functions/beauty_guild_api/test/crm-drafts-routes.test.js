@@ -106,3 +106,19 @@ test('saved drafts are never listed as real memberships when CRM drafts are on',
     assert.ok(crm.calls.some(c=>c.u.includes('Application_Status')&&c.u.includes('Deals')),'the status field is requested so drafts can be told apart');
   });
 });
+
+test('CRM writes use a text step and an offset date-time, which CRM text and date-time fields accept',async()=>{
+  const crm=fakeCrm();
+  await withApp(crm,async call=>{
+    const r=await call('/portal/drafts',send('POST',{service:'insurance',journeyId:JOURNEY,step:3,answers:{insWorking:['home']}}));
+    assert.equal(r.status,201);
+  });
+  const writes=crm.calls.filter(c=>['POST','PUT'].includes(c.method)&&/Insurance_Policy/.test(c.u)&&c.body?.data?.[0]?.Draft_Saved_At);
+  assert.ok(writes.length>=2);
+  for(const w of writes){
+    const row=w.body.data[0];
+    assert.equal(typeof row.Last_Completed_Journey_Step,'string');
+    assert.match(row.Draft_Saved_At,/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+00:00$/);
+  }
+  assert.equal(writes[writes.length-1].body.data[0].Last_Completed_Journey_Step,'3');
+});
