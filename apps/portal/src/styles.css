@@ -338,3 +338,17 @@ img,svg,video,iframe{max-width:100%}
 .cover-summary{list-style:none;margin:0 0 14px;padding:0;display:grid}.cover-summary li{display:grid;grid-template-columns:1fr auto auto;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid #f3edf0;font-size:13px}
 .cover-actions{display:inline-flex;gap:12px;min-width:90px;justify-content:flex-end}
 @media(max-width:600px){.cover-summary li{grid-template-columns:1fr auto}.cover-actions{grid-column:1/-1;justify-content:flex-start}}
+/* UAT membership feedback (MEM-016, 033, 034): Join the Guild page only. Pink titles and outlines to match the accreditation form.
+   Brand pink #ee3e96 is 3.4:1 on white, enough for the large titles and the outlines; smaller question text uses #b02c70 (5.9:1). */
+.membership-journey .buy-section h2{color:#ee3e96}.membership-journey .buy-section h3.buy-subtitle{color:#b02c70;font-size:1.15rem;margin:22px 0 8px}
+.membership-journey .buy-section legend,.membership-journey .buy-section .field>label{color:#b02c70;font-weight:700}
+.membership-journey .buy-section .field input:not([type=radio]):not([type=checkbox]),.membership-journey .buy-section .field select,.membership-journey .buy-section .addon-row input,.membership-journey .buy-section .radio-choice{border:1px solid #ee3e96}
+.membership-journey .buy-section .field.invalid input{border:2px solid #b3261e}.membership-journey .buy-section .field .error,.membership-journey .buy-section p.error{color:#b3261e;font-weight:600}
+.membership-journey .buy-section p.error{font-size:12px;margin:14px 0 0}
+.membership-journey .buy-section .radio-choice.selected{border-width:2px}
+.membership-journey .branch-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:10px}.membership-journey .branch-card{min-height:64px}.membership-journey .branch-logo{object-fit:contain;flex-shrink:0}
+.membership-journey .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+@media(max-width:640px){.membership-journey .branch-grid{grid-template-columns:1fr}}
+
+/* UAT qualification form: future-date message */
+.school-ops-form .field-error{color:var(--danger,#b42318);font-size:.9rem;margin:.25rem 0 0}

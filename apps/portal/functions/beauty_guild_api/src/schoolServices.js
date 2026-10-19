@@ -259,6 +259,11 @@ function registerSchoolRoutes(app,{enabled,writesEnabled,getCurrentUser,getCrmHe
   const body=req.body||{},name=String(body.name||'').trim(),month=String(body.month||'').trim(),year=Number(body.year);
   if(!name||name.length>180||!/^(?:[1-9]|1[0-2])$/.test(month)||!Number.isInteger(year)||year<1900||year>2200)
    fail('A qualification name and valid completion month and year are required.',422,'INVALID_QUALIFICATION');
+  const now=new Date();
+  if(year>now.getFullYear()||(year===now.getFullYear()&&Number(month)>now.getMonth()+1))
+   fail('The completion date must be this month or earlier, not in the future.',422,'INVALID_QUALIFICATION');
+  const centre=String(body.trainingCentre||'').trim();
+  if(!centre||centre.length>200)fail('Enter where you completed your qualification, up to 200 characters.',422,'INVALID_QUALIFICATION');
   if(!Array.isArray(body.delivery)||!body.delivery.length||body.delivery.some(x=>!DELIVERY.includes(x))||
    !Array.isArray(body.assessment)||!body.assessment.length||body.assessment.some(x=>!ASSESS.includes(x)))
    fail('Choose valid practical delivery and assessment methods.',422,'INVALID_QUALIFICATION');
@@ -271,6 +276,8 @@ function registerSchoolRoutes(app,{enabled,writesEnabled,getCurrentUser,getCrmHe
    Practical_Delivery_Type:body.delivery,Practical_Delivery_Other:deliveryOther,
    Practical_Assessment_Type:body.assessment,Practical_Assessment_Other:assessmentOther,
    Verification_Status:'Not Verified'};
+  // Free text, never linked to the accredited school. Sent only once the CRM field exists and its API name is configured.
+  if(config.qualificationCentreField)record[config.qualificationCentreField]=centre;
   // Refuse an identical qualification so a double click or retry cannot create it twice.
   const existing=await api.crm(req,'Qualifications/search?criteria='+esc('(Contact:equals:'+req.memberContact.id+')')+'&fields='+esc('Name,Primary_Accreditation,Date_Completed_Month,Date_Completed_Year'));
   if(existing.some(x=>String(x.Primary_Accreditation?.id)===String(acc.id)&&String(x.Name||'').trim().toLowerCase()===name.toLowerCase()&&

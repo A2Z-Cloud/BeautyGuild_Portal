@@ -215,6 +215,24 @@ const RECURRING = {price_assocY1111: {recurring: {interval: 'year', interval_cou
 const BUY = {service: 'membership', level: 'associate', branch: 'beauty', billing: 'annual', accepted: 'yes', firstName: 'Nia', lastName: 'New'};
 const unlinked = w => { const f = w.fetchImpl; w.fetchImpl = async (u, i) => String(u).includes('Contacts/search') ? {status: 200, ok: true, json: async () => ({data: []})} : f(u, i); return w; };
 
+test('membership carries the trading name and address from the Join page into the metadata, and omits blanks', async () => {
+  const w = unlinked(world({priceOverride: RECURRING}));
+  await withApp(w, async ({post}) => {
+    const r = await post({...BUY, businessName: "Nia's Nails", address1: '1 High Street', town: 'Leeds', postcode: 'LS1 1AA'});
+    assert.equal(r.status, 201, JSON.stringify(r.body));
+    const p = w.stripePosts[0].params;
+    assert.equal(p.get('metadata[business_name]'), "Nia's Nails");
+    assert.equal(p.get('metadata[address_line_1]'), '1 High Street');
+    assert.equal(p.get('metadata[postcode]'), 'LS1 1AA');
+    assert.equal(p.get('metadata[address_line_2]'), null);
+  }, MEM_ENV);
+});
+
+test('the membership extras are named without the word Additional', async () => {
+  const {ITEMS} = require('../src/catalogue');
+  assert.deepEqual([ITEMS.addon_certificate.name, ITEMS.addon_badge.name, ITEMS.addon_sticker.name], ['Certificate', 'Badge', 'Window sticker']);
+});
+
 test('a signed-in member without a Contact can buy: subscription, joining fee, V1 metadata, no contact id', async () => {
   const w = unlinked(world({priceOverride: RECURRING}));
   await withApp(w, async ({post}) => {
