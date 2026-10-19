@@ -261,3 +261,6 @@ img,svg,video,iframe{max-width:100%}
    :where keeps this at the lowest specificity, so every component that sets its own size still wins. */
 :where(.page) p{font-size:13px;line-height:1.6}
 .field select,.field input:not([type=radio]):not([type=checkbox]),.field textarea,.addon-row input{font-size:13px}
+.ins-step{border:0;border-top:1px solid #efe7ed;padding:18px 0 0;margin:18px 0 0}.ins-step legend{font-size:14px;font-weight:700;padding:0 8px 0 0}
+.people-list{display:grid;gap:10px}.people-row{display:grid;grid-template-columns:150px 1fr 1fr auto;gap:8px;align-items:center}.people-row select,.people-row input{border:1px solid #e3d8df;border-radius:9px;padding:9px 10px;min-height:42px}
+@media(max-width:600px){.people-row{grid-template-columns:1fr}}
