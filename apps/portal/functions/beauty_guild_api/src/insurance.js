@@ -181,13 +181,15 @@ const money2 = pence => Math.round(pence) / 100;
 // A quote that is REFER or STOP also gets these records ({referral}: Application_Status Referred, Risk_Status
 // Referred or Stopped) so the Insurance team can pick it up; it never reaches Stripe. {audits} are the risk checks
 // run for this application: each becomes a staff-only Risk_Screenings row linked to the policy.
-async function createRecords(create, {contactId, membershipDealId, ins, quote, start, end, entryRoute, termsAccepted, referral = null, audits = []}) {
+async function createRecords(create, {contactId, membershipDealId, ins, quote, start, end, entryRoute, termsAccepted, referral = null, audits = [], expiresAt = null}) {
   const description = Object.entries(BUSINESS_DESCRIPTION_BY_FLAG).filter(([flag]) => ins[flag]).map(([, label]) => label);
   const policyId = await create('Insurance_Policy', {
     Contact: contactId || undefined, Membership: membershipDealId || undefined, Policy_Type: ins.insRoute === 'salon' ? 'Salon' : 'Non Salon',
     Business_Description: description.length ? description : undefined, Annual_Turnover: ins.insRoute === 'salon' ? ins.insTurnover : undefined,
     Policy_Start_Date: start || undefined, Policy_End_Date: end || undefined,
     Application_Status: referral ? 'Referred' : 'Ready for Payment', Application_Source: 'Website', Entry_Route: entryRoute,
+    // What was quoted (gross, with IPT) and, for a payable quote, the day its Stripe session runs out.
+    Quoted_Amount: money2(quote.totalPence), Quote_Expiry: expiresAt ? expiresAt.toISOString().slice(0, 10) : undefined,
     ...(referral ? {Risk_Status: referral.status, Risk_Summary: referral.summary} : audits.length ? {Risk_Status: 'Clear'} : {}),
   });
   let premisesId = null;

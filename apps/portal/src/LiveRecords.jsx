@@ -16,8 +16,24 @@ export function LiveRecords(){
       <option value="">All</option>{['membership','accreditation','insurance'].map(k=><option value={k} key={k}>{serviceLabel(k)}</option>)}</select></div>
     {data.busy?<p role="status">Loading your records…</p>:data.error?<Notice title="Unable to load records">{data.error}</Notice>:<section className="surface">
       {data.rows.length?<div className="table-scroll"><table className="record-table"><thead><tr><th>Record</th><th>Status</th><th>Last updated</th></tr></thead><tbody>
-      {data.rows.map(x=><tr key={x.kind+x.id}><td><Link to={'/records/'+x.kind+'/'+x.id+'?from='+encodeURIComponent(kind||'all')} className="reference">{x.title}</Link><small>{serviceLabel(x.kind)}</small></td><td>{comingSoon(x)?<><Status value="Coming soon"/><small>{comingSoon(x).note}</small></>:<Status value={x.status}/>}</td><td>{formatDate(x.updated)}</td></tr>)}</tbody></table></div>:<p className="padded">No records found for your account.</p>}</section>}
+      {data.rows.map(x=><tr key={x.kind+x.id}><td><Link to={'/records/'+x.kind+'/'+x.id+'?from='+encodeURIComponent(kind||'all')} className="reference">{x.title}</Link><small>{serviceLabel(x.kind)}{x.quotedAmount!=null?' · Quoted '+poundsText(x.quotedAmount):''}</small></td><td>{comingSoon(x)?<><Status value="Coming soon"/><small>{comingSoon(x).note}</small></>:<Status value={x.status}/>}{x.canPay&&<small>Waiting for payment</small>}</td><td>{formatDate(x.updated)}</td></tr>)}</tbody></table></div>:<p className="padded">No records found for your account.</p>}</section>}
   </div>;
+}
+const poundsText=v=>'£'+Number(v).toFixed(2);
+// A quote that is waiting for payment: pay on its existing Stripe session, or find out it has expired.
+function PayQuote({record,onExpired}){
+  const [busy,setBusy]=useState(false),[error,setError]=useState('');
+  async function pay(){
+    if(busy)return;setBusy(true);setError('');
+    try{
+      const r=await portalApi.resumePayment(record.id);
+      if(r.alreadyPaid){setError('This quote has already been paid. It will show as active shortly.');setBusy(false);return;}
+      if(!/^https:\/\/checkout\.stripe\.com\//.test(r.checkoutUrl))throw new Error('We could not open the payment page. Please try again.');
+      window.location.assign(r.checkoutUrl);
+    }catch(e){if(e.code==='QUOTE_EXPIRED'&&onExpired)onExpired();setError(e.message);setBusy(false);}
+  }
+  return <div className="quote-action"><button type="button" className="btn btn-primary" disabled={busy} onClick={pay}>{busy?'Opening secure payment…':'Pay '+(record.quotedAmount!=null?poundsText(record.quotedAmount)+' ':'')+'now'}</button>
+    {error&&<p role="alert" className="error">{error}</p>}</div>;
 }
 const BANNER_THEME={membership:'pink',accreditation:'cream',insurance:'violet'};
 export function LiveRecordDetail({kindOverride}){
@@ -29,7 +45,7 @@ export function LiveRecordDetail({kindOverride}){
       <div className="record-banner-copy"><small className="eyebrow">{serviceLabel(record.kind).toUpperCase()}</small><h1>{record.title}</h1>
         <p>{[record.type,record.startDate&&record.endDate?formatDate(record.startDate)+' to '+formatDate(record.endDate):null].filter(Boolean).join(' · ')||'Your record details'}</p></div>
       {comingSoon(record)?<div><Status value="Coming soon"/><small>{comingSoon(record).note}</small></div>:<Status value={record.status}/>}</div><div className="surface padded"><dl className="detail-list">
-      {Object.entries({Reference:record.reference||record.id,Service:serviceLabel(record.kind),Status:record.status,Type:record.type,'Start date':formatDate(record.startDate),'End date':formatDate(record.endDate),'Payment status':record.paymentStatus}).map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value||'—'}</dd></div>)}</dl></div><div style={{marginTop:24}}>{kind==='membership'&&<p><Link className="btn btn-secondary" to={'/membership/manage/'+id}>Manage membership and invoices</Link></p>}<DocumentsPanel kind={kind} id={id}/></div></>}
+      {Object.entries({Reference:record.reference||record.id,Service:serviceLabel(record.kind),Status:record.status,Type:record.type,'Start date':formatDate(record.startDate),'End date':formatDate(record.endDate),'Payment status':record.paymentStatus,...(record.quotedAmount!=null?{'Quoted amount':poundsText(record.quotedAmount)}:{})}).map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value||'—'}</dd></div>)}</dl></div>{record.canPay&&<PayQuote record={record} onExpired={()=>setRecord(r=>({...r,canPay:false,status:'Expired'}))}/>}{record.kind==='insurance'&&record.status==='Expired'&&<Notice title="This quote has expired">Quotes last 24 hours. <Link className="text-link" to="/insurance/buy">Get a new quote</Link></Notice>}<div style={{marginTop:24}}>{kind==='membership'&&<p><Link className="btn btn-secondary" to={'/membership/manage/'+id}>Manage membership and invoices</Link></p>}<DocumentsPanel kind={kind} id={id}/></div></>}
   </div>;
 }
 const SUMMARY_LABELS={total:'All records',memberships:'Memberships',accreditations:'Accreditations',insurance:'Insurance'};

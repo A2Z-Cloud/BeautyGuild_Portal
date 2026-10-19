@@ -302,3 +302,4 @@ img,svg,video,iframe{max-width:100%}
 .course-facts{display:grid;gap:8px;margin:0}.course-facts div{display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid #f0e8ed;padding-bottom:6px;font-size:13px}.course-facts dt{color:#6f6670}.course-facts dd{margin:0;font-weight:700;text-align:right}
 .course-requirements{white-space:pre-wrap;font-size:13px;line-height:1.55;margin:0}.course-modal-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
 @media(max-width:600px){.tutor-row{grid-template-columns:1fr}.phone-input{grid-template-columns:1fr}.course-view{margin-left:0}}
+.quote-action{margin-top:18px}.quote-action .error{margin-top:8px}

@@ -83,6 +83,7 @@ export const portalApi=Object.freeze({
   publicQuote:async body=>publicHttp?(await publicHttp('/public/quote',{method:'POST',body})).quote:unavailable('Pricing'),
   submit:async()=>unavailable('CRM submission'),
   startCheckout:async body=>billingReq('/',{method:'POST',body}),
+  resumePayment:async policyId=>billingReq('/resume',{method:'POST',body:{policyId}}),
   getDocuments:async(kind,id,path='')=>documentHttp?documentHttp(documentPath(kind,id)+(path?'?path='+encodeURIComponent(path):'')):unavailable('Authorised document listing'),
   getDocumentDownloadUrl:(kind,id,fileId,path='')=>documentsOn?integrationConfig.apiBaseUrl+documentPath(kind,id)+'/file/'+encodeURIComponent(fileId)+(path?'?path='+encodeURIComponent(path):''):null,
 });

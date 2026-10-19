@@ -13,3 +13,22 @@ test('insurance policies get readable titles and other records keep theirs',()=>
   const p=mapRecord('insurance',{id:'6',Policy_Type:'Salon',Policy_Start_Date:'2026-10-01',Policy_End_Date:'2027-09-30'});
   assert.equal(p.startDate,'2026-10-01');assert.equal(p.endDate,'2027-09-30');
 });
+
+test('insurance quotes carry the quoted amount and whether they can still be paid', () => {
+  const tomorrow = new Date(Date.now() + 864e5).toISOString().slice(0, 10), yesterday = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
+  const row = extra => ({id: '1', Application_Status: 'Ready for Payment', Policy_Type: 'Non Salon', Quoted_Amount: 109.2, Quote_Expiry: tomorrow, Stripe_Checkout_Session_ID: 'cs_1', ...extra});
+  const live = mapRecord('insurance', row());
+  assert.equal(live.quotedAmount, 109.2);
+  assert.equal(live.canPay, true);
+  assert.equal(live.status, 'Ready for Payment');
+  const lapsed = mapRecord('insurance', row({Quote_Expiry: yesterday}));
+  assert.equal(lapsed.status, 'Expired');
+  assert.equal(lapsed.canPay, false);
+  assert.equal(mapRecord('insurance', row({Stripe_Checkout_Session_ID: undefined})).canPay, false);
+  assert.equal(mapRecord('insurance', row({Application_Status: 'Expired'})).canPay, false);
+  const paid = mapRecord('insurance', row({Application_Status: 'Active', Quote_Expiry: yesterday}));
+  assert.equal(paid.status, 'Active');
+  assert.equal(paid.canPay, false);
+  assert.equal(mapRecord('insurance', {id: '2', Application_Status: 'Active'}).quotedAmount, null);
+  assert.equal(mapRecord('membership', {id: '3', Stage: 'Active'}).quotedAmount, undefined);
+});

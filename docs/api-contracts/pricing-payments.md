@@ -61,3 +61,8 @@ Ported from V1 (`calculateInsuranceQuote`, `evaluateInsuranceRules`, `createInsu
 ## International accreditation
 
 A centre outside the UK is flat-rated and VAT-free (V1): £350, or £405 with the £55 International membership when the applicant has no current membership. Items `accreditation_international` (`STRIPE_PRICE_ACCREDITATION_INTERNATIONAL`) and `accreditation_international_bundle` (`STRIPE_PRICE_ACCREDITATION_INTERNATIONAL_BUNDLE`) hold the Stripe price IDs. Until both are set the checkout answers 409 "cannot be bought online yet". The metadata membership type is International.
+
+### Resuming and expiring insurance quotes
+- Each payable attempt stores on the Insurance_Policy `Stripe_Checkout_Session_ID`, `Quoted_Amount` (gross, with IPT) and `Quote_Expiry` (date). The Stripe session is created with `expires_at` 23 hours 50 minutes ahead (Stripe's maximum is 24 hours), and `Quote_Expiry` is that day.
+- `POST /portal/checkout/resume {policyId}` (own Contact's policy only, status `Ready for Payment`): an open session returns its `checkoutUrl`; a paid one returns `alreadyPaid`; an expired, missing or never-created session sets `Application_Status = Expired` and returns 409 `QUOTE_EXPIRED`. Referred and Stopped quotes are not resumable (and stay hidden from the member).
+- Records: insurance records carry `quotedAmount`, `quoteExpiry` and `canPay`. A `Ready for Payment` policy past its `Quote_Expiry` shows as Expired without a CRM write. The record page shows the quoted amount and a "Pay now" button when `canPay`, or "Get a new quote" when expired. Creator's webhook should still set the status on payment.

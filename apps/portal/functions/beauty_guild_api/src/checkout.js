@@ -11,6 +11,8 @@ const {createRateLimiter, clientKey} = require('./rateLimit');
 const {ITEMS, SERVICES, pounds} = require('./catalogue');
 
 const STRIPE = 'https://api.stripe.com/v1';
+const ID = /^\d{10,25}$/;
+const EXPIRED = 'This quote has expired. Please get a new quote.';
 const PRICE_ID = /^price_[A-Za-z0-9]{6,}$/;
 
 function registerCheckoutRoutes(app, {publicQuotesEnabled = false, enabled, getCurrentUser, getCrmHeaders, crmApiDomain, stripeKey, prices = {}, publicOrigin, riskChecks = null, fetchImpl = fetch, now = Date.now}) {
@@ -22,7 +24,7 @@ function registerCheckoutRoutes(app, {publicQuotesEnabled = false, enabled, getC
   const insuranceHour = createRateLimiter({limit: 10, windowMs: 60 * 60 * 1000, now});
   // Insurance attempts by what was asked for. A retry or double click within a few minutes gets the
   // same records and the same open session instead of a duplicate set. (Per instance, like the limiters.)
-  const attempts = new Map(), referrals = new Map(), ATTEMPT_TTL = 5 * 60 * 1000;
+  const attempts = new Map(), referrals = new Map(), ATTEMPT_TTL = 5 * 60 * 1000, QUOTE_LIFE_MS = (23 * 60 + 50) * 60 * 1000;
   const unavailable = () => new HttpError(503, 'CHECKOUT_UNAVAILABLE', 'Online payment is not available yet.');
   const priceCache = new Map();
 
@@ -155,6 +157,24 @@ function registerCheckoutRoutes(app, {publicQuotesEnabled = false, enabled, getC
     if (!stripeKey) throw unavailable();
     res.json({quote: view(await build(req, {...inputFrom(req.body || {}), quote: true}))});
   }));
+  // Pay for a quote you already have: the policy's own Stripe session, if it is still open. A quote whose session has
+  // run out (or that never got one) is marked Expired and has to be quoted again.
+  router.post('/resume', send(async (req, res) => {
+    if (!stripeKey) throw unavailable();
+    if (!limiter(req.portalUser.id)) throw new HttpError(429, 'RATE_LIMIT', 'Too many requests. Please wait a moment and try again.');
+    const id = String(req.body?.policyId || '');
+    if (!ID.test(id)) throw new HttpError(404, 'NOT_FOUND', 'Quote not found.');
+    const contact = await resolveContact(req, crm, req.portalUser);
+    const policy = (await crm(req, 'Insurance_Policy/' + id + '?fields=' + encodeURIComponent('Contact,Application_Status,Stripe_Checkout_Session_ID,Quote_Expiry')))[0];
+    if (!policy || String(policy.Contact?.id) !== String(contact.id)) throw new HttpError(404, 'NOT_FOUND', 'Quote not found.');
+    if (policy.Application_Status === 'Expired') throw new HttpError(409, 'QUOTE_EXPIRED', EXPIRED);
+    if (policy.Application_Status !== 'Ready for Payment') throw new HttpError(409, 'NOT_PAYABLE', 'This quote cannot be paid for online.');
+    const session = policy.Stripe_Checkout_Session_ID ? await stripe('GET', '/checkout/sessions/' + encodeURIComponent(policy.Stripe_Checkout_Session_ID)).catch(() => null) : null;
+    if (session?.payment_status === 'paid') return res.json({alreadyPaid: true});
+    if (session?.status === 'open' && typeof session.url === 'string' && session.url.startsWith('https://checkout.stripe.com/')) return res.json({checkoutUrl: session.url, reused: true});
+    await crmUpdate(req, 'Insurance_Policy', id, {Application_Status: 'Expired'});
+    throw new HttpError(409, 'QUOTE_EXPIRED', EXPIRED);
+  }));
   router.post('/', send(async (req, res) => {
     if (!stripeKey.startsWith('sk_test_') || !/^https:\/\/[a-z0-9.-]+$/i.test(publicOrigin || '')) throw unavailable();
     if (!limiter(req.portalUser.id)) throw new HttpError(429, 'RATE_LIMIT', 'Too many requests. Please wait a moment and try again.');
@@ -176,7 +196,9 @@ function registerCheckoutRoutes(app, {publicQuotesEnabled = false, enabled, getC
     // Insurance CRM records are created now, before payment, as V1 does: Creator's webhook reads their ids from the metadata.
     const startSession = async () => {
       // Insurance CRM records are created now, before payment, as V1 does: Creator's webhook reads their ids from the metadata.
-      const insuranceIds = b.prepared.beforePay ? await b.prepared.beforePay((module, record) => crmCreate(req, module, record)) : null;
+      // A payable insurance quote lives as long as its Stripe session: 23 hours 50 minutes (Stripe's limit is 24 hours).
+      const expiresAt = b.prepared.beforePay ? new Date(now() + QUOTE_LIFE_MS) : null;
+      const insuranceIds = b.prepared.beforePay ? await b.prepared.beforePay((module, record) => crmCreate(req, module, record), {expiresAt}) : null;
       const catalogue = b.lines.filter(l => l.item);
       const amounts = {};
       for (const l of catalogue) amounts[l.item] = pounds(l.totalPence);
@@ -185,7 +207,7 @@ function registerCheckoutRoutes(app, {publicQuotesEnabled = false, enabled, getC
         currency: 'GBP', status: 'pending', source: 'portal_v2',
         ...b.prepared.metadata({amounts, total: pounds(b.totalPence), lines: catalogue, insuranceIds}),
       };
-      const params = new URLSearchParams({mode: b.mode, customer_email: req.portalUser.email,
+      const params = new URLSearchParams({mode: b.mode, customer_email: req.portalUser.email, ...(expiresAt ? {expires_at: String(Math.floor(expiresAt.getTime() / 1000))} : {}),
         success_url: publicOrigin + '/app/#/payment-return?result=success&service=' + encodeURIComponent(input.service),
         cancel_url: publicOrigin + '/app/#/payment-return?result=cancelled&service=' + encodeURIComponent(input.service),
         ...(b.contact ? {client_reference_id: String(b.contact.id)} : {})});
@@ -200,6 +222,7 @@ function registerCheckoutRoutes(app, {publicQuotesEnabled = false, enabled, getC
       const session = await stripe('POST', '/checkout/sessions', {body: params, key: 'portal-v2-' + key});
       if (!session.id || typeof session.url !== 'string' || !session.url.startsWith('https://checkout.stripe.com/'))
         throw new HttpError(502, 'PAYMENT_UNAVAILABLE', 'Secure checkout is unavailable.');
+      if (insuranceIds?.policyId) await crmUpdate(req, 'Insurance_Policy', insuranceIds.policyId, {Stripe_Checkout_Session_ID: session.id});
       if (b.prepared.record) await crmUpdate(req, b.prepared.record.module, b.prepared.record.id, b.prepared.record.update(session.id));
       return session;
     };
