@@ -312,3 +312,6 @@ img,svg,video,iframe{max-width:100%}
 .page-footer .legal-links a{color:#8a7c86}.legal-note{margin-top:14px;font-size:12px}
 .policy-docs{border:1px solid #efe3eb;border-radius:12px;padding:14px 16px;margin:14px 0;background:#fffafd}.policy-docs h3{display:flex;align-items:center;gap:8px;font-size:1rem;margin:0 0 8px}
 .policy-docs ul{list-style:none;margin:0 0 8px;padding:0}.policy-docs li{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-top:1px solid #f4edf1;font-size:12px}.policy-docs li small{color:#807984}.policy-docs p{font-size:12px;margin:0}
+.accreditation-status{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;border:1px solid #f4cce0;background:#fff5fa;border-radius:14px;padding:18px 20px;margin:0 0 20px}
+.accreditation-status strong{display:block;font-size:15px}.accreditation-status p{margin:4px 0 0;font-size:13px;color:#726b74}
+.accreditation-status.status-approved{background:#f6fbf7;border-color:#cfe8d5}.accreditation-status.status-review{background:#f0ebf7;border-color:#ddd2ee}

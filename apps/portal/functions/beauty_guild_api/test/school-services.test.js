@@ -8,7 +8,8 @@ const cfg=loadConfig({PORTAL_SCHOOL_SERVICES_ENABLED:'true'});
 function upstream(url) {
  const str=String(url),u=decodeURIComponent(str);
  if(u.includes('Contacts/search'))return {data:[{id:'101',Email:'owner@example.test'}]};
- if(u.includes('Training_Centre_Accred/search'))return {data:[{id:'301',Applicant_Contact:{id:'101'},Account:{id:'201',name:'Grace School'},Accreditation_Status:'Accredited'}]};
+ if(u.includes('Training_Centre_Accred/search'))return {data:[{id:'301',Applicant_Contact:{id:'101'},Account:{id:'201',name:'Grace School'},Accreditation_Status:'Accredited',Application_Stage:'Paid',Payment_Status:'Paid'}]};
+ if(u.includes('Qualifications/search'))return {data:[{id:'q1',Primary_Accreditation:{id:'301'}},{id:'q2',Primary_Accreditation:{id:'301'}},{id:'q3',Primary_Accreditation:{id:'999'}}]};
  if(u.includes('Training_Centre_Accred/301'))return {data:[{id:'301',Applicant_Contact:{id:'101'},Account:{id:'201',name:'Grace School'},Accreditation_Status:'Accredited'}]};
  if(u.includes('Training_Centre_Accred/302'))return {data:[{id:'302',Applicant_Contact:{id:'other'},Account:{id:'202',name:'Other School'}}]};
  if(u.includes('Deals/1000000000401'))return {data:[{id:'1000000000401',Contact_Name:{id:'101'}}]};
@@ -150,4 +151,12 @@ test('course date create validates dates, price and days, and blocks a repeat',a
   assert.equal(ok.status,201);assert.equal(ok.body.session.id,'sess1');
  });
  await withWrites({},async(call)=>{await call('/portal/management/schools/1000000000301/sessions',jpost(goodSession));});
+});
+test('the school list carries what the Accreditation card needs: stage, payment and the qualification count',async()=>{
+ await withServer({},async call=>{
+  const r=await call('/portal/management/schools');
+  assert.equal(r.status,200);
+  const s=r.body.schools[0];
+  assert.equal(s.stage,'Paid');assert.equal(s.paid,true);assert.equal(s.payable,false);assert.equal(s.qualificationCount,2);
+ });
 });

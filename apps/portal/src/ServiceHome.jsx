@@ -6,6 +6,8 @@ import { IconFor, Notice, PageHeading } from './UiParts.jsx';
 import {INTEGRATIONS} from './services/api.js';
 import {CourseCatalogue} from './components/CourseCatalogue.jsx';
 import {MyServiceRecords,useServiceRecords,isExpired} from './MyServiceRecords.jsx';
+import {AccreditationStatusBanner,useAccreditationState} from './AccreditationStatus.jsx';
+import {MANAGE_TEXT} from './accreditationState.js';
 const paths={
  membership:['Membership option','Applicant details','Review information'],
  accreditation:['Your training centre','Courses and tutors','Review information'],
@@ -14,10 +16,13 @@ const paths={
 export default function ServiceHome({kind}){
  const service=DEMO_SERVICES.find(s=>s.kind===kind),applyOnline=kind==='accreditation'&&INTEGRATIONS.crmAccreditation;
  const records=useServiceRecords(kind),has=Boolean(records?.length);
+ const accState=useAccreditationState();// eslint-disable-line react-hooks/rules-of-hooks
+ const accHolds=kind==='accreditation'&&accState&&accState.key!=='none';
  const current=records?.find(r=>!isExpired(r));
  // A member's own records come first. Someone holding a membership manages or renews it instead of joining again.
  const membershipButton=has&&kind==='membership'?<Link className="btn btn-primary" to={'/membership/manage/'+encodeURIComponent((current||records[0]).id)}>{current?'Manage membership':'Renew membership'} <ArrowRight size={16}/></Link>:<Link className="btn btn-primary" to="/membership/buy">Join the Guild <ArrowRight size={16}/></Link>;
- return <div className="page"><PageHeading eyebrow="GUILD SERVICES" title={service.title} description={has?'':service.description}>{kind==='membership'&&INTEGRATIONS.stripeCheckout?membershipButton:kind==='insurance'&&INTEGRATIONS.stripeCheckout?<Link className="btn btn-primary" to="/insurance/buy">{has?'Buy another policy':'Buy insurance'} <ArrowRight size={16}/></Link>:<Link className="btn btn-primary" to={'/'+kind+'/new'}>{applyOnline?(has?'Apply for a new accreditation':'Apply for accreditation'):'View the form'} <ArrowRight size={16}/></Link>}</PageHeading>
+ return <div className="page"><PageHeading eyebrow="GUILD SERVICES" title={service.title} description={kind==='accreditation'&&(has||accHolds)?MANAGE_TEXT:has?'':service.description}>{kind==='membership'&&INTEGRATIONS.stripeCheckout?membershipButton:kind==='insurance'&&INTEGRATIONS.stripeCheckout?<Link className="btn btn-primary" to="/insurance/buy">{has?'Buy another policy':'Buy insurance'} <ArrowRight size={16}/></Link>:<Link className="btn btn-primary" to={'/'+kind+'/new'}>{applyOnline?(has?'Apply for a new accreditation':'Apply for accreditation'):'View the form'} <ArrowRight size={16}/></Link>}</PageHeading>
+ {kind==='accreditation'&&<AccreditationStatusBanner state={accState}/>}
  <MyServiceRecords kind={kind} rows={records}/>
  {!has&&<div className={'service-banner '+service.theme}><div><small className="eyebrow">A SIMPLER JOURNEY</small><h2>{kind==='insurance'?'Cover that works around you.':kind==='accreditation'?'Support for your training centre.':'Your professional community starts here.'}</h2><p>Look through the questions in our new online application.</p></div><IconFor kind={kind} size={70}/></div>}
  {!has&&<div className="two-cols"><section className="surface padded"><small className="eyebrow">THE JOURNEY</small><h2>Here's what to expect</h2><ol className="process">{paths[kind].map((label,i)=><li key={label}><b>{String(i+1).padStart(2,'0')}</b><span><strong>{label}</strong><small>{i===paths[kind].length-1?'Check your answers before you finish':'Questions to answer'}</small></span></li>)}</ol><Link className="btn btn-primary" to={'/'+kind+'/new'}>View the {kind} form <ArrowRight size={16}/></Link></section>
