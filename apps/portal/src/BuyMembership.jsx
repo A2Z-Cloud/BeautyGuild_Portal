@@ -3,6 +3,8 @@ import {ArrowLeft,LockKeyhole} from 'lucide-react';
 import {Link,useSearchParams} from 'react-router-dom';
 import {Notice,PageHeading} from './UiParts.jsx';
 import {INTEGRATIONS,portalApi} from './services/api.js';
+import PricePanel from './PricePanel.jsx';
+import {dueToday} from './priceSummary.js';
 import {COUNTRY_OPTIONS} from './JourneyConfig.js';
 import {countryFor} from './prefill.js';
 import {START_WINDOW_DAYS,isFuture,startLimits} from './startDate.js';
@@ -45,7 +47,7 @@ export default function BuyMembership(){
   const base=()=>({service:'membership',level:f.level,branch:f.branch,billing:f.billing,...(f.branches.length?{branches:f.branches.join(',')}:{}),
     ...(f.start?{start:f.start}:{}),...(previousId?{previousId,changeType}:{})});
   useEffect(()=>{
-    if(!INTEGRATIONS.stripeCheckout||who.state!=='in'||!ready||f.insurance){setQ({loading:false,quote:null,error:''});return undefined;}
+    if(!INTEGRATIONS.stripeCheckout||who.state!=='in'||!ready){setQ({loading:false,quote:null,error:''});return undefined;}
     let alive=true;setQ(s=>({...s,loading:true,error:''}));
     portalApi.checkoutQuote({...base(),...(addonText?{addons:addonText}:{})}).then(quote=>alive&&setQ({loading:false,quote,error:''})).catch(e=>alive&&setQ({loading:false,quote:null,error:e.message}));
     return()=>{alive=false;};
@@ -70,11 +72,12 @@ export default function BuyMembership(){
       window.location.assign(r.checkoutUrl);
     }catch(e){setPayError(e.message);setBusy(false);}
   }
-  const quote=f.insurance?iq.quote:q.quote,firstPay=quote?.lines.filter(l=>!l.interval).reduce((t,l)=>t+l.totalPence,0)||0,recurring=quote?.lines.find(l=>l.interval);
-  return <div className="page narrow-page"><Link to="/membership" className="back-link"><ArrowLeft size={16}/> Back to membership</Link>
+  // With insurance ticked the payable price is the one that includes it; until that is ready the panel shows the membership alone.
+  const priced=f.insurance?iq.quote:q.quote,quote=priced||q.quote,shown=quote,insuranceWaiting=f.insurance&&!iq.quote;
+  return <div className="page buy-page"><Link to="/membership" className="back-link"><ArrowLeft size={16}/> Back to membership</Link>
     <PageHeading eyebrow="GUILD MEMBERSHIP" title={previousId?(changeType==='upgrade'?'Upgrade your membership':'Renew your membership'):'Join the Guild'} description="Choose your membership, then pay securely on Stripe. We never see your card details."/>
     {!INTEGRATIONS.stripeCheckout?<Notice title="Not available yet">Online membership purchase is not available yet.</Notice>:who.state==='loading'?<p role="status">Checking your account…</p>:
-    who.state==='out'?<Notice title="Please sign in">Sign in or create an account to buy a membership. <Link className="text-link" to="/login">Sign in</Link></Notice>:<>
+    who.state==='out'?<Notice title="Please sign in">Sign in or create an account to buy a membership. <Link className="text-link" to="/login">Sign in</Link></Notice>:<div className="buy-layout"><div className="buy-main">
     <section className="surface padded buy-section"><h2>Your membership</h2>
       <div className="buy-options">{LEVELS.map(([id,name,hint])=><label key={id} className={'radio-choice'+(f.level===id?' selected':'')}><input type="radio" name="level" checked={f.level===id} onChange={()=>set({level:id})}/><span><strong>{name}</strong><small>{hint}</small></span></label>)}
         <p className="muted">International membership is priced individually. Please contact the Guild to join from outside the UK.</p></div>
@@ -89,16 +92,16 @@ export default function BuyMembership(){
       <label className="check-choice"><input type="checkbox" checked={f.insurance} disabled={f.level==='associate'} onChange={e=>set({insurance:e.target.checked})}/><span>Add Beauty Guild insurance to my membership</span></label>
       {f.level==='associate'&&<p className="muted">Insurance is included with Full membership. Choose a Full membership level to add it.</p>}
       {f.insurance&&<InsuranceForm values={iv} onChange={setI} errors={iErrors} country={country} onCountry={v=>{setCountry(v);setCountryError('');}} countryError={countryError}/>}</section>
-    <section className="surface padded buy-section"><h2>Summary</h2>
-      {!ready?<p className="muted">Choose a membership level and branch to see your price.</p>:q.loading||(f.insurance&&iq.loading)?<p role="status">Working out your price…</p>:(f.insurance?iq.error:q.error)?<Notice title="Unable to price this">{f.insurance?iq.error:q.error}</Notice>:f.insurance&&!quote?<p className="muted">Choose where you are based and how you work to see your price with insurance.</p>:quote?<>
-        {f.insurance&&<BlockedNotice quote={quote}/>}
-        <div className="checkout-summary">{quote.lines.map(l=><div key={l.name}><span>{l.name}{l.quantity>1?' × '+l.quantity:''}</span><strong>{money(l.totalPence)}{l.interval?' / '+l.interval:''}</strong></div>)}
-          <div className="checkout-total"><span>Due today</span><strong>{money(quote.totalPence)}</strong></div></div>
-        {isFuture(f.start)&&<p className="muted">Starts on {formatDate(f.start)}. It shows as Coming soon until then.</p>}
-        {recurring&&<p className="muted">Then {money(recurring.unitPence)} each {recurring.interval}, until you cancel. Prices include VAT where it applies.</p>}
+    <section className="surface padded buy-section"><h2>Review and pay</h2>
+      {!ready?<p className="muted">Choose a membership level and branch to see your price.</p>:insuranceWaiting?<p className="muted">Answer the insurance questions, including where you are based, so your price includes them.</p>:!priced?<p className="muted" role="status">{(q.error)?q.error:'Working out your price…'}</p>:<>
+        {f.insurance&&<BlockedNotice quote={priced}/>}
+        <p className="muted">You pay {money(dueToday(priced))} today.</p>
         <label className="check-choice"><input type="checkbox" checked={f.accepted} onChange={e=>set({accepted:e.target.checked})}/><span>I accept the <a href="https://www.beautyguild.com/Membership/Code-Of-Ethics" target="_blank" rel="noopener noreferrer">Code of Ethics</a> and the Guild's terms and privacy information.</span></label>
         {payError&&<Notice title="Payment unavailable">{payError}</Notice>}
-        <button type="button" className="btn btn-primary btn-block" disabled={busy||!f.accepted||!(who.firstName||who.lastName)||quote.payable===false} onClick={pay}><LockKeyhole size={16}/>{busy?'Opening secure payment…':'Pay '+money(firstPay||quote.totalPence)+' securely with Stripe'}</button>
-        {!(who.firstName||who.lastName)&&<p className="muted">Add your name to your account before buying.</p>}</>:null}</section></>}
+        <button type="button" className="btn btn-primary btn-block" disabled={busy||!f.accepted||!(who.firstName||who.lastName)||priced.payable===false} onClick={pay}><LockKeyhole size={16}/>{busy?'Opening secure payment…':'Pay '+money(dueToday(priced))+' securely with Stripe'}</button>
+        {!(who.firstName||who.lastName)&&<p className="muted">Add your name to your account before buying.</p>}</>}
+    </section></div>
+    <PricePanel quote={shown} loading={q.loading||(f.insurance&&iq.loading)} error={f.insurance&&iq.error?iq.error:q.error} ready={Boolean(ready)} emptyText="Choose a membership level and branch to see your price."
+      note={insuranceWaiting?'Insurance is not included yet. Answer the insurance questions to add it.':''} billing={f.billing} onBilling={b=>set({billing:b})} start={f.start}/></div>}
   </div>;
 }
