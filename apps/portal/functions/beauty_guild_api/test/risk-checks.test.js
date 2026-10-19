@@ -119,7 +119,7 @@ function creatorFake(state) {
     if (state.broken) return res({code: 2945, message: 'Invalid report'}, 400);
     // Creator only accepts 200, 500 or 1000 here (found against the real API).
     if (!['200', '500', '1000'].includes(new URL(url).searchParams.get('max_records'))) return res({code: 9250, message: "Please enter a valid input for 'max_records' key."}, 400);
-    if (criteria === 'Inactive==false') return res(state.empty ? {code: 9280, message: 'No records found matching the given criteria.'} : {code: 3000, data: [{Postcode_Key: 'XX', List_Date: '2024-01-01'}]});
+    if (criteria === 'InActive==false') return res(state.empty ? {code: 9280, message: 'No records found matching the given criteria.'} : {code: 3000, data: [{Postcode_Key: 'XX', List_Date: '2024-01-01'}]});
     const key = /"([A-Z0-9 ]+)"/.exec(criteria)[1].replace(/ /g, ''), hit = state[kind] && state[kind][key];
     return hit ? res({code: 3000, data: [{Postcode_Key: key, Outcome: hit}]}) : res({code: 9280, message: 'No records found matching the given criteria.'}, 400);
   };

@@ -99,7 +99,7 @@ function createRiskChecks({config, getAnalyticsHeaders, getCreatorHeaders, fetch
   async function listVersion(req, report) {
     const key = 'list|' + report, hit = fresh(key, CACHE_TTL);
     if (hit) return hit;
-    const rows = await retry(() => creatorRows(req, report, 'Inactive==false'));
+    const rows = await retry(() => creatorRows(req, report, 'InActive==false'));
     if (!rows.length) throw new CheckError('The postcode list is empty or unreadable.');
     return remember(key, 'list ' + clean(rows[0].List_Date || 'undated'));
   }
@@ -114,7 +114,7 @@ function createRiskChecks({config, getAnalyticsHeaders, getCreatorHeaders, fetch
     let findings;
     try {
       const version = await listVersion(req, report);
-      const rows = await retry(() => creatorRows(req, report, '(Inactive==false && Postcode=="' + pc.display + '")'));
+      const rows = await retry(() => creatorRows(req, report, '(InActive==false && Postcode=="' + pc.display + '")'));
       if (!rows.length) findings = [{...base, result: 'Clear', status: 'PASS', dataVersion: version, detail: ''}];
       else {
         const stop = /^stop/i.test(String(rows[0].Outcome?.display_value ?? rows[0].Outcome ?? ''));
