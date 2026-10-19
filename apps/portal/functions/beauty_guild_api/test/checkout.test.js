@@ -7,7 +7,7 @@ const {loadConfig} = require('../src/config');
 const ENV = {PORTAL_BILLING_ENABLED: 'true', STRIPE_SECRET_KEY: 'sk_test_example_only', PORTAL_PUBLIC_ORIGIN: 'https://portal.example.test',
   STRIPE_PRICE_ACCREDITATION: 'price_accr111111', STRIPE_PRICE_ASSOCIATE_MEMBERSHIP: 'price_bundle22222',
   STRIPE_PRICE_ADDITIONAL_VENUE: 'price_venue33333', STRIPE_PRICE_ADDON_BADGE: 'price_badge44444', STRIPE_PRICE_ADDON_STICKER: 'price_sticker5555'};
-const PRICES = {price_accr111111: 35400, price_bundle22222: 40900, price_venue33333: 10000, price_badge44444: 400, price_sticker5555: 400};
+const PRICES = {price_intl111111: 35000, price_intlbundle1: 40500, price_accr111111: 35400, price_bundle22222: 40900, price_venue33333: 10000, price_badge44444: 400, price_sticker5555: 400};
 const ME = '1011174000000000001', ACC = '1011174000000000002', DEAL = '1011174000000000003', CENTRE = '1011174000000000004';
 
 function world(opts = {}) {
@@ -87,6 +87,37 @@ test('accreditation with a current membership pays the plain accreditation price
     assert.equal(p.get('metadata[product_amount]'), '354.00');
     assert.equal(p.get('metadata[membership_id]'), 'prof1');
     assert.equal(p.get('metadata[membership_required]'), 'false');
+  });
+});
+const INTL_ENV = {STRIPE_PRICE_ACCREDITATION_INTERNATIONAL: 'price_intl111111', STRIPE_PRICE_ACCREDITATION_INTERNATIONAL_BUNDLE: 'price_intlbundle1'};
+test('an international school without a membership pays the flat 405 pound international bundle, no VAT', async () => {
+  const w = world({acc: {Accreditation_Level: 'International Accreditation Annual'}});
+  await withApp(w, async ({post, get}) => {
+    assert.equal((await get('service=accreditation&recordId=' + ACC)).body.quote.totalPence, 40500);
+    assert.equal((await post({service: 'accreditation', recordId: ACC})).status, 201);
+    const p = w.stripePosts[0].params;
+    assert.equal(p.get('line_items[0][price]'), 'price_intlbundle1');
+    assert.equal(p.get('metadata[product_amount]'), '405.00');
+    assert.equal(p.get('metadata[product_name]'), 'International Accreditation + International Membership');
+    assert.equal(JSON.parse(p.get('metadata[membership_details]')).type, 'International');
+  }, INTL_ENV);
+});
+test('an international school with a current membership pays the flat 350 pound fee', async () => {
+  const w = world({acc: {Accreditation_Level: 'International Accreditation Annual'}, deals: [activeDeal]});
+  await withApp(w, async ({post}) => {
+    assert.equal((await post({service: 'accreditation', recordId: ACC})).status, 201);
+    const p = w.stripePosts[0].params;
+    assert.equal(p.get('line_items[0][price]'), 'price_intl111111');
+    assert.equal(p.get('metadata[product_amount]'), '350.00');
+    assert.equal(p.get('metadata[membership_required]'), 'false');
+  }, INTL_ENV);
+});
+test('an international school cannot pay until the international prices are set up', async () => {
+  const w = world({acc: {Accreditation_Level: 'International Accreditation Annual'}});
+  await withApp(w, async ({post}) => {
+    const r = await post({service: 'accreditation', recordId: ACC});
+    assert.equal(r.status, 409);
+    assert.equal(w.stripePosts.length, 0);
   });
 });
 test('a browser-supplied amount is ignored', async () => {

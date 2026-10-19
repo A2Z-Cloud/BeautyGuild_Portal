@@ -10,7 +10,7 @@ const MY_CONTACT = '1000000000101', OTHER_CONTACT = '1000000000202';
 const COURSE_A = '3000000000001', COURSE_B = '3000000000002';
 const env = {PORTAL_CRM_DRAFTS_ENABLED: 'true', PORTAL_CRM_ACCREDITATION_ENABLED: 'true', PORTAL_RECORDS_ENABLED: 'true'};
 const STAGES = {fields: [{api_name: 'Application_Stage', pick_list_values: [{actual_value: 'Draft'}, {actual_value: 'Awaiting Payment'}]}]};
-const MODULES = ['Accounts', 'Training_Centres', 'Training_Centre_Accred', 'Accreditation_Centre_Link', 'TC_Course_Offering'];
+const MODULES = ['Accounts', 'Training_Centres', 'Training_Centre_Accred', 'Accreditation_Centre_Link', 'TC_Course_Offering', 'Tutor_Relationships', 'Deals'];
 const NAME_OF = {Accounts: 'Account_Name'};
 
 // A small stateful stand-in for Zoho CRM. Lookups come back as {id, name}.
@@ -27,7 +27,8 @@ function fakeCrm({contacts = [{id: MY_CONTACT, Email: ME.email, First_Name: 'Ada
   const fetchImpl = async (url, opts = {}) => {
     const u = decodeURIComponent(String(url)), method = opts.method || 'GET', body = opts.body ? JSON.parse(opts.body) : null;
     calls.push({method, u, body});
-    if (u.includes('/Contacts/search')) return json({data: contacts});
+    if (u.includes('/Contacts/search')) { const e = (u.match(/email=([^&]+)/) || [])[1]; return json({data: e ? contacts.filter(x => String(x.Email).toLowerCase() === e.toLowerCase()) : contacts}); }
+    if (method === 'POST' && /\/crm\/v3\/Contacts$/.test(u)) { const rec = {id: String(++seq), ...body.data[0]}; contacts.push(rec); return json({data: [{status: 'success', details: {id: rec.id}}]}); }
     if (u.includes('/settings/fields')) return json(stages);
     if (u.includes('/Courses/search')) return json({data: courses});
     const c = u.match(/\/crm\/v3\/Contacts\/(\d+)/);
@@ -65,10 +66,10 @@ async function withApp(crm, action, {user = ME, extraEnv = {}} = {}) {
 const send = (method, body) => ({method, headers: {'content-type': 'application/json'}, body: JSON.stringify(body)});
 const day = (offset = 0) => new Date(Date.now() + offset * 864e5).toISOString().slice(0, 10);
 const answers = (extra = {}) => ({
-  phone: '+44 1234 567890', mobile: '', address1: '1 High St', address2: '', address3: 'Block C', town: 'Derby', county: 'Derbyshire', postcode: 'DE1 1AA', contactCountry: 'United Kingdom',
-  centre: 'Glow Academy', country: 'United Kingdom', centreEmail: 'hello@glow.test', centrePhone: '01332 000000', centreAddress1: '2 Low Rd', centreAddress2: '', centreAddress3: '',
+  phone: '+44 1234 567890', mobile: '+44 7700 900123', address1: '1 High St', address2: '', address3: 'Block C', town: 'Derby', county: 'Derbyshire', postcode: 'DE1 1AA', contactCountry: 'United Kingdom',
+  centre: 'Glow Academy', country: 'United Kingdom', centreEmail: 'hello@glow.test', centrePhone: '+44 1332 000000', centreMobile: '+44 7700 900456', centreAddress1: '2 Low Rd', centreAddress2: '', centreAddress3: '',
   centreTown: 'Derby', centreCounty: '', centrePostcode: 'DE2 2BB', qualifiedSixMonths: 'yes', teachingQualification: 'yes', evidenceAvailable: 'yes',
-  otherTutors: 'yes', tutorQualified: 'yes', tutorCount: '3', additionalVenues: 'no', terms: true, courseIds: [COURSE_A, COURSE_B], startDate: day(5), ...extra,
+  otherTutors: 'yes', tutorQualified: 'yes', tutorCount: '2', tutors: [{firstName: 'Tess', surname: 'Tutor', email: 'tess@example.test'}, {firstName: 'Tom', surname: 'Teach', email: 'tom@example.test'}], additionalVenues: 'no', terms: true, courseIds: [COURSE_A, COURSE_B], startDate: day(5), ...extra,
 });
 const body = (a = answers(), extra = {}) => ({service: 'accreditation', journeyId: JOURNEY, step: 2, answers: a, ...extra});
 const created = (crm, mod) => crm.writes().filter(c => c.method === 'POST' && c.u.includes('/crm/v3/' + mod));
@@ -87,7 +88,7 @@ test('saving writes the V1 record set and the applicant details to the Contact',
   assert.equal(acc.Accreditation_Level, 'Standard Accreditation Annual');
   assert.equal(acc.Declaration_1_qualified_for_six_months, 'Yes');
   assert.equal(acc.Other_Tutors_Used, true);
-  assert.equal(acc.Number_of_Tutors, 3);
+  assert.equal(acc.Number_of_Tutors, 2);
   assert.equal(acc.Additional_Centres_Used, 'No');
   assert.equal(acc.Valid_From, day(5));
   assert.equal(acc.Valid_To, annualPeriodEnd(day(5)));
@@ -99,8 +100,9 @@ test('saving writes the V1 record set and the applicant details to the Contact',
   assert.equal(link.Name, 'Glow Academy - Main Centre');
   assert.equal(crm.store.TC_Course_Offering.length, 2);
   assert.ok(crm.store.TC_Course_Offering.every(o => o.Offering_Status === 'Pending Review' && o.Accreditation.id === acc.id));
-  // Tutor names are never collected and no Tutor_Relationships record is written; no Note or Journey_ID either.
-  assert.ok(!crm.calls.some(c => /Tutor_Relationships|Notes|Journey_ID/.test(c.u + JSON.stringify(c.body))));
+  // No Note or Journey_ID is written. Each listed tutor gets a Contact and an Inactive Tutor_Relationships row, as in V1.
+  assert.ok(!crm.calls.some(c => /Notes|Journey_ID/.test(c.u + JSON.stringify(c.body))));
+  assert.deepEqual(crm.store.Tutor_Relationships.map(r => [r.Name, r.Status, r.Account.id === crm.store.Accounts[0].id]), [['Tess Tutor', 'Inactive', true], ['Tom Teach', 'Inactive', true]]);
   const contact = crm.calls.find(c => c.method === 'PUT' && c.u.includes('/Contacts/'));
   assert.equal(contact.body.data[0].Phone, '+44 1234 567890');
   assert.equal(contact.body.data[0].Correspondence_Address_Line_3, 'Block C');
@@ -173,7 +175,7 @@ test('resume rebuilds the answers from the CRM records and lists only my drafts'
     assert.equal(a.centreAddress1, '2 Low Rd');
     assert.equal(a.qualifiedSixMonths, 'yes');
     assert.equal(a.otherTutors, 'yes');
-    assert.equal(a.tutorCount, 3);
+    assert.equal(a.tutorCount, 2);
     assert.equal(a.additionalVenues, 'no');
     assert.deepEqual(a.courseIds.sort(), [COURSE_A, COURSE_B]);
     assert.equal(a.firstName, 'Ada');
@@ -365,4 +367,39 @@ test('a CRM failure part way is reported with our own wording and no CRM text', 
     assert.equal(res.status, 502);
     assert.ok(!JSON.stringify(res.body).includes('secret'));
   });
+});
+
+test('tutors are linked once, an existing member tutor is Active, and a removed tutor is unlinked', async () => {
+  const crm = fakeCrm({contacts: [{id: MY_CONTACT, Email: ME.email, First_Name: 'Ada', Last_Name: 'Lovelace'}, {id: '1000000000303', Email: 'tess@example.test', First_Name: 'Tess', Last_Name: 'T'}],
+    rows: {Deals: [{id: '9', Contact_Name: {id: '1000000000303'}, Stage: 'Active', Membership_Type: 'Full Member', Start_Date: '2020-01-01', Expiry_Date: '2999-01-01'}]}});
+  await withApp(crm, async call => {
+    const first = (await call('/portal/drafts/', send('POST', body()))).body.draft;
+    assert.equal((await call('/portal/drafts/accreditation/' + first.id, send('PUT', body(answers(), {related: first.related})))).status, 200);
+    assert.equal(crm.store.Tutor_Relationships.length, 2);
+    assert.equal(crm.store.Tutor_Relationships.find(r => r.Tutor_Contact.id === '1000000000303').Status, 'Active');
+    assert.equal(crm.store.Tutor_Relationships.find(r => r.Name === 'Tom Teach').Status, 'Inactive');
+    assert.equal(crm.calls.filter(c => c.method === 'POST' && /Contacts$/.test(c.u)).length, 1);
+    const one = answers({tutorCount: '1', tutors: [{firstName: 'Tess', surname: 'Tutor', email: 'tess@example.test'}]});
+    assert.equal((await call('/portal/drafts/accreditation/' + first.id, send('PUT', body(one, {related: first.related})))).status, 200);
+    assert.equal(crm.store.Tutor_Relationships.length, 1);
+    const resumed = await call('/portal/drafts/accreditation/' + first.id);
+    assert.deepEqual(resumed.body.draft.answers.tutors, [{firstName: 'Tess', surname: 'T', email: 'tess@example.test'}]);
+  });
+});
+test('submit needs a name and a valid email for every tutor, and a mobile and centre contact details', () => {
+  const full = {final: true};
+  assert.throws(() => readAnswers(answers({tutors: [{firstName: 'Tess', surname: '', email: 'tess@example.test'}, {firstName: 'Tom', surname: 'Teach', email: 'tom@example.test'}]}), full), /tutor/i);
+  assert.throws(() => readAnswers(answers({tutors: [{firstName: 'Tess', surname: 'T', email: 'tess@example.test'}, {firstName: 'Tom', surname: 'T', email: 'TESS@example.test'}]}), full), /different email/i);
+  assert.throws(() => readAnswers(answers({tutors: [{firstName: 'Tess', surname: 'T', email: 'tess@example.test'}]}), full), /tutor/i);
+  assert.throws(() => readAnswers(answers({mobile: ''}), full), /mobile/i);
+  assert.throws(() => readAnswers(answers({centreEmail: ''}), full), /email/i);
+  assert.throws(() => readAnswers(answers({centreMobile: ''}), full), /mobile/i);
+  assert.equal(readAnswers(answers(), full).tutors.length, 2);
+});
+test('a phone number must be a real length: UK 9 or more digits after the country code', () => {
+  const bad = ['+44 123', '01234', '1', '+44 12345678'];
+  for (const phone of bad) assert.throws(() => readAnswers(answers({mobile: phone})), /mobile number/i, phone);
+  for (const phone of ['+44 7700 900123', '07700 900123', '+971 50 123 4567', '+33 6 12 34 56 78']) assert.doesNotThrow(() => readAnswers(answers({mobile: phone})), phone);
+  assert.throws(() => readAnswers(answers({mobile: '+971 1'})), /mobile number/i);
+  assert.throws(() => readAnswers(answers({mobile: '+44 77x0 900123'})), /mobile number/i);
 });

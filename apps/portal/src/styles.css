@@ -292,3 +292,13 @@ img,svg,video,iframe{max-width:100%}
   .price-panel{position:sticky;bottom:0;top:auto;order:2;border-radius:14px 14px 0 0;box-shadow:0 -8px 24px #38213118;z-index:5}
   .price-panel details[open] .price-body{max-height:55vh;overflow:auto}
 }
+.phone-input{display:grid;grid-template-columns:minmax(120px,170px) 1fr;gap:8px}.phone-input select,.phone-input input{min-width:0}
+.tutor-rows{display:grid;gap:12px}.tutor-row{display:grid;grid-template-columns:1fr 1fr 1.4fr;gap:8px;border:1px solid #e9dfe5;border-radius:12px;padding:10px 12px;margin:0}.tutor-row legend{font-size:12px;font-weight:700;padding:0 6px;color:#633b51}
+.copy-home{grid-column:1/-1;display:flex;flex-direction:column;gap:6px;align-items:flex-start;background:#fdeaf4;border-radius:12px;padding:12px 14px}.copy-home small{color:#633b51;font-size:12px}
+.course-view{font-size:12px;margin-left:auto;white-space:nowrap}
+.course-modal-backdrop{position:fixed;inset:0;background:rgba(37,33,42,.55);z-index:80;display:flex;align-items:center;justify-content:center;padding:16px}
+.course-modal{position:relative;background:#fff;border-radius:16px;max-width:520px;width:100%;max-height:85vh;overflow:auto;padding:24px 22px}.course-modal h3{margin:0 28px 12px 0}.course-modal h4{margin:16px 0 4px;font-size:13px}
+.course-modal-close{position:absolute;top:12px;right:12px;border:0;background:#f4eef2;border-radius:50%;width:32px;height:32px;display:grid;place-items:center;cursor:pointer}
+.course-facts{display:grid;gap:8px;margin:0}.course-facts div{display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid #f0e8ed;padding-bottom:6px;font-size:13px}.course-facts dt{color:#6f6670}.course-facts dd{margin:0;font-weight:700;text-align:right}
+.course-requirements{white-space:pre-wrap;font-size:13px;line-height:1.55;margin:0}.course-modal-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
+@media(max-width:600px){.tutor-row{grid-template-columns:1fr}.phone-input{grid-template-columns:1fr}.course-view{margin-left:0}}

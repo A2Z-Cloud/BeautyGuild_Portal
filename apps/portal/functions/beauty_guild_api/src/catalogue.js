@@ -16,6 +16,9 @@ const PROCESSING_STATUS = Object.freeze({Training_Centre_Accred: 'Payment Proces
 const ITEMS = Object.freeze({
   accreditation: {name: 'Accreditation', env: 'STRIPE_PRICE_ACCREDITATION'},
   accreditation_associate_bundle: {name: 'Accreditation and Associate Membership', env: 'STRIPE_PRICE_ASSOCIATE_MEMBERSHIP'},
+  // International schools pay a flat, VAT-free fee (V1: £350, or £405 with the £55 International membership).
+  accreditation_international: {name: 'International Accreditation', env: 'STRIPE_PRICE_ACCREDITATION_INTERNATIONAL', vatFree: true},
+  accreditation_international_bundle: {name: 'International Accreditation and International Membership', env: 'STRIPE_PRICE_ACCREDITATION_INTERNATIONAL_BUNDLE', vatFree: true},
   additional_venue: {name: 'Additional venue', env: 'STRIPE_PRICE_ADDITIONAL_VENUE'},
   addon_bundle: {name: 'Membership bundle', env: 'STRIPE_PRICE_ADDON_BUNDLE'},
   addon_certificate: {name: 'Additional certificate', env: 'STRIPE_PRICE_ADDON_CERTIFICATE'},
@@ -58,17 +61,20 @@ const SERVICES = {
       const international = acc.Accreditation_Level === INTERNATIONAL;
       const membership = await activeMembership(req, crm, contact.id);
       // A school without a current membership pays the combined accreditation and Associate price.
-      const bundle = !membership && !international;
-      const label = bundle ? 'Accreditation + Associate Membership' : international ? 'International Accreditation' : 'Accreditation';
+      const bundle = !membership;
+      const label = international ? (bundle ? 'International Accreditation + International Membership' : 'International Accreditation')
+        : bundle ? 'Accreditation + Associate Membership' : 'Accreditation';
+      const item = international ? (bundle ? 'accreditation_international_bundle' : 'accreditation_international')
+        : bundle ? 'accreditation_associate_bundle' : 'accreditation';
       return {
-        lines: [{item: bundle ? 'accreditation_associate_bundle' : 'accreditation', quantity: 1}],
+        lines: [{item, quantity: 1}],
         existingSessionId: acc.Stripe_Checkout_Session_ID || null,
         record: {module: 'Training_Centre_Accred', id, update: sessionId => ({Stripe_Checkout_Session_ID: sessionId, Payment_Status: PROCESSING_STATUS.Training_Centre_Accred})},
         metadata: ({total}) => ({
           type: 'accreditation', accreditation_id: id, application_id: id, contact_id: contact.id,
-          product_amount: total, product_details: label, product_name: bundle ? label : international ? 'International Accreditation' : 'Standard Accreditation',
+          product_amount: total, product_details: label, product_name: bundle || international ? label : 'Standard Accreditation',
           membership_required: bundle ? 'true' : 'false', membership_id: membership?.profileId || '',
-          membership_details: JSON.stringify({required: bundle, type: bundle ? 'Associate' : null,
+          membership_details: JSON.stringify({required: bundle, type: bundle ? (international ? 'International' : 'Associate') : null,
             start_date: membership?.start || null, expiry_date: membership?.expiry || null}),
         }),
       };
@@ -121,6 +127,7 @@ const SERVICES = {
 
 // Net (ex VAT) pounds for a priced line: standard rate 20%, except the zero-rated part of a membership fee.
 function netPounds(item, totalPence, quantity = 1) {
+  if (ITEMS[item].vatFree) return (totalPence / 100).toFixed(2);
   const zr = (ITEMS[item].zeroRatedPence || 0) * quantity;
   return ((zr + (totalPence - zr) / 1.2) / 100).toFixed(2);
 }

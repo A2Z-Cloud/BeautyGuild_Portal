@@ -57,3 +57,7 @@ Ported from V1 (`calculateInsuranceQuote`, `evaluateInsuranceRules`, `createInsu
 - It reads only Stripe prices and the rating tables. No CRM, Creator or Analytics call is made, there is no risk screening, and no record is written. The answer is marked `indicative: true`: the real checks (including sanctions, flood and subsidence) run when the member pays.
 - Renewals, upgrades, standalone insurance and accreditation are refused (422 `SIGN_IN_FOR_PRICE`). Rate limited to 30 a minute per client.
 - Checkout, drafts and every record write still need a signed-in account. The buy page keeps a guest's answers in the browser tab (sessionStorage, never sent anywhere, consent never restored) and sends them to the account checkpoint at the Pay step; the answers are cleared after a successful payment.
+
+## International accreditation
+
+A centre outside the UK is flat-rated and VAT-free (V1): £350, or £405 with the £55 International membership when the applicant has no current membership. Items `accreditation_international` (`STRIPE_PRICE_ACCREDITATION_INTERNATIONAL`) and `accreditation_international_bundle` (`STRIPE_PRICE_ACCREDITATION_INTERNATIONAL_BUNDLE`) hold the Stripe price IDs. Until both are set the checkout answers 409 "cannot be bought online yet". The metadata membership type is International.

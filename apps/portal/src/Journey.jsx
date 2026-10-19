@@ -3,7 +3,7 @@ import {ArrowLeft, ArrowRight, CreditCard, FileText, LockKeyhole, MapPin, Save, 
 import {Link, useNavigate} from 'react-router-dom';
 import {JOURNEYS,countryOption} from './JourneyConfig.js';
 import {Field,Notice,PageHeading,Stages} from './UiParts.jsx';
-import {centreCountry,resolveFields} from './accreditationInputs.js';
+import {centreCountry,resolveFields,COPY_HOME_MAP,LEGAL_LINKS,DECLARATIONS_WARNING} from './accreditationInputs.js';
 import {startLimits} from './startDate.js';
 import {accreditationType,validate} from './logic.mjs';
 import {usePreviewState} from './journeys/previewState.jsx';
@@ -11,7 +11,7 @@ import AddressLookup from './components/AddressLookup.jsx';
 import {INTEGRATIONS,portalApi} from './services/api.js';
 import {prefillFor} from './prefill.js';
 
-const reviewValue=(f,value)=>f.type==='courses'?value.length+(value.length===1?' course selected':' courses selected'):f.type==='radio'&&f.options?(f.options.find(o=>o.value===value)?.label||value):Array.isArray(value)?value.map(x=>typeof x==='object'?[x.type,x.firstName,x.lastName].filter(Boolean).join(' '):x).join(', '):String(value);
+const reviewValue=(f,value)=>f.type==='courses'?value.length+(value.length===1?' course selected':' courses selected'):f.type==='radio'&&f.options?(f.options.find(o=>o.value===value)?.label||value):Array.isArray(value)?value.map(x=>typeof x==='object'?[x.type,x.firstName,x.surname||x.lastName,x.email&&'('+x.email+')'].filter(Boolean).join(' '):x).join(', '):String(value);
 function ReviewDetails({steps,values,kind}){
   const all=steps.flatMap(s=>s.fields).filter(f=>!f.when||f.when(values));
   const entries=all.filter(f=>f.type!=='checkbox'&&values[f.name]!==undefined&&values[f.name]!==''&&values[f.name]!==false&&!(Array.isArray(values[f.name])&&!values[f.name].length));
@@ -25,6 +25,7 @@ function ReviewDetails({steps,values,kind}){
     <dl className="review-list">{entries.map(f=><div key={f.name}><dt>{f.label}</dt><dd>{reviewValue(f,values[f.name])}</dd></div>)}</dl>
     <div className="review-docs"><h3><FileText size={18}/> Information and documents</h3>
       <div className="doc-list"><a href="https://www.beautyguild.com/Membership/Code-Of-Ethics" target="_blank" rel="noopener noreferrer">Guild Code of Ethics <ArrowRight size={15}/></a>
+      {kind==='accreditation'&&Object.entries(LEGAL_LINKS).map(([label,href])=><a key={label} href={href} target="_blank" rel="noopener noreferrer">{label} <ArrowRight size={15}/></a>)}
       {kind==='insurance'&&<a href="https://www.beautyguild.com/Membership/Treatments-We-Cover" target="_blank" rel="noopener noreferrer">Treatments We Cover <ArrowRight size={15}/></a>}
       <span>Your policy documents will be available here once your application is complete.</span></div>
     </div>
@@ -115,6 +116,8 @@ export function Journey({kind}){
   }:{
     insPremPostcode:{line1:'insPremL1',town:'insPremTown',county:'insPremCounty',postcode:'insPremPostcode'}
   };
+  // Fills the training centre's address and contact details from the applicant's own, without touching anything they leave blank.
+  const copyHome=()=>{for(const [from,to] of Object.entries(COPY_HOME_MAP)){const v=values[from];if(typeof v==='string'&&v.trim())update(to,v);}};
   const applyAddress=(key,address)=>{
     const map=addressBindings[key]; if(!map)return;
     for(const [from,to] of Object.entries(map)){
@@ -140,7 +143,8 @@ export function Journey({kind}){
           <h2>{current.title}</h2><p className="journey-intro">{current.description}</p>
           {last?<><ReviewDetails steps={visible} values={values} kind={kind}/><CheckpointNotice kind={kind}/></>:<>
             {mayNeedLocation&&<div className="address-hint"><MapPin size={17}/><span>{INTEGRATIONS.address?'Enter your postcode and choose Find address, or type your address yourself.':'Address fields can be entered manually in this preview. Live postcode/address suggestions will use the Loqate backend.'}</span></div>}
-            <div className="fields-grid">{resolveFields(current.fields,values).map(f=><React.Fragment key={f.name}><Field field={f} value={values[f.name]} onChange={update} error={errors[f.name]}/>{INTEGRATIONS.address&&addressBindings[f.name]&&<AddressLookup query={values[f.name]||""} onSelect={address=>applyAddress(f.name,address)}/>}</React.Fragment>)}</div>
+            <div className="fields-grid">{resolveFields(current.fields,values).map(f=>f.type==='copyHome'?<div key={f.name} className="copy-home"><button type="button" className="btn btn-secondary" onClick={copyHome}>Copy my address and contact details</button><small>Fills in the centre address, mobile, telephone and email from your own details. You can change anything afterwards.</small></div>:<React.Fragment key={f.name}><Field field={f} value={values[f.name]} onChange={update} error={errors[f.name]} values={values}/>{INTEGRATIONS.address&&addressBindings[f.name]&&<AddressLookup query={values[f.name]||""} onSelect={address=>applyAddress(f.name,address)}/>}</React.Fragment>)}</div>
+            {kind==='accreditation'&&current.id==='declarations'&&['qualifiedSixMonths','teachingQualification','evidenceAvailable'].some(n=>values[n]==='no')&&<Notice title="All declarations are needed">{DECLARATIONS_WARNING}</Notice>}
           </>}
           {last&&saveStatus&&<Notice title="Application not submitted">{saveStatus}</Notice>}
           <div className="journey-footer"><div className="journey-footer-left">{index>0?<button type="button" className="btn btn-secondary" onClick={()=>move(index-1)}><ArrowLeft size={16}/> Previous</button>:<span className="muted">Fields marked * are required</span>}</div>
