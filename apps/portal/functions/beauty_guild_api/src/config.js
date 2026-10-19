@@ -13,6 +13,16 @@ function boundedInt(value, fallback, min, max) {
   return Number.isFinite(n) ? Math.min(max, Math.max(min, Math.trunc(n))) : fallback;
 }
 
+function safeName(value, fallback, name) {
+  const v = String(value || fallback).trim();
+  if (!/^[A-Za-z0-9][A-Za-z0-9 _.-]{0,79}$/.test(v)) throw new Error(`${name} contains characters that are not allowed`);
+  return v;
+}
+function unitFloat(value, fallback) {
+  const n = Number.parseFloat(value);
+  return Number.isFinite(n) && n > 0 && n <= 1 ? n : fallback;
+}
+
 function loadConfig(env = process.env) {
   return Object.freeze({
     crmApiDomain: httpsUrl(env.CRM_API_DOMAIN, 'https://www.zohoapis.eu', 'CRM_API_DOMAIN'),
@@ -24,6 +34,8 @@ function loadConfig(env = process.env) {
     recordsEnabled:env.PORTAL_RECORDS_ENABLED === 'true',
     diagnosticsEnabled:env.PORTAL_DIAGNOSTICS_ENABLED === 'true',
     diagnosticsEmails:String(env.PORTAL_DIAGNOSTICS_EMAILS||'').split(',').map(s=>s.trim().toLowerCase()).filter(Boolean),
+    // Whole email domains (exact, or a subdomain of one) that may also use diagnostics, e.g. "beautyguild.com,a2zcloud.com".
+    diagnosticsDomains:String(env.PORTAL_DIAGNOSTICS_DOMAINS||'').split(',').map(s=>s.trim().toLowerCase().replace(/^@/,'')).filter(d=>/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(d)),
     crmDraftsEnabled:env.PORTAL_CRM_DRAFTS_ENABLED === 'true',
     draftStatus:String(env.PORTAL_CRM_DRAFT_STATUS||'Draft'),
     dealStage:String(env.PORTAL_CRM_DRAFT_DEAL_STAGE||''),
@@ -47,6 +59,30 @@ function loadConfig(env = process.env) {
     // Stripe price IDs for the checkout catalogue (see catalogue.js). Anything else is ignored.
     stripePrices:Object.fromEntries(Object.entries(env).filter(([k,v])=>/^STRIPE_PRICE_[A-Z0-9_]+$/.test(k)&&/^price_[A-Za-z0-9]+$/.test(String(v).trim())).map(([k,v])=>[k,String(v).trim()])),
     portalPublicOrigin:String(env.PORTAL_PUBLIC_ORIGIN||''),
+    analyticsConnectionName:String(env.ANALYTICS_CONNECTION_NAME||'analytics'),
+    // Insurance risk checks (riskChecks.js). Each is off unless its switch is 'true', and a check that is on fails closed.
+    risk:Object.freeze({
+      sanctionsEnabled:env.PORTAL_RISK_SANCTIONS === 'true',
+      floodEnabled:env.PORTAL_RISK_FLOOD === 'true',
+      subsidenceEnabled:env.PORTAL_RISK_SUBSIDENCE === 'true',
+      guildPhone:String(env.PORTAL_GUILD_PHONE||'01332 224830').trim().slice(0,30),
+      sanctionsThreshold:unitFloat(env.PORTAL_RISK_SANCTIONS_THRESHOLD,0.88),
+      maxAgeHours:boundedInt(env.PORTAL_RISK_SANCTIONS_MAX_AGE_HOURS,72,1,720),
+      rowFloor:boundedInt(env.PORTAL_RISK_SANCTIONS_ROW_FLOOR,40000,1,10000000),
+      analytics:Object.freeze({
+        apiDomain:httpsUrl(env.ANALYTICS_API_DOMAIN,'https://analyticsapi.zoho.eu','ANALYTICS_API_DOMAIN'),
+        orgId:String(env.ANALYTICS_ORG_ID||'').trim(),
+        workspaceId:String(env.ANALYTICS_WORKSPACE_ID||'309854000000255068').trim(),
+        table:safeName(env.ANALYTICS_SANCTIONS_TABLE,'UK-Sanctions-List','ANALYTICS_SANCTIONS_TABLE'),
+      }),
+      creator:Object.freeze({
+        apiDomain:httpsUrl(env.CREATOR_API_DOMAIN,'https://www.zohoapis.eu','CREATOR_API_DOMAIN'),
+        owner:String(env.CREATOR_ACCOUNT_OWNER||'beautyguild'),
+        app:String(env.CREATOR_RISK_APP_LINK_NAME||'insurance-check'),
+        floodReport:safeName(env.CREATOR_RISK_FLOOD_REPORT,'All_Flood_Postcodes','CREATOR_RISK_FLOOD_REPORT'),
+        subsidenceReport:safeName(env.CREATOR_RISK_SUBSIDENCE_REPORT,'Subsidence_Postcodes_Report','CREATOR_RISK_SUBSIDENCE_REPORT'),
+      }),
+    }),
   });
 }
 

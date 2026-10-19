@@ -52,8 +52,10 @@ function registerRecordRoutes(app,{enabled,getCurrentUser,getCrmHeaders,crmApiDo
   // Saved drafts live in the same CRM modules; they are never shown as real memberships, policies or accreditations.
   // Each module marks a draft in its own field: Deals and Insurance_Policy use Application_Status, Training_Centre_Accred uses
   // Application_Stage. V1 saves accreditation applications at stage Draft, so those are hidden even before V2 drafts are switched on.
-  const isDraft=(row,d)=>Boolean(row)&&(d.draftField==='Application_Stage'?row.Application_Stage===DRAFT_STAGE:hideDrafts&&row[d.draftField]===draftStatus);
-  const fieldList=d=>[...new Set([...d.fields,'Modified_Time',...(hideDrafts||d.draftField==='Application_Stage'?[d.draftField]:[])])];
+  // Insurance applications the Insurance team is reviewing (Referred) are not shown to the member as a policy.
+  const reviewing=(row,d)=>d.module==='Insurance_Policy'&&row.Application_Status==='Referred';
+  const isDraft=(row,d)=>Boolean(row)&&(reviewing(row,d)||(d.draftField==='Application_Stage'?row.Application_Stage===DRAFT_STAGE:hideDrafts&&row[d.draftField]===draftStatus));
+  const fieldList=d=>[...new Set([...d.fields,'Modified_Time',...(hideDrafts||d.draftField==='Application_Stage'||d.module==='Insurance_Policy'?[d.draftField]:[])])];
   const router=express.Router();
   const {call}=createCrmClient({getCrmHeaders,crmApiDomain,fetchImpl});
   router.use(async(req,res,next)=>{try{
