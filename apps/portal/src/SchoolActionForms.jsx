@@ -4,6 +4,7 @@ import {Notice} from './UiParts.jsx';
 
 const DELIVERY=['Face to Face In the Classroom','Face to Face via Live Video Link','Online only','Other'];
 const ASSESS=['Face to Face In the Classroom','Face to Face via Live Video Link','Case Studies - Submitting Photographs','Case Studies - Submitting Videos','Other'];
+const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const formField=(k,v,set)=><input value={v||''} onChange={e=>set(k,e.target.value)}/>;
 function MultiOptions({label,values,options,onChange}){
  return <fieldset className="school-multi"><legend>{label}</legend>{options.map(o=><label key={o}>
@@ -11,11 +12,14 @@ function MultiOptions({label,values,options,onChange}){
  </label>)}</fieldset>;
 }
 export function QualificationForm({schoolId,onDone}){
- const [values,setValues]=useState({name:'',month:'',year:'',delivery:[],assessment:[],deliveryOther:'',assessmentOther:''});
+ const [values,setValues]=useState({name:'',trainingCentre:'',month:'',year:'',delivery:[],assessment:[],deliveryOther:'',assessmentOther:''});
  const [busy,setBusy]=useState(false),[error,setError]=useState('');
  const set=(key,value)=>setValues(p=>({...p,[key]:value}));
+ const thisYear=new Date().getFullYear(),thisMonth=new Date().getMonth()+1;
+ const years=Array.from({length:thisYear-1969},(_,i)=>thisYear-i);
+ const future=Number(values.year)===thisYear&&Number(values.month)>thisMonth;
  async function submit(e){
-  e.preventDefault();if(busy)return;setBusy(true);setError('');
+  e.preventDefault();if(busy||future)return;setBusy(true);setError('');
   try{await portalApi.saveSchoolQualification(schoolId,values);onDone();}
   catch(err){setError(err.message||'Qualification could not be saved.');}
   finally{setBusy(false);}
@@ -23,17 +27,20 @@ export function QualificationForm({schoolId,onDone}){
  return <form className="school-ops-form" onSubmit={submit}>
  <h3>Add a qualification</h3><p>Qualifications are submitted for Guild verification; they are not automatically approved.</p>
  <label>Qualification name *{formField('name',values.name,set)}</label>
+ <label>Training Centre *<input required maxLength={200} placeholder="Where you completed your qualification" value={values.trainingCentre} onChange={e=>set('trainingCentre',e.target.value)}/></label>
  <div className="auth-double">
   <label>Completion month *<select value={values.month} onChange={e=>set('month',e.target.value)} required>
-   <option value="">Choose month</option>{Array.from({length:12},(_,i)=><option value={i+1} key={i}>{i+1}</option>)}</select></label>
-  <label>Completion year *<input required type="number" min="1900" max="2200" value={values.year} onChange={e=>set('year',e.target.value)}/></label>
+   <option value="">Choose month</option>{Array.from({length:12},(_,i)=><option value={i+1} key={i}>{MONTHS[i]}</option>)}</select></label>
+  <label>Completion year *<select value={values.year} onChange={e=>set('year',e.target.value)} required>
+   <option value="">Choose year</option>{years.map(y=><option value={y} key={y}>{y}</option>)}</select></label>
  </div>
+ {future&&<p className="field-error" role="alert">The completion date cannot be in the future.</p>}
  <MultiOptions label="Practical delivery *" values={values.delivery} options={DELIVERY} onChange={v=>set('delivery',v)}/>
  {values.delivery.includes('Other')&&<label>Other delivery{formField('deliveryOther',values.deliveryOther,set)}</label>}
  <MultiOptions label="Practical assessment *" values={values.assessment} options={ASSESS} onChange={v=>set('assessment',v)}/>
  {values.assessment.includes('Other')&&<label>Other assessment{formField('assessmentOther',values.assessmentOther,set)}</label>}
  {error&&<Notice title="Not saved">{error}</Notice>}
- <button type="submit" className="btn btn-primary" disabled={busy||!values.name||!values.month||!values.year||!values.delivery.length||!values.assessment.length}>{busy?'Saving…':'Save qualification'}</button>
+ <button type="submit" className="btn btn-primary" disabled={busy||future||!values.name||!values.trainingCentre.trim()||!values.month||!values.year||!values.delivery.length||!values.assessment.length}>{busy?'Saving…':'Save qualification'}</button>
  </form>;
 }
 export function SessionForm({schoolId,onDone}){
