@@ -322,3 +322,6 @@ img,svg,video,iframe{max-width:100%}
 .accreditation-status{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;border:1px solid #f4cce0;background:#fff5fa;border-radius:14px;padding:18px 20px;margin:0 0 20px}
 .accreditation-status strong{display:block;font-size:15px}.accreditation-status p{margin:4px 0 0;font-size:13px;color:#726b74}
 .accreditation-status.status-approved{background:#f6fbf7;border-color:#cfe8d5}.accreditation-status.status-review{background:#f0ebf7;border-color:#ddd2ee}
+
+/* UAT qualification form: future-date message */
+.school-ops-form .field-error{color:var(--danger,#b42318);font-size:.9rem;margin:.25rem 0 0}
