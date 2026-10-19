@@ -12,6 +12,8 @@ const KNOWN_CODES=Object.freeze({
   CHECKOUT_UNAVAILABLE:'Online payment is not available yet. Please contact the Guild.',
   BILLING_DISABLED:'Online payment is not available yet. Please contact the Guild.',
   PAYMENT_UNAVAILABLE:'We could not open the secure payment page. Please try again in a moment.',
+  QUOTE_EXPIRED:'This quote has expired. Please get a new quote.',
+  NOT_PAYABLE:'This quote cannot be paid for online. Please contact the Guild.',
   CONTACT_AMBIGUOUS:'We need to check your details before we can show your records. Please contact the Guild.',
 });
 const SAFE_MESSAGES=Object.freeze({

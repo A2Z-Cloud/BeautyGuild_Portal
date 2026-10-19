@@ -302,6 +302,7 @@ img,svg,video,iframe{max-width:100%}
 .course-facts{display:grid;gap:8px;margin:0}.course-facts div{display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid #f0e8ed;padding-bottom:6px;font-size:13px}.course-facts dt{color:#6f6670}.course-facts dd{margin:0;font-weight:700;text-align:right}
 .course-requirements{white-space:pre-wrap;font-size:13px;line-height:1.55;margin:0}.course-modal-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
 @media(max-width:600px){.tutor-row{grid-template-columns:1fr}.phone-input{grid-template-columns:1fr}.course-view{margin-left:0}}
+.quote-action{margin-top:18px}.quote-action .error{margin-top:8px}
 .my-service-records{margin:0 0 26px}.my-service-records .section-row{margin-top:0}.service-record-list{display:grid;gap:12px}
 .service-record{display:flex;align-items:center;gap:16px;border:1px solid #eee6eb;background:#fff;border-radius:14px;padding:16px 18px;transition:box-shadow .2s,transform .2s}.service-record:hover{transform:translateY(-1px);box-shadow:0 8px 20px #38213110}
 .service-record .service-icon{margin:0;flex-shrink:0;background:#fff0f8}.service-record-copy{flex:1;min-width:0}.service-record-copy strong,.service-record-copy small{display:block}.service-record-copy small{margin-top:4px;font-size:12px}

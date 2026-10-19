@@ -181,8 +181,8 @@ async function insuranceLines({req, contact, input, member, risk, start, end}) {
   if (quote.iptPence) inline.push({name: 'Insurance Premium Tax (' + Math.round(insurance.IPT_RATE * 100) + '%)', unitPence: quote.iptPence, quantity: 1});
   return {
     inline, blocked, quote, fingerprint: JSON.stringify([country, ins, start]),
-    beforePay: create => insurance.createRecords(create, {contactId: contact?.id || '', membershipDealId: member?.id || null, ins, quote, start, end,
-      entryRoute: contact ? 'Existing Member' : 'Public Prospect', termsAccepted: input.accepted === 'yes', audits: screening.audits}),
+    beforePay: (create, extra = {}) => insurance.createRecords(create, {contactId: contact?.id || '', membershipDealId: member?.id || null, ins, quote, start, end,
+      entryRoute: contact ? 'Existing Member' : 'Public Prospect', termsAccepted: input.accepted === 'yes', audits: screening.audits, ...extra}),
     // A REFER or STOP is recorded in the CRM for the Insurance team, never sent to Stripe (INCOMPLETE is the member's to fix).
     refer: blocked && blocked.status !== 'INCOMPLETE' ? create => insurance.createRecords(create, {contactId: contact?.id || '', membershipDealId: member?.id || null, ins, quote, start, end,
       entryRoute: contact ? 'Existing Member' : 'Public Prospect', termsAccepted: input.accepted === 'yes', audits: screening.audits,

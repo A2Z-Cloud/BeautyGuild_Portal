@@ -8,6 +8,7 @@ const ENV = {PORTAL_BILLING_ENABLED: 'true', STRIPE_SECRET_KEY: 'sk_test_example
   STRIPE_PRICE_ACCREDITATION: 'price_accr111111', STRIPE_PRICE_ASSOCIATE_MEMBERSHIP: 'price_bundle22222',
   STRIPE_PRICE_ADDITIONAL_VENUE: 'price_venue33333', STRIPE_PRICE_ADDON_BADGE: 'price_badge44444', STRIPE_PRICE_ADDON_STICKER: 'price_sticker5555'};
 const PRICES = {price_intl111111: 35000, price_intlbundle1: 40500, price_accr111111: 35400, price_bundle22222: 40900, price_venue33333: 10000, price_badge44444: 400, price_sticker5555: 400};
+const POLICY = '1011174000000000009';
 const ME = '1011174000000000001', ACC = '1011174000000000002', DEAL = '1011174000000000003', CENTRE = '1011174000000000004';
 
 function world(opts = {}) {
@@ -33,6 +34,7 @@ function world(opts = {}) {
     }
     if (init.method === 'PUT') { state.crmPuts.push({url, body: JSON.parse(init.body)}); return json({data: [{status: 'success'}]}); }
     if (url.includes('Contacts/search')) return json({data: [{id: ME, Email: 'alice@example.test', First_Name: 'Alice', Last_Name: 'Test'}]});
+    if (url.includes('Insurance_Policy/') && (init.method || 'GET') === 'GET') return state.policy ? json({data: [{id: POLICY, ...state.policy}]}) : json({data: []});
     if (url.includes('Training_Centre_Accred/' + ACC)) return json({data: [{id: ACC, ...state.acc}]});
     if (url.includes('Training_Centre_Accred/')) return json({data: [{id: 'x', Applicant_Contact: {id: 'someone-else'}}]});
     if (url.includes('Accreditation_Centre_Link/search')) return json({data: url.includes(CENTRE) ? [{Training_Centre: {id: CENTRE}}] : []});
@@ -784,4 +786,64 @@ test('a different start date is a different insurance application, so a retry do
     assert.equal(w.crmPosts.filter(c => c.module === 'Insurance_Policy').length, 2);
     assert.equal(w.stripePosts.length, 2);
   });
+});
+
+// ---- Resuming a quote, quote amount and expiry ----
+test('a payable insurance quote stores the session id, quoted amount and expiry on the policy', async () => {
+  const w = fullWorld();
+  await withApp(w, async ({post}) => {
+    assert.equal((await post(INSURE)).status, 201);
+    const policy = w.crmPosts[0].record;
+    assert.equal(policy.Quoted_Amount, 109.2);
+    assert.match(policy.Quote_Expiry, /^\d{4}-\d{2}-\d{2}$/);
+    const put = w.crmPuts.find(c => c.url.includes('Insurance_Policy/9000000000000000001'));
+    assert.deepEqual(put.body.data[0], {Stripe_Checkout_Session_ID: 'cs_test_1'});
+    const expires = Number(w.stripePosts[0].params.get('expires_at')) - Date.now() / 1000;
+    assert.ok(expires > 23 * 3600 && expires < 24 * 3600, 'Stripe sessions last under 24 hours');
+  });
+});
+async function resumeCase(w, policy, body = {policyId: POLICY}) {
+  w.policy = policy;
+  let out;
+  const app = createApp({config: loadConfig({...ENV}), getCurrentUser: async () => ({id: 'user-1', email: 'alice@example.test'}), getCrmHeaders: async () => ({Authorization: 'Bearer t'}), fetchImpl: w.fetchImpl});
+  const server = await new Promise(resolve => { const s = app.listen(0, '127.0.0.1', () => resolve(s)); });
+  try {
+    const r = await fetch('http://127.0.0.1:' + server.address().port + '/portal/checkout/resume', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+    out = {status: r.status, body: await r.json()};
+  } finally { await new Promise(resolve => server.close(resolve)); }
+  return out;
+}
+const READY = {Contact: {id: ME}, Application_Status: 'Ready for Payment', Stripe_Checkout_Session_ID: 'cs_old'};
+const expiredWrites = w => w.crmPuts.filter(c => c.body.data[0].Application_Status === 'Expired').length;
+test('resume gives the open Stripe session for your own quote', async () => {
+  const w = world({sessions: {cs_old: {id: 'cs_old', status: 'open', payment_status: 'unpaid', url: 'https://checkout.stripe.com/c/pay/cs_old'}}});
+  const r = await resumeCase(w, READY);
+  assert.equal(r.status, 200);
+  assert.equal(r.body.checkoutUrl, 'https://checkout.stripe.com/c/pay/cs_old');
+  assert.equal(expiredWrites(w), 0);
+  assert.equal(w.stripePosts.length, 0);
+});
+test('resume marks a quote Expired when its session has run out, is missing or never existed', async () => {
+  for (const [session, policy] of [[{id: 'cs_old', status: 'expired', payment_status: 'unpaid', url: null}, READY], [undefined, READY],
+    [undefined, {...READY, Stripe_Checkout_Session_ID: undefined}]]) {
+    const w = world({sessions: session ? {cs_old: session} : {}});
+    const r = await resumeCase(w, policy);
+    assert.equal(r.status, 409);
+    assert.equal(r.body.code, 'QUOTE_EXPIRED');
+    assert.match(r.body.error, /get a new quote/);
+    assert.equal(expiredWrites(w), 1);
+    assert.equal(w.stripePosts.length, 0);
+  }
+});
+test('resume reports a paid session and refuses other people\'s, expired and non-payable policies', async () => {
+  const paid = world({sessions: {cs_old: {id: 'cs_old', status: 'complete', payment_status: 'paid', url: null}}});
+  assert.deepEqual((await resumeCase(paid, READY)).body, {alreadyPaid: true});
+  assert.equal((await resumeCase(world(), {...READY, Contact: {id: 'someone-else'}})).status, 404);
+  assert.equal((await resumeCase(world(), undefined)).status, 404);
+  assert.equal((await resumeCase(world(), READY, {policyId: 'abc'})).status, 404);
+  const done = world();
+  const r = await resumeCase(done, {...READY, Application_Status: 'Expired'});
+  assert.equal(r.body.code, 'QUOTE_EXPIRED');
+  assert.equal(expiredWrites(done), 0);
+  assert.equal((await resumeCase(world(), {...READY, Application_Status: 'Active'})).body.code, 'NOT_PAYABLE');
 });

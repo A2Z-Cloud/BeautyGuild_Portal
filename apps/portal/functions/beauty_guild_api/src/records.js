@@ -5,7 +5,7 @@ const ID=/^\d{10,25}$/;
 const DEFINITIONS={
  membership:{module:'Deals',draftField:'Application_Status',owner:'Contact_Name',fields:['Deal_Name','Stage','Membership_Type','Membership_Branch','Expiry_Date','Start_Date','Contact_Name','Amount','Payment_Status','Created_Time'],label:'Deal_Name',status:'Stage'},
  accreditation:{module:'Training_Centre_Accred',draftField:'Application_Stage',owner:'Applicant_Contact',fields:['Name','Account','Accreditation_Status','Application_Stage','Accreditation_Level','Valid_From','Valid_To','Applicant_Contact','Payment_Status','Created_Time'],label:'Account',status:'Accreditation_Status'},
- insurance:{module:'Insurance_Policy',draftField:'Application_Status',owner:'Contact',fields:['Application_Status','Policy_Type','Policy_Start_Date','Policy_End_Date','Contact','Created_Time'],label:'Policy_Type',status:'Application_Status'}
+ insurance:{module:'Insurance_Policy',draftField:'Application_Status',owner:'Contact',fields:['Application_Status','Policy_Type','Policy_Start_Date','Policy_End_Date','Contact','Created_Time','Quoted_Amount','Quote_Expiry','Stripe_Checkout_Session_ID'],label:'Policy_Type',status:'Application_Status'}
 };
 const DRAFT_STAGE='Draft';
 const uri=(s)=>encodeURIComponent(String(s));
@@ -49,6 +49,14 @@ function recordTitle(kind,base){
   if(kind==='insurance'&&!/insurance/i.test(text))return text.replace(/^Non[ -]?Salon$/i,'Non-salon')+' insurance';
   return text;
 }
+// A quote waiting for payment: what was quoted, whether its payment link can still be used, and Expired once the day has passed.
+// The CRM status changes to Expired when someone tries to pay for a quote whose Stripe session has run out.
+function insuranceQuoteFields(r){
+  const waiting=r.Application_Status==='Ready for Payment',lapsed=waiting&&r.Quote_Expiry&&String(r.Quote_Expiry)<new Date().toISOString().slice(0,10);
+  const amount=r.Quoted_Amount==null||r.Quoted_Amount===''?null:Number(r.Quoted_Amount);
+  return {quotedAmount:Number.isFinite(amount)?amount:null,quoteExpiry:r.Quote_Expiry||null,
+    ...(lapsed?{status:'Expired'}:{}),canPay:Boolean(waiting&&!lapsed&&r.Stripe_Checkout_Session_ID)};
+}
 function mapRecord(kind,r){
   const d=DEFINITIONS[kind];
   return {id:String(r.id),kind,title:recordTitle(kind,(typeof r[d.label]==='object'?r[d.label]?.name:r[d.label])),reference:kind==='accreditation'&&r.Name?String(r.Name):String(r.id),
@@ -56,7 +64,8 @@ function mapRecord(kind,r){
     updated:r.Modified_Time||r.Created_Time||null,
     startDate:r.Start_Date||r.Valid_From||r.Policy_Start_Date||null,
     endDate:r.Expiry_Date||r.Valid_To||r.Policy_End_Date||null,
-    paymentStatus:r.Payment_Status||null,type:r.Membership_Type||r.Accreditation_Level||r.Policy_Type||null};
+    paymentStatus:r.Payment_Status||null,type:r.Membership_Type||r.Accreditation_Level||r.Policy_Type||null,
+    ...(kind==='insurance'?insuranceQuoteFields(r):{})};
 }
 function registerRecordRoutes(app,{enabled,getCurrentUser,getCrmHeaders,crmApiDomain,fetchImpl=fetch,hideDrafts=false,draftStatus='Draft'}){
   // Saved drafts live in the same CRM modules; they are never shown as real memberships, policies or accreditations.
