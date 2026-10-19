@@ -1,11 +1,26 @@
-# Quotation, underwriting and Stripe stack (PR 3 of 4)
+# Catalogue-driven Stripe checkout
 
-**Current implementation:** user-owned, manually provisioned server-approved quotes in Catalyst DataStore. No client amount is ever used for checkout. This PR implements the secure **read quote → create Checkout Session → Stripe-signed webhook** lifecycle. It does **not** yet implement full V1 membership/insurance pricing or a live underwriting engine. Those must be signed off from the authoritative price tables and underwriting rules before enabling quote creation. Referral decisions PASS / REFER / STOP live in the backend-owned quote record; only PASS may pay.
+Follows V1 (`beauty-guild-catalyst`): the portal function creates the Stripe Checkout Session and holds the Stripe key. **Creator owns the Stripe webhook and everything after payment** (marking Deals Active, invoices, payment and add-on records). This function has no webhook.
 
-DataStore `Portal_Quotes` columns: `Owner_User_ID`, `Service`, `Decision`, `Status`, `Amount_Pence` integer, `Tax_Pence` integer, `Updated_At`. Only backend processes may insert/approve quotes; never give App Users table-write permission. `Portal_Payments` columns: `Owner_User_ID`, `Quote_ID`, `Status`, `Amount_Pence`, `Stripe_Session_ID`, `Updated_At`. All tables must be private. Webhook updates paid state only after Stripe signature verification, and does **not** issue a policy or activate membership.
+## How it works
+- `src/catalogue.js` lists ITEMS (each points at a Stripe price ID, supplied as an env var such as `STRIPE_PRICE_ACCREDITATION`) and SERVICES (who may pay, which items apply, the metadata Creator expects).
+- Books is the source of truth for prices and syncs to Stripe. The portal stores no amounts: it reads each item's live price from Stripe (must be active, GBP).
+- `GET /portal/checkout/quote?service=&recordId=` returns a server-built summary. `POST /portal/checkout` creates the session and returns `checkoutUrl`. Amounts from the browser are ignored.
+- Every request needs a signed-in user whose verified email matches exactly one CRM Contact, and the record must belong to that Contact.
+- Metadata keys match V1 (`type`, `accreditation_id`, `contact_id`, `membership_deal_id`, `product_amount`, ...) so Creator keeps working.
+- Open sessions for an accreditation are reused (`Stripe_Checkout_Session_ID`); paid ones return `alreadyPaid`. Accreditation sessions write `Stripe_Checkout_Session_ID` and `Payment_Status = Payment Processing` back to the CRM, as V1 does.
+- Only `sk_test_` keys are accepted until live use is agreed.
 
-Function env: `PORTAL_BILLING_ENABLED=true`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `PORTAL_PUBLIC_ORIGIN=https://<verified-host>`; frontend `VITE_PORTAL_BILLING=true` plus API mode and Catalyst auth. No secrets in Vite. Test with Stripe test keys and signed webhook events, including replay, cancelled and asynchronous payments. Configure return URL under `/app/#/payment-return` before enabling production.
+## Services now
+`accreditation` (bundle price when the Contact has no current membership, international price rule as V1), `additional_venue`, `membership_addon`.
 
-**Critical backlog:** port and reconcile V1 rating tables (including VAT/IPT, instalments, eligibility, specialist treatments, property risk), sanctions checks, consent/declarations, referral workflow, webhook-to-CRM fulfilment, Stripe retry-safe event storage, duplicate checkout prevention and idempotency across repeat payment attempts. Until that work is complete, DO NOT enable payment in Production.
+## Adding a service
+1. Add its items to `ITEMS` and set `STRIPE_PRICE_*` env vars (a new Books item synced to Stripe gives the price ID).
+2. Add an entry to `SERVICES` with `prepare()` (ownership check, lines, metadata).
+3. Add a route link in the portal to `/pay/<service>/<recordId>`.
 
-**Drafts are not a dependency:** this branch stacks solely on authenticated record reads and leaves the CRM draft PR separately blocked. Stripe amounts are sourced solely from backend-owned approved quote records; the actual pricing engine, sanctions and underwriting assessments are not yet implemented.
+## Env
+`PORTAL_BILLING_ENABLED=true`, `STRIPE_SECRET_KEY` (test), `PORTAL_PUBLIC_ORIGIN`, `STRIPE_PRICE_*`. Client: `VITE_PORTAL_BILLING=true`. Not sent: the Stripe webhook secret.
+
+## Not built yet
+New membership and insurance purchases (rating tables, VAT/IPT split, declarations, sanctions check, CRM record creation, subscription pricing) are not ported from V1. The checkout already supports recurring prices (subscription mode) for when they are.

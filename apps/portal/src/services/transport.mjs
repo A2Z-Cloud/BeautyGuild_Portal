@@ -9,6 +9,9 @@ const allowedMethods=new Set(['GET','POST','PUT','PATCH','DELETE']);
 // Backend codes we recognise get a fixed, customer-friendly message. Unknown codes never show backend text.
 const KNOWN_CODES=Object.freeze({
   CONTACT_UNLINKED:'We could not find a Guild membership record for your email address. If you are already a member, please contact the Guild.',
+  CHECKOUT_UNAVAILABLE:'Online payment is not available yet. Please contact the Guild.',
+  BILLING_DISABLED:'Online payment is not available yet. Please contact the Guild.',
+  PAYMENT_UNAVAILABLE:'We could not open the secure payment page. Please try again in a moment.',
   CONTACT_AMBIGUOUS:'We need to check your details before we can show your records. Please contact the Guild.',
 });
 const SAFE_MESSAGES=Object.freeze({
