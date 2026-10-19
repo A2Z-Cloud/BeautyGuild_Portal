@@ -87,7 +87,8 @@ function registerCheckoutRoutes(app, {publicQuotesEnabled = false, enabled, getC
     level: String(src.level || ''), branch: String(src.branch || ''), branches: src.branches || '', billing: String(src.billing || ''),
     previousId: String(src.previousId || ''), changeType: String(src.changeType || ''), start: String(src.start || ''),
     accepted: String(src.accepted || ''), firstName: String(src.firstName || ''), lastName: String(src.lastName || ''),
-    country: String(src.country || ''), insurance: src.insurance && typeof src.insurance === 'object' && !Array.isArray(src.insurance) ? src.insurance : null});
+    country: String(src.country || ''), businessName: String(src.businessName || ''), address1: String(src.address1 || ''), address2: String(src.address2 || ''),
+    town: String(src.town || ''), county: String(src.county || ''), postcode: String(src.postcode || ''), insurance: src.insurance && typeof src.insurance === 'object' && !Array.isArray(src.insurance) ? src.insurance : null});
   function parseAddons(text) {
     const out = {};
     for (const part of String(text || '').split(',').filter(Boolean)) { const [k, v] = part.split(':'); out[k] = Number(v); }

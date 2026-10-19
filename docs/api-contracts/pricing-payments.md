@@ -20,6 +20,8 @@ Follows V1 (`beauty-guild-catalyst`): the portal function creates the Stripe Che
 - Price IDs (env): `STRIPE_PRICE_MEMBERSHIP_{ASSOCIATE|FULL_NON_SALON|FULL_SALON}_{ANNUAL|MONTHLY}`, `STRIPE_PRICE_MEMBERSHIP_JOINING_FEE`, `STRIPE_PRICE_MEMBERSHIP_BRANCH`, plus the `STRIPE_PRICE_ADDON_*` items.
 - A signed-in user with no CRM Contact may buy (V1 public path): `contact_id` is empty and Creator creates the Contact after payment. A Contact with an active membership must renew or upgrade (`previousId`, owned Deal), which waives the joining fee. Metadata keys match V1 including net amounts (the zero-rated element of the fee is split out for Creator).
 - Page: `/membership/buy` (renew: `?renew=<dealId>`).
+- Join page details: the POST also accepts `businessName`, `address1`, `address2`, `town`, `county`, `postcode` (each trimmed to 100 characters). Non-empty values go in the session metadata as `business_name`, `address_line_1`, `address_line_2`, `town`, `county`, `postcode`, so Creator can store the trading name and address. Quotes ignore them.
+- Extras are named `Certificate`, `Badge` and `Window sticker` in Stripe line items and the price panel.
 
 ## Adding a service
 1. Add its items to `ITEMS` and set `STRIPE_PRICE_*` env vars (a new Books item synced to Stripe gives the price ID).

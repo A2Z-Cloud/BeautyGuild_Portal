@@ -21,9 +21,9 @@ const ITEMS = Object.freeze({
   accreditation_international_bundle: {name: 'International Accreditation and International Membership', env: 'STRIPE_PRICE_ACCREDITATION_INTERNATIONAL_BUNDLE', vatFree: true},
   additional_venue: {name: 'Additional venue', env: 'STRIPE_PRICE_ADDITIONAL_VENUE'},
   addon_bundle: {name: 'Membership bundle', env: 'STRIPE_PRICE_ADDON_BUNDLE'},
-  addon_certificate: {name: 'Additional certificate', env: 'STRIPE_PRICE_ADDON_CERTIFICATE'},
-  addon_badge: {name: 'Additional badge', env: 'STRIPE_PRICE_ADDON_BADGE'},
-  addon_sticker: {name: 'Additional window sticker', env: 'STRIPE_PRICE_ADDON_STICKER'},
+  addon_certificate: {name: 'Certificate', env: 'STRIPE_PRICE_ADDON_CERTIFICATE'},
+  addon_badge: {name: 'Badge', env: 'STRIPE_PRICE_ADDON_BADGE'},
+  addon_sticker: {name: 'Window sticker', env: 'STRIPE_PRICE_ADDON_STICKER'},
   joining_fee: {name: 'Membership joining fee', env: 'STRIPE_PRICE_MEMBERSHIP_JOINING_FEE'},
   membership_branch: {name: 'Additional branch', env: 'STRIPE_PRICE_MEMBERSHIP_BRANCH'},
   // Memberships are subscriptions. Each level has an annual and a monthly Stripe price (interval is checked).
@@ -197,6 +197,10 @@ async function insuranceLines({req, contact, input, member, risk, start, end}) {
 // Insurance is included with Full membership only; Associate has none.
 const NEEDS_FULL = () => new HttpError(409, 'INSURANCE_NEEDS_FULL_MEMBERSHIP',
   'Insurance is included with Full membership. You can add it when you join as a Full member or when you upgrade your membership.');
+// What the member typed on the Join page, kept short enough for Stripe metadata. Empty values are left out.
+const tidy = (v, n = 100) => String(v || '').trim().slice(0, n);
+const detailsMeta = input => Object.fromEntries([['business_name', input.businessName], ['address_line_1', input.address1], ['address_line_2', input.address2],
+  ['town', input.town], ['county', input.county], ['postcode', input.postcode]].map(([k, v]) => [k, tidy(v)]).filter(([, v]) => v));
 const isFullType = type => /^full\b/i.test(String(type || ''));
 const fullName = (contact, input) => contact ? [contact.First_Name, contact.Last_Name].filter(Boolean).join(' ')
   : [input.firstName, input.lastName].map(x => String(x || '').trim().slice(0, 60)).filter(Boolean).join(' ');
@@ -281,7 +285,7 @@ SERVICES.membership = {
           contact_id: contact?.id || '', membership_profile_id: member?.profileId || '',
           existing_membership: member ? JSON.stringify({type: member.type, start_date: member.start, expiry_date: member.expiry, deal_id: member.id}) : '',
           previous_membership_id: previous || '', change_type: change,
-          name, membership_level: level, primary_branch: branch, secondary_branches: secondary.join(','), addons: JSON.stringify(addons),
+          name, ...detailsMeta(input), membership_level: level, primary_branch: branch, secondary_branches: secondary.join(','), addons: JSON.stringify(addons),
           insurance_requested: ins ? 'true' : 'false', subscription_type: billing, membership_start: start, membership_expiry: expiry,
           base_membership_amount: gross(base), base_membership_amount_net: net(base),
           joining_fee_amount: gross('joining_fee'), joining_fee_amount_net: net('joining_fee'),

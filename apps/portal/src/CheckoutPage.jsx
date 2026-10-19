@@ -5,7 +5,7 @@ import {Link,useParams,useSearchParams} from 'react-router-dom';
 import {Notice,PageHeading} from './UiParts.jsx';
 import {INTEGRATIONS,portalApi} from './services/api.js';
 
-const ADDONS=[['bundle','Membership bundle'],['certificate','Additional certificate'],['badge','Additional badge'],['sticker','Additional window sticker']];
+const ADDONS=[['bundle','Membership bundle'],['certificate','Certificate'],['badge','Badge'],['sticker','Window sticker']];
 const money=pence=>'£'+(pence/100).toFixed(2);
 const TITLES={accreditation:'Accreditation payment',additional_venue:'Additional venue payment',membership_addon:'Membership add-ons'};
 
