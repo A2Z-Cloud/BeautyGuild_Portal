@@ -2,6 +2,7 @@ import React,{useEffect,useState} from 'react';
 import {Link,useParams,useSearchParams} from 'react-router-dom';
 import {portalApi} from './services/api.js';
 import {Notice,PageHeading,Status} from './UiParts.jsx';
+import {formatDate,serviceLabel} from './format.js';
 import {DocumentsPanel} from './DocumentsPanel.jsx';
 export function LiveRecords(){
   const [query,setQuery]=useSearchParams(),kind=query.get('type')||'';
@@ -12,10 +13,10 @@ export function LiveRecords(){
   },[kind]);
   return <div className="page"><PageHeading eyebrow="MEMBER RECORDS" title="My Guild records" description="Your memberships, accreditations and insurance."/>
     <div className="filter-wrap"><label htmlFor="live-type">Service</label><select id="live-type" value={kind} onChange={e=>setQuery(e.target.value?{type:e.target.value}:{})}>
-      <option value="">All</option>{['membership','accreditation','insurance'].map(k=><option value={k} key={k}>{k}</option>)}</select></div>
+      <option value="">All</option>{['membership','accreditation','insurance'].map(k=><option value={k} key={k}>{serviceLabel(k)}</option>)}</select></div>
     {data.busy?<p role="status">Loading your records…</p>:data.error?<Notice title="Unable to load records">{data.error}</Notice>:<section className="surface">
       {data.rows.length?<table className="record-table"><thead><tr><th>Record</th><th>Status</th><th>Last updated</th></tr></thead><tbody>
-      {data.rows.map(x=><tr key={x.kind+x.id}><td><Link to={'/records/'+x.kind+'/'+x.id+'?from='+encodeURIComponent(kind||'all')} className="reference">{x.title}</Link><small>{x.kind}</small></td><td><Status value={x.status}/></td><td>{x.updated||'—'}</td></tr>)}</tbody></table>:<p className="padded">No records found for your account.</p>}</section>}
+      {data.rows.map(x=><tr key={x.kind+x.id}><td><Link to={'/records/'+x.kind+'/'+x.id+'?from='+encodeURIComponent(kind||'all')} className="reference">{x.title}</Link><small>{serviceLabel(x.kind)}</small></td><td><Status value={x.status}/></td><td>{formatDate(x.updated)}</td></tr>)}</tbody></table>:<p className="padded">No records found for your account.</p>}</section>}
   </div>;
 }
 export function LiveRecordDetail({kindOverride}){
@@ -24,7 +25,7 @@ export function LiveRecordDetail({kindOverride}){
   useEffect(()=>{let active=true;setLoading(true);portalApi.getRecord(kind,id).then(x=>{if(active){setRecord(x);setLoading(false);}}).catch(e=>{if(active){setError(e.message);setLoading(false);}});return()=>{active=false;};},[kind,id]);
   return <div className="page"><Link to="/records" className="back-link">← Back to records</Link>
     {loading?<p role="status">Loading record…</p>:error?<Notice title="Record unavailable">{error}</Notice>:record&&<><PageHeading eyebrow={record.kind.toUpperCase()} title={record.title} description="Your record details"/><div className="surface padded"><dl className="detail-list">
-      {Object.entries({Reference:record.id,Service:record.kind,Status:record.status,Type:record.type,'Start date':record.startDate,'End date':record.endDate,'Payment status':record.paymentStatus}).map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value||'—'}</dd></div>)}</dl></div><div style={{marginTop:24}}>{kind==='membership'&&<p><Link className="btn btn-secondary" to={'/membership/manage/'+id}>Manage membership and invoices</Link></p>}<DocumentsPanel kind={kind} id={id}/></div></>}
+      {Object.entries({Reference:record.id,Service:serviceLabel(record.kind),Status:record.status,Type:record.type,'Start date':formatDate(record.startDate),'End date':formatDate(record.endDate),'Payment status':record.paymentStatus}).map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value||'—'}</dd></div>)}</dl></div><div style={{marginTop:24}}>{kind==='membership'&&<p><Link className="btn btn-secondary" to={'/membership/manage/'+id}>Manage membership and invoices</Link></p>}<DocumentsPanel kind={kind} id={id}/></div></>}
   </div>;
 }
 const SUMMARY_LABELS={total:'All records',memberships:'Memberships',accreditations:'Accreditations',insurance:'Insurance'};

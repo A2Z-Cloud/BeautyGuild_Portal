@@ -31,9 +31,16 @@ async function resolveContact(req,call,user){
   if(matches.length!==1)throw new HttpError(409,'CONTACT_AMBIGUOUS','Your account needs manual verification before records can be shown.');
   return matches[0];
 }
+// Insurance policies are named by their type in CRM ("Salon", "Non Salon"); give them a readable title.
+function recordTitle(kind,base){
+  const text=String(base||'').trim();
+  if(!text)return kind+' record';
+  if(kind==='insurance'&&!/insurance/i.test(text))return text.replace(/^Non[ -]?Salon$/i,'Non-salon')+' insurance';
+  return text;
+}
 function mapRecord(kind,r){
   const d=DEFINITIONS[kind];
-  return {id:String(r.id),kind,title:(typeof r[d.label]==='object'?r[d.label]?.name:r[d.label])||kind+' '+String(r.id),reference:String(r.id),
+  return {id:String(r.id),kind,title:recordTitle(kind,(typeof r[d.label]==='object'?r[d.label]?.name:r[d.label])),reference:String(r.id),
     status:r[d.status]||r.Application_Stage||'Unknown',
     updated:r.Modified_Time||r.Created_Time||null,
     startDate:r.Start_Date||r.Valid_From||r.Policy_Start_Date||null,
