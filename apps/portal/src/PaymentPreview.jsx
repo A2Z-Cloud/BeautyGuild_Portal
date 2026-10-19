@@ -1,4 +1,5 @@
-import React, {useState} from 'react';
+import React, {useEffect, useState} from 'react';
+import {clearStored} from './storedState.js';
 import {ArrowLeft,CreditCard,FileCheck2,LockKeyhole,ShieldCheck} from 'lucide-react';
 import {Link,useParams,useSearchParams} from 'react-router-dom';
 import {Notice,PageHeading} from './UiParts.jsx';
@@ -38,6 +39,7 @@ export function PaymentPreview(){
 
 export function PaymentReturn(){
  const [params]=useSearchParams(),cancelled=params.get('result')==='cancelled';
+ useEffect(()=>{if(params.get('result')==='success')clearStored();},[params]);
  return <div className="page narrow-page"><PageHeading eyebrow="PAYMENT STATUS" title={cancelled?'Payment cancelled':'Thank you'}/>
  {cancelled?<Notice title="Nothing was charged">You left the payment page before paying. You can try again whenever you are ready.</Notice>
  :<Notice title="Payment received">We are confirming your payment with the Guild. Your records update shortly and we will confirm by email.</Notice>}

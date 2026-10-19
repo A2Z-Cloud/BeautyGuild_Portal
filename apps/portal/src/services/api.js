@@ -21,6 +21,9 @@ const recordsOn=integrationConfig.baseConfigured && integrationConfig.catalystAu
 const recordHttp=recordsOn?createHttpClient({baseUrl:integrationConfig.apiBaseUrl}):null;
 const recordReq=path=>recordHttp?recordHttp('/portal/records'+path):unavailable('Authenticated CRM records');
 const billingOn=integrationConfig.baseConfigured && integrationConfig.catalystAuth && import.meta.env.VITE_PORTAL_BILLING==='true';
+// Signed-out visitors can price a membership (no account, no CRM access); the server also has to have PUBLIC_QUOTES_ENABLED on.
+const publicQuotesOn=billingOn&&import.meta.env.VITE_PORTAL_PUBLIC_QUOTES==='true';
+const publicHttp=publicQuotesOn?createHttpClient({baseUrl:integrationConfig.apiBaseUrl}):null;
 const billingHttp=billingOn?createHttpClient({baseUrl:integrationConfig.apiBaseUrl}):null;
 const billingReq=(path,options)=>billingHttp?billingHttp('/portal/checkout'+path,options):unavailable('Authorised pricing and checkout');
 const documentsOn=integrationConfig.baseConfigured && integrationConfig.catalystAuth && import.meta.env.VITE_PORTAL_DOCUMENTS==='true';
@@ -36,7 +39,7 @@ export const INTEGRATIONS=Object.freeze({
   courses:isEnabled(integrationConfig,'courses'),
   address:isEnabled(integrationConfig,'address'),
   schoolServices:schoolOn,schoolWrites:schoolWritesOn,crmRecords:recordsOn,crmDrafts:draftsOn,crmContactMapping:recordsOn,pricing:false,
-  underwriting:false,stripeCheckout:billingOn,policyIssuance:false,workdrive:documentsOn,
+  underwriting:false,stripeCheckout:billingOn,publicQuotes:publicQuotesOn,policyIssuance:false,workdrive:documentsOn,
 });
 export const portalApi=Object.freeze({
   mode:DATA_MODE,
@@ -74,6 +77,7 @@ export const portalApi=Object.freeze({
   discardDraft:async (service,id)=>draftReq('/'+service+'/'+encodeURIComponent(id),{method:'DELETE'}),
   checkoutQuote:async params=>(await billingReq('/quote?'+new URLSearchParams(params).toString())).quote,
   checkoutQuotePost:async body=>(await billingReq('/quote',{method:'POST',body})).quote,
+  publicQuote:async body=>publicHttp?(await publicHttp('/public/quote',{method:'POST',body})).quote:unavailable('Pricing'),
   submit:async()=>unavailable('CRM submission'),
   startCheckout:async body=>billingReq('/',{method:'POST',body}),
   getDocuments:async(kind,id,path='')=>documentHttp?documentHttp(documentPath(kind,id)+(path?'?path='+encodeURIComponent(path):'')):unavailable('Authorised document listing'),

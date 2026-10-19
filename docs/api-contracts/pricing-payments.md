@@ -51,3 +51,9 @@ Ported from V1 (`calculateInsuranceQuote`, `evaluateInsuranceRules`, `createInsu
 - The date goes to Creator as `membership_start` and `membership_expiry`, and for insurance as `insurance_start_date` and `insurance_end_date`. The insurance policy record is created with `Policy_Start_Date` and `Policy_End_Date`.
 - The member pays now. The portal shows any record whose start date is after today as Coming soon with the date, until that day.
 - Whether Creator and the CRM treat a future-dated record as pending until its start date is Creator's side to confirm.
+
+## Guest pricing (no account)
+- `POST /public/quote` prices a **membership** (optionally with insurance) for a signed-out visitor, so the buy form can be filled in and priced before sign-up. It is off unless `PUBLIC_QUOTES_ENABLED=true` (and billing is on); the client flag is `VITE_PORTAL_PUBLIC_QUOTES`.
+- It reads only Stripe prices and the rating tables. No CRM, Creator or Analytics call is made, there is no risk screening, and no record is written. The answer is marked `indicative: true`: the real checks (including sanctions, flood and subsidence) run when the member pays.
+- Renewals, upgrades, standalone insurance and accreditation are refused (422 `SIGN_IN_FOR_PRICE`). Rate limited to 30 a minute per client.
+- Checkout, drafts and every record write still need a signed-in account. The buy page keeps a guest's answers in the browser tab (sessionStorage, never sent anywhere, consent never restored) and sends them to the account checkpoint at the Pay step; the answers are cleared after a successful payment.

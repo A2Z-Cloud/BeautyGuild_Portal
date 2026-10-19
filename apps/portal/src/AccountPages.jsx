@@ -6,7 +6,7 @@ import {DEMO_USER} from './data/demo.js';
 import {INTEGRATIONS} from './services/api.js';
 import {CatalystSignIn,CatalystRegistration,CatalystAccountOverview} from './components/CatalystAuthViews.jsx';
 
-const validReturn = path => ['/membership/new','/insurance/new','/accreditation/new'].includes(path) ? path : '/';
+const validReturn = path => ['/membership/new','/insurance/new','/accreditation/new','/membership/buy'].includes(path) ? path : '/';
 function useReturn(){
   const [params]=useSearchParams();
   const route=validReturn(params.get('returnTo'));
