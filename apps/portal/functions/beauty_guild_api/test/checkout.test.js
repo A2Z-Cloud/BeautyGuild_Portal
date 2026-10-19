@@ -543,3 +543,66 @@ test('only modules with a payment-in-progress value are written to; Deals get no
     assert.equal(w.crmPuts[0].body.data[0].Payment_Status, PROCESSING_STATUS.Training_Centre_Accred);
   }, MEM_ENV);
 });
+
+// ---- Start dates for insurance, and one date for membership with insurance ----
+const dayFrom = n => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10);
+const yearEnd = start => { const d = new Date(start + 'T00:00:00Z'); d.setUTCFullYear(d.getUTCFullYear() + 1); d.setUTCDate(d.getUTCDate() - 1); return d.toISOString().slice(0, 10); };
+
+test('standalone insurance starts today by default and a later start up to 30 days ahead is recorded on the policy and in the metadata', async () => {
+  const w = fullWorld();
+  await withApp(w, async ({post}) => {
+    assert.equal((await post(INSURE)).status, 201);
+    let policy = w.crmPosts[0].record;
+    assert.equal(policy.Policy_Start_Date, dayFrom(0));
+    assert.equal(policy.Policy_End_Date, yearEnd(dayFrom(0)));
+    assert.equal(w.stripePosts[0].params.get('metadata[insurance_start_date]'), dayFrom(0));
+    assert.equal((await post({...INSURE, start: dayFrom(30)})).status, 201);
+    policy = w.crmPosts.filter(c => c.module === 'Insurance_Policy')[1].record;
+    assert.equal(policy.Policy_Start_Date, dayFrom(30));
+    assert.equal(policy.Policy_End_Date, yearEnd(dayFrom(30)));
+    assert.equal(w.stripePosts[1].params.get('metadata[insurance_start_date]'), dayFrom(30));
+    assert.equal(w.stripePosts[1].params.get('metadata[insurance_end_date]'), yearEnd(dayFrom(30)));
+  });
+});
+test('an insurance start date in the past or more than 30 days ahead is refused with the allowed range, and nothing is created', async () => {
+  const w = fullWorld();
+  await withApp(w, async ({post, get}) => {
+    for (const start of [dayFrom(-1), dayFrom(31), '2000-01-01', 'soon', '2026-02-30']) {
+      const r = await post({...INSURE, start});
+      assert.equal(r.status, 422, start);
+      assert.equal(r.body.error, 'Choose a start date from today up to ' + dayFrom(30) + '.');
+    }
+    assert.equal(w.crmPosts, undefined);
+    assert.equal(w.stripePosts.length, 0);
+  });
+});
+test('membership with insurance uses one date for both: the membership term and the policy start together', async () => {
+  const w = unlinked(world({priceOverride: RECURRING}));
+  await withApp(w, async ({post}) => {
+    const start = dayFrom(14);
+    const r = await post({...BUY, level: 'full_non_salon', insurance: INS_OK, country: 'United Kingdom', start});
+    assert.equal(r.status, 201);
+    const p = w.stripePosts[0].params;
+    assert.equal(p.get('metadata[membership_start]'), start);
+    assert.equal(p.get('metadata[membership_expiry]'), yearEnd(start));
+    assert.equal(p.get('metadata[insurance_start_date]'), start);
+    assert.equal(p.get('metadata[insurance_end_date]'), yearEnd(start));
+    assert.equal(w.crmPosts[0].record.Policy_Start_Date, start);
+  }, MEM_ENV);
+});
+test('the membership start window is 30 days, the same as insurance', async () => {
+  const w = world({priceOverride: RECURRING});
+  await withApp(w, async ({post}) => {
+    assert.equal((await post({...BUY, previousId: DEAL, start: dayFrom(31)})).status, 422);
+    assert.equal((await post({...BUY, previousId: DEAL, start: dayFrom(30)})).status, 201);
+  }, MEM_ENV);
+});
+test('a different start date is a different insurance application, so a retry does not reuse the earlier records', async () => {
+  const w = fullWorld();
+  await withApp(w, async ({post}) => {
+    assert.equal((await post({...INSURE, start: dayFrom(5)})).status, 201);
+    assert.equal((await post({...INSURE, start: dayFrom(6)})).status, 201);
+    assert.equal(w.crmPosts.filter(c => c.module === 'Insurance_Policy').length, 2);
+    assert.equal(w.stripePosts.length, 2);
+  });
+});

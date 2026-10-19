@@ -173,11 +173,12 @@ const money2 = pence => Math.round(pence) / 100;
 // Creates the Insurance_Policy, Insured_Premises, Insured_People, Insurance_Extension and Declarations
 // records before payment (as V1 does) and returns their ids for the Stripe metadata, which Creator's
 // webhook reads. Sequential, because later records link to the ids made earlier. create(module, record) -> id.
-async function createRecords(create, {contactId, membershipDealId, ins, quote, entryRoute, termsAccepted}) {
+async function createRecords(create, {contactId, membershipDealId, ins, quote, start, end, entryRoute, termsAccepted}) {
   const description = Object.entries(BUSINESS_DESCRIPTION_BY_FLAG).filter(([flag]) => ins[flag]).map(([, label]) => label);
   const policyId = await create('Insurance_Policy', {
     Contact: contactId || undefined, Membership: membershipDealId || undefined, Policy_Type: ins.insRoute === 'salon' ? 'Salon' : 'Non Salon',
     Business_Description: description.length ? description : undefined, Annual_Turnover: ins.insRoute === 'salon' ? ins.insTurnover : undefined,
+    Policy_Start_Date: start || undefined, Policy_End_Date: end || undefined,
     Application_Status: 'Ready for Payment', Application_Source: 'Website', Entry_Route: entryRoute,
   });
   let premisesId = null;
