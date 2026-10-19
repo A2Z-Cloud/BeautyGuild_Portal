@@ -5,6 +5,7 @@
 // else gets a plain 404 so its existence is not revealed. Switch it off again when finished.
 const express=require('express');
 const {HttpError}=require('./errors');
+const {createAnalyticsClient}=require('./analytics');
 const NAME=/^[A-Za-z][A-Za-z0-9_]{0,49}$/;
 const trimField=f=>({
   api_name:f.api_name,label:f.field_label||null,type:f.data_type||null,custom:f.custom_field===true,
@@ -14,7 +15,7 @@ const trimField=f=>({
   unique_raw:f.unique===undefined?null:f.unique,
   options:Array.isArray(f.pick_list_values)?f.pick_list_values.slice(0,40).map(o=>o.actual_value||o.display_value).filter(Boolean):undefined,
 });
-function registerDiagnosticsRoutes(app,{enabled,allowedEmails=[],getCurrentUser,getCrmHeaders,crmApiDomain,fetchImpl=fetch}){
+function registerDiagnosticsRoutes(app,{enabled,allowedEmails=[],getCurrentUser,getCrmHeaders,crmApiDomain,fetchImpl=fetch,risk=null,getAnalyticsHeaders,getCreatorHeaders}){
   const router=express.Router();
   const notFound=()=>new HttpError(404,'NOT_FOUND','Not found.');
   router.use(async(req,res,next)=>{
@@ -57,6 +58,31 @@ function registerDiagnosticsRoutes(app,{enabled,allowedEmails=[],getCurrentUser,
     }
     res.json({found});
   }));
+  // Risk-check sources (names only, never values): the sanctions table's columns and freshness, and the
+  // fields of the flood and subsidence reports, so the checks can be pointed at the right names.
+  if(risk){
+    const analytics=createAnalyticsClient({getAnalyticsHeaders,apiDomain:risk.analytics.apiDomain,orgId:risk.analytics.orgId,workspaceId:risk.analytics.workspaceId,fetchImpl});
+    const table=risk.analytics.table;
+    router.get('/analytics',run(async(req,res)=>{
+      try{
+        const orgs=(await analytics.orgs(req)).map(o=>({orgId:o.orgId,orgName:o.orgName}));
+        const view=await analytics.view(req,table);
+        const sample=await analytics.sql(req,'SELECT * FROM "'+table+'" LIMIT 1');
+        const count=await analytics.sql(req,'SELECT COUNT(*) AS n FROM "'+table+'"');
+        res.json({orgs,workspaceId:risk.analytics.workspaceId,table,viewId:view.id,lastModified:view.lastModified?view.lastModified.toISOString():null,
+          detailKeys:Object.keys(view.details||{}),columns:Object.keys(sample[0]||{}),rows:Number(Object.values(count[0]||{})[0])});
+      }catch(e){throw new HttpError(502,'ANALYTICS_UNAVAILABLE','Analytics said: '+String(e.message).slice(0,200));}
+    }));
+    router.get('/creator-report',run(async(req,res)=>{
+      const report=String(req.query.report||'');
+      if(![risk.creator.floodReport,risk.creator.subsidenceReport].includes(report))throw new HttpError(400,'INVALID_REQUEST','Use the flood or subsidence report name.');
+      const url=risk.creator.apiDomain+'/creator/v2.1/data/'+encodeURIComponent(risk.creator.owner)+'/'+encodeURIComponent(risk.creator.app)+'/report/'+encodeURIComponent(report)+'?field_config=all&max_records=1';
+      let r,body;
+      try{r=await fetchImpl(url,{headers:await getCreatorHeaders(req),signal:AbortSignal.timeout(15000)});body=await r.json().catch(()=>null);}
+      catch{throw new HttpError(502,'CREATOR_UNAVAILABLE','Creator could not be reached.');}
+      res.json({report,status:r.status,code:body?.code??null,message:body?.message||null,fields:Object.keys((body?.data||[])[0]||{}),returned:Array.isArray(body?.data)?body.data.length:null});
+    }));
+  }
   app.use('/portal/diagnostics',router);
 }
 module.exports={registerDiagnosticsRoutes,trimField};

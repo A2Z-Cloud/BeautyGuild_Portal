@@ -94,3 +94,20 @@ test('Document download denies unauthorized record even if fileId is known',asyn
   assert.equal(result.status,404);
  });
 });
+test('an insurance application the Insurance team is reviewing (Referred) is not shown to the member as a policy',async()=>{
+ const fetchImpl=async url=>{
+  url=String(url);
+  const json=body=>({status:200,ok:true,json:async()=>body});
+  if(url.includes('Contacts/search'))return json({data:[{id:'1011174000000000001',Email:'alice@example.test'}]});
+  if(url.includes('Insurance_Policy/search'))return json({data:[
+   {id:'1',Policy_Type:'Salon',Application_Status:'Active',Contact:{id:'1011174000000000001'}},
+   {id:'2',Policy_Type:'Salon',Application_Status:'Referred',Contact:{id:'1011174000000000001'}}]});
+  if(url.includes('Insurance_Policy/1011174000000000002'))return json({data:[{id:'1011174000000000002',Policy_Type:'Salon',Application_Status:'Referred',Contact:{id:'1011174000000000001'}}]});
+  return json({data:[]});
+ };
+ await withApp({fetchImpl},async({call})=>{
+  const list=await call('/portal/records/?kind=insurance');
+  assert.deepEqual(list.body.records.map(r=>r.id),['1']);
+  assert.equal((await call('/portal/records/insurance/1011174000000000002')).status,404);
+ });
+});
