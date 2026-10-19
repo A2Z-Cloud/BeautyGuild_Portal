@@ -174,12 +174,17 @@ function registerSchoolRoutes(app,{enabled,writesEnabled,getCurrentUser,getCrmHe
   if(section==='verification'){
    // The same assessment the public page uses, for this school's own accreditation records.
    if(!accountId)return res.json({school:{name:a.Account?.name||'Training centre',registrationNumber:null},verification:{status:'not_accredited',isCurrentlyAccredited:false,expiryDate:null,checkedAt:new Date().toISOString()}});
-   const rows=await api.crm(req,'Training_Centre_Accred/search?criteria='+esc('(Account:equals:'+accountId+')')+'&fields='+esc('Account,Accreditation_Status,Application_Stage,Valid_From,Valid_To'));
+   const rows=await api.crm(req,'Training_Centre_Accred/search?criteria='+esc('(Account:equals:'+accountId+')')+'&fields='+esc('Name,Account,Accreditation_Status,Application_Stage,Valid_From,Valid_To'));
    const own=rows.filter(r=>String(r.Account?.id)===String(accountId));
    let registrationNumber=null;
    const field=config.schoolRegistrationField;
    if(field&&/^[A-Za-z][A-Za-z0-9_]{0,79}$/.test(field)){
-    if(config.schoolRegistrationModule==='Accounts'){
+    if(config.schoolRegistrationModule==='Training_Centre_Accred'){
+     // The reference is per accreditation record and changes at renewal: show the current one (latest end date among granted records).
+     const granted=own.filter(r=>['verified','expired','closed'].includes(String(r.Accreditation_Status||'').toLowerCase())&&r[field])
+      .sort((x,y)=>String(y.Valid_To||'').localeCompare(String(x.Valid_To||'')));
+     registrationNumber=granted[0]?String(granted[0][field]).trim()||null:null;
+    }else if(config.schoolRegistrationModule==='Accounts'){
      const acct=(await api.crm(req,'Accounts/'+accountId+'?fields='+esc(field)))[0];
      registrationNumber=acct&&acct[field]?String(acct[field]).trim()||null:null;
     }else if(config.schoolRegistrationModule==='Training_Centres'){

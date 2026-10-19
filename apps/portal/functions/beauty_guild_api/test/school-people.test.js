@@ -142,3 +142,10 @@ test('the school verification tab shows the public result and the registration n
   const other=await getJson(fake({accreditations:[{...verified,Account:{id:'9999999999999'}}]}),'/portal/management/schools/'+SCHOOL+'/verification');
   assert.equal(other.body.verification.isCurrentlyAccredited,false);
 });
+
+test('with the accreditation reference, the school tab shows its current reference',async()=>{
+  const cfgRef=loadConfig({PORTAL_SCHOOL_SERVICES_ENABLED:'true',PUBLIC_SCHOOL_REGISTRATION_MODULE:'Training_Centre_Accred',PUBLIC_SCHOOL_REGISTRATION_FIELD:'Name'});
+  const rows=[{...verified,Name:'ACC-00007',Accreditation_Status:'Expired',Valid_To:'2025-01-01'},{...verified,Name:'ACC-00042'},{...verified,Name:'ACC-00050',Accreditation_Status:'Unverified',Application_Stage:'Draft',Valid_To:'2999-12-31'}];
+  const r=await getJson(fake({accreditations:rows}),'/portal/management/schools/'+SCHOOL+'/verification',cfgRef);
+  assert.equal(r.body.school.registrationNumber,'ACC-00042');
+});

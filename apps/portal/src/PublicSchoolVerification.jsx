@@ -5,7 +5,7 @@ import {Logo} from './UiParts.jsx';
 import {integrationConfig} from './services/api.js';
 import {createHttpClient} from './services/transport.mjs';
 
-const VALID_NUMBER=/^[A-Za-z0-9][A-Za-z0-9_-]{0,39}$/;
+const VALID_NUMBER=/^[A-Za-z0-9][A-Za-z0-9 _-]{0,39}$/;
 const AVAILABLE=new Set(['accredited','expired','suspended','revoked','not_accredited']);
 const labels={
   accredited:'Currently accredited',expired:'Accreditation expired',
@@ -72,7 +72,7 @@ export default function PublicSchoolVerification(){
     e.preventDefault();
     const value=input.trim();
     if(!VALID_NUMBER.test(value)){setState({kind:'invalid'});return;}
-    navigate('/verify/'+encodeURIComponent(value));
+    navigate('/verify/'+encodeURIComponent(value.replace(/\s+/g,'')));
   };
   return <div className="school-verify-page">
     <header className="school-verify-header"><Link to="/" aria-label="Beauty Guild portal dashboard"><Logo/></Link>
