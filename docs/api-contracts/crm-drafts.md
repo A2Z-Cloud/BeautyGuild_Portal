@@ -26,3 +26,10 @@ Shared endpoints: POST/GET /portal/drafts, GET/PUT/DELETE /portal/drafts/:servic
 - Revision checking is read-then-write, not atomic. Conflict prevention requires a verified CRM conditional-update strategy before Production.
 - CRM search-index lag, partial writes, list pagination, orphan Notes cleanup, Catalyst account-to-Contact provisioning, Creator/Stripe completion against existing draft IDs all need end-to-end testing.
 - No end-to-end Catalyst or CRM writes have been performed by this PR. Do not merge/deploy as a complete production implementation.
+
+## Readiness check changes (Development)
+- `PORTAL_CRM_DRAFT_REQUIRE_UNIQUE=false` lets drafts run while `Journey_ID` is not yet a unique CRM field. Default is `true`; use `false` on a test system only, because a repeated save could then create a duplicate.
+- The Deal draft stage (`PORTAL_CRM_DRAFT_DEAL_STAGE`) is trusted rather than checked against the module-level Stage list, which omits stages that layouts or pipelines add (Active and Paid are also missing from it). CRM refuses an unknown stage, so a wrong value fails the save without writing.
+
+## Prefill
+`GET /portal/records/me` returns the signed-in member's own Contact details (Salutation, names, email, Phone, Mobile, correspondence address, country, Interests) for filling forms. The Contact is resolved from the verified email, never from a browser-supplied id.

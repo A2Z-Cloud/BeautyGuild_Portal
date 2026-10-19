@@ -53,12 +53,12 @@ function checkMetadata(module,fields,config){
  const options=(status.pick_list_values||[]).map(x=>x.actual_value||x.display_value);
  if(!options.includes(config.draftStatus))fail('STATUS_NOT_READY','CRM draft status is not configured.',503);
  const j=metaField(fields,'Journey_ID');
- if(!isUnique(j.unique))fail('JOURNEY_UNIQUE_REQUIRED','Journey_ID must be a CRM unique field to prevent duplicate saves.',503);
+ if(config.draftRequireUnique!==false&&!isUnique(j.unique))fail('JOURNEY_UNIQUE_REQUIRED','Journey_ID must be a CRM unique field to prevent duplicate saves.',503);
  if(module==='Deals'){
   textField(fields,'Contact_Name');textField(fields,'Stage');textField(fields,'Deal_Name');
-  const stage=metaField(fields,'Stage');
-  const stages=(stage.pick_list_values||[]).map(x=>x.actual_value||x.display_value);
-  if(!config.dealStage||!stages.includes(config.dealStage))fail('DEAL_STAGE_REQUIRED','Configure an existing Deal Stage for CRM drafts.',503);
+  // The module-level Stage list does not show every stage a layout or pipeline offers (it omits Active and Paid, for example), so the
+  // configured stage is trusted here. CRM itself refuses a stage it does not know, and the save then fails without writing anything.
+  if(!config.dealStage)fail('DEAL_STAGE_REQUIRED','Configure the Deal Stage used for CRM drafts.',503);
  }
  if(module==='Insurance_Policy'){textField(fields,'Contact');textField(fields,'Membership');}
  if(module==='Training_Centre_Accred')textField(fields,'Applicant_Contact');
@@ -125,10 +125,12 @@ function registerDraftRoutes(app,{enabled,getCurrentUser,getCrmHeaders,crmApiDom
   if(state.journeyId!==row.Journey_ID)fail('DRAFT_MISMATCH','CRM draft references do not match.',409);
   return state;
  };
+ // CRM text fields want strings, and date-times want a numeric offset without milliseconds.
+ const crmTime=(iso=new Date().toISOString())=>iso.replace(/\.\d{3}Z$/,'Z').replace(/Z$/,'+00:00');
  const saveParent=async(req,module,journey,person,old,more={})=>{
   const status=config.draftStatus;
   const data={Journey_ID:journey,Application_Status:status,
-    Last_Completed_Journey_Step:0,Draft_Saved_At:new Date().toISOString(),...more};
+    Last_Completed_Journey_Step:'0',Draft_Saved_At:crmTime(),...more};
   if(module==='Deals'){data.Contact_Name={id:person.id};data.Deal_Name='Membership application '+journey.slice(0,8);data.Stage=config.dealStage;}
   if(module==='Insurance_Policy')data.Contact={id:person.id};
   if(module==='Training_Centre_Accred')data.Applicant_Contact={id:person.id};
@@ -154,7 +156,7 @@ function registerDraftRoutes(app,{enabled,getCurrentUser,getCrmHeaders,crmApiDom
     revision:revision+1,answers:body.answers,savedAt:new Date().toISOString()};
   await saveNote(req,module,row,next);
   const update=await request(req,'PUT',module+'/'+row.id,{data:[{
-    Last_Completed_Journey_Step:body.step,Draft_Saved_At:next.savedAt
+    Last_Completed_Journey_Step:String(body.step),Draft_Saved_At:crmTime(next.savedAt)
   }]});
   if(update.data?.[0]?.status!=='success')fail('SAVE_INCOMPLETE','CRM did not confirm the last step.',502);
   return {id:row.id,service:body.service,journeyId:body.journeyId,revision:next.revision,step:body.step,savedAt:next.savedAt,answers:body.answers};

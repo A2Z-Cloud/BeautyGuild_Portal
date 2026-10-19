@@ -36,6 +36,10 @@ const LEVELS = Object.freeze({associate: 'Associate Member', full_non_salon: 'Fu
 const BRANCHES = Object.freeze({beauty: 'Guild of Beauty Therapists', holistic: 'Guild of Holistic Therapists', nails: 'Guild of Nail Technicians', hair: 'Guild of Hairdressers & Barbers'});
 const PAID = new Set(['paid', 'succeeded', 'completed', 'payment received']);
 const INTERNATIONAL = 'International Accreditation Annual';
+// An accreditation can be paid for only while it is waiting for payment and has not been paid.
+const PAYABLE_STAGES = new Set(['Awaiting Payment', 'Payment Failed', 'Payment Processing']);
+const isPaidStatus = status => PAID.has(String(status || '').toLowerCase());
+const isPayableAccreditation = acc => !isPaidStatus(acc?.Payment_Status) && PAYABLE_STAGES.has(String(acc?.Application_Stage || ''));
 const esc = encodeURIComponent;
 const bad = (message, status = 422, code = 'INVALID_REQUEST') => { throw new HttpError(status, code, message); };
 const notFound = what => bad(what + ' not found.', 404, 'NOT_FOUND');
@@ -290,4 +294,4 @@ SERVICES.membership = {
 };
 const list = v => (Array.isArray(v) ? v : String(v || '').split(',')).map(x => String(x).trim()).filter(Boolean);
 
-module.exports = {ITEMS, SERVICES, ADDONS, pounds, ID, START_WINDOW_DAYS, PROCESSING_STATUS};
+module.exports = {ITEMS, SERVICES, ADDONS, pounds, ID, START_WINDOW_DAYS, PROCESSING_STATUS, isPaidStatus, isPayableAccreditation};
