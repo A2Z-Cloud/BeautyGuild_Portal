@@ -77,7 +77,7 @@ function registerDiagnosticsRoutes(app,{enabled,allowedEmails=[],allowedDomains=
         const sample=await analytics.sql(req,'SELECT * FROM "'+table+'" LIMIT 1');
         const count=await analytics.sql(req,'SELECT COUNT(*) AS n FROM "'+table+'"');
         res.json({orgs,workspaceId:risk.analytics.workspaceId,table,viewId:view.id,lastModified:view.lastModified?view.lastModified.toISOString():null,
-          detailKeys:Object.keys(view.details||{}),times:{created:view.details?.createdTime||null,lastDesignModified:view.details?.lastDesignModifiedTime||null},columns:Object.keys(sample[0]||{}),rows:Number(Object.values(count[0]||{})[0])});
+          detailKeys:Object.keys(view.details||{}),listedKeys:Object.keys(view.listed||{}),listedTimes:Object.fromEntries(Object.entries(view.listed||{}).filter(([k])=>/time|modified|updated/i.test(k))),times:{created:view.details?.createdTime||null,lastDesignModified:view.details?.lastDesignModifiedTime||null},columns:Object.keys(sample[0]||{}),rows:Number(Object.values(count[0]||{})[0])});
       }catch(e){throw new HttpError(502,'ANALYTICS_UNAVAILABLE','Analytics said: '+String(e.message).slice(0,200));}
     }));
     router.get('/creator-report',run(async(req,res)=>{

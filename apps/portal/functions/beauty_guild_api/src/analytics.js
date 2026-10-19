@@ -69,21 +69,18 @@ function createAnalyticsClient({getAnalyticsHeaders, apiDomain, orgId = '', work
     return parseCsv(await api(req, jobPath + '/data', {text: true}));
   }
 
-  // The view's id and last-modified time, found by name (a table or query table in the workspace).
-  const viewCache = new Map();
+  // The view's id and last-modified time, found by name (a table or query table in the workspace). The views
+  // list carries the data's last-modified time (the table's own details only carry its design times).
   async function view(req, name) {
-    let id = viewCache.get(name);
-    if (!id) {
-      const config = encodeURIComponent(JSON.stringify({keyword: name, viewTypes: [0, 6]}));
-      const views = (await api(req, '/workspaces/' + workspaceId + '/views?CONFIG=' + config))?.data?.views;
-      const found = Array.isArray(views) && views.find(v => String(v.viewName || '').toLowerCase() === name.toLowerCase());
-      if (!found?.viewId) throw new AnalyticsError('The sanctions table was not found in Analytics.');
-      id = String(found.viewId);
-      viewCache.set(name, id);
-    }
+    const config = encodeURIComponent(JSON.stringify({keyword: name, viewTypes: [0, 6]}));
+    const views = (await api(req, '/workspaces/' + workspaceId + '/views?CONFIG=' + config))?.data?.views;
+    const found = Array.isArray(views) && views.find(v => String(v.viewName || '').toLowerCase() === name.toLowerCase());
+    if (!found?.viewId) throw new AnalyticsError('The sanctions table was not found in Analytics.');
+    const id = String(found.viewId);
     const details = (await api(req, '/views/' + encodeURIComponent(id)))?.data;
     const v = Array.isArray(details?.views) ? details.views[0] : details?.views || details?.view || details || {};
-    return {id, lastModified: toDate(v.lastModifiedTime || v.modifiedTime || v.lastModified), details: v};
+    const pick = o => toDate(o.lastModifiedTime || o.modifiedTime || o.lastModified);
+    return {id, lastModified: pick(found) || pick(v), details: v, listed: found};
   }
   const orgs = async req => (await request(req, '/orgs'))?.data?.orgs || [];
   return {sql, view, orgs, orgId: resolveOrg, api};
