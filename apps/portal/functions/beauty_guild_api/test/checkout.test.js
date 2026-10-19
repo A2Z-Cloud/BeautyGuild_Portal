@@ -16,6 +16,7 @@ function world(opts = {}) {
   const json = (body, status = 200) => ({status, ok: status < 400, json: async () => body});
   state.fetchImpl = async (url, init = {}) => {
     url = String(url);
+    if (state.external) { const handled = await state.external(url, init); if (handled) return handled; }
     if (url.startsWith('https://api.stripe.com/v1/prices/')) {
       const id = url.split('/').pop(), p = state.priceOverride[id] || {};
       return PRICES[id] ? json({active: true, currency: 'gbp', unit_amount: PRICES[id], recurring: null, ...p}) : json({}, 404);
@@ -44,7 +45,7 @@ function world(opts = {}) {
 }
 async function withApp(state, fn, env = {}) {
   const app = createApp({config: loadConfig({...ENV, ...env}), getCurrentUser: async () => ({id: 'user-1', email: 'alice@example.test'}),
-    getCrmHeaders: async () => ({Authorization: 'Bearer test'}), fetchImpl: state.fetchImpl});
+    getCrmHeaders: async () => ({Authorization: 'Bearer test'}), getAnalyticsHeaders: async () => ({Authorization: 'a'}), getCreatorHeaders: async () => ({Authorization: 'c'}), fetchImpl: state.fetchImpl});
   const server = await new Promise(resolve => { const s = app.listen(0, '127.0.0.1', () => resolve(s)); });
   try {
     const url = path => 'http://127.0.0.1:' + server.address().port + path;
@@ -338,7 +339,7 @@ test('salon property cover creates premises, people and linked extensions', asyn
     assert.equal(p.get('metadata[insurance_amount]'), '289.52');
   });
 });
-test('a REFER or STOP quote is shown but is not payable, and nothing is created', async () => {
+test('a REFER or STOP quote is not payable, never reaches Stripe, and is recorded in the CRM for the Insurance team', async () => {
   const w = fullWorld();
   await withApp(w, async ({post}) => {
     for (const [insurance, status] of [[{...INS_OK, insDeclarations: ['yes', 'no', 'no', 'no', 'no', 'yes', 'yes']}, 'REFER'], [{...INS_OK, insEthicsAccepted: 'no'}, 'STOP'],
@@ -348,7 +349,10 @@ test('a REFER or STOP quote is shown but is not payable, and nothing is created'
       assert.equal(r.body.code, 'REFERRAL_REQUIRED');
     }
     assert.equal(w.stripePosts.length, 0);
-    assert.equal(w.crmPosts, undefined);
+    const policies = w.crmPosts.filter(c => c.module === 'Insurance_Policy').map(c => c.record);
+    assert.deepEqual(policies.map(p => [p.Application_Status, p.Risk_Status]), [['Referred', 'Referred'], ['Referred', 'Stopped'], ['Referred', 'Stopped']]);
+    assert.ok(policies.every(p => /^[A-Z_0-9]+: /.test(p.Risk_Summary)));
+    assert.deepEqual(w.crmPosts.filter(c => c.module === 'Declarations').map(c => c.record.Referral_Required), [true, true, true]);
   });
 });
 test('the server insists on answered declarations and confirmations before payment', async () => {
@@ -430,7 +434,7 @@ test('membership with a REFER quote cannot be paid for online', async () => {
       insNamedPeople: [1, 2, 3, 4, 5].map(n => ({type: 'employee', firstName: 'P' + n, lastName: 'X'}))}});
     assert.equal(r.status, 422);
     assert.equal(w.stripePosts.length, 0);
-    assert.equal(w.crmPosts, undefined);
+    assert.equal(w.crmPosts.find(c => c.module === 'Insurance_Policy').record.Application_Status, 'Referred');
   }, MEM_ENV);
 });
 
@@ -511,4 +515,242 @@ test('insurance pay attempts have a lower limit than quotes: 3 a minute, 10 an h
     for (let n = 5; n < 14; n++) { t += 61000; if (await call('/', variant(n)) === 201) ok++; }
     assert.equal(ok, 10);
   } finally { await new Promise(resolve => server.close(resolve)); }
+});
+
+// ---- Insurance risk checks (sanctions, flood, subsidence) ----
+const RISK_ENV = {PORTAL_RISK_SANCTIONS: 'true', PORTAL_RISK_FLOOD: 'true', PORTAL_RISK_SUBSIDENCE: 'true', ANALYTICS_ORG_ID: '555', ANALYTICS_WORKSPACE_ID: 'W1'};
+const SANCTION_HEAD = ['Unique ID', 'OFSI Group ID', 'Name 1', 'Name 2', 'Name 3', 'Name 4', 'Name 5', 'Name 6', 'Name type', 'Alias strength', 'Designation Type', 'D.O.B', 'Address Country', 'Nationality(/ies)', 'Regime Name'];
+// Fake Analytics and Creator, answered before the CRM and Stripe fakes: sanctions rows, flood and subsidence postcodes, and a switch to take Analytics down.
+function riskSources(w, {listed = {}, sanctions = [], analyticsDown = false} = {}) {
+  w.external = async (url, init) => {
+    const json = (body, status = 200) => ({status, ok: status < 300, json: async () => body, text: async () => (typeof body === 'string' ? body : JSON.stringify(body))});
+    if (url.includes('analyticsapi')) {
+      if (analyticsDown) throw new Error('down');
+      if (url.includes('/views?CONFIG')) return json({data: {views: [{viewId: 'V1', viewName: 'UK-Sanctions-List'}]}});
+      if (url.endsWith('/views/V1')) return json({data: {views: {lastModifiedTime: String(Date.now() - 3600e3)}}});
+      if (url.includes('/data?CONFIG=')) return json({data: {jobId: /COUNT/.test(decodeURIComponent(url)) ? 'JC' : 'JS'}});
+      if (url.endsWith('/exportjobs/JC/data')) return json('n\n58609');
+      if (url.endsWith('/exportjobs/JS/data')) return json([SANCTION_HEAD.join(','), ...sanctions.map(r => SANCTION_HEAD.map(h => r[h] || '').join(','))].join('\n'));
+      if (url.includes('/exportjobs/')) return json({data: {jobCode: 1004}});
+      return json({}, 404);
+    }
+    if (url.includes('/creator/v2.1/data/')) {
+      const kind = url.includes('Flood') ? 'flood' : 'subsidence', criteria = decodeURIComponent(url.split('criteria=')[1] || '');
+      if (criteria === 'InActive==false') return json({code: 3000, data: [{List_Date: '2024-01-01'}]});
+      const key = /"([A-Z0-9 ]+)"/.exec(criteria)[1].replace(/ /g, '');
+      return listed[kind] && listed[kind][key] ? json({code: 3000, data: [{Postcode_Key: key, Outcome: listed[kind][key]}]}) : json({code: 9280, message: 'No records found matching the given criteria.'}, 400);
+    }
+    return null;
+  };
+}
+const person = (id, first, last) => ({'Unique ID': id, 'OFSI Group ID': '9' + id, 'Name 1': first, 'Name 6': last, 'Name type': 'Primary name', 'Designation Type': 'Individual', 'Regime Name': 'Secret regime'});
+const SALON_PREMISES = {...INS_OK, insRoute: 'salon', insSalon: true, insTurnover: 90000, insContents: true, insComputers: 2000, insEquipment: 5000,
+  insPremisesAddress: {l1: '1 High St', postcode: 'ab10 1au'}, insSoleOccupation: 'yes', insStandardConstruction: 'yes'};
+const screeningRows = w => (w.crmPosts || []).filter(c => c.module === 'Risk_Screenings').map(c => c.record);
+
+test('risk checks all clear: payable, the checks are recorded against the policy, nothing says Referred', async () => {
+  const w = fullWorld();
+  riskSources(w);
+  await withApp(w, async ({post}) => {
+    assert.equal((await post(INSURE)).status, 201);
+    const policy = w.crmPosts.find(c => c.module === 'Insurance_Policy').record;
+    assert.equal(policy.Application_Status, 'Ready for Payment');
+    assert.equal(policy.Risk_Status, 'Clear');
+    assert.deepEqual(screeningRows(w).map(r => [r.Check, r.Subject, r.Result, r.Investigation_Status]), [['Sanctions', 'Buyer: Alice Test', 'Clear', 'Cleared']]);
+    assert.match(screeningRows(w)[0].Policy, /^9\d+$/);
+    assert.equal(w.stripePosts.length, 1);
+  }, RISK_ENV);
+});
+test('a sanctions match: not payable, the customer is told to contact the Guild, staff get a Referred policy and an Open screening row', async () => {
+  const w = fullWorld();
+  riskSources(w, {sanctions: [person('A1', 'Alice', 'Test')]});
+  await withApp(w, async ({post}) => {
+    const r = await post(INSURE);
+    assert.equal(r.status, 422);
+    assert.equal(r.body.code, 'REFERRAL_REQUIRED');
+    assert.equal(r.body.error, 'We cannot complete this online. Please contact the Guild on 01332 224830.');
+    assert.ok(!/sanction|secret|alice/i.test(JSON.stringify(r.body)), 'nothing about the match reaches the customer');
+    assert.equal(w.stripePosts.length, 0);
+    const policy = w.crmPosts.find(c => c.module === 'Insurance_Policy').record;
+    assert.deepEqual([policy.Application_Status, policy.Risk_Status], ['Referred', 'Referred']);
+    assert.match(policy.Risk_Summary, /RISK_SANCTIONS_REVIEW/);
+    assert.equal(w.crmPosts.find(c => c.module === 'Declarations').record.Referral_Required, true);
+    const [row] = screeningRows(w);
+    assert.deepEqual([row.Check, row.Result, row.Investigation_Status], ['Sanctions', 'Potential match', 'Open']);
+    assert.match(row.Match_Detail, /"id":"A1"/);
+    assert.equal(row.Inputs_Hash.length, 64);
+    assert.equal(row.Contact, ME);
+    // the same application again is recorded once
+    assert.equal((await post(INSURE)).status, 422);
+    assert.equal(w.crmPosts.filter(c => c.module === 'Insurance_Policy').length, 1);
+  }, RISK_ENV);
+});
+test('a check that cannot run is a REFER, never a clear result, and staff are told', async () => {
+  const w = fullWorld();
+  riskSources(w, {analyticsDown: true});
+  await withApp(w, async ({post}) => {
+    const r = await post(INSURE);
+    assert.equal(r.status, 422);
+    assert.match(r.body.error, /could not finish our checks/);
+    assert.equal(w.stripePosts.length, 0);
+    assert.equal(screeningRows(w)[0].Result, 'Error');
+    assert.equal(w.crmPosts.find(c => c.module === 'Insurance_Policy').record.Risk_Status, 'Referred');
+  }, RISK_ENV);
+});
+test('a listed postcode refers or stops the quote; an unlisted one is payable', async () => {
+  const listed = {flood: {AB101AU: 'Refer'}, subsidence: {AB101AU: 'Stop'}};
+  const w = fullWorld();
+  riskSources(w, {listed});
+  await withApp(w, async ({post}) => {
+    const r = await post({...INSURE, insurance: SALON_PREMISES});
+    assert.equal(r.status, 422);
+    assert.equal(w.crmPosts.find(c => c.module === 'Insurance_Policy').record.Risk_Status, 'Stopped');
+    assert.deepEqual(screeningRows(w).map(x => [x.Check, x.Result]), [['Sanctions', 'Clear'], ['Flood', 'Listed postcode'], ['Subsidence', 'Listed postcode']]);
+  }, RISK_ENV);
+  const w2 = fullWorld();
+  riskSources(w2, {listed: {flood: {ZZ99ZZ: 'Refer'}}});
+  await withApp(w2, async ({post}) => assert.equal((await post({...INSURE, insurance: SALON_PREMISES})).status, 201), RISK_ENV);
+});
+test('a quote shows the risk outcome but writes nothing', async () => {
+  const w = fullWorld();
+  riskSources(w, {listed: {flood: {AB101AU: 'Refer'}}});
+  const app = createApp({config: loadConfig({...ENV, ...RISK_ENV}), getCurrentUser: async () => ({id: 'user-1', email: 'alice@example.test'}), getCrmHeaders: async () => ({Authorization: 'Bearer t'}),
+    getAnalyticsHeaders: async () => ({}), getCreatorHeaders: async () => ({}), fetchImpl: w.fetchImpl});
+  const server = await new Promise(resolve => { const s = app.listen(0, '127.0.0.1', () => resolve(s)); });
+  try {
+    const r = await (await fetch('http://127.0.0.1:' + server.address().port + '/portal/checkout/quote', {method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({service: 'insurance', country: 'United Kingdom', insurance: SALON_PREMISES})})).json();
+    assert.equal(r.quote.payable, false);
+    assert.equal(r.quote.blocked.status, 'REFER');
+    assert.match(r.quote.blocked.reasons.join(' '), /flood risk/);
+    assert.equal(w.crmPosts, undefined);
+    assert.equal(w.stripePosts.length, 0);
+  } finally { await new Promise(resolve => server.close(resolve)); }
+});
+test('if the audit rows cannot be written the member is not sent to pay', async () => {
+  const w = fullWorld();
+  riskSources(w);
+  const original = w.fetchImpl;
+  w.fetchImpl = async (url, init = {}) => (init.method === 'POST' && String(url).endsWith('/crm/v3/Risk_Screenings')
+    ? {status: 400, ok: false, json: async () => ({data: [{status: 'error'}]})} : original(url, init));
+  await withApp(w, async ({post}) => {
+    const r = await post(INSURE);
+    assert.equal(r.status, 502);
+    assert.equal(w.stripePosts.length, 0);
+  }, RISK_ENV);
+});
+test('an incomplete application (a postcode that is not a postcode) is the member to fix and records nothing', async () => {
+  const w = fullWorld();
+  riskSources(w);
+  await withApp(w, async ({post}) => {
+    const r = await post({...INSURE, insurance: {...SALON_PREMISES, insPremisesAddress: {l1: '1 High St', postcode: 'HELLO'}}});
+    assert.equal(r.status, 422);
+    assert.match(r.body.error, /valid UK postcode/);
+    assert.equal(w.crmPosts, undefined);
+  }, RISK_ENV);
+});
+test('with the risk switches off nothing changes: no Analytics or Creator call, no screening rows', async () => {
+  const w = fullWorld();
+  const seen = [];
+  w.external = async url => { if (/analyticsapi|creator\/v2/.test(url)) seen.push(url); return null; };
+  await withApp(w, async ({post}) => {
+    assert.equal((await post(INSURE)).status, 201);
+    assert.equal(seen.length, 0);
+    assert.equal(screeningRows(w).length, 0);
+    assert.equal('Risk_Status' in w.crmPosts[0].record, false);
+  });
+});
+
+// ---- Start dates and payment status values ----
+test('a membership start date outside the window is refused with a message, not reset to today', async () => {
+  const w = world({priceOverride: RECURRING});
+  await withApp(w, async ({post}) => {
+    const day = n => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10);
+    for (const start of ['2000-01-01', day(-1), day(91), 'tomorrow']) {
+      const r = await post({...BUY, previousId: DEAL, start});
+      assert.equal(r.status, 422, start);
+      assert.match(r.body.error, /^Choose a start date from today up to \d{4}-\d{2}-\d{2}\.$/);
+    }
+    assert.equal(w.stripePosts.length, 0);
+    assert.equal((await post({...BUY, previousId: DEAL, start: day(30)})).status, 201);
+    assert.equal(w.stripePosts[0].params.get('metadata[membership_start]'), day(30));
+    assert.equal((await post({...BUY, previousId: DEAL})).status, 201);
+    assert.equal(w.stripePosts[1].params.get('metadata[membership_start]'), day(0));
+  }, MEM_ENV);
+});
+test('only modules with a payment-in-progress value are written to; Deals get no Payment_Status', async () => {
+  const {PROCESSING_STATUS} = require('../src/catalogue');
+  assert.deepEqual(Object.keys(PROCESSING_STATUS), ['Training_Centre_Accred']);
+  const w = world({deals: [activeDeal], priceOverride: RECURRING});
+  await withApp(w, async ({post}) => {
+    assert.equal((await post({...BUY, previousId: DEAL})).status, 201);
+    assert.equal((await post({service: 'membership_addon', recordId: DEAL, addons: {badge: 1}})).status, 201);
+    assert.equal(w.crmPuts.length, 0);
+    assert.equal((await post({service: 'accreditation', recordId: ACC})).status, 201);
+    assert.equal(w.crmPuts.length, 1);
+    assert.equal(w.crmPuts[0].body.data[0].Payment_Status, PROCESSING_STATUS.Training_Centre_Accred);
+  }, MEM_ENV);
+});
+
+// ---- Start dates for insurance, and one date for membership with insurance ----
+const dayFrom = n => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10);
+const yearEnd = start => { const d = new Date(start + 'T00:00:00Z'); d.setUTCFullYear(d.getUTCFullYear() + 1); d.setUTCDate(d.getUTCDate() - 1); return d.toISOString().slice(0, 10); };
+
+test('standalone insurance starts today by default and a later start up to 30 days ahead is recorded on the policy and in the metadata', async () => {
+  const w = fullWorld();
+  await withApp(w, async ({post}) => {
+    assert.equal((await post(INSURE)).status, 201);
+    let policy = w.crmPosts[0].record;
+    assert.equal(policy.Policy_Start_Date, dayFrom(0));
+    assert.equal(policy.Policy_End_Date, yearEnd(dayFrom(0)));
+    assert.equal(w.stripePosts[0].params.get('metadata[insurance_start_date]'), dayFrom(0));
+    assert.equal((await post({...INSURE, start: dayFrom(30)})).status, 201);
+    policy = w.crmPosts.filter(c => c.module === 'Insurance_Policy')[1].record;
+    assert.equal(policy.Policy_Start_Date, dayFrom(30));
+    assert.equal(policy.Policy_End_Date, yearEnd(dayFrom(30)));
+    assert.equal(w.stripePosts[1].params.get('metadata[insurance_start_date]'), dayFrom(30));
+    assert.equal(w.stripePosts[1].params.get('metadata[insurance_end_date]'), yearEnd(dayFrom(30)));
+  });
+});
+test('an insurance start date in the past or more than 30 days ahead is refused with the allowed range, and nothing is created', async () => {
+  const w = fullWorld();
+  await withApp(w, async ({post, get}) => {
+    for (const start of [dayFrom(-1), dayFrom(31), '2000-01-01', 'soon', '2026-02-30']) {
+      const r = await post({...INSURE, start});
+      assert.equal(r.status, 422, start);
+      assert.equal(r.body.error, 'Choose a start date from today up to ' + dayFrom(30) + '.');
+    }
+    assert.equal(w.crmPosts, undefined);
+    assert.equal(w.stripePosts.length, 0);
+  });
+});
+test('membership with insurance uses one date for both: the membership term and the policy start together', async () => {
+  const w = unlinked(world({priceOverride: RECURRING}));
+  await withApp(w, async ({post}) => {
+    const start = dayFrom(14);
+    const r = await post({...BUY, level: 'full_non_salon', insurance: INS_OK, country: 'United Kingdom', start});
+    assert.equal(r.status, 201);
+    const p = w.stripePosts[0].params;
+    assert.equal(p.get('metadata[membership_start]'), start);
+    assert.equal(p.get('metadata[membership_expiry]'), yearEnd(start));
+    assert.equal(p.get('metadata[insurance_start_date]'), start);
+    assert.equal(p.get('metadata[insurance_end_date]'), yearEnd(start));
+    assert.equal(w.crmPosts[0].record.Policy_Start_Date, start);
+  }, MEM_ENV);
+});
+test('the membership start window is 30 days, the same as insurance', async () => {
+  const w = world({priceOverride: RECURRING});
+  await withApp(w, async ({post}) => {
+    assert.equal((await post({...BUY, previousId: DEAL, start: dayFrom(31)})).status, 422);
+    assert.equal((await post({...BUY, previousId: DEAL, start: dayFrom(30)})).status, 201);
+  }, MEM_ENV);
+});
+test('a different start date is a different insurance application, so a retry does not reuse the earlier records', async () => {
+  const w = fullWorld();
+  await withApp(w, async ({post}) => {
+    assert.equal((await post({...INSURE, start: dayFrom(5)})).status, 201);
+    assert.equal((await post({...INSURE, start: dayFrom(6)})).status, 201);
+    assert.equal(w.crmPosts.filter(c => c.module === 'Insurance_Policy').length, 2);
+    assert.equal(w.stripePosts.length, 2);
+  });
 });

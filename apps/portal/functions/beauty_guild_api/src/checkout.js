@@ -13,7 +13,7 @@ const {ITEMS, SERVICES, pounds} = require('./catalogue');
 const STRIPE = 'https://api.stripe.com/v1';
 const PRICE_ID = /^price_[A-Za-z0-9]{6,}$/;
 
-function registerCheckoutRoutes(app, {enabled, getCurrentUser, getCrmHeaders, crmApiDomain, stripeKey, prices = {}, publicOrigin, fetchImpl = fetch, now = Date.now}) {
+function registerCheckoutRoutes(app, {enabled, getCurrentUser, getCrmHeaders, crmApiDomain, stripeKey, prices = {}, publicOrigin, riskChecks = null, fetchImpl = fetch, now = Date.now}) {
   const router = express.Router();
   const {call: crm} = createCrmClient({getCrmHeaders, crmApiDomain, fetchImpl});
   const limiter = createRateLimiter({limit: 20, windowMs: 60 * 1000, now});
@@ -22,7 +22,7 @@ function registerCheckoutRoutes(app, {enabled, getCurrentUser, getCrmHeaders, cr
   const insuranceHour = createRateLimiter({limit: 10, windowMs: 60 * 60 * 1000, now});
   // Insurance attempts by what was asked for. A retry or double click within a few minutes gets the
   // same records and the same open session instead of a duplicate set. (Per instance, like the limiters.)
-  const attempts = new Map(), ATTEMPT_TTL = 5 * 60 * 1000;
+  const attempts = new Map(), referrals = new Map(), ATTEMPT_TTL = 5 * 60 * 1000;
   const unavailable = () => new HttpError(503, 'CHECKOUT_UNAVAILABLE', 'Online payment is not available yet.');
   const priceCache = new Map();
 
@@ -59,7 +59,7 @@ function registerCheckoutRoutes(app, {enabled, getCurrentUser, getCrmHeaders, cr
     let contact = null;
     try { contact = await resolveContact(req, crm, req.portalUser); }
     catch (e) { if (!(service.allowNoContact && e.code === 'CONTACT_UNLINKED')) throw e; }
-    const prepared = await service.prepare({req, crm, contact, input, user: req.portalUser});
+    const prepared = await service.prepare({req, crm, contact, input, user: req.portalUser, risk: riskChecks});
     if (prepared.alreadyPaid) return {service, contact, alreadyPaid: true};
     const lines = [];
     for (const l of prepared.lines) {
@@ -108,6 +108,19 @@ function registerCheckoutRoutes(app, {enabled, getCurrentUser, getCrmHeaders, cr
     return String(result.details.id);
   }
 
+  // A REFER or STOP application is recorded in the CRM for the Insurance team (nothing goes to Stripe). The same
+  // application within a few minutes is recorded once, and a recording that fails is an error, never a silent skip.
+  async function recordReferral(req, b) {
+    const key = crypto.createHash('sha256').update([req.portalUser.id, b.prepared.fingerprint || '', b.prepared.blocked.status].join('|')).digest('hex');
+    const hit = referrals.get(key);
+    if (hit && now() - hit.at < ATTEMPT_TTL) { await hit.promise; return; }
+    if (!insuranceMinute(req.portalUser.id) || !insuranceHour(req.portalUser.id)) throw new HttpError(429, 'RATE_LIMIT', 'Too many insurance attempts. Please wait a few minutes and try again.');
+    const promise = b.prepared.refer((module, record) => crmCreate(req, module, record));
+    referrals.set(key, {at: now(), promise});
+    promise.catch(() => { if (referrals.get(key)?.promise === promise) referrals.delete(key); });
+    await promise;
+  }
+
   const send = fn => async (req, res, next) => { try { await fn(req, res); } catch (e) { next(e); } };
   router.use(express.json({limit: '40kb'}));
   router.use(async (req, res, next) => {
@@ -133,8 +146,12 @@ function registerCheckoutRoutes(app, {enabled, getCurrentUser, getCrmHeaders, cr
     if (!limiter(req.portalUser.id)) throw new HttpError(429, 'RATE_LIMIT', 'Too many requests. Please wait a moment and try again.');
     const input = inputFrom(req.body || {}), b = await build(req, input);
     if (b.alreadyPaid) return res.json({alreadyPaid: true});
-    if (b.prepared.blocked) throw new HttpError(422, 'REFERRAL_REQUIRED', b.prepared.blocked.status === 'INCOMPLETE'
-      ? b.prepared.blocked.reasons.join(' ') : 'This insurance quote needs a review by the Insurance team, so it cannot be paid for online. We will be in touch.');
+    if (b.prepared.blocked) {
+      const blocked = b.prepared.blocked;
+      if (blocked.status !== 'INCOMPLETE' && b.prepared.refer) await recordReferral(req, b);
+      throw new HttpError(422, 'REFERRAL_REQUIRED', blocked.status === 'INCOMPLETE' ? blocked.reasons.join(' ')
+        : blocked.riskMessage || 'This insurance quote needs a review by the Insurance team, so it cannot be paid for online. We will be in touch.');
+    }
     // Reuse a session already started for this record rather than create a second charge.
     if (b.prepared.existingSessionId) {
       const old = await stripe('GET', '/checkout/sessions/' + encodeURIComponent(b.prepared.existingSessionId)).catch(() => null);
@@ -169,7 +186,7 @@ function registerCheckoutRoutes(app, {enabled, getCurrentUser, getCrmHeaders, cr
       const session = await stripe('POST', '/checkout/sessions', {body: params, key: 'portal-v2-' + key});
       if (!session.id || typeof session.url !== 'string' || !session.url.startsWith('https://checkout.stripe.com/'))
         throw new HttpError(502, 'PAYMENT_UNAVAILABLE', 'Secure checkout is unavailable.');
-      if (b.prepared.record) await crmUpdate(req, b.prepared.record.module, b.prepared.record.id, {Stripe_Checkout_Session_ID: session.id, Payment_Status: 'Payment Processing'});
+      if (b.prepared.record) await crmUpdate(req, b.prepared.record.module, b.prepared.record.id, b.prepared.record.update(session.id));
       return session;
     };
     if (b.prepared.beforePay) {

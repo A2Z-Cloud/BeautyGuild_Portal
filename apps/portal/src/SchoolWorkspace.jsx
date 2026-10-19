@@ -114,7 +114,7 @@ export function SchoolWorkspace(){
  current.loading?<p>Loading school…</p>:current.error?<Notice title="Unable to load school">{current.error}</Notice>:
  !school?<Notice title="School unavailable">No school linked to your account matches this reference.</Notice>:
  <div className="school-layout"><nav aria-label="School sections" className="school-nav">{GROUPS.map(g=><div className="school-nav-group" key={g.label}><span className="school-nav-label">{g.label}</span><div className="school-nav-links">{g.items.map(([key,label,Icon])=><Link key={key} className={key===section?'active':''} aria-current={key===section?'page':undefined} to={'/schools/'+id+'/'+key}><Icon size={16} aria-hidden="true"/>{label}</Link>)}</div></div>)}</nav>
- <section className="surface padded school-workspace-panel">{section==='documents'?<DocumentsPanel kind="accreditation" id={id}/>:<SchoolSection id={id} section={section}/>}</section></div>}
+ <section className="surface padded school-workspace-panel">{section==='documents'?<DocumentsPanel kind="accreditation" id={id}/>:<SchoolSection key={id+'/'+section} id={id} section={section}/>}</section></div>}
  </div>;
 }
 export function AccountInvoices(){
