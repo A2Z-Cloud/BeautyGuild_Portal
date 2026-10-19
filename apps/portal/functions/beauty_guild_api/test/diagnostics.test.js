@@ -62,3 +62,11 @@ test('the risk diagnostics return names and freshness only, never list or postco
   assert.equal((await get('/portal/diagnostics/creator-report?report=Other_Report')).status,400);
  }finally{await new Promise(ok=>server.close(ok));}
 });
+test('diagnostics can be allowed by whole email domain: exact or subdomain, never "contains"',async()=>{
+ const env={PORTAL_DIAGNOSTICS_ENABLED:'true',PORTAL_DIAGNOSTICS_DOMAINS:'beautyguild.com, @a2zcloud.com, not a domain'};
+ assert.deepEqual(loadConfig(env).diagnosticsDomains,['beautyguild.com','a2zcloud.com']);
+ for(const [email,status] of [['x@beautyguild.com',200],['X@A2ZCloud.com',200],['x@mail.beautyguild.com',200],['x@beautyguild.com.evil.test',404],['x@evil-beautyguild.com',404],
+   ['x@beautyguild.attacker.test',404],['x@a2zcloud.co',404],['beautyguild.com@evil.test',404],['a@b@beautyguild.com',404]])
+  await withApp(env,{id:'1',email},async get=>assert.equal((await get('/portal/diagnostics/modules')).status,status,email));
+ await withApp({PORTAL_DIAGNOSTICS_ENABLED:'true',PORTAL_DIAGNOSTICS_DOMAINS:''},{id:'1',email:'x@beautyguild.com'},async get=>assert.equal((await get('/portal/diagnostics/modules')).status,404));
+});

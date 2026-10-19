@@ -34,6 +34,8 @@ function loadConfig(env = process.env) {
     recordsEnabled:env.PORTAL_RECORDS_ENABLED === 'true',
     diagnosticsEnabled:env.PORTAL_DIAGNOSTICS_ENABLED === 'true',
     diagnosticsEmails:String(env.PORTAL_DIAGNOSTICS_EMAILS||'').split(',').map(s=>s.trim().toLowerCase()).filter(Boolean),
+    // Whole email domains (exact, or a subdomain of one) that may also use diagnostics, e.g. "beautyguild.com,a2zcloud.com".
+    diagnosticsDomains:String(env.PORTAL_DIAGNOSTICS_DOMAINS||'').split(',').map(s=>s.trim().toLowerCase().replace(/^@/,'')).filter(d=>/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(d)),
     crmDraftsEnabled:env.PORTAL_CRM_DRAFTS_ENABLED === 'true',
     draftStatus:String(env.PORTAL_CRM_DRAFT_STATUS||'Draft'),
     dealStage:String(env.PORTAL_CRM_DRAFT_DEAL_STAGE||''),

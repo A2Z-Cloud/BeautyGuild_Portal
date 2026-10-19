@@ -48,6 +48,10 @@ Connection settings: `ANALYTICS_CONNECTION_NAME` (default `analytics`), `ANALYTI
 
 Insurance_Policy: `Risk_Status` (Clear, Referred, Stopped), `Risk_Summary`, and `Referred` in the `Application_Status` picklist. Module `Risk_Screening` with the fields named above plus `Name`, `Investigated_By`, `Investigated_At`, `Investigation_Note`. Verify the API names with the diagnostics routes before switching a check on: `/portal/diagnostics/fields?module=Risk_Screening`, `/portal/diagnostics/analytics` (organisations, table columns, last-modified time, row count) and `/portal/diagnostics/creator-report?report=...` (field names only).
 
+## Diagnostics access
+
+Off by default. `PORTAL_DIAGNOSTICS_ENABLED=true` plus an allow-list: `PORTAL_DIAGNOSTICS_EMAILS` (exact addresses) and/or `PORTAL_DIAGNOSTICS_DOMAINS` (whole domains, e.g. `beautyguild.com,a2zcloud.com`). A domain matches itself and its subdomains only, never as "contains", because anyone can sign up to the portal and `beautyguild.attacker.test` would otherwise pass. Everyone else gets a plain 404. Switch it off again when finished.
+
 ## Known limits
 
 - Caches and rate limits are per function instance, like the rest of the function.

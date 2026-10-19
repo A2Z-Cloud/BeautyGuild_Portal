@@ -80,7 +80,7 @@ function createApp({
   registerRecordRoutes(app,{enabled:config.recordsEnabled,getCurrentUser,getCrmHeaders,crmApiDomain:config.crmApiDomain,fetchImpl,hideDrafts:config.crmDraftsEnabled,draftStatus:config.draftStatus});
   registerCheckoutRoutes(app,{enabled:config.billingEnabled,getCurrentUser,getCrmHeaders,crmApiDomain:config.crmApiDomain,stripeKey:config.stripeSecretKey,prices:config.stripePrices,publicOrigin:config.portalPublicOrigin,riskChecks,fetchImpl,now});
   registerDraftRoutes(app,{enabled:config.crmDraftsEnabled,getCurrentUser,getCrmHeaders,crmApiDomain:config.crmApiDomain,config,fetchImpl});
-  registerDiagnosticsRoutes(app,{enabled:config.diagnosticsEnabled,allowedEmails:config.diagnosticsEmails,getCurrentUser,getCrmHeaders,crmApiDomain:config.crmApiDomain,fetchImpl,risk:config.risk,getAnalyticsHeaders,getCreatorHeaders});
+  registerDiagnosticsRoutes(app,{enabled:config.diagnosticsEnabled,allowedEmails:config.diagnosticsEmails,allowedDomains:config.diagnosticsDomains,getCurrentUser,getCrmHeaders,crmApiDomain:config.crmApiDomain,fetchImpl,risk:config.risk,getAnalyticsHeaders,getCreatorHeaders});
   registerDocumentRoutes(app,{enabled:config.documentsEnabled,getCurrentUser,getCrmHeaders,getWorkdriveHeaders,crmApiDomain:config.crmApiDomain,workdriveApiDomain:config.workdriveApiDomain,fetchImpl});
   app.use((req, res, next) => next(new HttpError(404, 'NOT_FOUND', 'Not found.')));
   // eslint-disable-next-line no-unused-vars

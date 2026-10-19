@@ -15,14 +15,21 @@ const trimField=f=>({
   unique_raw:f.unique===undefined?null:f.unique,
   options:Array.isArray(f.pick_list_values)?f.pick_list_values.slice(0,40).map(o=>o.actual_value||o.display_value).filter(Boolean):undefined,
 });
-function registerDiagnosticsRoutes(app,{enabled,allowedEmails=[],getCurrentUser,getCrmHeaders,crmApiDomain,fetchImpl=fetch,risk=null,getAnalyticsHeaders,getCreatorHeaders}){
+function registerDiagnosticsRoutes(app,{enabled,allowedEmails=[],allowedDomains=[],getCurrentUser,getCrmHeaders,crmApiDomain,fetchImpl=fetch,risk=null,getAnalyticsHeaders,getCreatorHeaders}){
   const router=express.Router();
   const notFound=()=>new HttpError(404,'NOT_FOUND','Not found.');
+  // An exact address, or an address on a listed domain or one of its subdomains. Never a "contains" match:
+  // anyone can sign up to the portal, and beautyguild.attacker.test would contain "beautyguild".
+  const permitted=email=>{
+    if(allowedEmails.includes(email))return true;
+    const domain=email.split('@').pop();
+    return email.split('@').length===2&&allowedDomains.some(d=>domain===d||domain.endsWith('.'+d));
+  };
   router.use(async(req,res,next)=>{
     try{
-      if(!enabled||!allowedEmails.length)throw notFound();
+      if(!enabled||!(allowedEmails.length||allowedDomains.length))throw notFound();
       const user=await getCurrentUser(req);
-      if(!user?.email||!allowedEmails.includes(String(user.email).toLowerCase()))throw notFound();
+      if(!user?.email||!permitted(String(user.email).toLowerCase()))throw notFound();
       next();
     }catch(e){next(e);}
   });
