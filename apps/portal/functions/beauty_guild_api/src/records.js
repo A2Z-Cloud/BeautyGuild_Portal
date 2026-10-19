@@ -5,7 +5,7 @@ const ID=/^\d{10,25}$/;
 const DEFINITIONS={
  membership:{module:'Deals',owner:'Contact_Name',fields:['Deal_Name','Stage','Membership_Type','Membership_Branch','Expiry_Date','Start_Date','Contact_Name','Amount','Payment_Status','Created_Time'],label:'Deal_Name',status:'Stage'},
  accreditation:{module:'Training_Centre_Accred',owner:'Applicant_Contact',fields:['Account','Accreditation_Status','Application_Stage','Accreditation_Level','Valid_From','Valid_To','Applicant_Contact','Payment_Status','Created_Time'],label:'Account',status:'Accreditation_Status'},
- insurance:{module:'Insurance_Policy',owner:'Contact',fields:['Application_Status','Policy_Type','Contact','Created_Time'],label:'Policy_Type',status:'Application_Status'}
+ insurance:{module:'Insurance_Policy',owner:'Contact',fields:['Application_Status','Policy_Type','Policy_Start_Date','Policy_End_Date','Contact','Created_Time'],label:'Policy_Type',status:'Application_Status'}
 };
 const uri=(s)=>encodeURIComponent(String(s));
 function createCrmClient({getCrmHeaders,crmApiDomain,fetchImpl=fetch}){

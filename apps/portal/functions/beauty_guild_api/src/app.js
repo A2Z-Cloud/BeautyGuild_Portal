@@ -7,6 +7,7 @@ const { createRateLimiter, clientKey } = require('./rateLimit');
 const {registerRecordRoutes}=require('./records');
 const {registerBillingRoutes}=require('./billing');
 const {registerDocumentRoutes}=require('./documents');
+const {registerDiagnosticsRoutes}=require('./diagnostics');
 const {registerPublicSchoolVerification}=require('./publicSchoolVerification');
 const {registerDraftRoutes}=require('./crmDrafts');
 const {registerSchoolRoutes}=require('./schoolServices');
@@ -77,6 +78,7 @@ function createApp({
   registerRecordRoutes(app,{enabled:config.recordsEnabled,getCurrentUser,getCrmHeaders,crmApiDomain:config.crmApiDomain,fetchImpl,hideDrafts:config.crmDraftsEnabled,draftStatus:config.draftStatus});
   registerBillingRoutes(app,{enabled:config.billingEnabled,getCurrentUser,getQuoteTable,getPaymentTable,stripeKey:config.stripeSecretKey,webhookSecret:config.stripeWebhookSecret,publicOrigin:config.portalPublicOrigin,fetchImpl});
   registerDraftRoutes(app,{enabled:config.crmDraftsEnabled,getCurrentUser,getCrmHeaders,crmApiDomain:config.crmApiDomain,config,fetchImpl});
+  registerDiagnosticsRoutes(app,{enabled:config.diagnosticsEnabled,allowedEmails:config.diagnosticsEmails,getCurrentUser,getCrmHeaders,crmApiDomain:config.crmApiDomain,fetchImpl});
   registerDocumentRoutes(app,{enabled:config.documentsEnabled,getCurrentUser,getCrmHeaders,getWorkdriveHeaders,crmApiDomain:config.crmApiDomain,workdriveApiDomain:config.workdriveApiDomain,fetchImpl});
   app.use((req, res, next) => next(new HttpError(404, 'NOT_FOUND', 'Not found.')));
   // eslint-disable-next-line no-unused-vars

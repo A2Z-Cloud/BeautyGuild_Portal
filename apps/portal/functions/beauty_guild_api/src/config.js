@@ -22,6 +22,8 @@ function loadConfig(env = process.env) {
     loqateCountries: String(env.LOQATE_COUNTRY_FILTER || '').trim(),
     loqateMaxResults: boundedInt(env.LOQATE_MAX_RESULTS, 40, 1, 100),
     recordsEnabled:env.PORTAL_RECORDS_ENABLED === 'true',
+    diagnosticsEnabled:env.PORTAL_DIAGNOSTICS_ENABLED === 'true',
+    diagnosticsEmails:String(env.PORTAL_DIAGNOSTICS_EMAILS||'').split(',').map(s=>s.trim().toLowerCase()).filter(Boolean),
     crmDraftsEnabled:env.PORTAL_CRM_DRAFTS_ENABLED === 'true',
     draftStatus:String(env.PORTAL_CRM_DRAFT_STATUS||'Draft'),
     dealStage:String(env.PORTAL_CRM_DRAFT_DEAL_STAGE||''),

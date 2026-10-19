@@ -45,13 +45,15 @@ function textField(fields,name){
  if(!f||!['text','textarea','integer','bigint','datetime','lookup','multiselectpicklist','picklist'].includes(String(f.data_type||'').toLowerCase()))fail('FIELD_NOT_READY','CRM draft metadata requires review: '+name,503);
  return f;
 }
+// CRM reports an empty object for a field that allows duplicates and a populated object for a unique one.
+function isUnique(u){return u===true||Boolean(u&&typeof u==='object'&&Object.keys(u).length>0);}
 function checkMetadata(module,fields,config){
  for(const name of ['Application_Status','Journey_ID','Last_Completed_Journey_Step','Draft_State_Reference','Draft_Saved_At'])textField(fields,name);
  const status=metaField(fields,'Application_Status');
  const options=(status.pick_list_values||[]).map(x=>x.actual_value||x.display_value);
  if(!options.includes(config.draftStatus))fail('STATUS_NOT_READY','CRM draft status is not configured.',503);
  const j=metaField(fields,'Journey_ID');
- if(!(j.unique===true||j.unique?.id||j.unique?.is_unique===true))fail('JOURNEY_UNIQUE_REQUIRED','Journey_ID must be a CRM unique field to prevent duplicate saves.',503);
+ if(!isUnique(j.unique))fail('JOURNEY_UNIQUE_REQUIRED','Journey_ID must be a CRM unique field to prevent duplicate saves.',503);
  if(module==='Deals'){
   textField(fields,'Contact_Name');textField(fields,'Stage');textField(fields,'Deal_Name');
   const stage=metaField(fields,'Stage');

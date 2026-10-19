@@ -84,7 +84,7 @@ test('duplicates must never select an arbitrary school',async()=>{
 });
 test('malformed registration numbers are rejected before CRM',async()=>{
   await withServer({},async(get,calls)=>{
-    for(const q of ['/public/verify/%20bad','/public/verify/12345%20foo','/public/verify/12345%3D1']){
+    for(const q of ['/public/verify/bad%21','/public/verify/a%3Bb','/public/verify/12345%3D1']){
       assert.equal((await get(q)).status,400);
     }
     assert.equal(calls.length,0);
@@ -157,4 +157,45 @@ test('Training_Centres lookup can resolve centre via its Account',async()=>{
     const r=await get('/public/verify/00123');assert.equal(r.status,200);
     assert.equal(r.body.school.registrationNumber,'00123');assert.equal(r.body.school.name,'Academy Centre');
   });
+});
+
+test('the accreditation reference works as the registration number, for issued records only',async()=>{
+  const accred=(over={})=>({id:'223456789012345',Name:'ACC-00042',Account:{id:school.id,name:'Example Beauty Training School'},
+    Accreditation_Status:'Verified',Application_Stage:'Approved',Valid_From:'2026-01-01',Valid_To:'2027-12-31',...over});
+  const run=async(ref,rows,path='/public/verify/ACC-00042')=>{
+    let result;
+    await withServer({config:config({PUBLIC_SCHOOL_REGISTRATION_MODULE:'Training_Centre_Accred',PUBLIC_SCHOOL_REGISTRATION_FIELD:'Name'}),
+      fetchImpl:async(url)=>{
+        const u=decodeURIComponent(String(url));
+        if(u.includes('Training_Centre_Accred/search')&&u.includes('Name:equals:'))return response({data:ref});
+        if(u.includes('Training_Centre_Accred/search'))return response({data:rows});
+        throw Error('unexpected '+u);
+      }},async get=>{result=await get(path);});
+    return result;
+  };
+  const ok=await run([accred()],[accred()]);
+  assert.equal(ok.status,200);assert.equal(ok.body.school.name,'Example Beauty Training School');
+  assert.equal(ok.body.school.registrationNumber,'ACC-00042');assert.equal(ok.body.verification.status,'accredited');
+  // an older reference still shows the school's CURRENT status
+  const old=accred({Name:'ACC-00007',Accreditation_Status:'Expired',Valid_From:'2024-01-01',Valid_To:'2024-12-31'});
+  const viaOld=await run([old],[old,accred()],'/public/verify/ACC-00007');
+  assert.equal(viaOld.status,200);assert.equal(viaOld.body.verification.status,'accredited');
+  // applications that were never granted are not revealed
+  for(const status of ['Unverified',null,'']){
+    const draft=await run([accred({Accreditation_Status:status,Application_Stage:'Draft'})],[]);
+    assert.equal(draft.status,404,String(status));
+  }
+});
+
+test('a spaced reference such as "ACC - 0140" is found with or without the spaces',async()=>{
+  const rec={id:'223456789012345',Name:'ACC - 0140',Account:{id:school.id,name:'Example Beauty Training School'},Accreditation_Status:'Verified',Application_Stage:'Approved',Valid_From:'2026-01-01',Valid_To:'2999-12-31'};
+  for(const path of ['/public/verify/ACC-0140','/public/verify/ACC%20-%200140','/public/verify/acc0140']){
+    let criteria='',result;
+    await withServer({config:config({PUBLIC_SCHOOL_REGISTRATION_MODULE:'Training_Centre_Accred',PUBLIC_SCHOOL_REGISTRATION_FIELD:'Name'}),
+      fetchImpl:async(url)=>{const u=decodeURIComponent(String(url));if(u.includes('Name:equals:'))criteria=u;return response({data:[rec]});}},
+      async get=>{result=await get(path);});
+    assert.equal(result.status,200,path);
+    assert.match(criteria,/Name:equals:ACC - 0140/,path);
+    assert.equal(result.body.school.registrationNumber,'ACC - 0140',path);
+  }
 });

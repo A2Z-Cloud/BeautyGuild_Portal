@@ -3,6 +3,14 @@ const express=require('express');
 const {HttpError}=require('./errors');
 const {createRateLimiter,clientKey}=require('./rateLimit');
 
+// Statuses that mean the accreditation was actually granted at some point.
+const ISSUED=new Set(['verified','expired','closed','suspended','revoked']);
+// CRM stores the reference as "ACC - 0140"; accept "ACC-0140" and "acc 0140" as the same reference.
+const squash=v=>String(v||'').replace(/\s+/g,'').toLowerCase();
+function canonicalReference(value){
+  const m=String(value).match(/^([A-Za-z]{1,10})[\s-]*(\d{1,12})$/);
+  return m?m[1].toUpperCase()+' - '+m[2]:String(value);
+}
 const REGISTRATION_RE=/^[A-Za-z0-9][A-Za-z0-9_-]{0,39}$/;
 const FIELD_RE=/^[A-Za-z][A-Za-z0-9_]{0,79}$/;
 const toStatus=x=>String(x||'').trim().toLowerCase();
@@ -44,7 +52,7 @@ function registerPublicSchoolVerification(app,{
   const allowed=createRateLimiter({limit,windowMs,now});
   const unavailable=()=>new HttpError(503,'VERIFICATION_UNAVAILABLE','School verification is temporarily unavailable.');
   router.use((req,res,next)=>{
-    if(!enabled||!['Accounts','Training_Centres'].includes(registrationModule)||
+    if(!enabled||!['Accounts','Training_Centres','Training_Centre_Accred'].includes(registrationModule)||
       !FIELD_RE.test(registrationField)||!String(activeStatus).trim())return next(unavailable());
     // Best-effort per-instance limiter. Require an edge/WAF rate limit in production.
     if(!allowed(clientKey(req)))
@@ -66,22 +74,28 @@ function registerPublicSchoolVerification(app,{
   }
   router.get('/:number',async(req,res,next)=>{
     try{
-      const number=String(req.params.number||'');
+      // Spaces are ignored: a certificate may print "ACC - 0140" while a link carries "ACC-0140".
+      const number=String(req.params.number||'').replace(/\s+/g,'');
       if(!REGISTRATION_RE.test(number))
         throw new HttpError(400,'INVALID_SCHOOL_NUMBER','Enter a valid school registration number.');
       const accountSource=registrationModule==='Accounts';
-      const fields=accountSource?[registrationField,'Account_Name']:[registrationField,'Name','Account'];
+      // The accreditation reference (Training_Centre_Accred autonumber) is issued to every applicant, including
+      // drafts and rejections, so only references that were really issued are recognised publicly.
+      const accredSource=registrationModule==='Training_Centre_Accred';
+      const fields=accountSource?[registrationField,'Account_Name']:accredSource?[registrationField,'Account','Accreditation_Status','Application_Stage']:[registrationField,'Name','Account'];
       const schools=await crmSearch(req,registrationModule,
-        '('+registrationField+':equals:'+number+')',fields);
+        '('+registrationField+':equals:'+(accredSource?canonicalReference(number):number)+')',fields);
       const matches=schools.filter(s=>{
         if(!(registrationField in s))throw unavailable();
-        return toStatus(s[registrationField])===toStatus(number);
+        return accredSource?squash(s[registrationField]).replace(/-/g,'')===squash(number).replace(/-/g,''):toStatus(s[registrationField])===toStatus(number);
       });
       if(!matches.length)throw new HttpError(404,'SCHOOL_NOT_FOUND','No school was found for this registration number.');
       if(matches.length!==1)throw unavailable();
       const school=matches[0];
+      if(accredSource&&!ISSUED.has(toStatus(school.Accreditation_Status)))
+        throw new HttpError(404,'SCHOOL_NOT_FOUND','No school was found for this registration number.');
       const accountId=accountSource?school.id:school.Account?.id;
-      const schoolName=accountSource?school.Account_Name:school.Name;
+      const schoolName=accountSource?school.Account_Name:accredSource?school.Account?.name:school.Name;
       if(!/^\d{10,25}$/.test(String(accountId||''))||!String(schoolName||'').trim())throw unavailable();
       const acc=await crmSearch(req,'Training_Centre_Accred',
         '(Account:equals:'+accountId+')',
@@ -89,7 +103,7 @@ function registerPublicSchoolVerification(app,{
       // Re-check lookup ownership: never let fuzzy CRM criteria match another school.
       if(acc.some(a=>String(a.Account?.id||'')!==String(accountId)))throw unavailable();
       const stamp=new Date(now()).toISOString();
-      return res.json({school:{registrationNumber:number,name:String(schoolName).trim()},
+      return res.json({school:{registrationNumber:accredSource?String(school[registrationField]).trim():number,name:String(schoolName).trim()},
         verification:{...assess(acc,stamp.slice(0,10),activeStatus),checkedAt:stamp}});
     }catch(error){
       next(error instanceof HttpError?error:unavailable());
