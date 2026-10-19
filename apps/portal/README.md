@@ -95,3 +95,8 @@ Test using [INTEGRATION-TEST.md](INTEGRATION-TEST.md) and see [Milestone 2 Contr
 A public school number search has been added at the standalone hash routes /app/#/verify and /app/#/verify/12345. The lookup is implemented in the existing Catalyst API as GET /server/beauty_guild_api/public/verify/:number and is **disabled until the exact CRM School Registration Number field is configured**. It uses only actual CRM data and never fabricates an accredited result.
 
 The requested beautyguild.com/verify/12345 address needs a separate WordPress route or redirect; QR codes are not part of this change. See [School Verification V1 handover](../../docs/school-accreditation-verification-v1.md) for setup, CRM dependencies, security and testing.
+
+
+## Proposed MTA self-service workstream (not implemented)
+
+The [customer portal MTA functional specification](../../requirements/mta/customer-portal-functional-spec.md) defines proposed contextual Membership/Insurance changes, quote and referral journeys, payment handling and revision documents. It is a review specification only: no MTA route, backend processing service, underwriting engine or policy endorsement is implemented or deployed by this link.

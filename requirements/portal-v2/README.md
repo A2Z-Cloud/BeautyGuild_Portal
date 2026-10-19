@@ -40,3 +40,8 @@
 - International price and post-payment membership fulfilment
 - Referral statuses and notification mechanism
 - Voucher-specific business rules and redemption event behaviour
+
+
+## Related proposed workstream: MTA customer self-service
+
+The [MTA customer portal functional specification](../mta/customer-portal-functional-spec.md) captures the proposed authenticated membership and insurance amendment experience from the Guild's MTA workbook. It is **for review only** and does not authorise a change to the approved Portal V2 release scope or implementation of payments/underwriting.
