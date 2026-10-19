@@ -5,6 +5,7 @@
 // and set its STRIPE_PRICE_* env var. To add a new service, add an entry to SERVICES: it says who
 // may pay (ownership), which items to charge, and the metadata Creator expects after payment.
 const {HttpError} = require('./errors');
+const insurance = require('./insurance');
 
 const ID = /^\d{10,25}$/;
 const ITEMS = Object.freeze({
@@ -135,6 +136,54 @@ async function activeMembership(req, crm, contactId) {
 }
 
 
+// Insurance is rated here, not read from Stripe: each cover row and the IPT become inline price_data lines.
+// Nothing is created in the CRM until the member pays (beforePay runs on checkout only, never on a quote),
+// and a quote that needs the Insurance team (REFER) or cannot be offered online (STOP) is never payable.
+function insuranceLines({contact, input, member}) {
+  const country = String(input.country || '').trim().slice(0, 60);
+  if (!country) bad('Tell us where you are based.');
+  const ins = insurance.clean(input.insurance);
+  const quote = insurance.calculateQuote(ins);
+  const rules = insurance.evaluateRules(ins, country, {complete: !input.quote});
+  const blocked = rules.overall === 'PASS' ? null : {status: rules.overall, reasons: rules.results.map(r => r.customerMessage)};
+  if (!quote.rows.length && !blocked) bad('Choose the insurance cover you need.');
+  const inline = quote.rows.map(r => ({name: 'Insurance - ' + r.label, unitPence: r.premiumPence, quantity: 1}));
+  if (quote.iptPence) inline.push({name: 'Insurance Premium Tax (' + Math.round(insurance.IPT_RATE * 100) + '%)', unitPence: quote.iptPence, quantity: 1});
+  return {
+    inline, blocked, quote,
+    beforePay: create => insurance.createRecords(create, {contactId: contact?.id || '', membershipDealId: member?.id || null, ins, quote,
+      entryRoute: contact ? 'Existing Member' : 'Public Prospect', termsAccepted: input.accepted === 'yes'}),
+    metadata: ids => ({
+      insurance_amount: pounds(quote.totalPence), insurance_net_amount: pounds(quote.netPence), insurance_ipt_amount: pounds(quote.iptPence), insurance_route: ins.insRoute,
+      insurance_policy_id: ids?.policyId || '', insured_premises_id: ids?.premisesId || '', insured_people_ids: (ids?.insuredPeopleIds || []).join(','),
+      insurance_extension_ids: (ids?.extensionIds || []).join(','), insurance_declarations_id: ids?.declarationsId || '',
+    }),
+  };
+}
+const fullName = (contact, input) => contact ? [contact.First_Name, contact.Last_Name].filter(Boolean).join(' ')
+  : [input.firstName, input.lastName].map(x => String(x || '').trim().slice(0, 60)).filter(Boolean).join(' ');
+
+SERVICES.insurance = {
+  title: 'Insurance',
+  allowNoContact: true,
+  async prepare({req, crm, contact, input}) {
+    if (!input.insurance) bad('Tell us about the cover you need.');
+    if (!input.quote && input.accepted !== 'yes') bad('Please accept the Code of Ethics and terms to continue.');
+    const name = fullName(contact, input);
+    if (!name && !input.quote) bad('Enter your first name and surname.');
+    const member = contact ? await activeMembership(req, crm, contact.id) : null;
+    const ins = insuranceLines({contact, input, member});
+    return {
+      lines: [], inline: ins.inline, blocked: ins.blocked, beforePay: ins.beforePay, noContact: !contact,
+      metadata: ({total, insuranceIds}) => ({
+        type: 'insurance', quote_reference: 'BGP-' + Date.now().toString(36).toUpperCase(), entry_point: contact ? 'member' : 'public',
+        contact_id: contact?.id || '', membership_deal_id: member?.id || '', membership_profile_id: member?.profileId || '', name,
+        insurance_requested: 'true', ...ins.metadata(insuranceIds), total_amount: total, total_amount_net: total,
+      }),
+    };
+  },
+};
+
 SERVICES.membership = {
   title: 'Membership',
   allowNoContact: true,
@@ -157,8 +206,7 @@ SERVICES.membership = {
     }
     // A quote is only a summary; paying needs the consents and a name.
     if (!input.quote && input.accepted !== 'yes') bad('Please accept the Code of Ethics and terms to continue.');
-    const name = contact ? [contact.First_Name, contact.Last_Name].filter(Boolean).join(' ')
-      : [input.firstName, input.lastName].map(x => String(x || '').trim().slice(0, 60)).filter(Boolean).join(' ');
+    const name = fullName(contact, input);
     if (!name && !input.quote) bad('Enter your first name and surname.');
 
     const today = isoDay(new Date());
@@ -179,21 +227,22 @@ SERVICES.membership = {
     if (!previous) lines.push({item: 'joining_fee', quantity: 1});
     if (secondary.length) lines.push({item: 'membership_branch', quantity: secondary.length});
     for (const [key, quantity] of Object.entries(addons)) lines.push({item: ADDONS[key], quantity});
+    const ins = input.insurance ? insuranceLines({contact, input, member}) : null;
     return {
-      lines, noContact: !contact,
-      metadata: ({lines: priced, total}) => {
+      lines, noContact: !contact, inline: ins?.inline || [], blocked: ins?.blocked || null, beforePay: ins?.beforePay,
+      metadata: ({lines: priced, total, insuranceIds}) => {
         const by = item => priced.find(l => l.item === item);
         const gross = item => by(item) ? pounds(by(item).totalPence) : '0.00';
         const net = item => by(item) ? netPounds(item, by(item).totalPence, by(item).quantity) : '0.00';
         const base = priced[0].item;
         const totalNet = priced.reduce((t, l) => t + Number(netPounds(l.item, l.totalPence, l.quantity)), 0).toFixed(2);
         return {
-          type: 'membership', quote_reference: 'BGP-' + Date.now().toString(36).toUpperCase(), entry_point: contact ? 'member' : 'public',
+          type: ins ? 'membership_insurance' : 'membership', quote_reference: 'BGP-' + Date.now().toString(36).toUpperCase(), entry_point: contact ? 'member' : 'public',
           contact_id: contact?.id || '', membership_profile_id: member?.profileId || '',
           existing_membership: member ? JSON.stringify({type: member.type, start_date: member.start, expiry_date: member.expiry, deal_id: member.id}) : '',
           previous_membership_id: previous || '', change_type: change,
           name, membership_level: level, primary_branch: branch, secondary_branches: secondary.join(','), addons: JSON.stringify(addons),
-          insurance_requested: 'false', subscription_type: billing, membership_start: start, membership_expiry: expiry,
+          insurance_requested: ins ? 'true' : 'false', subscription_type: billing, membership_start: start, membership_expiry: expiry,
           base_membership_amount: gross(base), base_membership_amount_net: net(base),
           joining_fee_amount: gross('joining_fee'), joining_fee_amount_net: net('joining_fee'),
           branch_addon_amount: gross('membership_branch'), branch_addon_amount_net: net('membership_branch'),
@@ -201,9 +250,10 @@ SERVICES.membership = {
           certificate_amount: gross('addon_certificate'), certificate_amount_net: net('addon_certificate'),
           badge_amount: gross('addon_badge'), badge_amount_net: net('addon_badge'),
           sticker_amount: gross('addon_sticker'), sticker_amount_net: net('addon_sticker'),
-          insurance_amount: 'not_requested', insurance_net_amount: '', insurance_ipt_amount: '', insurance_route: '',
-          insurance_policy_id: '', insured_premises_id: '', insured_people_ids: '', insurance_extension_ids: '', insurance_declarations_id: '',
-          total_amount: total, total_amount_net: totalNet,
+          ...(ins ? ins.metadata(insuranceIds) : {
+            insurance_amount: 'not_requested', insurance_net_amount: '', insurance_ipt_amount: '', insurance_route: '',
+            insurance_policy_id: '', insured_premises_id: '', insured_people_ids: '', insurance_extension_ids: '', insurance_declarations_id: ''}),
+          total_amount: total, total_amount_net: (Number(totalNet) + (ins ? ins.quote.totalPence / 100 : 0)).toFixed(2),
         };
       },
     };

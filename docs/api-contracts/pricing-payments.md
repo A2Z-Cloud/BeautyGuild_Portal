@@ -12,7 +12,7 @@ Follows V1 (`beauty-guild-catalyst`): the portal function creates the Stripe Che
 - Only `sk_test_` keys are accepted until live use is agreed.
 
 ## Services now
-`accreditation` (bundle price when the Contact has no current membership, international price rule as V1), `additional_venue`, `membership_addon`, and `membership` (new, renewal, upgrade).
+`insurance` (standalone), `accreditation` (bundle price when the Contact has no current membership, international price rule as V1), `additional_venue`, `membership_addon`, and `membership` (new, renewal, upgrade).
 
 ### Membership purchase
 - Levels `associate`, `full_non_salon`, `full_salon` (international is refused: priced individually). Branches `beauty|holistic|nails|hair`; additional branches and add-ons optional. Annual or monthly.
@@ -29,5 +29,15 @@ Follows V1 (`beauty-guild-catalyst`): the portal function creates the Stripe Che
 ## Env
 `PORTAL_BILLING_ENABLED=true`, `STRIPE_SECRET_KEY` (test), `PORTAL_PUBLIC_ORIGIN`, `STRIPE_PRICE_*`. Client: `VITE_PORTAL_BILLING=true`. Not sent: the Stripe webhook secret.
 
-## Not built yet
-Insurance purchases and membership with insurance (rating tables and rules, IPT, declarations, sanctions check, creation of the insurance CRM records before payment) are not ported from V1.
+## Insurance
+Ported from V1 (`calculateInsuranceQuote`, `evaluateInsuranceRules`, `createInsuranceRecords`) into `src/insurance.js`. Two entry points: `service=insurance` (standalone, one-off payment) and `service=membership` with an `insurance` object (membership subscription plus insurance in one checkout, metadata `type=membership_insurance`).
+- **Request**: `country` (territory) and `insurance` (the V1 `ins*` answers). The body is cleaned to a fixed shape: unknown keys are dropped, numbers are bounded, at most 10 named people, and the route is derived from `insSalon`, never trusted from the browser. Use `POST /portal/checkout/quote` (the answers are too big for a query string); `GET /quote` still serves the other services.
+- **Rating**: V1 tables and formulas. Premiums are computed, so each cover row and the IPT line (12% of the net total, rounded once to the penny) go to Stripe as inline `price_data` (name, `unit_amount`), not catalogue price IDs. Insurance is one-off, so it rides on the first invoice of a subscription.
+- **Rules** (STOP, REFER, PASS): as V1. Territory is UK, the UK nations, Channel Islands or Isle of Man (V1 treated "England" and the other nations as unsupported; the portal's country list contains them, so they count as UK here). Paying also requires every declaration and confirmation to be answered (V1 left that to its wizard), and the premises address when property cover is chosen.
+- **Not payable online**: a REFER or STOP quote is returned by `/quote` with `payable: false` and the reasons, and `POST /portal/checkout` refuses it (422, `REFERRAL_REQUIRED`) before anything is created.
+- **CRM records before payment, as V1**: Insurance_Policy (Application_Status `Ready for Payment`, Entry_Route `Existing Member` or `Public Prospect`, Membership = the current active Deal if any), Insured_Premises, Insured_People, Insurance_Extension (one per cover row) and Declarations. Created only on a payable checkout, never on a quote. Their ids go in the session metadata exactly as V1: `insurance_policy_id`, `insured_premises_id`, `insured_people_ids`, `insurance_extension_ids`, `insurance_declarations_id`, plus `insurance_amount` (gross), `insurance_net_amount`, `insurance_ipt_amount`, `insurance_route`, `insurance_requested`. For membership with insurance `total_amount_net` adds the insurance total, which carries no VAT.
+- **Standalone metadata**: `type=insurance`, `quote_reference`, `entry_point`, `contact_id`, `membership_deal_id`, `membership_profile_id`, `name`, the insurance keys above, `total_amount`. V1 had no standalone insurance checkout, so Creator's webhook needs a branch for `type=insurance` (activate the policy from `insurance_policy_id`).
+- **Contact link**: same rule as membership. A verified email matching one Contact is linked; no Contact means a public prospect (`contact_id` empty, Policy and Declarations have no Contact) and Creator creates the Contact after payment.
+- **Known limit (as V1)**: if payment is abandoned the policy stays at `Ready for Payment`; a retry creates a new set of records. Creator can expire stale ones.
+- Pages: `/insurance/buy` and the "Add insurance" section of `/membership/buy`. The questions live in `src/insuranceInputs.js` and also drive the saved-application journey.
+- Sanctions checks and policy documents are not part of this checkout.

@@ -3,6 +3,9 @@ import {ArrowLeft,LockKeyhole} from 'lucide-react';
 import {Link,useSearchParams} from 'react-router-dom';
 import {Notice,PageHeading} from './UiParts.jsx';
 import {INTEGRATIONS,portalApi} from './services/api.js';
+import {validate} from './logic.mjs';
+import {toRequest,visibleFields} from './insuranceInputs.js';
+import {BlockedNotice,InsuranceForm,useInsuranceQuote} from './InsuranceForm.jsx';
 
 const LEVELS=[['associate','Associate Member','Guild membership without insurance.'],['full_non_salon','Full Member (Non-Salon)','Full membership for practitioners who do not own a salon.'],['full_salon','Full Member (Salon)','Full membership for salon owners.']];
 const BRANCHES=[['beauty','Beauty Therapists'],['holistic','Holistic Therapists'],['nails','Nail Technicians'],['hair','Hairdressers & Barbers']];
@@ -14,7 +17,8 @@ const money=pence=>'£'+(pence/100).toFixed(2);
 export default function BuyMembership(){
   const [query]=useSearchParams(),previousId=query.get('renew')||'',changeType=query.get('change')==='upgrade'?'upgrade':'renewal';
   const [who,setWho]=useState({state:'loading',firstName:'',lastName:''});
-  const [f,setF]=useState({level:'',branch:'',branches:[],billing:'annual',addons:{},accepted:false});
+  const [f,setF]=useState({level:'',branch:'',branches:[],billing:'annual',addons:{},accepted:false,insurance:false});
+  const [iv,setIv]=useState({}),[country,setCountry]=useState(''),[iErrors,setIErrors]=useState({}),[countryError,setCountryError]=useState('');
   const [q,setQ]=useState({loading:false,quote:null,error:''}),[busy,setBusy]=useState(false),[payError,setPayError]=useState('');
   useEffect(()=>{
     let alive=true;
@@ -26,22 +30,32 @@ export default function BuyMembership(){
   const base=()=>({service:'membership',level:f.level,branch:f.branch,billing:f.billing,...(f.branches.length?{branches:f.branches.join(',')}:{}),
     ...(previousId?{previousId,changeType}:{})});
   useEffect(()=>{
-    if(!INTEGRATIONS.stripeCheckout||who.state!=='in'||!ready){setQ({loading:false,quote:null,error:''});return undefined;}
+    if(!INTEGRATIONS.stripeCheckout||who.state!=='in'||!ready||f.insurance){setQ({loading:false,quote:null,error:''});return undefined;}
     let alive=true;setQ(s=>({...s,loading:true,error:''}));
     portalApi.checkoutQuote({...base(),...(addonText?{addons:addonText}:{})}).then(quote=>alive&&setQ({loading:false,quote,error:''})).catch(e=>alive&&setQ({loading:false,quote:null,error:e.message}));
     return()=>{alive=false;};
-  },[who.state,f.level,f.branch,f.billing,f.branches.join(','),addonText,previousId]);// eslint-disable-line react-hooks/exhaustive-deps
+  },[who.state,f.level,f.branch,f.billing,f.branches.join(','),addonText,previousId,f.insurance]);// eslint-disable-line react-hooks/exhaustive-deps
+  // With insurance the answers are too large for a query string, so the server prices them from a POST.
+  const ins=toRequest(iv);
+  const iq=useInsuranceQuote({enabled:INTEGRATIONS.stripeCheckout&&who.state==='in'&&ready&&f.insurance&&Boolean(country)&&(iv.insWorking||[]).length>0,
+    request:()=>({...base(),addons:f.addons,country,insurance:toRequest(iv)}),key:JSON.stringify([f.level,f.branch,f.billing,f.branches,f.addons,previousId,country,ins])});
+  const setI=(name,value)=>{setIv(v=>({...v,[name]:value}));setIErrors(e=>({...e,[name]:undefined}));};
   const set=patch=>setF(old=>({...old,...patch}));
   const toggleBranch=id=>set({branches:f.branches.includes(id)?f.branches.filter(b=>b!==id):[...f.branches,id]});
   async function pay(){
-    if(busy)return;setBusy(true);setPayError('');
+    if(busy)return;
+    if(f.insurance){
+      const found=validate(visibleFields(iv),iv);setIErrors(found);setCountryError(country?'':'Choose where you are based.');
+      if(Object.keys(found).length||!country){setPayError('Please answer the highlighted insurance questions.');return;}
+    }
+    setBusy(true);setPayError('');
     try{
-      const r=await portalApi.startCheckout({...base(),addons:f.addons,accepted:'yes',firstName:who.firstName,lastName:who.lastName});
+      const r=await portalApi.startCheckout({...base(),addons:f.addons,accepted:'yes',firstName:who.firstName,lastName:who.lastName,...(f.insurance?{country,insurance:ins}:{})});
       if(!/^https:\/\/checkout\.stripe\.com\//.test(r.checkoutUrl))throw new Error('We could not open the payment page. Please try again.');
       window.location.assign(r.checkoutUrl);
     }catch(e){setPayError(e.message);setBusy(false);}
   }
-  const quote=q.quote,firstPay=quote?.lines.filter(l=>!l.interval).reduce((t,l)=>t+l.totalPence,0)||0,recurring=quote?.lines.find(l=>l.interval);
+  const quote=f.insurance?iq.quote:q.quote,firstPay=quote?.lines.filter(l=>!l.interval).reduce((t,l)=>t+l.totalPence,0)||0,recurring=quote?.lines.find(l=>l.interval);
   return <div className="page narrow-page"><Link to="/membership" className="back-link"><ArrowLeft size={16}/> Back to membership</Link>
     <PageHeading eyebrow="GUILD MEMBERSHIP" title={previousId?(changeType==='upgrade'?'Upgrade your membership':'Renew your membership'):'Join the Guild'} description="Choose your membership, then pay securely on Stripe. We never see your card details."/>
     {!INTEGRATIONS.stripeCheckout?<Notice title="Not available yet">Online membership purchase is not available yet.</Notice>:who.state==='loading'?<p role="status">Checking your account…</p>:
@@ -54,14 +68,18 @@ export default function BuyMembership(){
       <fieldset className="buy-fieldset"><legend>Pay</legend>{[['annual','Annually'],['monthly','Monthly']].map(([id,name])=><label key={id} className="check-choice"><input type="radio" name="billing" checked={f.billing===id} onChange={()=>set({billing:id})}/>{name}</label>)}</fieldset></section>
     <section className="surface padded buy-section"><h2>Extras (optional)</h2>{ADDONS.map(([key,label])=><label key={key} className="addon-row"><span>{label}</span>
       <input type="number" min="0" max="10" inputMode="numeric" value={f.addons[key]||0} onChange={e=>set({addons:{...f.addons,[key]:Math.max(0,Math.min(10,Number(e.target.value)||0))}})}/></label>)}</section>
+    <section className="surface padded buy-section"><h2>Insurance (optional)</h2>
+      <label className="check-choice"><input type="checkbox" checked={f.insurance} onChange={e=>set({insurance:e.target.checked})}/><span>Add Beauty Guild insurance to my membership</span></label>
+      {f.insurance&&<InsuranceForm values={iv} onChange={setI} errors={iErrors} country={country} onCountry={v=>{setCountry(v);setCountryError('');}} countryError={countryError}/>}</section>
     <section className="surface padded buy-section"><h2>Summary</h2>
-      {!ready?<p className="muted">Choose a membership level and branch to see your price.</p>:q.loading?<p role="status">Working out your price…</p>:q.error?<Notice title="Unable to price this">{q.error}</Notice>:quote?<>
+      {!ready?<p className="muted">Choose a membership level and branch to see your price.</p>:q.loading||(f.insurance&&iq.loading)?<p role="status">Working out your price…</p>:(f.insurance?iq.error:q.error)?<Notice title="Unable to price this">{f.insurance?iq.error:q.error}</Notice>:f.insurance&&!quote?<p className="muted">Choose where you are based and how you work to see your price with insurance.</p>:quote?<>
+        {f.insurance&&<BlockedNotice quote={quote}/>}
         <div className="checkout-summary">{quote.lines.map(l=><div key={l.name}><span>{l.name}{l.quantity>1?' × '+l.quantity:''}</span><strong>{money(l.totalPence)}{l.interval?' / '+l.interval:''}</strong></div>)}
           <div className="checkout-total"><span>Due today</span><strong>{money(quote.totalPence)}</strong></div></div>
         {recurring&&<p className="muted">Then {money(recurring.unitPence)} each {recurring.interval}, until you cancel. Prices include VAT where it applies.</p>}
         <label className="check-choice"><input type="checkbox" checked={f.accepted} onChange={e=>set({accepted:e.target.checked})}/><span>I accept the <a href="https://www.beautyguild.com/Membership/Code-Of-Ethics" target="_blank" rel="noopener noreferrer">Code of Ethics</a> and the Guild's terms and privacy information.</span></label>
         {payError&&<Notice title="Payment unavailable">{payError}</Notice>}
-        <button type="button" className="btn btn-primary btn-block" disabled={busy||!f.accepted||!(who.firstName||who.lastName)} onClick={pay}><LockKeyhole size={16}/>{busy?'Opening secure payment…':'Pay '+money(firstPay||quote.totalPence)+' securely with Stripe'}</button>
+        <button type="button" className="btn btn-primary btn-block" disabled={busy||!f.accepted||!(who.firstName||who.lastName)||quote.payable===false} onClick={pay}><LockKeyhole size={16}/>{busy?'Opening secure payment…':'Pay '+money(firstPay||quote.totalPence)+' securely with Stripe'}</button>
         {!(who.firstName||who.lastName)&&<p className="muted">Add your name to your account before buying.</p>}</>:null}</section></>}
   </div>;
 }
