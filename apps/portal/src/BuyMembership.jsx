@@ -40,7 +40,7 @@ export default function BuyMembership(){
   const iq=useInsuranceQuote({enabled:INTEGRATIONS.stripeCheckout&&who.state==='in'&&ready&&f.insurance&&Boolean(country)&&(iv.insWorking||[]).length>0,
     request:()=>({...base(),addons:f.addons,country,insurance:toRequest(iv)}),key:JSON.stringify([f.level,f.branch,f.billing,f.branches,f.addons,previousId,country,ins])});
   const setI=(name,value)=>{setIv(v=>({...v,[name]:value}));setIErrors(e=>({...e,[name]:undefined}));};
-  const set=patch=>setF(old=>({...old,...patch}));
+  const set=patch=>setF(old=>({...old,...patch,...(patch.level==='associate'?{insurance:false}:{})}));
   const toggleBranch=id=>set({branches:f.branches.includes(id)?f.branches.filter(b=>b!==id):[...f.branches,id]});
   async function pay(){
     if(busy)return;
@@ -69,7 +69,8 @@ export default function BuyMembership(){
     <section className="surface padded buy-section"><h2>Extras (optional)</h2>{ADDONS.map(([key,label])=><label key={key} className="addon-row"><span>{label}</span>
       <input type="number" min="0" max="10" inputMode="numeric" value={f.addons[key]||0} onChange={e=>set({addons:{...f.addons,[key]:Math.max(0,Math.min(10,Number(e.target.value)||0))}})}/></label>)}</section>
     <section className="surface padded buy-section"><h2>Insurance (optional)</h2>
-      <label className="check-choice"><input type="checkbox" checked={f.insurance} onChange={e=>set({insurance:e.target.checked})}/><span>Add Beauty Guild insurance to my membership</span></label>
+      <label className="check-choice"><input type="checkbox" checked={f.insurance} disabled={f.level==='associate'} onChange={e=>set({insurance:e.target.checked})}/><span>Add Beauty Guild insurance to my membership</span></label>
+      {f.level==='associate'&&<p className="muted">Insurance is included with Full membership. Choose a Full membership level to add it.</p>}
       {f.insurance&&<InsuranceForm values={iv} onChange={setI} errors={iErrors} country={country} onCountry={v=>{setCountry(v);setCountryError('');}} countryError={countryError}/>}</section>
     <section className="surface padded buy-section"><h2>Summary</h2>
       {!ready?<p className="muted">Choose a membership level and branch to see your price.</p>:q.loading||(f.insurance&&iq.loading)?<p role="status">Working out your price…</p>:(f.insurance?iq.error:q.error)?<Notice title="Unable to price this">{f.insurance?iq.error:q.error}</Notice>:f.insurance&&!quote?<p className="muted">Choose where you are based and how you work to see your price with insurance.</p>:quote?<>

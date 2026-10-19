@@ -150,7 +150,7 @@ function insuranceLines({contact, input, member}) {
   const inline = quote.rows.map(r => ({name: 'Insurance - ' + r.label, unitPence: r.premiumPence, quantity: 1}));
   if (quote.iptPence) inline.push({name: 'Insurance Premium Tax (' + Math.round(insurance.IPT_RATE * 100) + '%)', unitPence: quote.iptPence, quantity: 1});
   return {
-    inline, blocked, quote,
+    inline, blocked, quote, fingerprint: JSON.stringify([country, ins]),
     beforePay: create => insurance.createRecords(create, {contactId: contact?.id || '', membershipDealId: member?.id || null, ins, quote,
       entryRoute: contact ? 'Existing Member' : 'Public Prospect', termsAccepted: input.accepted === 'yes'}),
     metadata: ids => ({
@@ -160,6 +160,10 @@ function insuranceLines({contact, input, member}) {
     }),
   };
 }
+// Insurance is included with Full membership only; Associate has none.
+const NEEDS_FULL = () => new HttpError(409, 'INSURANCE_NEEDS_FULL_MEMBERSHIP',
+  'Insurance is included with Full membership. You can add it when you join as a Full member or when you upgrade your membership.');
+const isFullType = type => /^full\b/i.test(String(type || ''));
 const fullName = (contact, input) => contact ? [contact.First_Name, contact.Last_Name].filter(Boolean).join(' ')
   : [input.firstName, input.lastName].map(x => String(x || '').trim().slice(0, 60)).filter(Boolean).join(' ');
 
@@ -172,9 +176,10 @@ SERVICES.insurance = {
     const name = fullName(contact, input);
     if (!name && !input.quote) bad('Enter your first name and surname.');
     const member = contact ? await activeMembership(req, crm, contact.id) : null;
+    if (!member || !isFullType(member.type)) throw NEEDS_FULL();
     const ins = insuranceLines({contact, input, member});
     return {
-      lines: [], inline: ins.inline, blocked: ins.blocked, beforePay: ins.beforePay, noContact: !contact,
+      lines: [], inline: ins.inline, blocked: ins.blocked, beforePay: ins.beforePay, fingerprint: ins.fingerprint, noContact: !contact,
       metadata: ({total, insuranceIds}) => ({
         type: 'insurance', quote_reference: 'BGP-' + Date.now().toString(36).toUpperCase(), entry_point: contact ? 'member' : 'public',
         contact_id: contact?.id || '', membership_deal_id: member?.id || '', membership_profile_id: member?.profileId || '', name,
@@ -227,9 +232,10 @@ SERVICES.membership = {
     if (!previous) lines.push({item: 'joining_fee', quantity: 1});
     if (secondary.length) lines.push({item: 'membership_branch', quantity: secondary.length});
     for (const [key, quantity] of Object.entries(addons)) lines.push({item: ADDONS[key], quantity});
+    if (input.insurance && level === 'associate') throw NEEDS_FULL();
     const ins = input.insurance ? insuranceLines({contact, input, member}) : null;
     return {
-      lines, noContact: !contact, inline: ins?.inline || [], blocked: ins?.blocked || null, beforePay: ins?.beforePay,
+      lines, noContact: !contact, inline: ins?.inline || [], blocked: ins?.blocked || null, beforePay: ins?.beforePay, fingerprint: ins?.fingerprint,
       metadata: ({lines: priced, total, insuranceIds}) => {
         const by = item => priced.find(l => l.item === item);
         const gross = item => by(item) ? pounds(by(item).totalPence) : '0.00';

@@ -11,7 +11,7 @@ import {INTEGRATIONS,portalApi} from './services/api.js';
 function ReviewDetails({steps,values,kind}){
   const all=steps.flatMap(s=>s.fields).filter(f=>!f.when||f.when(values));
   const entries=all.filter(f=>f.type!=='checkbox'&&values[f.name]!==undefined&&values[f.name]!==''&&values[f.name]!==false&&!(Array.isArray(values[f.name])&&!values[f.name].length));
-  const concern=kind==='insurance'&&[1,2,3,4,5].some(i=>values['insDecl'+i]==='yes')||[6,7].some(i=>values['insDecl'+i]==='no');
+  const concern=kind==='insurance'&&([1,2,3,4,5].some(i=>values['insDecl'+i]==='yes')||[6,7].some(i=>values['insDecl'+i]==='no'));
   return <div className="review-box">
     <div className="review-head"><h3>Your answers</h3><span>Not yet submitted</span></div>
     {kind==='accreditation'&&values.country&&<div className="classification"><strong>{accreditationType(values.country)}</strong><small>Your centre's country decides which accreditation route applies. The Guild confirms eligibility and prices when your application is reviewed.</small></div>}

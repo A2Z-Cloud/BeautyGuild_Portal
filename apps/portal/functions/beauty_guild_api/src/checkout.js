@@ -17,6 +17,12 @@ function registerCheckoutRoutes(app, {enabled, getCurrentUser, getCrmHeaders, cr
   const router = express.Router();
   const {call: crm} = createCrmClient({getCrmHeaders, crmApiDomain, fetchImpl});
   const limiter = createRateLimiter({limit: 20, windowMs: 60 * 1000, now});
+  // Each insurance pay attempt writes 5 to 15 CRM records, so it has its own, lower limits.
+  const insuranceMinute = createRateLimiter({limit: 3, windowMs: 60 * 1000, now});
+  const insuranceHour = createRateLimiter({limit: 10, windowMs: 60 * 60 * 1000, now});
+  // Insurance attempts by what was asked for. A retry or double click within a few minutes gets the
+  // same records and the same open session instead of a duplicate set. (Per instance, like the limiters.)
+  const attempts = new Map(), ATTEMPT_TTL = 5 * 60 * 1000;
   const unavailable = () => new HttpError(503, 'CHECKOUT_UNAVAILABLE', 'Online payment is not available yet.');
   const priceCache = new Map();
 
@@ -137,31 +143,53 @@ function registerCheckoutRoutes(app, {enabled, getCurrentUser, getCrmHeaders, cr
         return res.json({checkoutUrl: old.url, reused: true});
     }
     // Insurance CRM records are created now, before payment, as V1 does: Creator's webhook reads their ids from the metadata.
-    const insuranceIds = b.prepared.beforePay ? await b.prepared.beforePay((module, record) => crmCreate(req, module, record)) : null;
-    const catalogue = b.lines.filter(l => l.item);
-    const amounts = {};
-    for (const l of catalogue) amounts[l.item] = pounds(l.totalPence);
-    const meta = {
-      email: req.portalUser.email, name: b.contact ? [b.contact.First_Name, b.contact.Last_Name].filter(Boolean).join(' ') : '',
-      currency: 'GBP', status: 'pending', source: 'portal_v2',
-      ...b.prepared.metadata({amounts, total: pounds(b.totalPence), lines: catalogue, insuranceIds}),
+    const startSession = async () => {
+      // Insurance CRM records are created now, before payment, as V1 does: Creator's webhook reads their ids from the metadata.
+      const insuranceIds = b.prepared.beforePay ? await b.prepared.beforePay((module, record) => crmCreate(req, module, record)) : null;
+      const catalogue = b.lines.filter(l => l.item);
+      const amounts = {};
+      for (const l of catalogue) amounts[l.item] = pounds(l.totalPence);
+      const meta = {
+        email: req.portalUser.email, name: b.contact ? [b.contact.First_Name, b.contact.Last_Name].filter(Boolean).join(' ') : '',
+        currency: 'GBP', status: 'pending', source: 'portal_v2',
+        ...b.prepared.metadata({amounts, total: pounds(b.totalPence), lines: catalogue, insuranceIds}),
+      };
+      const params = new URLSearchParams({mode: b.mode, customer_email: req.portalUser.email,
+        success_url: publicOrigin + '/app/#/payment-return?result=success&service=' + encodeURIComponent(input.service),
+        cancel_url: publicOrigin + '/app/#/payment-return?result=cancelled&service=' + encodeURIComponent(input.service),
+        ...(b.contact ? {client_reference_id: String(b.contact.id)} : {})});
+      b.lines.forEach((l, i) => {
+        if (l.priceId) params.set('line_items[' + i + '][price]', l.priceId);
+        else { params.set('line_items[' + i + '][price_data][currency]', 'gbp'); params.set('line_items[' + i + '][price_data][product_data][name]', l.name); params.set('line_items[' + i + '][price_data][unit_amount]', String(l.unitPence)); }
+        params.set('line_items[' + i + '][quantity]', String(l.quantity));
+      });
+      for (const [k, v] of Object.entries(meta)) params.set('metadata[' + k + ']', String(v).slice(0, 500));
+      const key = crypto.createHash('sha256').update([b.contact?.id || req.portalUser.id, input.service, input.recordId, input.centreId,
+        JSON.stringify(b.lines.map(l => [l.priceId || l.name + ':' + l.unitPence, l.quantity])), b.prepared.fingerprint || '', Math.floor(now() / 120000)].join('|')).digest('hex').slice(0, 40);
+      const session = await stripe('POST', '/checkout/sessions', {body: params, key: 'portal-v2-' + key});
+      if (!session.id || typeof session.url !== 'string' || !session.url.startsWith('https://checkout.stripe.com/'))
+        throw new HttpError(502, 'PAYMENT_UNAVAILABLE', 'Secure checkout is unavailable.');
+      if (b.prepared.record) await crmUpdate(req, b.prepared.record.module, b.prepared.record.id, {Stripe_Checkout_Session_ID: session.id, Payment_Status: 'Payment Processing'});
+      return session;
     };
-    const params = new URLSearchParams({mode: b.mode, customer_email: req.portalUser.email,
-      success_url: publicOrigin + '/app/#/payment-return?result=success&service=' + encodeURIComponent(input.service),
-      cancel_url: publicOrigin + '/app/#/payment-return?result=cancelled&service=' + encodeURIComponent(input.service),
-      ...(b.contact ? {client_reference_id: String(b.contact.id)} : {})});
-    b.lines.forEach((l, i) => {
-      if (l.priceId) params.set('line_items[' + i + '][price]', l.priceId);
-      else { params.set('line_items[' + i + '][price_data][currency]', 'gbp'); params.set('line_items[' + i + '][price_data][product_data][name]', l.name); params.set('line_items[' + i + '][price_data][unit_amount]', String(l.unitPence)); }
-      params.set('line_items[' + i + '][quantity]', String(l.quantity));
-    });
-    for (const [k, v] of Object.entries(meta)) params.set('metadata[' + k + ']', String(v).slice(0, 500));
-    const key = crypto.createHash('sha256').update([b.contact?.id || req.portalUser.id, input.service, input.recordId, input.centreId,
-      JSON.stringify(b.lines.map(l => [l.priceId || l.name + ':' + l.unitPence, l.quantity])), insuranceIds?.policyId || '', Math.floor(now() / 120000)].join('|')).digest('hex').slice(0, 40);
-    const session = await stripe('POST', '/checkout/sessions', {body: params, key: 'portal-v2-' + key});
-    if (!session.id || typeof session.url !== 'string' || !session.url.startsWith('https://checkout.stripe.com/'))
-      throw new HttpError(502, 'PAYMENT_UNAVAILABLE', 'Secure checkout is unavailable.');
-    if (b.prepared.record) await crmUpdate(req, b.prepared.record.module, b.prepared.record.id, {Stripe_Checkout_Session_ID: session.id, Payment_Status: 'Payment Processing'});
+    if (b.prepared.beforePay) {
+      const attemptKey = crypto.createHash('sha256').update([req.portalUser.id, JSON.stringify({...input, insurance: undefined}), b.prepared.fingerprint || '',
+        JSON.stringify(b.lines.map(l => [l.priceId || l.name + ':' + l.unitPence, l.quantity]))].join('|')).digest('hex');
+      const hit = attempts.get(attemptKey);
+      if (hit && now() - hit.at < ATTEMPT_TTL) {
+        const earlier = await hit.promise.catch(() => null);
+        const old = earlier && await stripe('GET', '/checkout/sessions/' + encodeURIComponent(earlier.id)).catch(() => null);
+        if (old?.payment_status === 'paid') return res.json({alreadyPaid: true});
+        if (old?.status === 'open' && typeof old.url === 'string' && old.url.startsWith('https://checkout.stripe.com/')) return res.json({checkoutUrl: old.url, reused: true});
+        attempts.delete(attemptKey);
+      }
+      if (!insuranceMinute(req.portalUser.id) || !insuranceHour(req.portalUser.id)) throw new HttpError(429, 'RATE_LIMIT', 'Too many insurance attempts. Please wait a few minutes and try again.');
+      const promise = startSession();
+      attempts.set(attemptKey, {at: now(), promise});
+      promise.catch(() => { if (attempts.get(attemptKey)?.promise === promise) attempts.delete(attemptKey); });
+      return res.status(201).json({checkoutUrl: (await promise).url});
+    }
+    const session = await startSession();
     res.status(201).json({checkoutUrl: session.url});
   }));
   app.use('/portal/checkout', router);

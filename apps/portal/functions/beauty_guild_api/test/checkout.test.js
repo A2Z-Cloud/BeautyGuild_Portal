@@ -258,11 +258,13 @@ test('a membership price set up with the wrong billing interval is refused', asy
 // ---- Insurance purchases ----
 const INS_OK = {insRoute: 'non_salon', insMobile: true, insEquipmentTier: 5000, insStandardConstruction: 'yes', insDeclarations: ['no', 'no', 'no', 'no', 'no', 'yes', 'yes'],
   insInformationAccurate: 'yes', insEthicsAccepted: 'yes', insDemandsNeedsAccepted: 'yes', insNonAdvisedAccepted: 'yes'};
+const FULL_DEAL = {id: DEAL, Contact_Name: {id: ME}, Stage: 'Active', Membership_Type: 'Full Member (Non-Salon)'};
+const fullWorld = opts => world({deals: [FULL_DEAL], ...opts});
 const INSURE = {service: 'insurance', country: 'United Kingdom', accepted: 'yes', firstName: 'Nia', lastName: 'New', insurance: INS_OK};
 const lineNames = p => [...p.keys()].filter(k => /^line_items\[\d+\]\[price_data\]\[product_data\]\[name\]$/.test(k)).map(k => p.get(k));
 
 test('standalone insurance: inline premium lines and IPT, CRM records first, ids in the V1 metadata', async () => {
-  const w = unlinked(world());
+  const w = fullWorld();
   await withApp(w, async ({post}) => {
     const r = await post(INSURE);
     assert.equal(r.status, 201);
@@ -276,8 +278,8 @@ test('standalone insurance: inline premium lines and IPT, CRM records first, ids
     assert.equal(p.has('line_items[0][price]'), false);
     assert.deepEqual(w.crmPosts.map(c => c.module), ['Insurance_Policy', 'Insurance_Extension', 'Insurance_Extension', 'Declarations']);
     const [policy, medmal, equipment, decl] = w.crmPosts.map(c => c.record);
-    assert.equal(policy.Entry_Route, 'Public Prospect');
-    assert.equal(policy.Contact, undefined);
+    assert.equal(policy.Entry_Route, 'Existing Member');
+    assert.equal(policy.Contact, ME);
     assert.equal(policy.Application_Status, 'Ready for Payment');
     assert.equal(medmal.Cover_Type, 'MedMal');
     assert.equal(equipment.Cover_Type, 'Equipment');
@@ -293,12 +295,12 @@ test('standalone insurance: inline premium lines and IPT, CRM records first, ids
     assert.equal(p.get('metadata[insurance_net_amount]'), '97.50');
     assert.equal(p.get('metadata[insurance_ipt_amount]'), '11.70');
     assert.equal(p.get('metadata[insurance_route]'), 'non_salon');
-    assert.equal(p.get('metadata[contact_id]'), '');
-    assert.equal(p.get('metadata[entry_point]'), 'public');
+    assert.equal(p.get('metadata[contact_id]'), ME);
+    assert.equal(p.get('metadata[entry_point]'), 'member');
   });
 });
 test('insurance for a linked member records the Contact and the current membership on the policy', async () => {
-  const w = world({deals: [{id: DEAL, Contact_Name: {id: ME}, Stage: 'Active', Membership_Type: 'Associate'}]});
+  const w = fullWorld();
   await withApp(w, async ({post}) => {
     assert.equal((await post(INSURE)).status, 201);
     const policy = w.crmPosts[0].record;
@@ -310,7 +312,7 @@ test('insurance for a linked member records the Contact and the current membersh
   });
 });
 test('salon property cover creates premises, people and linked extensions', async () => {
-  const w = world();
+  const w = fullWorld();
   const salon = {...INS_OK, insRoute: 'salon', insSalon: true, insTurnover: 90000, insContents: true, insComputers: 2000, insEquipment: 5000, insMoneyCover: true,
     insNamedPeopleCover: true, insNamedPeople: [{type: 'employee', firstName: 'Ada', lastName: 'Lee'}, {type: 'subcontractor', firstName: 'Bo', lastName: 'Ng'}],
     insPremisesAddress: {l1: '1 High St', postcode: 'AB1 2CD'}, insSoleOccupation: 'yes', insStandardConstruction: 'yes'};
@@ -337,7 +339,7 @@ test('salon property cover creates premises, people and linked extensions', asyn
   });
 });
 test('a REFER or STOP quote is shown but is not payable, and nothing is created', async () => {
-  const w = world();
+  const w = fullWorld();
   await withApp(w, async ({post}) => {
     for (const [insurance, status] of [[{...INS_OK, insDeclarations: ['yes', 'no', 'no', 'no', 'no', 'yes', 'yes']}, 'REFER'], [{...INS_OK, insEthicsAccepted: 'no'}, 'STOP'],
       [{...INS_OK, insSalon: true, insTurnover: 300000}, 'STOP']]) {
@@ -350,7 +352,7 @@ test('a REFER or STOP quote is shown but is not payable, and nothing is created'
   });
 });
 test('the server insists on answered declarations and confirmations before payment', async () => {
-  const w = world();
+  const w = fullWorld();
   await withApp(w, async ({post}) => {
     const r = await post({...INSURE, insurance: {insMobile: true, insEquipmentTier: 5000}});
     assert.equal(r.status, 422);
@@ -360,7 +362,7 @@ test('the server insists on answered declarations and confirmations before payme
   });
 });
 test('POST /quote summarises a computed quote with its reasons and creates no records', async () => {
-  const w = world();
+  const w = fullWorld();
   const app = createApp({config: loadConfig({...ENV}), getCurrentUser: async () => ({id: 'user-1', email: 'alice@example.test'}), getCrmHeaders: async () => ({Authorization: 'Bearer t'}), fetchImpl: w.fetchImpl});
   const server = await new Promise(resolve => { const s = app.listen(0, '127.0.0.1', () => resolve(s)); });
   try {
@@ -379,7 +381,7 @@ test('POST /quote summarises a computed quote with its reasons and creates no re
   } finally { await new Promise(resolve => server.close(resolve)); }
 });
 test('insurance in another territory is stopped, and browser-supplied route and amounts are ignored', async () => {
-  const w = world();
+  const w = fullWorld();
   await withApp(w, async ({post}) => {
     assert.equal((await post({...INSURE, country: 'France'})).status, 422);
     assert.equal((await post({...INSURE, country: ''})).status, 422);
@@ -390,7 +392,7 @@ test('insurance in another territory is stopped, and browser-supplied route and 
   });
 });
 test('a CRM failure while creating the policy stops checkout before Stripe', async () => {
-  const w = world(), f = w.fetchImpl;
+  const w = fullWorld(), f = w.fetchImpl;
   w.fetchImpl = async (u, i) => String(u).includes('/crm/v3/Insurance_Policy') && i?.method === 'POST' ? {status: 400, ok: false, json: async () => ({})} : f(u, i);
   await withApp(w, async ({post}) => {
     assert.equal((await post(INSURE)).status, 502);
@@ -400,22 +402,22 @@ test('a CRM failure while creating the policy stops checkout before Stripe', asy
 test('membership with insurance: recurring membership plus one-off inline premium lines, V1 membership_insurance metadata', async () => {
   const w = unlinked(world({priceOverride: RECURRING}));
   await withApp(w, async ({post}) => {
-    const r = await post({...BUY, insurance: INS_OK, country: 'United Kingdom'});
+    const r = await post({...BUY, level: 'full_non_salon', insurance: INS_OK, country: 'United Kingdom'});
     assert.equal(r.status, 201);
     const p = w.stripePosts[0].params;
     assert.equal(p.get('mode'), 'subscription');
-    assert.equal(p.get('line_items[0][price]'), 'price_assocY1111');
+    assert.equal(p.get('line_items[0][price]'), 'price_fullY11111');
     assert.equal(p.get('line_items[1][price]'), 'price_join111111');
     assert.deepEqual(lineNames(p), ['Insurance - Medical Malpractice', 'Insurance - Business Equipment', 'Insurance Premium Tax (12%)']);
     assert.equal(p.get('metadata[type]'), 'membership_insurance');
     assert.equal(p.get('metadata[insurance_requested]'), 'true');
     assert.equal(p.get('metadata[insurance_policy_id]'), '9000000000000000001');
     assert.equal(p.get('metadata[insurance_amount]'), '109.20');
-    assert.equal(p.get('metadata[base_membership_amount]'), '55.00');
-    // 55 + 10 joining + 109.20 insurance
-    assert.equal(p.get('metadata[total_amount]'), '174.20');
-    // membership net (51.78 + 8.33) plus insurance, which carries no VAT
-    assert.equal(p.get('metadata[total_amount_net]'), '169.31');
+    assert.equal(p.get('metadata[base_membership_amount]'), '48.60');
+    // 48.60 + 10 joining + 109.20 insurance
+    assert.equal(p.get('metadata[total_amount]'), '167.80');
+    // membership net (46.45 + 8.33) plus insurance, which carries no VAT
+    assert.equal(p.get('metadata[total_amount_net]'), '163.98');
     assert.ok([...p.keys()].filter(k => k.startsWith('metadata[')).length <= 50);
     assert.ok([...p.keys()].filter(k => k.startsWith('metadata[')).every(k => p.get(k).length <= 500));
     assert.equal(w.crmPosts[0].record.Entry_Route, 'Public Prospect');
@@ -424,10 +426,89 @@ test('membership with insurance: recurring membership plus one-off inline premiu
 test('membership with a REFER quote cannot be paid for online', async () => {
   const w = unlinked(world({priceOverride: RECURRING}));
   await withApp(w, async ({post}) => {
-    const r = await post({...BUY, country: 'United Kingdom', insurance: {...INS_OK, insNamedPeopleCover: true,
+    const r = await post({...BUY, level: 'full_non_salon', country: 'United Kingdom', insurance: {...INS_OK, insNamedPeopleCover: true,
       insNamedPeople: [1, 2, 3, 4, 5].map(n => ({type: 'employee', firstName: 'P' + n, lastName: 'X'}))}});
     assert.equal(r.status, 422);
     assert.equal(w.stripePosts.length, 0);
     assert.equal(w.crmPosts, undefined);
   }, MEM_ENV);
+});
+
+test('standalone insurance needs a current Full membership: none, Associate, expired and Full Salon', async () => {
+  const cases = [[[], 'no membership'], [[{...FULL_DEAL, Membership_Type: 'Associate Member'}], 'associate'],
+    [[{...FULL_DEAL, Expiry_Date: '2020-01-01'}], 'expired'], [[{...FULL_DEAL, Stage: 'Pending'}], 'not active']];
+  for (const [deals, label] of cases) {
+    const w = world({deals});
+    await withApp(w, async ({post}) => {
+      const r = await post(INSURE);
+      assert.equal(r.status, 409, label);
+      assert.equal(r.body.code, 'INSURANCE_NEEDS_FULL_MEMBERSHIP');
+      assert.match(r.body.error, /included with Full membership/);
+      assert.equal(w.crmPosts, undefined);
+      assert.equal(w.stripePosts.length, 0);
+    });
+  }
+  const salon = world({deals: [{...FULL_DEAL, Membership_Type: 'Full Member (Salon)'}]});
+  await withApp(salon, async ({post}) => assert.equal((await post(INSURE)).status, 201));
+  const noContact = unlinked(world({deals: [FULL_DEAL]}));
+  await withApp(noContact, async ({post}) => assert.equal((await post(INSURE)).status, 409));
+});
+test('membership with insurance is refused for the Associate level, which has no insurance', async () => {
+  const w = unlinked(world({priceOverride: RECURRING}));
+  await withApp(w, async ({post}) => {
+    const r = await post({...BUY, insurance: INS_OK, country: 'United Kingdom'});
+    assert.equal(r.status, 409);
+    assert.equal(r.body.code, 'INSURANCE_NEEDS_FULL_MEMBERSHIP');
+    assert.equal(w.crmPosts, undefined);
+    assert.equal(w.stripePosts.length, 0);
+    assert.equal((await post({...BUY, level: 'full_non_salon'})).status, 201);
+  }, MEM_ENV);
+});
+test('two identical insurance POSTs create one set of CRM records and one Stripe session', async () => {
+  const w = fullWorld(), f = w.fetchImpl;
+  // A created session can then be read back as open, as Stripe would report it.
+  w.fetchImpl = async (u, i) => String(u).endsWith('/checkout/sessions/cs_test_1') ? {status: 200, ok: true, json: async () => ({id: 'cs_test_1', status: 'open', payment_status: 'unpaid', url: 'https://checkout.stripe.com/c/pay/cs_test_1'})} : f(u, i);
+  await withApp(w, async ({post}) => {
+    const [a, b] = await Promise.all([post(INSURE), post(INSURE)]);
+    assert.deepEqual([a.status, b.status].sort(), [200, 201]);
+    assert.equal(a.body.checkoutUrl, b.body.checkoutUrl);
+    const again = await post(INSURE);
+    assert.equal(again.body.reused, true);
+    assert.equal(w.stripePosts.length, 1);
+    assert.equal(w.crmPosts.filter(c => c.module === 'Insurance_Policy').length, 1);
+    assert.equal(w.crmPosts.filter(c => c.module === 'Declarations').length, 1);
+    // a different answer is a different application
+    assert.equal((await post({...INSURE, insurance: {...INS_OK, insEquipmentTier: 10000}})).status, 201);
+    assert.equal(w.crmPosts.filter(c => c.module === 'Insurance_Policy').length, 2);
+  });
+});
+test('a failed attempt is not remembered, so the retry can succeed', async () => {
+  const w = fullWorld(), f = w.fetchImpl;
+  let fail = true;
+  w.fetchImpl = async (u, i) => fail && String(u) === 'https://api.stripe.com/v1/checkout/sessions' && i?.method === 'POST' ? {status: 500, ok: false, json: async () => ({})} : f(u, i);
+  await withApp(w, async ({post}) => {
+    assert.equal((await post(INSURE)).status, 502);
+    fail = false;
+    assert.equal((await post(INSURE)).status, 201);
+  });
+});
+test('insurance pay attempts have a lower limit than quotes: 3 a minute, 10 an hour', async () => {
+  let t = 1000000;
+  const w = fullWorld(), f = w.fetchImpl;
+  w.fetchImpl = async (u, i) => /\/checkout\/sessions\/cs_test_1$/.test(String(u)) ? {status: 200, ok: true, json: async () => ({id: 'cs_test_1', status: 'open', payment_status: 'unpaid', url: 'https://checkout.stripe.com/c/pay/cs_test_1'})} : f(u, i);
+  const app = createApp({config: loadConfig({...ENV}), getCurrentUser: async () => ({id: 'user-1', email: 'alice@example.test'}), getCrmHeaders: async () => ({Authorization: 'Bearer t'}), fetchImpl: w.fetchImpl, now: () => t});
+  const server = await new Promise(resolve => { const s = app.listen(0, '127.0.0.1', () => resolve(s)); });
+  const call = async (path, body) => { const r = await fetch('http://127.0.0.1:' + server.address().port + '/portal/checkout' + path, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)}); return r.status; };
+  const variant = n => ({...INSURE, insurance: {...INS_OK, insTurnover: 0, insNamedPeopleCover: true, insNamedPeople: [{type: 'employee', firstName: 'P' + n, lastName: 'X'}]}});
+  try {
+    assert.deepEqual([await call('/', variant(1)), await call('/', variant(2)), await call('/', variant(3))], [201, 201, 201]);
+    assert.equal(await call('/', variant(4)), 429);
+    assert.equal(await call('/quote', variant(4)), 200);
+    const records = w.crmPosts.length;
+    assert.equal(await call('/', variant(1)), 200);
+    assert.equal(w.crmPosts.length, records);
+    let ok = 3;
+    for (let n = 5; n < 14; n++) { t += 61000; if (await call('/', variant(n)) === 201) ok++; }
+    assert.equal(ok, 10);
+  } finally { await new Promise(resolve => server.close(resolve)); }
 });
