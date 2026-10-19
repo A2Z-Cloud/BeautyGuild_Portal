@@ -7,12 +7,14 @@ import {INTEGRATIONS,portalApi} from './services/api.js';
 import {DocumentsPanel} from './DocumentsPanel.jsx';
 import {QualificationForm,SessionForm,TutorForm,BookingForm} from './SchoolActionForms.jsx';
 import SchoolVerification from './SchoolVerification.jsx';
+import CourseGroups from './components/CourseGroups.jsx';
 
-const sections=[
- ['profile','School profile',Building2],['courses','Courses',BookOpen],['venues','Venues',MapPin],
- ['tutors','Tutors',Users],['qualifications','Qualifications',GraduationCap],
- ['sessions','Course dates',CalendarDays],['documents','Documents',FileText],['invoices','Invoices',Receipt],['verification','Verification',ShieldCheck]
+const GROUPS=[
+ {label:'Overview',items:[['profile','School profile',Building2],['verification','Verification',ShieldCheck]]},
+ {label:'Teaching',items:[['courses','Courses',BookOpen],['sessions','Course dates',CalendarDays],['tutors','Tutors',Users],['qualifications','Qualifications',GraduationCap],['venues','Venues',MapPin]]},
+ {label:'Records',items:[['documents','Documents',FileText],['invoices','Invoices',Receipt]]},
 ];
+const sections=GROUPS.flatMap(g=>g.items);
 function useLoad(load,keys){
  const [data,setData]=useState({loading:true,error:'',value:null});
  useEffect(()=>{
@@ -74,13 +76,15 @@ function SchoolSection({id,section}){
  case 'profile':return <SchoolProfile data={x}/>;
  case 'courses':return <><h2>Accredited courses</h2><SimpleTable rows={x.courses||[]} columns={[col('name','Course')]}/>
  <h3>Other available GTi courses</h3><p>Contact the Guild to add a new course to this accreditation.</p>
- <SimpleTable rows={x.available||[]} columns={[col('name','Course'),col('duration','Duration'),col('cpdPoints','CPD points')]}/></>;
+ <CourseGroups courses={x.available||[]} searchable emptyText="There are no other GTi courses to add."/></>;
  case 'venues':return <><h2>Accredited venues</h2><p>Adding a venue is subject to a separate Guild approval and payment process.</p>
  <SimpleTable rows={x.venues||[]} columns={[col('name','Venue'),col('town','Town'),
  {key:'isMain',label:'Type',render:r=>r.isMain?'Main centre':'Additional venue'},col('courseCount','Courses'),
  {key:'visible',label:'Directory',render:r=>r.visible?'Visible':'Hidden'}]}/></>;
  case 'tutors':return <><div className="school-dialog-head"><h2>Accredited tutors</h2>{INTEGRATIONS.schoolWrites&&<button type="button" className="btn btn-primary" onClick={()=>setEditing(v=>!v)}>{editing?'Cancel':'Add tutor'}</button>}</div><p>Tutors should hold current Guild membership, appropriate qualifications and insurance.</p>{editing&&<TutorForm schoolId={id} onDone={saved}/>}
- <SimpleTable rows={x.tutors||[]} columns={[col('name','Tutor'),col('membershipNumber','Membership number'),dateCol('membershipExpiry','Membership expiry'),col('status','Status')]}/></>;
+ <SimpleTable rows={(x.tutors||[]).filter(t=>t.active)} columns={[col('name','Tutor'),col('membershipNumber','Membership number'),dateCol('membershipExpiry','Membership expiry'),col('status','Membership')]}/>
+ <h3>Inactive tutors</h3><p>These tutors have been added but are not active yet. They become active once they hold a current Guild membership.</p>
+ <SimpleTable rows={(x.tutors||[]).filter(t=>!t.active)} columns={[col('name','Tutor'),col('membershipNumber','Membership number'),dateCol('membershipExpiry','Membership expiry'),col('status','Membership')]}/></>;
  case 'qualifications':return <><div className="school-dialog-head"><h2>Qualifications</h2>{INTEGRATIONS.schoolWrites&&<button type="button" className="btn btn-primary" onClick={()=>setEditing(v=>!v)}>{editing?'Cancel':'Add qualification'}</button>}</div>{editing&&<QualificationForm schoolId={id} onDone={saved}/>}<SimpleTable rows={x.qualifications||[]} columns={[col('name','Qualification'),
  {key:'month',label:'Completed',render:r=>[r.month,r.year].filter(Boolean).join('/')||'—'},col('status','Verification')]}/></>;
  case 'sessions':return <><div className="school-dialog-head"><h2>Course dates and bookings</h2>{INTEGRATIONS.schoolWrites&&<button type="button" className="btn btn-primary" onClick={()=>setEditing(v=>!v)}>{editing?'Cancel':'Create session'}</button>}</div><p>Your published fixed and flexible course dates, with the places booked so far.</p>{editing&&<SessionForm schoolId={id} onDone={saved}/>}
@@ -108,8 +112,8 @@ export function SchoolWorkspace(){
  {!INTEGRATIONS.schoolServices?<Notice title="Coming soon">Managing your school online is coming soon.</Notice>:
  current.loading?<p>Loading school…</p>:current.error?<Notice title="Unable to load school">{current.error}</Notice>:
  !school?<Notice title="School unavailable">No school linked to your account matches this reference.</Notice>:
- <><nav aria-label="School sections" className="school-tabs">{sections.map(([key,label])=><Link key={key} className={key===section?'active':''} to={'/schools/'+id+'/'+key}>{label}</Link>)}</nav>
- <section className="surface padded school-workspace-panel">{section==='documents'?<DocumentsPanel kind="accreditation" id={id}/>:<SchoolSection id={id} section={section}/>}</section></>}
+ <div className="school-layout"><nav aria-label="School sections" className="school-nav">{GROUPS.map(g=><div className="school-nav-group" key={g.label}><span className="school-nav-label">{g.label}</span><div className="school-nav-links">{g.items.map(([key,label,Icon])=><Link key={key} className={key===section?'active':''} aria-current={key===section?'page':undefined} to={'/schools/'+id+'/'+key}><Icon size={16} aria-hidden="true"/>{label}</Link>)}</div></div>)}</nav>
+ <section className="surface padded school-workspace-panel">{section==='documents'?<DocumentsPanel kind="accreditation" id={id}/>:<SchoolSection id={id} section={section}/>}</section></div>}
  </div>;
 }
 export function AccountInvoices(){

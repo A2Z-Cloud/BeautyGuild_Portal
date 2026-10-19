@@ -208,3 +208,47 @@ img,svg,video,iframe{max-width:100%}
 .school-verify-preview{margin:18px 0}.school-verify-share{margin-top:22px;padding-top:18px;border-top:1px solid #f0e7ed}.school-verify-share h3{margin-bottom:8px}.school-verify-share small{display:block;margin-top:8px;color:#807984}
 .school-verify-share .school-verify-input-row input{min-width:0}
 .school-verify-qr{margin-top:20px;display:grid;justify-items:center;gap:6px;text-align:center;padding:24px 18px;border:2px dashed #e3d8df;border-radius:14px;color:#807984;background:#fdfafc}.school-verify-qr strong{color:#25212a}.school-verify-qr span{font-size:12px;max-width:340px}
+
+/* ---- Consistent type inside content panels (plain paragraphs and headings were browser-default size) ---- */
+.school-workspace-panel p,.surface.padded>p,.account-page .surface p{font-size:13px;line-height:1.65;color:#655a62;margin-bottom:12px}
+.school-workspace-panel h2,.surface.padded>h2,.school-dialog-head h2{font-size:22px;margin-bottom:10px}
+.school-workspace-panel h3,.surface.padded>h3{font-size:17px;margin:20px 0 6px}
+.school-workspace-panel .school-dialog-head{margin-bottom:6px}
+
+/* ---- Record detail banner: same section colours as the home page ---- */
+.record-banner{display:flex;align-items:center;gap:20px;border-radius:16px;padding:26px 30px;margin:16px 0 22px}
+.record-banner.pink{background:#ffe9f4}.record-banner.cream{background:#f8eee5}.record-banner.violet{background:#f0ebf7}
+.record-banner-copy{flex:1;min-width:0}.record-banner h1{margin:6px 0 4px;font-size:clamp(1.6rem,2.4vw,2.2rem)}.record-banner p{margin:0;color:#7e6f7c;font-size:13px}
+@media(max-width:600px){.record-banner{flex-wrap:wrap;padding:22px 20px}.record-banner-copy{flex-basis:calc(100% - 80px)}}
+
+/* ---- School navigation: grouped, sidebar on wide screens, tidy chips on small ones ---- */
+.school-layout{display:grid;grid-template-columns:230px minmax(0,1fr);gap:18px;align-items:start;margin-top:16px}
+.school-nav{position:sticky;top:16px;background:#fff;border:1px solid #f0e7ed;border-radius:16px;padding:14px;display:grid;gap:16px}
+.school-nav-label{display:block;font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:#a17f91;margin:0 8px 6px}
+.school-nav-links{display:grid;gap:3px}
+.school-nav-links a{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;font-size:13px;font-weight:600;color:#655863}
+.school-nav-links a:hover{background:#faeaf2}
+.school-nav-links a.active{background:#ee3e96;color:#fff}
+@media(max-width:1100px){.school-layout{grid-template-columns:minmax(0,1fr)}.school-nav{position:static;grid-template-columns:repeat(3,minmax(0,1fr));align-items:start}}
+@media(max-width:700px){.school-nav{grid-template-columns:minmax(0,1fr);gap:12px}.school-nav-links{display:flex;flex-wrap:wrap;gap:8px}
+  .school-nav-links a{border:1px solid #eadde5;padding:9px 12px}.school-nav-links a.active{border-color:#ee3e96}}
+
+/* ---- GTi courses: grouped and collapsible ---- */
+.visually-hidden{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.course-groups{display:grid;gap:8px;margin-top:12px}
+.course-search{display:flex;align-items:center;gap:8px;border:1px solid #e3d8df;border-radius:10px;padding:0 12px;background:#fff;max-width:420px;margin-bottom:6px;color:#807984}
+.course-search input{border:0;outline:0;flex:1;min-height:42px;font-size:13px;background:transparent;color:#322832}
+.course-group{border:1px solid #f0e7ed;border-radius:12px;background:#fff}
+.course-group summary{list-style:none;display:flex;align-items:center;gap:10px;padding:13px 16px;cursor:pointer;font-weight:700;font-size:14px;color:#25212a}
+.course-group summary::-webkit-details-marker{display:none}
+.course-group summary svg{color:#a17f91;transition:transform .15s}
+.course-group[open] summary svg{transform:rotate(180deg)}
+.course-group-name{flex:1}
+.course-group-count{background:#faeaf2;color:#a92a70;border-radius:999px;padding:2px 10px;font-size:11px}
+.course-group-list{list-style:none;margin:0;padding:0 16px 8px}
+.course-group-list li{display:flex;justify-content:space-between;gap:14px;padding:9px 0;border-top:1px solid #f6eff3;font-size:13px}
+.course-name{font-weight:600;color:#322832}.course-meta{color:#807984;font-size:12px;text-align:right}
+.course-empty{font-size:13px;color:#807984}
+@media(max-width:600px){.course-group-list li{flex-direction:column;gap:2px}.course-meta{text-align:left}}
+
+@media(max-width:640px){.table-scroll .record-table{min-width:460px}}

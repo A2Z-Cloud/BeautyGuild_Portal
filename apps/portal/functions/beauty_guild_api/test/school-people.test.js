@@ -26,6 +26,7 @@ function fake(world={}){
     if(u.includes('Training_Centre_Accred/'+SCHOOL))return ok({data:[{id:SCHOOL,Applicant_Contact:{id:OWNER.id},Account:{id:ACCOUNT,name:'Grace School'}}]});
     if(u.includes('Training_Centre_Accred/search'))return ok({data:w.accreditations||[]});
     if(u.includes('/crm/v3/Accounts/'+ACCOUNT))return ok({data:[{id:ACCOUNT,School_Registration_Number:w.registration||null}]});
+    if(u.includes('TC_Course_Offering/search'))return ok({data:w.offerings||[]});
     if(u.includes('Tutor_Relationships/search'))return ok({data:w.relationships});
     if(u.includes('Deals/search'))return ok({data:w.deals});
     if(method==='POST'&&u.includes('/creator/'))return ok({code:3000,data:{ID:'booking1'}});
@@ -148,4 +149,25 @@ test('with the accreditation reference, the school tab shows its current referen
   const rows=[{...verified,Name:'ACC-00007',Accreditation_Status:'Expired',Valid_To:'2025-01-01'},{...verified,Name:'ACC-00042'},{...verified,Name:'ACC-00050',Accreditation_Status:'Unverified',Application_Stage:'Draft',Valid_To:'2999-12-31'}];
   const r=await getJson(fake({accreditations:rows}),'/portal/management/schools/'+SCHOOL+'/verification',cfgRef);
   assert.equal(r.body.school.registrationNumber,'ACC-00042');
+});
+
+test('course options are reachable for the school and offer its courses and active tutors',async()=>{
+  const f=fake({offerings:[{id:'7000000000001',Course:{id:'1',name:'Gel Polish'},Training_Centre:{id:'401',name:'Main Centre'}},{id:'7000000000002',Course:null,Training_Centre:{id:'401'}}],
+    relationships:[{id:'8000000000001',Status:'Active',Tutor_Contact:{id:'9',name:'Jo Tutor'}}]});
+  const r=await getJson(f,'/portal/management/schools/'+SCHOOL+'/course-options');
+  assert.equal(r.status,200);
+  assert.deepEqual(r.body.offerings,[{id:'7000000000001',name:'Gel Polish',trainingCentre:'Main Centre'}]);
+  assert.equal(r.body.tutors[0].name,'Jo Tutor');
+  const active=f.calls.find(c=>c.u.includes('Tutor_Relationships/search'));
+  assert.ok(active.u.includes('Status:equals:Active'),'only active tutors can be assigned to a course date');
+});
+test('the tutor list includes tutors who are not active yet, marked as such',async()=>{
+  const f=fake({relationships:[
+    {id:'8000000000001',Status:'Active',Tutor_Contact:{id:'9',name:'Jo Tutor'}},
+    {id:'8000000000002',Status:'Inactive',Tutor_Contact:{id:'10',name:'New Tutor'}}]});
+  const r=await getJson(f,'/portal/management/schools/'+SCHOOL+'/tutors');
+  assert.equal(r.status,200);
+  assert.deepEqual(r.body.tutors.map(x=>[x.name,x.active]),[['Jo Tutor',true],['New Tutor',false]]);
+  const q=f.calls.find(c=>c.u.includes('Tutor_Relationships/search')).u;
+  assert.ok(!q.includes('Status:equals'),'the list is not limited to active tutors');
 });

@@ -4,7 +4,7 @@ const {HttpError}=require('./errors');
 const ID=/^\d{10,25}$/;
 const DEFINITIONS={
  membership:{module:'Deals',owner:'Contact_Name',fields:['Deal_Name','Stage','Membership_Type','Membership_Branch','Expiry_Date','Start_Date','Contact_Name','Amount','Payment_Status','Created_Time'],label:'Deal_Name',status:'Stage'},
- accreditation:{module:'Training_Centre_Accred',owner:'Applicant_Contact',fields:['Account','Accreditation_Status','Application_Stage','Accreditation_Level','Valid_From','Valid_To','Applicant_Contact','Payment_Status','Created_Time'],label:'Account',status:'Accreditation_Status'},
+ accreditation:{module:'Training_Centre_Accred',owner:'Applicant_Contact',fields:['Name','Account','Accreditation_Status','Application_Stage','Accreditation_Level','Valid_From','Valid_To','Applicant_Contact','Payment_Status','Created_Time'],label:'Account',status:'Accreditation_Status'},
  insurance:{module:'Insurance_Policy',owner:'Contact',fields:['Application_Status','Policy_Type','Policy_Start_Date','Policy_End_Date','Contact','Created_Time'],label:'Policy_Type',status:'Application_Status'}
 };
 const uri=(s)=>encodeURIComponent(String(s));
@@ -40,7 +40,7 @@ function recordTitle(kind,base){
 }
 function mapRecord(kind,r){
   const d=DEFINITIONS[kind];
-  return {id:String(r.id),kind,title:recordTitle(kind,(typeof r[d.label]==='object'?r[d.label]?.name:r[d.label])),reference:String(r.id),
+  return {id:String(r.id),kind,title:recordTitle(kind,(typeof r[d.label]==='object'?r[d.label]?.name:r[d.label])),reference:kind==='accreditation'&&r.Name?String(r.Name):String(r.id),
     status:r[d.status]||r.Application_Stage||'Unknown',
     updated:r.Modified_Time||r.Created_Time||null,
     startDate:r.Start_Date||r.Valid_From||r.Policy_Start_Date||null,
