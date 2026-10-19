@@ -7,6 +7,7 @@
 // fetched and verified, never trusted.
 const crypto = require('node:crypto');
 const {HttpError} = require('./errors');
+const {phoneIssue} = require('./phone');
 
 const CRMID = /^\d{10,25}$/;
 const DRAFT = 'Draft';
@@ -53,6 +54,26 @@ function str(value, max = 255) {
 }
 const flag = v => (v === 'yes' || v === true ? true : v === 'no' || v === false ? false : null);
 
+const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/;
+// The other tutors the applicant lists (UAT: names and emails up front, as V1 Step 9). A draft keeps the complete rows; a
+// submit needs every row complete, with a valid email and no email used twice.
+function readTutors(rows, {final, otherTutors}) {
+  if (!otherTutors || rows === undefined || rows === null || rows === '') return [];
+  if (!Array.isArray(rows) || rows.length > 50) fail('INVALID_ANSWERS', 'The tutor list is not valid.');
+  const out = [], seen = new Set();
+  for (const row of rows) {
+    const firstName = str(row?.firstName, 60), surname = str(row?.surname, 60), email = str(row?.email, 254).toLowerCase();
+    if (!firstName && !surname && !email) { if (final) fail('TUTORS_REQUIRED', 'Enter the first name, surname and email address of each tutor.'); continue; }
+    if (!firstName || !surname || !EMAIL.test(email)) {
+      if (final) fail('TUTORS_REQUIRED', 'Enter the first name, surname and a valid email address for each tutor.');
+      continue;
+    }
+    if (seen.has(email)) { if (final) fail('TUTORS_DUPLICATE', 'Each tutor needs a different email address.'); continue; }
+    seen.add(email);
+    out.push({firstName, surname, email});
+  }
+  return out;
+}
 // Reads the journey answers into one tidy shape. `final` adds the rules for submitting.
 function readAnswers(a, {final = false, now = Date.now()} = {}) {
   if (!a || typeof a !== 'object' || Array.isArray(a)) fail('INVALID_ANSWERS', 'Application answers are missing.');
@@ -71,7 +92,10 @@ function readAnswers(a, {final = false, now = Date.now()} = {}) {
     tutorCount = Number(a.tutorCount);
     if (!Number.isInteger(tutorCount) || tutorCount < 0 || tutorCount > 500) fail('INVALID_ANSWERS', 'Enter the number of tutors as a whole number.');
   }
+  const tutors = readTutors(a.tutors, {final, otherTutors});
+  if (tutors.length && tutorCount === undefined) tutorCount = tutors.length;
   const m = {
+    tutors,
     phone: str(a.phone, 40), mobile: str(a.mobile, 40),
     address: {l1: str(a.address1), l2: str(a.address2), l3: str(a.address3), town: str(a.town), county: str(a.county), postcode: str(a.postcode, 20), country: contactCountry},
     school: {name: str(a.centre, 100), email: str(a.centreEmail), phone: str(a.centrePhone, 40), mobile: str(a.centreMobile, 40),
@@ -83,8 +107,15 @@ function readAnswers(a, {final = false, now = Date.now()} = {}) {
     courseIds: [...new Set(courseIds)], startDate,
   };
   if (m.school.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(m.school.email)) fail('INVALID_EMAIL', 'Enter a valid centre email address.');
+  for (const [label, value] of [['your telephone', m.phone], ['your mobile', m.mobile], ['the centre telephone', m.school.phone], ['the centre mobile', m.school.mobile]]) {
+    const issue = phoneIssue(value);
+    if (issue) fail('INVALID_PHONE', 'Check ' + label + ' number. ' + issue);
+  }
   if (final) {
     const s = m.school;
+    if (!m.mobile) fail('MOBILE_REQUIRED', 'Enter your mobile number.');
+    if (!s.email) fail('CENTRE_REQUIRED', 'Enter the training centre email address.');
+    if (!s.mobile) fail('CENTRE_REQUIRED', 'Enter the training centre mobile number.');
     if (!s.name) fail('CENTRE_REQUIRED', 'Enter your training school name.');
     if (!s.country) fail('CENTRE_REQUIRED', 'Choose your training centre country.');
     if (!s.l1 || !s.town) fail('CENTRE_REQUIRED', 'Enter your training centre address.');
@@ -93,11 +124,12 @@ function readAnswers(a, {final = false, now = Date.now()} = {}) {
     if (m.termsAccepted !== true) fail('TERMS_REQUIRED', 'Accept the application terms to continue.');
     if (!m.courseIds.length) fail('COURSES_REQUIRED', 'Choose at least one GTi course.');
     if (m.otherTutors === null || m.otherVenues === null) fail('TUTORS_REQUIRED', 'Answer the tutor and venue questions.');
+    if (m.otherTutors && (!m.tutors.length || (m.tutorCount && m.tutors.length !== m.tutorCount))) fail('TUTORS_REQUIRED', 'Enter the first name, surname and email address of each tutor.');
   }
   return m;
 }
 
-function createAccreditation({request, listCourses, now = Date.now, sleep = ms => new Promise(r => setTimeout(r, ms)), retryDelayMs = 1500}) {
+function createAccreditation({request, listCourses, log = console.log, now = Date.now, sleep = ms => new Promise(r => setTimeout(r, ms)), retryDelayMs = 1500}) {
   let stagesChecked = 0;
   const data = r => (Array.isArray(r?.data) ? r.data : []);
   // CRM search lags real writes by up to about 30 seconds; a fetch by id does not. Retry only on an empty result.
@@ -232,6 +264,49 @@ function createAccreditation({request, listCourses, now = Date.now, sleep = ms =
     const stale = existing.filter(r => r.Course?.id && !want.has(String(r.Course.id)) && (!r.Offering_Status || r.Offering_Status === 'Pending Review')).map(r => String(r.id));
     await remove(req, 'TC_Course_Offering', stale);
   }
+  const currentMembership = (deal, today) => deal.Stage === 'Active' && ['associate', 'full', 'international'].some(p => String(deal.Membership_Type || '').toLowerCase().startsWith(p))
+    && !(deal.Start_Date && deal.Start_Date > today) && !(deal.Expiry_Date && deal.Expiry_Date < today);
+  // Links each listed tutor to the school as V1 does: the tutor's Contact is reused (or created) and a Tutor_Relationships row
+  // links it. A tutor starts Inactive unless they already hold a current membership. One tutor failing never blocks the save.
+  // Tutors removed from the list are unlinked, but only on the Account this journey created for the application.
+  async function syncTutors(req, m, accountId, person) {
+    if (m.otherTutors === null) return;
+    const wanted = m.otherTutors ? m.tutors.filter(t => t.email !== String(person.Email || '').toLowerCase()) : [];
+    const existing = await search(req, 'Tutor_Relationships/search?criteria=' + q('(Account:equals:' + accountId + ')') + '&fields=' + q('Tutor_Contact,Status'));
+    const linked = new Set(existing.map(r => String(r.Tutor_Contact?.id)));
+    const keep = new Set();
+    for (const t of wanted) {
+      try {
+        const found = (await search(req, 'Contacts/search?email=' + q(t.email) + '&fields=Email')).filter(c => String(c.Email || '').trim().toLowerCase() === t.email);
+        if (found.length > 1) { log('tutor email matches several contacts', t.email); continue; }
+        let id = found[0]?.id ? String(found[0].id) : null;
+        const isExisting = Boolean(id);
+        if (!id) id = await create(req, 'Contacts', {Email: t.email, First_Name: t.firstName, Last_Name: t.surname});
+        keep.add(id);
+        if (linked.has(id)) continue;
+        let status = 'Inactive';
+        if (isExisting) {
+          const today = todayIso(now());
+          const deals = await search(req, 'Deals/search?criteria=' + q('(Contact_Name:equals:' + id + ')') + '&fields=' + q('Stage,Membership_Type,Start_Date,Expiry_Date'));
+          if (deals.some(d => currentMembership(d, today))) status = 'Active';
+        }
+        await create(req, 'Tutor_Relationships', {Name: t.firstName + ' ' + t.surname, Account: {id: accountId}, Tutor_Contact: {id}, Status: status});
+      } catch (err) { log('tutor link failed', t.email, err && err.code, err && err.message); }
+    }
+    const stale = existing.filter(r => r.Tutor_Contact?.id && !keep.has(String(r.Tutor_Contact.id))).map(r => String(r.id));
+    await remove(req, 'Tutor_Relationships', stale);
+  }
+  // The tutors linked to this application's Account, as the rows the form shows.
+  async function readLinkedTutors(req, acc) {
+    if (!acc.Account?.id) return [];
+    const rels = await search(req, 'Tutor_Relationships/search?criteria=' + q('(Account:equals:' + acc.Account.id + ')') + '&fields=' + q('Tutor_Contact'));
+    const rows = [];
+    for (const r of rels.slice(0, 50)) {
+      const c = r.Tutor_Contact?.id ? await get(req, 'Contacts', r.Tutor_Contact.id, 'First_Name,Last_Name,Email') : null;
+      if (c?.Email) rows.push({firstName: c.First_Name || '', surname: c.Last_Name || '', email: String(c.Email).toLowerCase()});
+    }
+    return rows;
+  }
   // One path for save and submit. The stage only moves to Awaiting Payment once every related record is written.
   async function persist(req, person, m, acc, hints, {submit}) {
     const validTo = annualPeriodEnd(m.startDate);
@@ -261,6 +336,7 @@ function createAccreditation({request, listCourses, now = Date.now, sleep = ms =
         Centre_Relationship_Type: 'Main Centre', Start_Date: m.startDate, End_Date: validTo});
     }
     await syncCourses(req, m, accId, centreId, linkId, validTo, isNew);
+    await syncTutors(req, m, accountId, person);
     if (submit) {
       await update(req, 'Training_Centre_Accred', accId, {Application_Stage: AWAITING, Terms_Accepted_Date: new Date(now()).toISOString().split('.')[0] + '+00:00',
         Purchase_Type: 'New Accreditation', Application_Source: 'Portal', Payment_Status: 'Not Paid'});
@@ -299,13 +375,14 @@ function createAccreditation({request, listCourses, now = Date.now, sleep = ms =
       const {link, centre} = await findRelated(req, acc, person);
       const offerings = await searchWithRetry(req, 'TC_Course_Offering/search?criteria=' + q('(Accreditation:equals:' + acc.id + ')') + '&fields=Course', 2);
       const contact = await get(req, 'Contacts', person.id, CONTACT_FIELDS);
+      const tutors = await readLinkedTutors(req, acc);
       const answers = {...contactAnswers(contact),
         centre: stripPlaceholder(centre?.Name) || '', country: centre?.Country || '', centreEmail: centre?.Email || '', centrePhone: centre?.Phone_Number || '',
         centreMobile: centre?.Mobile_Phone_Number || '', centreAddress1: centre?.Address_Line_1 || '', centreAddress2: centre?.Address_Line_2 || '',
         centreAddress3: centre?.Address_Line_3 || '', centreTown: centre?.Town || '', centreCounty: centre?.County || '', centrePostcode: centre?.Postcode || '',
         qualifiedSixMonths: fromYesNo(acc.Declaration_1_qualified_for_six_months), teachingQualification: fromYesNo(acc.Declaration_2_teaching_qualification),
         evidenceAvailable: fromYesNo(acc.Declaration_3_evidence_available), otherTutors: fromYesNo(acc.Other_Tutors_Used),
-        tutorQualified: fromYesNo(acc.Tutor_qualification_declaration_question), tutorCount: acc.Number_of_Tutors ?? '',
+        tutorQualified: fromYesNo(acc.Tutor_qualification_declaration_question), tutorCount: acc.Number_of_Tutors ?? (tutors.length || ''), tutors,
         additionalVenues: fromYesNo(acc.Additional_Centres_Used), terms: acc.Terms_Privacy_Accepted === true,
         courseIds: offerings.map(o => String(o.Course?.id)).filter(Boolean), startDate: acc.Valid_From || ''};
       return {id: String(acc.id), service: 'accreditation', journeyId: crypto.randomUUID(), revision: 1, step: 0, savedAt: acc.Modified_Time || acc.Created_Time || null,

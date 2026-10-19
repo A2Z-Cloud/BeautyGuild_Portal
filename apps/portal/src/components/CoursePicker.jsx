@@ -23,6 +23,7 @@ export default function CoursePicker({value,onChange}){
       <CourseGroups courses={state.items} searchable groupBy="treatmentGroup" selectable selected={selected} onToggle={toggle} emptyText="No active GTi courses were returned."/>
     </>}
     <details className="course-help"><summary>Can't find the course you want to teach?</summary>
-      <p>Most Guild Accredited Schools deliver courses using our ready-made GTi course programmes. If you offer a course that is not available as a GTi course, you may be able to apply to have your own course accredited. Your course materials will need to be submitted separately and additional fees may apply. Call our accreditation team on 01332 224830.</p></details>
+      <p>Most Guild Accredited Schools deliver courses using our ready-made GTi course programmes, which include the required theory and provide a simple route to offering Guild-recognised training.</p>
+      <p>If you offer a course that isn't available as a GTi course, you may be able to apply to have your own course accredited by the Guild. Your course materials and supporting documentation will need to be submitted separately for assessment and additional accreditation fees may apply. Call our accreditation team on 01332 224830 for more information.</p></details>
   </div>;
 }
