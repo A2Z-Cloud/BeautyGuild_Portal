@@ -1,10 +1,10 @@
 # Beauty Guild Staff Workspace | Functional and UX Specification
 
-**Document version:** 2.0 (review baseline, 19 October 2026)  
+**Document version:** 2.1 (CRM snapshot integration review, 19 October 2026)  
 **Product:** Zoho CRM Staff Workspace widget  
 **Location:** BeautyGuild_Portal / widgets / crm / beauty-guild-staff-workspace  
 **Audience:** Solution architecture, CRM and Catalyst developers, design, QA, delivery and customer reviewers  
-**Document status:** Requirements and proposed UX baseline; **not** a statement that the features are deployed or signed off.
+**Document status:** Requirements and proposed UX baseline, updated with the 19 October 2026 18:44 CRM metadata. **Not** a statement that the features, automations or insurance issuance have passed UAT or are deployed.
 
 ## 1. Purpose and design intent
 
@@ -129,13 +129,91 @@ Use these as intended logical mappings, **not** proof that every API name, relat
 
 - **Membership:** distinguish Deals Stage, Member Profile state, payment/subscription state and expiry. Certain Deals Stage underlying picklist values are not the labels staff see; determine the displayed value using actual CRM metadata.
 - **Accreditation:** show Application_Stage, Accreditation_Status and Payment_Status separately. Approvals and acceptance-letter workflows remain native CRM processes.
-- **Insurance:** show Application_Status, Underwriting_Status, Policy_Status and Payment_Status separately. An application marked paid or quoted is **not** automatically an active policy.
+- **Insurance:** show Application_Status, Underwriting_Status, Risk_Status, Policy_Status and Payment_Status separately, plus Member_Gate_Result, Sanctions_Status, Manual_Review_Outcome and Document_Status when available. An application marked paid or quoted is **not** automatically an active or validly issued policy. Use actual picklist values, including the newly added Underwriting_Status = Stop and Payment_Status = Pending / Failed / Expired.
 - **Qualifications/Course Offerings:** show Verification_Status or Offering_Status from their own records where available.
 - Never infer a successful status from substrings such as 'Verified' within 'Not Verified'. Use explicit state mappings and neutral fallback for unknown statuses.
 
 ### 5.4 Processing and workflow integration
 
 The widget **reads**, provides context and facilitates safe low-risk actions. Existing Zoho CRM Blueprints, workflows, custom buttons, approval/rejection logic, notifications and permissions remain authoritative. Use native **Open in CRM** for complex edits/decisions rather than reproducing hidden Deluge/business logic. If an in-widget action is later proposed, require its exact supported API contract, side effects, permission and idempotency handling to be verified first.
+
+### 5.5 CRM metadata baseline: 19 October 2026, 18:44
+
+**Source:** Beauty Guild Cartographer snapshot `snap-792ffa56-26dd-4d6d-95ec-6af3cc1114d0`, captured `2026-10-19T18:44:29.877Z` for Zoho CRM organisation `1011174000000549177`. Compared with the earlier 14:59 snapshot `snap-b9df05b9-5f66-445a-8946-679062ebfa12`. This is a **metadata and Deluge-source inspection**, not runtime evidence.
+
+| Discovery area | Previous | Latest | Delta / interpretation |
+| --- | ---: | ---: | --- |
+| Modules | 80 | 80 | No newly discovered modules |
+| Field nodes | 1,237 | 1,258 | **21 new**; metadata coverage counter reports 1,260, a separate extractor count |
+| Layouts | 40 | 40 | Three existing layouts changed: Insurance Policy, Member Profile and Accounts |
+| Related-list catalogue | 413 | 413 | Stable; related-list detail extraction remains unavailable |
+| Workflow definitions | 39 | 45 | Six **new active** Insurance workflows |
+| Function definitions and full source | 65 | 71 | Six new active function definitions (one is a Schedule function) |
+| Blueprints | 1 | 1 | Still **Task Process Management** in `Tasks`; no Insurance/Accreditation Blueprint identified |
+
+**New fields (21):**
+
+| Module | Exact CRM field API names | Purpose for staff view |
+| --- | --- | --- |
+| `Membership` (2) | `Banned_From_Insurance`, `Has_Insurance_Issue` | Eligibility and referral inputs; restricted to authorised roles |
+| `Accounts` (1) | `Insurance_Workdrive_Link` | Link to the Account's insurance document folder |
+| `Insurance_Policy` (18) | `Member_Gate_Result`, `Sanctions_Status`, `Sanctions_Reference`, `Sanctions_Checked_At`, `Manual_Review_Outcome`, `Reviewed_At`, `Underwriting_Notes`, `Quote_Version`, `Reprice_Required`, `Next_Action`, `Next_Action_Date`, `Last_Activity_At`, `Document_Status`, `Documents_Generated_At`, `Workdrive_Link`, `Insurance_Schedule_Link`, `Statement_of_Fact_Link`, `Policy_Wording_Links` | Underwriting and gate outcomes, staff follow-up, quote versioning and policy document links |
+
+The **Insurance Policy** layout now includes dedicated sections `Underwriting and Gates`, `Sanctions`, `Operations` and `Policy Documents`. The widget should use these as a starting point for its compact field groupings, rather than simply rendering all 62 fields in layout order. Existing `Accounts` and `Membership` layouts gained the fields shown above.
+
+**Picklist changes confirmed in the same snapshot:**
+
+| Module.field | New allowed values | Existing values remain |
+| --- | --- | --- |
+| `Insurance_Policy.Underwriting_Status` | `Stop` | `Not Assessed`, `Pending`, `Clear`, `Refer`, `Declined`, `Manual Review (REC)` |
+| `Insurance_Policy.Payment_Status` | `Pending`, `Failed`, `Expired` | `Paid`, `Not Paid` |
+
+New operational picklists include `Member_Gate_Result` = Clear / Review / Blocked; `Sanctions_Status` = Not Checked / Clear / Review / Block / Error; `Manual_Review_Outcome` = Approved / Declined / Approved with Endorsement; and `Document_Status` = Not Generated / Draft / Issued / Regenerate / Failed. Also handle blank or null values as **unknown**, not successful clearance.
+
+### 5.6 Insurance workflows and server-side ownership
+
+The newly discovered workflows are **active in metadata**, but execution history, function-to-workflow parameter configuration, role permissions and integrated UAT were not provided.
+
+| CRM workflow | Trigger and condition from snapshot | Linked Deluge function | Intended staff-visible effect |
+| --- | --- | --- | --- |
+| `A2Z - INS Member Gate` | Insurance Policy create/edit for an open application and non-active policy | `a2z_ins_member_gate` | Evaluates Member Profile ban/issue flags, writes Member_Gate_Result and may set underwriting Stop/manual review plus Next Action/task |
+| `A2Z - INS Sanctions Roll-up` | Risk Screening create/edit where Check = Sanctions | `a2z_ins_sanctions_rollup` | Maps screening/investigation to policy Sanctions_Status and may create a high-priority review task |
+| `A2Z - INS Review Completion` | Manual_Review_Outcome field updated to a non-empty value | `a2z_ins_review_completion` | Approved clears underwriting; Declined sets Stop/Withdrawn; Approved with Endorsement increments Quote_Version and sets Reprice_Required |
+| `A2Z - INS Policy Activation` | Payment_Status field updated to Paid | `a2z_ins_policy_activation` | Evaluates its current gates and, if passed, sets Policy_Status Active, Application_Status Completed and dates; also activates eligible extensions |
+| `A2Z - INS Documents on Activation` | Policy_Status updated to Active | `a2z_ins_policy_documents` | Creates **draft placeholder** documents in WorkDrive; not production-approved issuance |
+| `A2Z - INS Documents Regenerate` | Document_Status updated to Regenerate | `a2z_ins_policy_documents` | Regenerates draft documents using the same function |
+
+**Additional function, not one of the six workflow actions:** `a2z_ins_incomplete_followup` is categorised as a **Schedule** function, scans up to five pages of 200 draft/in-progress/saved quote records, checks the `ins_incomplete_followup_days` organisation variable (fallback three days), and creates a follow-up task/Next Action if not previously followed up after the last activity. The export does **not** prove the function has a running schedule. The scan is bounded at 1,000 records; staff queues should not rely on it as an exhaustive or continuously updated index.
+
+**Widget responsibility:** read and present statuses, next action and authorised linked information; deep-link into the appropriate native CRM record for manual outcomes and established processing. Do **not** replicate this Deluge logic in browser JavaScript, bypass its workflow triggers by direct status updates, or claim that a UI payment badge is a verified Stripe receipt.
+
+### 5.7 Insurance activation and document safeguards: evidence versus required behaviour
+
+The source-code review identifies the following **implementation risks**. They are not confirmed production incidents, and the widget must not assume the described checks already operate fail-closed.
+
+| Risk ID | What current Deluge actually does | Required safeguard / validation before enabling staff-triggered completion |
+| --- | --- | --- |
+| INS-G01 | If Underwriting_Status is blank or Not Assessed, the activation function rejects only Risk_Status = Referred or Stopped; other Risk_Status values can fall through | Agree a positive, explicit underwriting clearance requirement and test all blank, pending, referral, Stop, declined and error combinations |
+| INS-G02 | Activation blocks Sanctions_Status = Review, Block or Error; **Not Checked / blank are not rejected** | Confirm applicable sanctions clearance is completed, current and auditable before issue; missing/error outcomes fail closed |
+| INS-G03 | Activation blocks Member_Gate_Result = Blocked, but **Review / blank are not rejected** | Require a verified Clear result or an approved, auditable manual disposition according to Guild rules |
+| INS-G04 | Member Gate defaults to Clear when `Membership_Profile` lookup is absent | Agree whether an unlinked profile is eligible; do not silently treat missing eligibility evidence as clearance |
+| INS-G05 | Member Gate runs on open Insurance Policy create/edit; changing a Member Profile's ban/issue fields alone does not match this workflow trigger | Confirm propagation/re-evaluation for changed Member Profile flags and existing applications |
+| INS-G06 | Sanctions Roll-up updates from an individual screening record without an apparent latest-result/review-state precedence check | Validate multiple screenings, chronology, confirmed investigations, re-screening and contradictory results; preserve audit and avoid stale clears |
+| INS-G07 | A Paid CRM field update triggers activation; this function does not itself verify Stripe webhook signature, provenance or captured amount | Enforce trusted server-side payment verification and idempotent fulfilment; never allow generic staff entry of Paid to stand in for receipt |
+| INS-G08 | Activation does not check `Reprice_Required` / current `Quote_Version` as a gate | Block use of superseded quotes and require the approved final price/endorsement before checkout and issue |
+| INS-G09 | `a2z_ins_policy_documents` creates WorkDrive text files marked **DRAFT - TEMPLATE AWAITING APPROVAL**, then sets `Document_Status` to Draft even if Policy_Status is Active | Do not present draft schedule/Statement of Fact as issued cover documents. Approve templates, wordings, versioning, document status transitions, links and failure handling before customer issuance |
+| INS-G10 | The document generator requires an Account; missing Account sets Document_Status Failed and a Next Action. Some wording references may default to 'link to be added' | Validate prerequisite Accounts, WorkDrive folders, final URLs, document retrieval permissions and regeneration/recovery behaviour |
+| INS-G11 | Incomplete follow-up is bounded and deduplication is based on Next_Action/Next_Action_Date | Verify schedule, task deduplication across retries/record edits, null date handling, timezone and volume >1,000 records |
+| INS-G12 | Manual review completion sets Reviewed_At and may set Review_Owner from Modified_By, then updates policy without further workflow triggers | Validate authorised reviewer identity, audit trail, endorsements, downstream notification and state transitions; never infer that entering a selection alone completes governance |
+
+**Proposed production acceptance rule (pending Guild/insurance sign-off):** a policy must not be offered for payment or treated as issued unless its membership eligibility, underwriting and required sanctions checks have explicit acceptable outcomes, required declarations/customer evidence are confirmed, any repricing is resolved, and payment is independently verified. Document issuance requires separately approved templates and an auditable successful generation outcome. These are **recommendations**, not assertions that the present Deluge enforces each condition.
+
+**Operational UI behaviour:**
+- Insurance list rows should offer concise **Application**, **Underwriting**, **Payment**, **Policy**, **Next Action** and due-date indicators, plus a visible referral/blocked attention state. These are independent state machines.
+- Insurance detail should group **Application**, **Underwriting**, **Eligibility and Screening**, **Payment and Cover**, **Documents and Follow-up**. Display recorded sanctions status, reference and screening timestamp only to authorised staff; provide drill-in to permitted `Risk_Screenings`.
+- Show `Document_Status = Draft` and any draft schedule links as **Draft documents, not evidence of cover**. Missing links, error states or placeholder policy wordings must not render as completed/issued.
+- Restrict Manual Review Outcome, Policy Status, Payment Status, member insurance restrictions and screening dispositions to native verified CRM actions/authorised workflows until write contracts are approved.
+- For queues, use `Next_Action` and `Next_Action_Date` where populated, but distinguish blank values from 'no action required'. Do not invent workflow SLA counters or totals.
 
 ## 6. Assisted creation (staff acting on behalf of a customer)
 
@@ -149,7 +227,7 @@ The primary UX has three **macro stages**:
 
 **Membership:** joining/renewal/upgrade where supported, membership level, professional branches, add-ons, billing preference, optional insurance and applicant declarations. Preserve the distinction between the Member Profile and Membership transaction. Exact product/Books/Stripe pricing is authoritative on the backend.
 
-**Insurance:** applicant details, working methods, specialist treatments, optional people/premises/property cover, conditional questions, underwriting disclosures, evidence and selected start date. Support PASS/REFER/STOP outcomes from the validated backend and fail closed on screening errors. **Referred, declined and incomplete applications are not payable or issued**.
+**Insurance:** applicant details, working methods, specialist treatments, optional people/premises/property cover, conditional questions, underwriting disclosures, evidence and selected start date. Display separate member-eligibility, underwriting, sanctions and document gates, with the current CRM fields and the verified backend risk outcome. Support PASS/REFER/STOP outcomes from the validated backend and fail closed on screening errors. **Referred, declined, uncleared and incomplete applications must not become payable or be issued**. See the CRM snapshot review in section 5.5 for gaps in the current activation function.
 
 **Accreditation:** applicant and correspondence, Account/Training Centre, main/additional venues, qualified tutors, GTi courses/offerings, qualification evidence, declaration confirmation and UK/international route from the centre's country. Preserve the multi-record CRM structure instead of writing only a simplified parent record.
 
@@ -270,6 +348,14 @@ Do not store API keys, tokens, Stripe secrets or unrestricted service credential
 | A16 | Browser narrow width and keyboard | Usable navigation, actions, focus and forms |
 | A17 | Official Zoho widget upload | ZET validate/pack, successful installation and live test |
 | A18 | Later Stripe link flow | Authorised price, idempotent session, verified webhook result; no card capture in widget |
+| A19 | Open Insurance record with new fields | Exact API mapping and display of Member Gate, Sanctions, Manual Review, Next Action and Document Status |
+| A20 | Gate matrix across incomplete screening and underwriting | Missing/Not Checked/Review/Error/Stop/Not Assessed outcomes cannot silently activate or issue cover |
+| A21 | Payment marked Paid without verified settlement | Does not imply authoritative payment or issue; fulfilment relies on verified backend outcome |
+| A22 | Member Profile ban or issue changed | Associated open applications are re-evaluated per approved business rule; no stale Clear outcome |
+| A23 | Sanctions screening chronology | Multiple screenings and cleared/confirmed investigations cannot be incorrectly overwritten by older outcomes |
+| A24 | Manual review with endorsement | Quote version and Reprice Required are respected before payment/issue, with authorised reviewer audit |
+| A25 | Policy activation and documents | Draft placeholder schedule and Statement of Fact do not appear as issued evidence of cover; regeneration/failure is visible |
+| A26 | Incomplete quote follow-up | Configured schedule verified; bounded scanning, duplicates and missing activity timestamps handled safely |
 
 For unsupported/unfinished features, UAT must record **not ready**, rather than treating a browser preview, mock SDK test or source-code presence as a pass.
 
@@ -284,6 +370,9 @@ For unsupported/unfinished features, UAT must record **not ready**, rather than 
 - Agree the staff declaration attestation vs customer-confirmed evidence requirements with Guild/insurance stakeholders.
 - Define staff-specific backend authentication/authorisation for Catalyst pricing, quotes and Checkout, plus Creator webhook compatibility.
 - Confirm WorkDrive/CRM email/document access, record visibility and paging.
+- Resolve **INS-G01–INS-G12** against the new Insurance Deluge functions: explicit underwriting/sanctions/member eligibility clearance, verified payment provenance, quote version/reprice gate, reliable screening precedence, reviewer audit, document approval, and incomplete-quote schedule.
+- Agree whether a paid-but-not-activated policy may have a Payment_Status of Paid while blocked; show this as a processing exception without automatically reversing financial state.
+- Validate WorkDrive document templates and issuance terminology; current generated schedule and Statement of Fact are draft placeholders despite an Active policy status.
 - Import and refactor actual widget source into this repository only after the reviewed spec is approved; official package, live CRM deployment and end-to-end tests remain separate tasks.
 
 ## 13. Source of truth and references
@@ -300,6 +389,8 @@ For unsupported/unfinished features, UAT must record **not ready**, rather than 
 - [Payments and Checkout](../../../docs/api-contracts/pricing-payments.md)
 - [Insurance risk-check contract](../../../docs/api-contracts/insurance-risk-checks.md)
 - [Architecture and deployment boundaries](../../../docs/architecture/workspace.md)
+
+**CRM metadata snapshot baseline:** Beauty Guild Cartographer export `snap-792ffa56-26dd-4d6d-95ec-6af3cc1114d0` (19 Oct 2026, 18:44), compared against `snap-b9df05b9-5f66-445a-8946-679062ebfa12` (19 Oct 2026, 14:59). It includes source for all 71 discovered functions, but field-detail/layout-detail REST endpoints and selected workflow action details reported OAuth scope restrictions; related-list detailed extraction is unavailable. Treat source-level concerns as **validation requirements**, not runtime proof. The snapshot file was supplied for review and is **not** committed to the repository or bundled into the CRM widget.
 
 **Prior widget source:** separately supplied Staff Workspace candidate kit and the existing [widget README](README.md). The above links describe the source being used for UX and integration alignment. They do not prove the CRM widget is already built or deployed.
 
