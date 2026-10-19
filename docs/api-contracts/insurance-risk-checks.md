@@ -29,7 +29,7 @@ Flood and subsidence run only when the cover needs premises (`propertyRequired`)
 
 ## Flood and subsidence lists
 
-Each Creator form has `Postcode` (uppercase with one space, e.g. `AB10 1AU`, as in the source sheets), `Outcome` (Refer or Stop), `Active` (must be ticked: a row that is not Active is ignored) and `List_Date`; `Postcode_Key` is optional and not used. The lookup is `Active==true && Postcode=="AB10 1AU"`, whole postcode only (the postcode is normalised to that format first). Creator answers "no records" with HTTP 400 code 9280. The lists hold exceptions, so an unlisted postcode passes; a sector or outward-code fallback would refer whole areas. An empty list or an unreadable report is an error, not "nothing listed" (a one-row `Active==true` check, held for 10 minutes).
+Each Creator form has `Postcode` (uppercase with one space, e.g. `AB10 1AU`, as in the source sheets), `Outcome` (Refer or Stop), `Inactive` (a tick box, left unticked; tick it to switch a postcode off without deleting it) and `List_Date`; `Postcode_Key` is optional and not used. The lookup is `Inactive==false && Postcode=="AB10 1AU"`, whole postcode only (the postcode is normalised to that format first). Creator answers "no records" with HTTP 400 code 9280. The lists hold exceptions, so an unlisted postcode passes; a sector or outward-code fallback would refer whole areas. An empty list or an unreadable report is an error, not "nothing listed" (a check that `Inactive==false` returns rows, held for 10 minutes).
 
 ## Audit and staff route
 

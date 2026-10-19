@@ -536,7 +536,7 @@ function riskSources(w, {listed = {}, sanctions = [], analyticsDown = false} = {
     }
     if (url.includes('/creator/v2.1/data/')) {
       const kind = url.includes('Flood') ? 'flood' : 'subsidence', criteria = decodeURIComponent(url.split('criteria=')[1] || '');
-      if (criteria === 'Active==true') return json({code: 3000, data: [{List_Date: '2024-01-01'}]});
+      if (criteria === 'Inactive==false') return json({code: 3000, data: [{List_Date: '2024-01-01'}]});
       const key = /"([A-Z0-9 ]+)"/.exec(criteria)[1].replace(/ /g, '');
       return listed[kind] && listed[kind][key] ? json({code: 3000, data: [{Postcode_Key: key, Outcome: listed[kind][key]}]}) : json({code: 9280, message: 'No records found matching the given criteria.'}, 400);
     }
