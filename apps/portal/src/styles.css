@@ -333,3 +333,6 @@ img,svg,video,iframe{max-width:100%}
 .membership-journey .branch-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:10px}.membership-journey .branch-card{min-height:64px}.membership-journey .branch-logo{object-fit:contain;flex-shrink:0}
 .membership-journey .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 @media(max-width:640px){.membership-journey .branch-grid{grid-template-columns:1fr}}
+
+/* UAT qualification form: future-date message */
+.school-ops-form .field-error{color:var(--danger,#b42318);font-size:.9rem;margin:.25rem 0 0}
