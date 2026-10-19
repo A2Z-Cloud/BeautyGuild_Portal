@@ -17,6 +17,12 @@ function registerCheckoutRoutes(app, {enabled, getCurrentUser, getCrmHeaders, cr
   const router = express.Router();
   const {call: crm} = createCrmClient({getCrmHeaders, crmApiDomain, fetchImpl});
   const limiter = createRateLimiter({limit: 20, windowMs: 60 * 1000, now});
+  // Each insurance pay attempt writes 5 to 15 CRM records, so it has its own, lower limits.
+  const insuranceMinute = createRateLimiter({limit: 3, windowMs: 60 * 1000, now});
+  const insuranceHour = createRateLimiter({limit: 10, windowMs: 60 * 60 * 1000, now});
+  // Insurance attempts by what was asked for. A retry or double click within a few minutes gets the
+  // same records and the same open session instead of a duplicate set. (Per instance, like the limiters.)
+  const attempts = new Map(), ATTEMPT_TTL = 5 * 60 * 1000;
   const unavailable = () => new HttpError(503, 'CHECKOUT_UNAVAILABLE', 'Online payment is not available yet.');
   const priceCache = new Map();
 
@@ -61,17 +67,22 @@ function registerCheckoutRoutes(app, {enabled, getCurrentUser, getCrmHeaders, cr
       lines.push({item: l.item, name: ITEMS[l.item].name, quantity: l.quantity, priceId: price.id, unitPence: price.unit,
         totalPence: price.unit * l.quantity, interval: price.interval});
     }
+    // Computed items (insurance premiums) have no catalogue price: they travel as inline price_data.
+    for (const l of prepared.inline || []) lines.push({item: null, name: l.name, quantity: l.quantity, priceId: null, unitPence: l.unitPence, totalPence: l.unitPence * l.quantity, interval: null});
+    if (!lines.length && !prepared.blocked) throw new HttpError(422, 'INVALID_REQUEST', 'Choose something to pay for.');
     return {service, contact, prepared, lines, totalPence: lines.reduce((t, l) => t + l.totalPence, 0),
       mode: lines.some(l => l.interval) ? 'subscription' : 'payment'};
   }
   const view = b => b.alreadyPaid ? {service: b.service.title, alreadyPaid: true} :
     {service: b.service.title, alreadyPaid: false, currency: 'GBP', totalPence: b.totalPence, mode: b.mode,
+      payable: !b.prepared.blocked, ...(b.prepared.blocked ? {blocked: b.prepared.blocked} : {}),
       lines: b.lines.map(({name, quantity, unitPence, totalPence, interval}) => ({name, quantity, unitPence, totalPence, interval}))};
   const inputFrom = src => ({service: String(src.service || ''), recordId: String(src.recordId || ''), centreId: String(src.centreId || ''),
     addons: src.addons && typeof src.addons === 'object' ? src.addons : parseAddons(src.addons),
     level: String(src.level || ''), branch: String(src.branch || ''), branches: src.branches || '', billing: String(src.billing || ''),
     previousId: String(src.previousId || ''), changeType: String(src.changeType || ''), start: String(src.start || ''),
-    accepted: String(src.accepted || ''), firstName: String(src.firstName || ''), lastName: String(src.lastName || '')});
+    accepted: String(src.accepted || ''), firstName: String(src.firstName || ''), lastName: String(src.lastName || ''),
+    country: String(src.country || ''), insurance: src.insurance && typeof src.insurance === 'object' && !Array.isArray(src.insurance) ? src.insurance : null});
   function parseAddons(text) {
     const out = {};
     for (const part of String(text || '').split(',').filter(Boolean)) { const [k, v] = part.split(':'); out[k] = Number(v); }
@@ -84,8 +95,21 @@ function registerCheckoutRoutes(app, {enabled, getCurrentUser, getCrmHeaders, cr
     } catch { /* The charge still stands; Creator reconciles from the Stripe event. */ }
   }
 
+  // Creates a CRM record and returns its id. Used for the insurance records, which exist before payment.
+  async function crmCreate(req, module, record) {
+    let r, body;
+    try {
+      r = await fetchImpl(crmApiDomain + '/crm/v3/' + module, {method: 'POST', signal: AbortSignal.timeout(15000),
+        headers: {...(await getCrmHeaders(req)), 'Content-Type': 'application/json'}, body: JSON.stringify({data: [record]})});
+      body = await r.json();
+    } catch { throw new HttpError(502, 'CRM_UNAVAILABLE', 'We could not prepare your insurance application. Please try again.'); }
+    const result = body?.data?.[0];
+    if (!r.ok || result?.status !== 'success' || !result.details?.id) throw new HttpError(502, 'CRM_UNAVAILABLE', 'We could not prepare your insurance application. Please try again.');
+    return String(result.details.id);
+  }
+
   const send = fn => async (req, res, next) => { try { await fn(req, res); } catch (e) { next(e); } };
-  router.use(express.json({limit: '10kb'}));
+  router.use(express.json({limit: '40kb'}));
   router.use(async (req, res, next) => {
     try {
       if (!enabled) throw new HttpError(503, 'BILLING_DISABLED', 'Online payment is not available yet.');
@@ -99,11 +123,18 @@ function registerCheckoutRoutes(app, {enabled, getCurrentUser, getCrmHeaders, cr
     if (!stripeKey) throw unavailable();
     res.json({quote: view(await build(req, {...inputFrom(req.query), quote: true}))});
   }));
+  // The same summary as GET /quote, for requests too large for a query string (insurance answers).
+  router.post('/quote', send(async (req, res) => {
+    if (!stripeKey) throw unavailable();
+    res.json({quote: view(await build(req, {...inputFrom(req.body || {}), quote: true}))});
+  }));
   router.post('/', send(async (req, res) => {
     if (!stripeKey.startsWith('sk_test_') || !/^https:\/\/[a-z0-9.-]+$/i.test(publicOrigin || '')) throw unavailable();
     if (!limiter(req.portalUser.id)) throw new HttpError(429, 'RATE_LIMIT', 'Too many requests. Please wait a moment and try again.');
     const input = inputFrom(req.body || {}), b = await build(req, input);
     if (b.alreadyPaid) return res.json({alreadyPaid: true});
+    if (b.prepared.blocked) throw new HttpError(422, 'REFERRAL_REQUIRED', b.prepared.blocked.status === 'INCOMPLETE'
+      ? b.prepared.blocked.reasons.join(' ') : 'This insurance quote needs a review by the Insurance team, so it cannot be paid for online. We will be in touch.');
     // Reuse a session already started for this record rather than create a second charge.
     if (b.prepared.existingSessionId) {
       const old = await stripe('GET', '/checkout/sessions/' + encodeURIComponent(b.prepared.existingSessionId)).catch(() => null);
@@ -111,25 +142,54 @@ function registerCheckoutRoutes(app, {enabled, getCurrentUser, getCrmHeaders, cr
       if (old?.status === 'open' && typeof old.url === 'string' && old.url.startsWith('https://checkout.stripe.com/'))
         return res.json({checkoutUrl: old.url, reused: true});
     }
-    const amounts = {};
-    for (const l of b.lines) amounts[l.item] = pounds(l.totalPence);
-    const meta = {
-      email: req.portalUser.email, name: b.contact ? [b.contact.First_Name, b.contact.Last_Name].filter(Boolean).join(' ') : '',
-      currency: 'GBP', status: 'pending', source: 'portal_v2',
-      ...b.prepared.metadata({amounts, total: pounds(b.totalPence), lines: b.lines}),
+    // Insurance CRM records are created now, before payment, as V1 does: Creator's webhook reads their ids from the metadata.
+    const startSession = async () => {
+      // Insurance CRM records are created now, before payment, as V1 does: Creator's webhook reads their ids from the metadata.
+      const insuranceIds = b.prepared.beforePay ? await b.prepared.beforePay((module, record) => crmCreate(req, module, record)) : null;
+      const catalogue = b.lines.filter(l => l.item);
+      const amounts = {};
+      for (const l of catalogue) amounts[l.item] = pounds(l.totalPence);
+      const meta = {
+        email: req.portalUser.email, name: b.contact ? [b.contact.First_Name, b.contact.Last_Name].filter(Boolean).join(' ') : '',
+        currency: 'GBP', status: 'pending', source: 'portal_v2',
+        ...b.prepared.metadata({amounts, total: pounds(b.totalPence), lines: catalogue, insuranceIds}),
+      };
+      const params = new URLSearchParams({mode: b.mode, customer_email: req.portalUser.email,
+        success_url: publicOrigin + '/app/#/payment-return?result=success&service=' + encodeURIComponent(input.service),
+        cancel_url: publicOrigin + '/app/#/payment-return?result=cancelled&service=' + encodeURIComponent(input.service),
+        ...(b.contact ? {client_reference_id: String(b.contact.id)} : {})});
+      b.lines.forEach((l, i) => {
+        if (l.priceId) params.set('line_items[' + i + '][price]', l.priceId);
+        else { params.set('line_items[' + i + '][price_data][currency]', 'gbp'); params.set('line_items[' + i + '][price_data][product_data][name]', l.name); params.set('line_items[' + i + '][price_data][unit_amount]', String(l.unitPence)); }
+        params.set('line_items[' + i + '][quantity]', String(l.quantity));
+      });
+      for (const [k, v] of Object.entries(meta)) params.set('metadata[' + k + ']', String(v).slice(0, 500));
+      const key = crypto.createHash('sha256').update([b.contact?.id || req.portalUser.id, input.service, input.recordId, input.centreId,
+        JSON.stringify(b.lines.map(l => [l.priceId || l.name + ':' + l.unitPence, l.quantity])), b.prepared.fingerprint || '', Math.floor(now() / 120000)].join('|')).digest('hex').slice(0, 40);
+      const session = await stripe('POST', '/checkout/sessions', {body: params, key: 'portal-v2-' + key});
+      if (!session.id || typeof session.url !== 'string' || !session.url.startsWith('https://checkout.stripe.com/'))
+        throw new HttpError(502, 'PAYMENT_UNAVAILABLE', 'Secure checkout is unavailable.');
+      if (b.prepared.record) await crmUpdate(req, b.prepared.record.module, b.prepared.record.id, {Stripe_Checkout_Session_ID: session.id, Payment_Status: 'Payment Processing'});
+      return session;
     };
-    const params = new URLSearchParams({mode: b.mode, customer_email: req.portalUser.email,
-      success_url: publicOrigin + '/app/#/payment-return?result=success&service=' + encodeURIComponent(input.service),
-      cancel_url: publicOrigin + '/app/#/payment-return?result=cancelled&service=' + encodeURIComponent(input.service),
-      ...(b.contact ? {client_reference_id: String(b.contact.id)} : {})});
-    b.lines.forEach((l, i) => { params.set('line_items[' + i + '][price]', l.priceId); params.set('line_items[' + i + '][quantity]', String(l.quantity)); });
-    for (const [k, v] of Object.entries(meta)) params.set('metadata[' + k + ']', String(v).slice(0, 500));
-    const key = crypto.createHash('sha256').update([b.contact?.id || req.portalUser.id, input.service, input.recordId, input.centreId,
-      JSON.stringify(b.lines.map(l => [l.priceId, l.quantity])), Math.floor(now() / 120000)].join('|')).digest('hex').slice(0, 40);
-    const session = await stripe('POST', '/checkout/sessions', {body: params, key: 'portal-v2-' + key});
-    if (!session.id || typeof session.url !== 'string' || !session.url.startsWith('https://checkout.stripe.com/'))
-      throw new HttpError(502, 'PAYMENT_UNAVAILABLE', 'Secure checkout is unavailable.');
-    if (b.prepared.record) await crmUpdate(req, b.prepared.record.module, b.prepared.record.id, {Stripe_Checkout_Session_ID: session.id, Payment_Status: 'Payment Processing'});
+    if (b.prepared.beforePay) {
+      const attemptKey = crypto.createHash('sha256').update([req.portalUser.id, JSON.stringify({...input, insurance: undefined}), b.prepared.fingerprint || '',
+        JSON.stringify(b.lines.map(l => [l.priceId || l.name + ':' + l.unitPence, l.quantity]))].join('|')).digest('hex');
+      const hit = attempts.get(attemptKey);
+      if (hit && now() - hit.at < ATTEMPT_TTL) {
+        const earlier = await hit.promise.catch(() => null);
+        const old = earlier && await stripe('GET', '/checkout/sessions/' + encodeURIComponent(earlier.id)).catch(() => null);
+        if (old?.payment_status === 'paid') return res.json({alreadyPaid: true});
+        if (old?.status === 'open' && typeof old.url === 'string' && old.url.startsWith('https://checkout.stripe.com/')) return res.json({checkoutUrl: old.url, reused: true});
+        attempts.delete(attemptKey);
+      }
+      if (!insuranceMinute(req.portalUser.id) || !insuranceHour(req.portalUser.id)) throw new HttpError(429, 'RATE_LIMIT', 'Too many insurance attempts. Please wait a few minutes and try again.');
+      const promise = startSession();
+      attempts.set(attemptKey, {at: now(), promise});
+      promise.catch(() => { if (attempts.get(attemptKey)?.promise === promise) attempts.delete(attemptKey); });
+      return res.status(201).json({checkoutUrl: (await promise).url});
+    }
+    const session = await startSession();
     res.status(201).json({checkoutUrl: session.url});
   }));
   app.use('/portal/checkout', router);

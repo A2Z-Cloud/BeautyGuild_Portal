@@ -256,3 +256,6 @@ img,svg,video,iframe{max-width:100%}
 /* Checkout */
 .addon-picker{margin-bottom:18px}.addon-row{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:10px 0;border-bottom:1px solid #f3edf0;font-size:13px}.addon-row input{width:72px;border:1px solid #e3d8df;border-radius:9px;padding:9px 10px;min-height:42px}
 .buy-section{margin-bottom:16px}.buy-section h2{margin-bottom:14px}.buy-options{display:grid;gap:10px;margin-bottom:18px}.buy-options .radio-choice small{display:block;margin-top:3px}.buy-fieldset{border:0;padding:0;margin:18px 0 0;display:grid;gap:10px}.buy-fieldset legend{font-size:12px;font-weight:700;margin-bottom:10px;padding:0}
+.ins-step{border:0;border-top:1px solid #efe7ed;padding:18px 0 0;margin:18px 0 0}.ins-step legend{font-size:14px;font-weight:700;padding:0 8px 0 0}
+.people-list{display:grid;gap:10px}.people-row{display:grid;grid-template-columns:150px 1fr 1fr auto;gap:8px;align-items:center}.people-row select,.people-row input{border:1px solid #e3d8df;border-radius:9px;padding:9px 10px;min-height:42px}
+@media(max-width:600px){.people-row{grid-template-columns:1fr}}

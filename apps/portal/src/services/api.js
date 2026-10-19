@@ -72,6 +72,7 @@ export const portalApi=Object.freeze({
   listDrafts:async ()=>(await draftReq('/')).drafts,
   discardDraft:async (service,id)=>draftReq('/'+service+'/'+encodeURIComponent(id),{method:'DELETE'}),
   checkoutQuote:async params=>(await billingReq('/quote?'+new URLSearchParams(params).toString())).quote,
+  checkoutQuotePost:async body=>(await billingReq('/quote',{method:'POST',body})).quote,
   submit:async()=>unavailable('CRM submission'),
   startCheckout:async body=>billingReq('/',{method:'POST',body}),
   getDocuments:async(kind,id,path='')=>documentHttp?documentHttp(documentPath(kind,id)+(path?'?path='+encodeURIComponent(path):'')):unavailable('Authorised document listing'),
