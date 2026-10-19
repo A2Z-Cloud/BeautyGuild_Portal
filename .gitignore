@@ -8,7 +8,7 @@
 *.pfx
 
 # JavaScript dependencies and builds
-node_modules/
+node_modules
 dist/
 build/
 coverage/
