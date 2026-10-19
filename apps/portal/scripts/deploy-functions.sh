@@ -12,6 +12,16 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
+
+# The function is packaged with whatever is in its node_modules. A link, or a missing or empty folder, ships a package with no
+# dependencies and takes the function down, so refuse before anything is changed. Fix with: npm ci (in functions/beauty_guild_api).
+FN_MODULES="functions/beauty_guild_api/node_modules"
+if [ -L "$FN_MODULES" ]; then
+  echo "Refusing to deploy: $FN_MODULES is a link. Replace it with real dependencies: cd functions/beauty_guild_api && rm node_modules && npm ci" >&2; exit 1
+fi
+if [ ! -d "$FN_MODULES/express" ]; then
+  echo "Refusing to deploy: $FN_MODULES is missing or incomplete. Run: cd functions/beauty_guild_api && npm ci" >&2; exit 1
+fi
 ENV_FILE="${BGV2_ENV_FILE:-$HOME/Documents/GitHub/BGV2-env/Key-Development-Value.txt}"
 CONFIG="functions/beauty_guild_api/catalyst-config.json"
 FLAGS_FILE="${BGV2_FLAGS_FILE:-$HOME/Documents/GitHub/BGV2-env/feature-flags.env}"
