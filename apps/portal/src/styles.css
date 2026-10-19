@@ -308,3 +308,7 @@ img,svg,video,iframe{max-width:100%}
 .service-record .service-icon{margin:0;flex-shrink:0;background:#fff0f8}.service-record-copy{flex:1;min-width:0}.service-record-copy strong,.service-record-copy small{display:block}.service-record-copy small{margin-top:4px;font-size:12px}
 .service-record>span:nth-of-type(3){text-align:right}.service-record>span small{display:block;margin-top:4px;font-size:11px}.service-record>svg{color:#d32a7d;flex-shrink:0}.service-record.expired{background:#faf8f9}.service-record.expired .service-icon{background:#f1edf0}
 @media(max-width:600px){.service-record{flex-wrap:wrap}.service-record>span:nth-of-type(3){text-align:left;flex-basis:100%}}
+.legal-links{display:inline-flex;gap:14px;flex-wrap:wrap}.legal-links a,.legal-note a,.policy-docs a,.auth-checkbox a,.check-choice a{color:#d02b7c;text-decoration:underline;text-underline-offset:2px}
+.page-footer .legal-links a{color:#8a7c86}.legal-note{margin-top:14px;font-size:12px}
+.policy-docs{border:1px solid #efe3eb;border-radius:12px;padding:14px 16px;margin:14px 0;background:#fffafd}.policy-docs h3{display:flex;align-items:center;gap:8px;font-size:1rem;margin:0 0 8px}
+.policy-docs ul{list-style:none;margin:0 0 8px;padding:0}.policy-docs li{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-top:1px solid #f4edf1;font-size:12px}.policy-docs li small{color:#807984}.policy-docs p{font-size:12px;margin:0}

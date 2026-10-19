@@ -1,4 +1,5 @@
 import React, {useEffect, useState} from 'react';
+import {LegalLinks} from './LegalLinks.jsx';
 import {clearStored} from './storedState.js';
 import {ArrowLeft,CreditCard,FileCheck2,LockKeyhole,ShieldCheck} from 'lucide-react';
 import {Link,useParams,useSearchParams} from 'react-router-dom';
@@ -43,5 +44,6 @@ export function PaymentReturn(){
  return <div className="page narrow-page"><PageHeading eyebrow="PAYMENT STATUS" title={cancelled?'Payment cancelled':'Thank you'}/>
  {cancelled?<Notice title="Nothing was charged">You left the payment page before paying. You can try again whenever you are ready.</Notice>
  :<Notice title="Payment received">We are confirming your payment with the Guild. Your records update shortly and we will confirm by email.</Notice>}
- <Link className="btn btn-secondary" to="/records">View my records</Link></div>;
+ <Link className="btn btn-secondary" to="/records">View my records</Link>
+ <p className="muted legal-note">Read the Guild's <LegalLinks keys={['terms','privacy','ethics']}/>.</p></div>;
 }

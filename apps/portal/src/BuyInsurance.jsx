@@ -1,4 +1,6 @@
 import React,{useEffect,useState} from 'react';
+import {LEGAL} from './legal.js';
+import {PolicyDocuments} from './LegalLinks.jsx';
 import {ArrowLeft,LockKeyhole} from 'lucide-react';
 import {Link} from 'react-router-dom';
 import {Notice,PageHeading} from './UiParts.jsx';
@@ -65,7 +67,8 @@ export default function BuyInsurance(){
         <BlockedNotice quote={quote}/>
         {payable&&<>
           <p className="muted">You pay {money(dueToday(quote))} today, including Insurance Premium Tax.</p>
-          <label className="check-choice"><input type="checkbox" checked={accepted} onChange={e=>setAccepted(e.target.checked)}/><span>I accept the <a href="https://www.beautyguild.com/Membership/Code-Of-Ethics" target="_blank" rel="noopener noreferrer">Code of Ethics</a> and the Guild's <a href="https://www.beautyguild.com/Legal/Terms-Of-Business" target="_blank" rel="noopener noreferrer">Terms of Business</a> and <a href="https://www.beautyguild.com/Legal/Privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.</span></label>
+          <PolicyDocuments values={values}/>
+          <label className="check-choice"><input type="checkbox" checked={accepted} onChange={e=>setAccepted(e.target.checked)}/><span>I accept the <a href={LEGAL.ethics.href} target="_blank" rel="noopener noreferrer">Code of Ethics</a> and the Guild's <a href={LEGAL.terms.href} target="_blank" rel="noopener noreferrer">Terms of Business</a> and <a href={LEGAL.privacy.href} target="_blank" rel="noopener noreferrer">Privacy Policy</a>.</span></label>
           {payError&&<Notice title="Payment unavailable">{payError}</Notice>}
           <button type="button" className="btn btn-primary btn-block" disabled={busy||!accepted||!(who.firstName||who.lastName)} onClick={pay}><LockKeyhole size={16}/>{busy?'Opening secure payment…':'Pay '+money(dueToday(quote))+' securely with Stripe'}</button>
           {!(who.firstName||who.lastName)&&<p className="muted">Add your name to your account before buying.</p>}</>}</>}
