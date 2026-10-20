@@ -34,13 +34,16 @@ function createRiskChecks({config, getAnalyticsHeaders, getCreatorHeaders, fetch
   const remember = (key, value) => { if (cache.size > 500) cache.clear(); cache.set(key, {at: now(), value}); return value; };
 
   // ---- Sanctions -----------------------------------------------------------------------------
-  // The list must be recent (loaded daily from the Government) and not suspiciously small.
+  // The list is treated as live and must not be suspiciously small. Its age is only checked when a limit is set.
   async function sanctionsVersion(req) {
     const hit = fresh('sanctions-health', CACHE_TTL);
     if (hit) return hit;
     const info = await retry(() => analytics.view(req, c.analytics.table));
-    if (!info.lastModified) throw new CheckError('The sanctions data has no last-modified time.');
-    if (now() - info.lastModified.getTime() > c.maxAgeHours * 3600 * 1000) throw new CheckError('The sanctions data is out of date (last loaded ' + info.lastModified.toISOString() + ').');
+    // The list is treated as live: the Government does not always update it, so its age never holds up a quote. Only an optional limit does.
+    if (c.maxAgeHours > 0) {
+      if (!info.lastModified) throw new CheckError('The sanctions data has no last-modified time.');
+      if (now() - info.lastModified.getTime() > c.maxAgeHours * 3600 * 1000) throw new CheckError('The sanctions data is out of date (last loaded ' + info.lastModified.toISOString() + ').');
+    }
     let count = fresh('sanctions-count', COUNT_TTL);
     if (count == null) {
       const rows = await retry(() => analytics.sql(req, 'SELECT COUNT(*) AS n FROM "' + c.analytics.table + '"'));
@@ -48,7 +51,7 @@ function createRiskChecks({config, getAnalyticsHeaders, getCreatorHeaders, fetch
       if (!(count >= c.rowFloor)) throw new CheckError('The sanctions data has too few rows (' + count + ').');
       remember('sanctions-count', count);
     }
-    return remember('sanctions-health', 'list loaded ' + info.lastModified.toISOString() + ', ' + count + ' rows');
+    return remember('sanctions-health', 'list loaded ' + (info.lastModified ? info.lastModified.toISOString() : 'at an unknown time') + ', ' + count + ' rows');
   }
   const candidateSql = ({prefixes, exact}) => {
     const like = (col, p, contains) => 'LOWER("' + col + '") LIKE \'' + (contains ? '%' : '') + p + '%\'';

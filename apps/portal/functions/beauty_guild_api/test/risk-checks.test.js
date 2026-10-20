@@ -162,10 +162,10 @@ test('named employees and subcontractors are screened too', async () => {
   const r = await screen(w, {ins: INS({insNamedPeopleCover: true, insNamedPeople: [{type: 'employee', firstName: 'Ada', lastName: 'Lee'}, {type: 'subcontractor', firstName: 'Bo', lastName: 'Ng'}]})});
   assert.deepEqual(r.audits.map(a => [a.subject, a.result]), [['Buyer: Nia New', 'Clear'], ['Employee: Ada Lee', 'Potential match'], ['Subcontractor: Bo Ng', 'Clear']]);
 });
-test('sanctions fails closed: Analytics down, stale data, too few rows, a truncated result, an unscreenable name', async () => {
+test('sanctions fails closed: Analytics down, too few rows, a truncated result, an unscreenable name; and stale data only when a limit is set', async () => {
   const cases = [
-    [{analytics: {down: true}}, /could not be reached/], [{analytics: {modified: String(Date.now() - 5 * 86400e3)}}, /out of date/],
-    [{analytics: {modified: ''}}, /no last-modified/], [{analytics: {count: 120}}, /too few rows/], [{analytics: {jobCode: 1003}}, /failed/],
+    [{analytics: {down: true}}, /could not be reached/],
+    [{analytics: {count: 120}}, /too few rows/], [{analytics: {jobCode: 1003}}, /failed/],
   ];
   for (const [opts, why] of cases) {
     const r = await screen(riskWorld({env: {PORTAL_RISK_FLOOD: 'false', PORTAL_RISK_SUBSIDENCE: 'false'}, ...opts}));
@@ -234,6 +234,20 @@ test('config: defaults, bounds and refusal of unsafe table names', () => {
   assert.equal(d.creator.app, 'insurance-check');
   assert.equal(d.creator.subsidenceReport, 'Subsidence_Postcodes_Report');
   assert.equal(d.analytics.table, 'UK-Sanctions-List');
-  assert.equal(d.maxAgeHours, 72);
+  assert.equal(d.maxAgeHours, 0);
   assert.throws(() => loadConfig({ANALYTICS_SANCTIONS_TABLE: 'x"; DROP TABLE y'}), /not allowed/);
+});
+
+test('an old sanctions list does not hold up quotes by default, because the Government list is treated as live', async () => {
+  const old = {modified: String(Date.now() - 30 * 86400e3)};
+  const r = await screen(riskWorld({env: {PORTAL_RISK_FLOOD: 'false', PORTAL_RISK_SUBSIDENCE: 'false'}, analytics: old}));
+  assert.equal(r.results.filter(x => x.status === 'REFER').length, 0, 'no referral for a list loaded 30 days ago');
+  assert.equal(r.audits[0].result, 'Clear');
+  const none = await screen(riskWorld({env: {PORTAL_RISK_FLOOD: 'false', PORTAL_RISK_SUBSIDENCE: 'false'}, analytics: {modified: ''}}));
+  assert.equal(none.results.filter(x => x.status === 'REFER').length, 0, 'a missing last-modified time is not a reason to refer');
+});
+test('an optional age limit still refers old data when one is set', async () => {
+  const r = await screen(riskWorld({env: {PORTAL_RISK_FLOOD: 'false', PORTAL_RISK_SUBSIDENCE: 'false', PORTAL_RISK_SANCTIONS_MAX_AGE_HOURS: '72'}, analytics: {modified: String(Date.now() - 5 * 86400e3)}}));
+  assert.equal(r.results[0].status, 'REFER');
+  assert.match(r.audits[0].detail, /out of date/);
 });

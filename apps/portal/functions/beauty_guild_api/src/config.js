@@ -74,7 +74,8 @@ function loadConfig(env = process.env) {
       subsidenceEnabled:env.PORTAL_RISK_SUBSIDENCE === 'true',
       guildPhone:String(env.PORTAL_GUILD_PHONE||'01332 224830').trim().slice(0,30),
       sanctionsThreshold:unitFloat(env.PORTAL_RISK_SANCTIONS_THRESHOLD,0.88),
-      maxAgeHours:boundedInt(env.PORTAL_RISK_SANCTIONS_MAX_AGE_HOURS,72,1,720),
+      // 0 (the default) treats the Government list as live however long ago it last changed: it is not always updated. Set 1 to 720 hours to block on old data.
+      maxAgeHours:boundedInt(env.PORTAL_RISK_SANCTIONS_MAX_AGE_HOURS,0,0,720),
       rowFloor:boundedInt(env.PORTAL_RISK_SANCTIONS_ROW_FLOOR,40000,1,10000000),
       analytics:Object.freeze({
         apiDomain:httpsUrl(env.ANALYTICS_API_DOMAIN,'https://analyticsapi.zoho.eu','ANALYTICS_API_DOMAIN'),
