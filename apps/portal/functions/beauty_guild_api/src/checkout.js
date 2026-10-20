@@ -219,7 +219,10 @@ function registerCheckoutRoutes(app, {publicQuotesEnabled = false, enabled, getC
       });
       for (const [k, v] of Object.entries(meta)) params.set('metadata[' + k + ']', String(v).slice(0, 500));
       const key = crypto.createHash('sha256').update([b.contact?.id || req.portalUser.id, input.service, input.recordId, input.centreId,
-        JSON.stringify(b.lines.map(l => [l.priceId || l.name + ':' + l.unitPence, l.quantity])), b.prepared.fingerprint || '', Math.floor(now() / 120000)].join('|')).digest('hex').slice(0, 40);
+        JSON.stringify(b.lines.map(l => [l.priceId || l.name + ':' + l.unitPence, l.quantity])), b.prepared.fingerprint || '', Math.floor(now() / 120000),
+        // Stripe refuses a repeated key whose request differs in any way. The request carries a fresh quote reference, expiry and the
+        // member's details, so a second click, or a change of branch within two minutes, must get its own key or checkout fails (502).
+        params.toString()].join('|')).digest('hex').slice(0, 40);
       const session = await stripe('POST', '/checkout/sessions', {body: params, key: 'portal-v2-' + key});
       if (!session.id || typeof session.url !== 'string' || !session.url.startsWith('https://checkout.stripe.com/'))
         throw new HttpError(502, 'PAYMENT_UNAVAILABLE', 'Secure checkout is unavailable.');

@@ -865,3 +865,14 @@ test('resume reports a paid session and refuses other people\'s, expired and non
   assert.equal(expiredWrites(done), 0);
   assert.equal((await resumeCase(world(), {...READY, Application_Status: 'Active'})).body.code, 'NOT_PAYABLE');
 });
+
+test('paying again within two minutes, or after changing the branch, gets its own Stripe key so checkout never fails', async () => {
+  const w = unlinked(world({priceOverride: RECURRING}));
+  await withApp(w, async ({post}) => {
+    assert.equal((await post({...BUY, businessName: 'Nia', address1: '1 High Street', town: 'Leeds', postcode: 'LS1 1AA'})).status, 201);
+    assert.equal((await post({...BUY, branch: 'holistic', businessName: 'Nia', address1: '1 High Street', town: 'Leeds', postcode: 'LS1 1AA'})).status, 201);
+    assert.equal((await post({...BUY, businessName: 'Nia', address1: '2 Other Road', town: 'Leeds', postcode: 'LS1 1AA'})).status, 201);
+    const keys = w.stripePosts.map(p => p.key);
+    assert.equal(new Set(keys).size, 3);
+  }, MEM_ENV);
+});
