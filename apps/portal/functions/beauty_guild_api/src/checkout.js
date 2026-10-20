@@ -55,14 +55,46 @@ function registerCheckoutRoutes(app, {publicQuotesEnabled = false, enabled, getC
     return price;
   }
 
-  async function build(req, input, {guest = false} = {}) {
+  // A signed-in customer with no CRM Contact gets one when they press Pay or a quote is referred, so the policy, the referral and
+  // the payment all belong to a person in the CRM. Only the verified email is used to find or make the Contact; the name and address
+  // typed on the page only fill in a new one. A quote or a price check never creates one.
+  const madeContacts = new Map(), makingContact = new Map();
+  const clean = (v, n = 80) => String(v ?? '').replace(/[\u0000-\u001f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, n);
+  async function ensureContact(req, input) {
+    const user = req.portalUser, email = String(user.email || '').trim().toLowerCase();
+    // CRM search can lag a Contact made moments ago, so one made here is confirmed by id and exact email, never made twice.
+    const known = madeContacts.get(user.id);
+    if (known && known.email === email) {
+      const row = (await crm(req, 'Contacts/' + known.id))[0];
+      if (row && String(row.Email || '').trim().toLowerCase() === email) return {...row, createdNow: true};
+    }
+    if (makingContact.has(user.id)) return makingContact.get(user.id);
+    const make = (async () => {
+      const first = clean(input.firstName, 60), last = clean(input.lastName, 60) || first || email.split('@')[0].slice(0, 80);
+      const address = {Correspondence_Address_Line_1: clean(input.address1, 120), Correspondence_Address_Line_2: clean(input.address2, 120),
+        Correspondence_Town: clean(input.town, 80), Correspondence_County: clean(input.county, 80), Correspondence_Postcode: clean(input.postcode, 20)};
+      const record = {...(first ? {First_Name: first} : {}), Last_Name: last, Email: email,
+        ...Object.fromEntries(Object.entries(address).filter(([, v]) => v))};
+      const id = await crmCreate(req, 'Contacts', record);
+      if (madeContacts.size >= 500) madeContacts.delete(madeContacts.keys().next().value);
+      madeContacts.set(user.id, {id, email});
+      return {id, Email: email, First_Name: first, Last_Name: last, createdNow: true};
+    })();
+    makingContact.set(user.id, make);
+    try { return await make; } finally { makingContact.delete(user.id); }
+  }
+
+  async function build(req, input, {guest = false, createContact = false} = {}) {
     const service = SERVICES[input.service];
     if (!service) throw new HttpError(422, 'INVALID_REQUEST', 'Choose something to pay for.');
     let contact = null;
     // A guest (no account) has no contact and is never risk screened: their price is a guide, and the checks run when they pay.
     if (!guest) {
       try { contact = await resolveContact(req, crm, req.portalUser); }
-      catch (e) { if (!(service.allowNoContact && e.code === 'CONTACT_UNLINKED')) throw e; }
+      catch (e) {
+        if (!(service.allowNoContact && e.code === 'CONTACT_UNLINKED')) throw e;
+        if (createContact) contact = await ensureContact(req, input);
+      }
     }
     const prepared = await service.prepare({req, crm, contact, input, user: guest ? null : req.portalUser, risk: guest ? null : riskChecks});
     if (prepared.alreadyPaid) return {service, contact, alreadyPaid: true};
@@ -179,7 +211,11 @@ function registerCheckoutRoutes(app, {publicQuotesEnabled = false, enabled, getC
   router.post('/', send(async (req, res) => {
     if (!stripeKey.startsWith('sk_test_') || !/^https:\/\/[a-z0-9.-]+$/i.test(publicOrigin || '')) throw unavailable();
     if (!limiter(req.portalUser.id)) throw new HttpError(429, 'RATE_LIMIT', 'Too many requests. Please wait a moment and try again.');
-    const input = inputFrom(req.body || {}), b = await build(req, input);
+    const input = inputFrom(req.body || {});
+    let b = await build(req, input);
+    // Rules that stop the purchase outright, or answers still missing, record nothing and make no Contact. Anything else
+    // (a payment or a referral for the Insurance team) needs the customer to exist in the CRM first.
+    if (!b.alreadyPaid && !b.contact && b.service.allowNoContact && b.prepared?.blocked?.status !== 'INCOMPLETE') b = await build(req, input, {createContact: true});
     if (b.alreadyPaid) return res.json({alreadyPaid: true});
     if (b.prepared.blocked) {
       const blocked = b.prepared.blocked;

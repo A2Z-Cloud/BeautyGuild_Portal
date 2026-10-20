@@ -233,7 +233,7 @@ test('the membership extras are named without the word Additional', async () => 
   assert.deepEqual([ITEMS.addon_certificate.name, ITEMS.addon_badge.name, ITEMS.addon_sticker.name], ['Certificate', 'Badge', 'Window sticker']);
 });
 
-test('a signed-in member without a Contact can buy: subscription, joining fee, V1 metadata, no contact id', async () => {
+test('a signed-in member without a Contact can buy: a Contact is made first, then subscription, joining fee and V1 metadata', async () => {
   const w = unlinked(world({priceOverride: RECURRING}));
   await withApp(w, async ({post}) => {
     const r = await post({...BUY, branches: 'nails', addons: {badge: 2}});
@@ -245,7 +245,7 @@ test('a signed-in member without a Contact can buy: subscription, joining fee, V
     assert.equal(p.get('line_items[2][price]'), 'price_branch1111');
     assert.equal(p.get('line_items[3][price]'), 'price_badge44444');
     assert.equal(p.get('metadata[type]'), 'membership');
-    assert.equal(p.get('metadata[contact_id]'), '');
+    assert.equal(p.get('metadata[contact_id]'), '9000000000000000001', 'the Contact made for this customer');
     assert.equal(p.get('metadata[entry_point]'), 'public');
     assert.equal(p.get('metadata[name]'), 'Nia New');
     assert.equal(p.get('metadata[membership_level]'), 'associate');
@@ -256,7 +256,10 @@ test('a signed-in member without a Contact can buy: subscription, joining fee, V
     assert.equal(p.get('metadata[badge_amount]'), '8.00');
     assert.equal(p.get('metadata[total_amount]'), '88.00');
     assert.equal(p.get('metadata[change_type]'), 'new');
-    assert.equal(p.has('client_reference_id'), false);
+    assert.equal(p.get('client_reference_id'), '9000000000000000001');
+    const made = w.crmPosts.filter(c => c.module === 'Contacts');
+    assert.equal(made.length, 1);
+    assert.deepEqual(made[0].record, {First_Name: 'Nia', Last_Name: 'New', Email: 'alice@example.test'});
   }, MEM_ENV);
 });
 test('monthly uses the monthly price; Full non-salon net splits the zero-rated element', async () => {
@@ -469,7 +472,7 @@ test('membership with insurance: recurring membership plus one-off inline premiu
     assert.deepEqual(lineNames(p), ['Insurance - Medical Malpractice', 'Insurance - Business Equipment', 'Insurance Premium Tax (12%)']);
     assert.equal(p.get('metadata[type]'), 'membership_insurance');
     assert.equal(p.get('metadata[insurance_requested]'), 'true');
-    assert.equal(p.get('metadata[insurance_policy_id]'), '9000000000000000001');
+    assert.equal(p.get('metadata[insurance_policy_id]'), '9000000000000000002', 'the Contact is made first, so the policy is the second record');
     assert.equal(p.get('metadata[insurance_amount]'), '109.20');
     assert.equal(p.get('metadata[base_membership_amount]'), '48.60');
     // 48.60 + 10 joining + 109.20 insurance
@@ -478,7 +481,7 @@ test('membership with insurance: recurring membership plus one-off inline premiu
     assert.equal(p.get('metadata[total_amount_net]'), '163.98');
     assert.ok([...p.keys()].filter(k => k.startsWith('metadata[')).length <= 50);
     assert.ok([...p.keys()].filter(k => k.startsWith('metadata[')).every(k => p.get(k).length <= 500));
-    assert.equal(w.crmPosts[0].record.Entry_Route, 'Public Prospect');
+    assert.equal(w.crmPosts.find(c => c.module === 'Insurance_Policy').record.Entry_Route, 'Public Prospect', 'a Contact made at checkout is still a new prospect');
   }, MEM_ENV);
 });
 test('membership with a REFER quote cannot be paid for online', async () => {
@@ -792,7 +795,7 @@ test('membership with insurance uses one date for both: the membership term and 
     assert.equal(p.get('metadata[membership_expiry]'), yearEnd(start));
     assert.equal(p.get('metadata[insurance_start_date]'), start);
     assert.equal(p.get('metadata[insurance_end_date]'), yearEnd(start));
-    assert.equal(w.crmPosts[0].record.Policy_Start_Date, start);
+    assert.equal(w.crmPosts.find(c => c.module === 'Insurance_Policy').record.Policy_Start_Date, start);
   }, MEM_ENV);
 });
 test('the membership start window is 30 days, the same as insurance', async () => {
@@ -880,5 +883,46 @@ test('paying again within two minutes, or after changing the branch, gets its ow
     assert.equal((await post({...BUY, businessName: 'Nia', address1: '2 Other Road', town: 'Leeds', postcode: 'LS1 1AA'})).status, 201);
     const keys = w.stripePosts.map(p => p.key);
     assert.equal(new Set(keys).size, 3);
+  }, MEM_ENV);
+});
+
+const contactsMade = w => (w.crmPosts || []).filter(c => c.module === 'Contacts');
+test('a Contact is made when a referred quote is recorded, and the policy is linked to it', async () => {
+  const w = unlinked(world({priceOverride: RECURRING}));
+  await withApp(w, async ({post}) => {
+    const r = await post({...BUY, level: 'full_non_salon', country: 'United Kingdom', insurance: {...INS_OK, insNamedPeopleCover: true,
+      insNamedPeople: [1, 2, 3, 4, 5].map(n => ({type: 'employee', firstName: 'P' + n, lastName: 'X'}))}});
+    assert.equal(r.status, 422);
+    assert.equal(r.body.code, 'REFERRAL_REQUIRED');
+    assert.equal(contactsMade(w).length, 1);
+    const policy = w.crmPosts.find(c => c.module === 'Insurance_Policy').record;
+    assert.equal(policy.Contact?.id ?? policy.Contact, '9000000000000000001');
+    assert.equal(policy.Entry_Route, 'Public Prospect');
+  }, MEM_ENV);
+});
+test('a quote, an incomplete payment, or a purchase the rules refuse makes no Contact', async () => {
+  const w = unlinked(world({priceOverride: RECURRING}));
+  await withApp(w, async ({post, get}) => {
+    await get('service=membership&level=associate&branch=beauty&billing=annual');
+    assert.equal(contactsMade(w).length, 0, 'a price check makes none');
+    const standalone = await post({service: 'insurance', accepted: 'yes', firstName: 'Nia', lastName: 'New', country: 'United Kingdom', insurance: INS_OK});
+    assert.equal(standalone.status, 409, 'standalone insurance needs a current Full membership');
+    assert.equal(contactsMade(w).length, 0, 'a refused purchase makes none');
+  }, MEM_ENV);
+});
+test('paying twice makes one Contact, and an existing Contact is never made again', async () => {
+  const w = unlinked(world({priceOverride: RECURRING}));
+  w.external = async url => (/\/Contacts\/9\d+/.test(String(url)) ? {status: 200, ok: true, json: async () => ({data: [{id: '9000000000000000001', Email: 'alice@example.test', First_Name: 'Nia', Last_Name: 'New'}]})} : null);
+  await withApp(w, async ({post}) => {
+    assert.equal((await post({...BUY, businessName: 'Nia', address1: '1 High Street', town: 'Leeds', postcode: 'LS1 1AA'})).status, 201);
+    assert.equal((await post({...BUY, branch: 'holistic'})).status, 201);
+    assert.equal(contactsMade(w).length, 1);
+    assert.equal(contactsMade(w)[0].record.Correspondence_Address_Line_1, '1 High Street');
+    assert.equal(contactsMade(w)[0].record.Correspondence_Postcode, 'LS1 1AA');
+  }, MEM_ENV);
+  const linked = world({priceOverride: RECURRING});
+  await withApp(linked, async ({post}) => {
+    assert.equal((await post({...BUY})).status, 201);
+    assert.equal(contactsMade(linked).length, 0, 'a matched Contact is used as it is');
   }, MEM_ENV);
 });
