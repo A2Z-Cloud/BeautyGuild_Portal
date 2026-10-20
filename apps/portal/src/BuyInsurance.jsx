@@ -13,6 +13,9 @@ import {formatDate} from './format.js';
 import {validate} from './logic.mjs';
 import {stopMessages,toRequest,visibleFields} from './insuranceInputs.js';
 import {BlockedNotice,CoverSummary,InsuranceForm,useInsuranceQuote} from './InsuranceForm.jsx';
+import {useStoredState} from './storedState.js';
+import SaveApplication,{useSaveApplication} from './SaveApplication.jsx';
+import {buyDraft,noConfirmations,validStart} from './savedDraft.js';
 
 const money=pence=>'£'+(pence/100).toFixed(2);
 
@@ -20,7 +23,11 @@ const money=pence=>'£'+(pence/100).toFixed(2);
 // needs the Insurance team, or cannot be offered online, is explained here and cannot be paid for.
 export default function BuyInsurance(){
   const [who,setWho]=useState({state:'loading',firstName:'',lastName:''});
-  const [values,setValues]=useState({}),[country,setCountry]=useState(''),[accepted,setAccepted]=useState(false),[start,setStart]=useState('');
+  // The answers are kept in this tab (and saved to the account on request). Confirmation boxes are never restored.
+  const [kept,setKept]=useStoredState('insurance',{values:{},country:'',start:''},x=>({...x,values:noConfirmations(x.values),start:validStart(x.start)}));
+  const {values,country,start}=kept,[accepted,setAccepted]=useState(false);
+  const field=name=>next=>setKept(o=>({...o,[name]:typeof next==='function'?next(o[name]):next}));
+  const setValues=field('values'),setCountry=field('country'),setStart=field('start');
   const [errors,setErrors]=useState({}),[countryError,setCountryError]=useState(''),[busy,setBusy]=useState(false),[payError,setPayError]=useState('');
   useEffect(()=>{
     let alive=true;
@@ -38,6 +45,8 @@ export default function BuyInsurance(){
     }).catch(()=>{});
     return()=>{alive=false;};
   },[]);
+  const saver=useSaveApplication({signedIn:who.state==='in',route:'/insurance/buy',canSave:Boolean(country)||Object.keys(values).length>0,hint:'Answer at least one question before saving.',
+    build:()=>({...buyDraft({values,country,start}),names:{firstName:who.firstName,lastName:who.lastName}})});
   const ins=toRequest(values),enabled=INTEGRATIONS.stripeCheckout&&who.state==='in'&&Boolean(country)&&(values.insWorking||[]).length>0;
   const q=useInsuranceQuote({enabled,request:()=>({service:'insurance',country,...(start?{start}:{}),insurance:toRequest(values)}),key:JSON.stringify([country,start,ins])});
   const set=(name,value)=>{setValues(v=>({...v,[name]:value}));setErrors(e=>({...e,[name]:undefined}));};
@@ -76,6 +85,7 @@ export default function BuyInsurance(){
           {payError&&<Notice title="Payment unavailable">{payError}</Notice>}
           <button type="button" className="btn btn-primary btn-block" disabled={busy||!accepted||!(who.firstName||who.lastName)} onClick={pay}><LockKeyhole size={16}/>{busy?'Opening secure payment…':'Pay '+money(dueToday(quote))+' securely with Stripe'}</button>
           {!(who.firstName||who.lastName)&&<p className="muted">Add your name to your account before buying.</p>}</>}</>}
-    </section></div>}
+    </section>
+    <SaveApplication saver={saver} className="save-inline"/></div>}
   </div>;
 }

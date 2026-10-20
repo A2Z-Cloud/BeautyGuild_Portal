@@ -166,7 +166,7 @@ export const INSURANCE_STEPS=[
 export const visibleSteps=v=>INSURANCE_STEPS.filter(s=>!s.when||s.when(v));
 export const visibleFields=v=>visibleSteps(v).flatMap(s=>s.fields).filter(f=>!f.when||f.when(v));
 const FLAGS=['insNamedPeopleCover','insContents','insMoneyCover','insBuildingsCover','insBiCover','insPropertyAwayCover','insSalonEL','insNonSalonEL'];
-const confirmations=['insInformationAccurate','insEthicsAccepted','insDemandsNeedsAccepted','insNonAdvisedAccepted'];
+export const CONFIRMATIONS=['insInformationAccurate','insEthicsAccepted','insDemandsNeedsAccepted','insNonAdvisedAccepted'];
 // "Additional" teaching cover is only offered with an additional treatment; a stale choice is treated as none.
 export const effective=v=>v.insTeachingCover==='additional'&&!treatments(v)?{...v,insTeachingCover:''}:v;
 // The call-the-office messages that stop the customer going on (a wage roll over £125,000, a single item over £10,000).
@@ -191,7 +191,7 @@ export function toRequest(raw){
   out.insNamedPeople=has('insNamedPeople')?(v.insNamedPeople||[]).filter(p=>p.firstName||p.lastName):[];
   out.insPremisesAddress=has('insPremL1')?{l1:v.insPremL1||'',l2:v.insPremL2||'',town:v.insPremTown||'',county:v.insPremCounty||'',postcode:v.insPremPostcode||''}:{};
   out.insDeclarations=DECLARATION_EXPECTED.map((expected,i)=>{const a=v['insDecl'+(i+1)];return a==='agree'?expected:a==='disagree'?(expected==='yes'?'no':'yes'):'';});
-  for(const k of confirmations)out[k]=v[k]===true?'yes':'';
+  for(const k of CONFIRMATIONS)out[k]=v[k]===true?'yes':'';
   return out;
 }
 

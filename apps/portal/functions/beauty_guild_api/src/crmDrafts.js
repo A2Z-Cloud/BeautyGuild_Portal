@@ -95,7 +95,38 @@ function registerDraftRoutes(app,{enabled,getCurrentUser,getCrmHeaders,crmApiDom
   return r.fields;
  };
  // Same identity rule as member records: the verified Catalyst email must match exactly one CRM Contact.
- const contact=async(req)=>resolveContact(req,async(r,path)=>(await request(r,'GET',path)).data||[],await getCurrentUser(req));
+ // A verified user with no Contact gets one at first save (project decision 2026-10-18), never at sign-up. Only an exact verified email is
+ // used, a browser-supplied Contact id is never read, and a name is taken from the browser only to label a new Contact.
+ const madeContacts=new Map(),makingContact=new Map();
+ const cleanName=v=>String(v??'').replace(/[\u0000-\u001f]/g,'').trim().slice(0,80);
+ const contact=async(req,{create=false,names}={})=>{
+  const user=await getCurrentUser(req);
+  try{return await resolveContact(req,async(r,path)=>(await request(r,'GET',path)).data||[],user);}
+  catch(e){
+   if(e?.code!=='CONTACT_UNLINKED'||!user)throw e;
+   // CRM search can lag a Contact made moments ago, so one made by this function is confirmed by id and exact email instead of created twice.
+   const known=madeContacts.get(user.id);
+   if(known&&known.email===user.email){
+    const row=(await request(req,'GET','Contacts/'+known.id)).data?.[0];
+    if(row&&String(row.Email||'').trim().toLowerCase()===user.email)return row;
+   }
+   if(!create||config.draftCreateContact===false)throw e;
+   if(makingContact.has(user.id))return makingContact.get(user.id);
+   const make=(async()=>{
+    const first=cleanName(names?.firstName),last=cleanName(names?.lastName)||first||user.email.split('@')[0].slice(0,80);
+    let out;
+    try{out=await request(req,'POST','Contacts',{data:[{...(first?{First_Name:first}:{}),Last_Name:last,Email:user.email}]});}
+    catch(err){if(err?.code==='REVISION_CONFLICT')fail('CONTACT_AMBIGUOUS','Your account needs manual verification before an application can be saved.',409);throw err;}
+    const id=out.data?.[0]?.details?.id;
+    if(!id||out.data[0].status!=='success')fail('CONTACT_UNCONFIRMED','CRM did not confirm your account details. Nothing has been saved.',502);
+    if(madeContacts.size>=500)madeContacts.delete(madeContacts.keys().next().value);
+    madeContacts.set(user.id,{id:String(id),email:user.email});
+    return {id:String(id),Email:user.email,First_Name:first,Last_Name:last};
+   })();
+   makingContact.set(user.id,make);
+   try{return await make;}finally{makingContact.delete(user.id);}
+  }
+ };
  // Accreditation keeps its V1 record set (no Journey_ID or Notes); see accreditationDrafts.js.
  const accreditation=createAccreditation({request,listCourses,...(sleep?{sleep}:{})});
  const findByJourney=async(req,module,journeyId,contactId)=>{
@@ -164,9 +195,11 @@ function registerDraftRoutes(app,{enabled,getCurrentUser,getCrmHeaders,crmApiDom
   if(update.data?.[0]?.status!=='success')fail('SAVE_INCOMPLETE','CRM did not confirm the last step.',502);
   return {id:row.id,service:body.service,journeyId:body.journeyId,revision:next.revision,step:body.step,savedAt:next.savedAt,answers:body.answers};
  };
- const withAuth=fn=>async(req,res,next)=>{try{
+ const CREATES_CONTACT=['membership','insurance','combined'];
+ const withAuth=(fn,{createFor=false,emptyIfUnlinked=false}={})=>async(req,res,next)=>{try{
   if(!enabled)fail('DRAFTS_DISABLED','CRM drafts are not enabled.',503);
-  req.draftContact=await contact(req);
+  try{req.draftContact=await contact(req,{create:createFor&&CREATES_CONTACT.includes(req.body?.service),names:req.body?.contact});}
+  catch(e){if(emptyIfUnlinked&&e?.code==='CONTACT_UNLINKED')return res.json({drafts:[]});throw e;}
   await fn(req,res);
  }catch(e){next(e);}};
  const gateAccreditation=()=>{if(!config.accreditationEnabled)fail('ACCREDITATION_DISABLED','Accreditation applications are not available yet.',503);};
@@ -182,7 +215,7 @@ function registerDraftRoutes(app,{enabled,getCurrentUser,getCrmHeaders,crmApiDom
   }
   const result=await writeOne(req,kind(d.service),d,req.draftContact);
   res.status(201).json({draft:result});
- }));
+ },{createFor:true}));
  router.get('/',withAuth(async(req,res)=>{
   const drafts=[],perModule={};
   for(const [service,module] of Object.entries(SERVICES)){
@@ -210,7 +243,7 @@ function registerDraftRoutes(app,{enabled,getCurrentUser,getCrmHeaders,crmApiDom
   }
   if(config.accreditationEnabled)drafts.push(...await accreditation.list(req,req.draftContact));
   res.json({drafts:drafts.sort((a,b)=>String(b.updatedAt).localeCompare(String(a.updatedAt)))});
- }));
+ },{emptyIfUnlinked:true}));
  async function combined(req,id){
   const membership=ensureOwnership(await detail(req,'Deals',id),req.draftContact.id);
   const insurance=await findByJourney(req,'Insurance_Policy',membership.Journey_ID,req.draftContact.id);

@@ -7,6 +7,8 @@ import {Notice,PageHeading} from './UiParts.jsx';
 import {INTEGRATIONS,portalApi} from './services/api.js';
 import PricePanel from './PricePanel.jsx';
 import {useStoredState} from './storedState.js';
+import SaveApplication,{useSaveApplication} from './SaveApplication.jsx';
+import {joinDraft} from './savedDraft.js';
 import {dueToday} from './priceSummary.js';
 import {COUNTRY_OPTIONS} from './JourneyConfig.js';
 import {countryFor} from './prefill.js';
@@ -48,6 +50,8 @@ export default function BuyMembership(){
   const [d,setD]=useStoredState('membership_details',EMPTY_DETAILS),[showMissing,setShowMissing]=useState(false);
   const missing=missingDetails(d),setDetail=patch=>setD(o=>({...o,...patch}));
   const [iErrors,setIErrors]=useState({}),[countryError,setCountryError]=useState('');
+  const saver=useSaveApplication({signedIn:who.state==='in',route:'/membership/buy',canSave:Boolean(f.level),hint:'Choose your membership level before saving.',
+    build:()=>({...joinDraft({f,d,iv,country}),names:{firstName:(d.firstName||who.firstName||'').trim(),lastName:(d.lastName||who.lastName||'').trim()}})});
   const guest=who.state==='out'&&INTEGRATIONS.publicQuotes;
   const loginTo='/account/checkpoint?returnTo='+encodeURIComponent('/membership/buy')+'&intent=complete';
   const [q,setQ]=useState({loading:false,quote:null,error:''}),[busy,setBusy]=useState(false),[payError,setPayError]=useState('');
@@ -154,8 +158,9 @@ export default function BuyMembership(){
           <Link className="btn btn-primary btn-block" to={loginTo}><LockKeyhole size={16}/> Sign in or create an account to continue</Link></>:
         <button type="button" className="btn btn-primary btn-block" disabled={busy||!f.accepted||priced.payable===false} onClick={pay}><LockKeyhole size={16}/>{busy?'Opening secure payment…':'Pay '+money(dueToday(priced))+' securely with Stripe'}</button>}
         </>}
-    </section></div>
-    <PricePanel quote={shown} loading={q.loading||(f.insurance&&iq.loading)} error={f.insurance&&iq.error?iq.error:q.error} ready={Boolean(ready)} emptyText="Choose a membership level and branch to see your price."
-      note={insuranceWaiting?'Insurance is not included yet. Answer the insurance questions to add it.':''} billing={f.billing} onBilling={b=>set({billing:b})} start={f.start}/></div>}
+    </section>
+    {!previousId&&<SaveApplication saver={saver} className="save-main"/>}</div>
+    <div className="buy-side">{!previousId&&<SaveApplication saver={saver} className="save-side"/>}<PricePanel quote={shown} loading={q.loading||(f.insurance&&iq.loading)} error={f.insurance&&iq.error?iq.error:q.error} ready={Boolean(ready)} emptyText="Choose a membership level and branch to see your price."
+      note={insuranceWaiting?'Insurance is not included yet. Answer the insurance questions to add it.':''} billing={f.billing} onBilling={b=>set({billing:b})} start={f.start}/></div></div>}
   </div>;
 }

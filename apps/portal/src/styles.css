@@ -352,3 +352,13 @@ img,svg,video,iframe{max-width:100%}
 
 /* UAT qualification form: future-date message */
 .school-ops-form .field-error{color:var(--danger,#b42318);font-size:.9rem;margin:.25rem 0 0}
+
+/* Save my application (Join the Guild and Buy insurance) */
+.buy-side{align-self:stretch;display:flex;flex-direction:column;gap:12px}
+.save-card{background:#fff;border:1px solid #eee6eb;border-radius:14px;padding:14px 16px;margin-top:16px}
+.buy-side .save-card{margin-top:0}
+.save-card .muted{margin:8px 0 0;font-size:.9rem}
+.save-card .save-ok{margin:8px 0 0;color:#146c43;font-weight:600}
+.save-card .error{margin:8px 0 0}
+.save-main{display:none}
+@media(max-width:900px){.buy-side{display:contents}.save-side{display:none}.save-main{display:block}}
