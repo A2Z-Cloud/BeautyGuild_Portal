@@ -362,3 +362,5 @@ img,svg,video,iframe{max-width:100%}
 .save-card .error{margin:8px 0 0}
 .save-main{display:none}
 @media(max-width:900px){.buy-side{display:contents}.save-side{display:none}.save-main{display:block}}
+/* Branch logos (supplied by the Guild). */
+.membership-journey .branch-card{min-height:76px;justify-content:center}.membership-journey .branch-logo{height:44px;width:auto;max-width:100%}.membership-journey .branch-logo-small{height:30px;width:auto}

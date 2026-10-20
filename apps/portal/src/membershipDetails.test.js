@@ -21,8 +21,8 @@ test('the request carries the trading name that is showing',()=>{
   const r=detailsRequest({...EMPTY_DETAILS,firstName:' A ',lastName:'B',postcode:'LS1 1AA'});
   assert.equal(r.businessName,'A B');assert.equal(r.firstName,'A');assert.equal(r.postcode,'LS1 1AA');
 });
-test('branches have no logo until one is set, and names resolve',()=>{
+test('the four branches have their logos, and names resolve',()=>{
   assert.equal(BRANCHES.length,4);
-  assert.ok(BRANCHES.every(b=>b.logo===null));
+  assert.ok(BRANCHES.every(b=>typeof b.logo==='string'&&b.logo.endsWith('.png')));
   assert.equal(branchName('nails'),'Nail Technicians');
 });
