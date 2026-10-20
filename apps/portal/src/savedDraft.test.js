@@ -95,3 +95,42 @@ test('after a successful payment the matching draft is discarded and the tab is 
   assert.equal(await finishPaidDraft(other,'membership',t),false);assert.equal(other.calls.length,0);
   assert.equal(await finishPaidDraft(fakeApi({discardDraft:async()=>{throw new Error('x');}}),'insurance',(()=>{const u=fakeStorage();writeStored('draft',{id:'6',service:'insurance'},u);return u;})()),false);
 });
+
+// Emailed sign-up link: answers wait in localStorage and are restored once in the new tab.
+import {clearWaiting,readWaiting,restoreWaiting,safeEntries,snapshotStored,writeWaiting} from './savedDraft.js';
+const T0=1_700_000_000_000,HOUR=36e5;
+const entries=()=>({membership:{...F},membership_details:D,membership_insurance:{iv:IV,country:'England'}});
+test('the snapshot copies the buy answers but not the pending flag, and strips agreement and confirmations',()=>{
+  const s=fakeStorage();writeStored('membership',F,s);writeStored('membership_insurance',{iv:IV,country:'England'},s);writeStored('save_pending',{pending:true},s);s.setItem('other','x');
+  const snap=snapshotStored(s);
+  assert.deepEqual(Object.keys(snap).sort(),['membership','membership_insurance']);
+  const safe=safeEntries(snap);
+  assert.equal(safe.membership.accepted,false);for(const c of CONFIRMATIONS)assert.equal(safe.membership_insurance.iv[c],undefined);
+  const l=fakeStorage();writeWaiting('/membership/buy',snap,l,T0);
+  const text=l.getItem('bg_save_waiting');assert.ok(!text.includes('insInformationAccurate'));assert.ok(!text.includes('"accepted":true'));
+});
+test('waiting answers come back only for the matching page, once, and within 24 hours',()=>{
+  const l=fakeStorage();
+  assert.equal(readWaiting('/membership/buy',l,T0),null);
+  writeWaiting('/membership/buy',entries(),l,T0);
+  assert.equal(readWaiting('/insurance/buy',l,T0+HOUR),null,'another page does not restore it');
+  assert.ok(l.getItem('bg_save_waiting'),'and does not remove it');
+  assert.equal(readWaiting('/membership/buy',l,T0+23*HOUR).service,'membership');
+  assert.equal(readWaiting('/membership/buy',l,T0+25*HOUR),null);
+  assert.equal(l.getItem('bg_save_waiting'),null,'expired answers are removed');
+});
+test('restoring writes the tab state, flags one save, and cannot restore twice',()=>{
+  const l=fakeStorage(),s=fakeStorage();writeWaiting('/membership/buy',entries(),l,T0);
+  assert.equal(restoreWaiting('/insurance/buy',s,l,T0),false);assert.equal(s.data.size,0);
+  assert.equal(restoreWaiting('/membership/buy',s,l,T0),true);
+  assert.equal(readStored('membership',{},s).level,'full_salon');assert.equal(readStored('membership',{},s).accepted,false);
+  assert.equal(takeSavePending(s),true);
+  assert.equal(restoreWaiting('/membership/buy',fakeStorage(),l,T0),false,'already restored');
+});
+test('damaged waiting data is removed and clearing removes it',()=>{
+  const l=fakeStorage();l.setItem('bg_save_waiting','{nope');
+  assert.equal(readWaiting('/membership/buy',l,T0),null);assert.equal(l.getItem('bg_save_waiting'),null);
+  writeWaiting('/insurance/buy',{insurance:{values:IV,country:'Wales',start:''}},l,T0);clearWaiting(l);assert.equal(l.getItem('bg_save_waiting'),null);
+  const blocked={getItem(){throw new Error('b');},setItem(){throw new Error('b');},removeItem(){throw new Error('b');}};
+  assert.doesNotThrow(()=>{writeWaiting('/membership/buy',{},blocked);readWaiting('/membership/buy',blocked);clearWaiting(blocked);});
+});
