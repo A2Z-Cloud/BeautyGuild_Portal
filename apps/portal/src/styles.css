@@ -364,3 +364,5 @@ img,svg,video,iframe{max-width:100%}
 @media(max-width:900px){.buy-side{display:contents}.save-side{display:none}.save-main{display:block}}
 /* Branch logos (supplied by the Guild). */
 .membership-journey .branch-card{min-height:76px;justify-content:center}.membership-journey .branch-logo{height:44px;width:auto;max-width:100%}.membership-journey .branch-logo-small{height:30px;width:auto}
+/* Insurance application sent to the Insurance team (Referred or Stopped) */
+.referral-panel{border:1px solid #cfe7d6;background:#f4fbf6;border-radius:12px;padding:20px 22px;margin:16px 0}.referral-panel.stopped{border-color:#f7d4e6;background:#fff6fa}.referral-panel h3{margin:0 0 10px}.referral-panel p{font-size:13px;line-height:1.6;color:#46404a;margin:0 0 10px}.referral-reference span{font-weight:700}.referral-reference strong{overflow-wrap:anywhere}.referral-reference small{display:block;margin-top:4px}

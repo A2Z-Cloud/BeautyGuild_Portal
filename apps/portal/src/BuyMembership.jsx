@@ -7,6 +7,7 @@ import {Notice,PageHeading} from './UiParts.jsx';
 import {INTEGRATIONS,portalApi} from './services/api.js';
 import PricePanel from './PricePanel.jsx';
 import {useStoredState} from './storedState.js';
+import {referralFrom,sameAnswers} from './referral.js';
 import SaveApplication,{useSaveApplication} from './SaveApplication.jsx';
 import {joinDraft} from './savedDraft.js';
 import {dueToday} from './priceSummary.js';
@@ -16,7 +17,7 @@ import {START_WINDOW_DAYS,isFuture,startLimits} from './startDate.js';
 import {formatDate} from './format.js';
 import {validate} from './logic.mjs';
 import {toRequest,visibleFields} from './insuranceInputs.js';
-import {BlockedNotice,InsuranceForm,useInsuranceQuote} from './InsuranceForm.jsx';
+import {BlockedNotice,InsuranceForm,ReferralPanel,useInsuranceQuote} from './InsuranceForm.jsx';
 import AddressLookup from './components/AddressLookup.jsx';
 import {BRANCHES} from './branches.js';
 import {EMPTY_DETAILS,DETAIL_LABELS,detailsRequest,missingDetails,tradingNameOf} from './membershipDetails.js';
@@ -85,6 +86,9 @@ export default function BuyMembership(){
   },[who.state,f.level,f.branch,f.billing,f.start,f.branches.join(','),addonText,previousId,f.insurance]);// eslint-disable-line react-hooks/exhaustive-deps
   // With insurance the answers are too large for a query string, so the server prices them from a POST.
   const ins=toRequest(iv);
+  // An insurance application the Insurance team now holds is kept with the answers it was for, so a refresh still shows it.
+  const [sent,setSent]=useStoredState('membership_referral',{outcome:null});
+  const answersKey=JSON.stringify([f.level,f.branch,f.billing,f.start,f.branches,f.addons,previousId,country,ins]),referral=f.insurance&&sameAnswers(sent.outcome,answersKey)?sent.outcome:null;
   const iq=useInsuranceQuote({enabled:INTEGRATIONS.stripeCheckout&&(who.state==='in'||guest)&&ready&&f.insurance&&Boolean(country)&&(iv.insWorking||[]).length>0,send:guest?portalApi.publicQuote:portalApi.checkoutQuotePost,
     request:()=>({...base(),addons:f.addons,country,insurance:toRequest(iv)}),key:JSON.stringify([f.level,f.branch,f.billing,f.start,f.branches,f.addons,previousId,country,ins])});
   const setI=(name,value)=>{setIv(v=>({...v,[name]:value}));setIErrors(e=>({...e,[name]:undefined}));};
@@ -102,7 +106,11 @@ export default function BuyMembership(){
       const r=await portalApi.startCheckout({...base(),addons:f.addons,accepted:'yes',...detailsRequest(d),...(f.insurance?{country,insurance:ins}:{})});
       if(!/^https:\/\/checkout\.stripe\.com\//.test(r.checkoutUrl))throw new Error('We could not open the payment page. Please try again.');
       window.location.assign(r.checkoutUrl);
-    }catch(e){setPayError(e.message);setBusy(false);}
+    }catch(e){
+      const outcome=f.insurance?referralFrom(e):null;
+      if(outcome){setSent({outcome:{...outcome,key:answersKey}});setPayError('');}else setPayError(e.message);
+      setBusy(false);
+    }
   }
   // With insurance ticked the payable price is the one that includes it; until that is ready the panel shows the membership alone.
   const priced=f.insurance?iq.quote:q.quote,quote=priced||q.quote,shown=quote,insuranceWaiting=f.insurance&&!iq.quote;
@@ -150,13 +158,15 @@ export default function BuyMembership(){
     <section className="surface padded buy-section"><h2>Review and pay</h2>
       {!ready?<p className="muted">Choose a membership level and branch to see your price.</p>:insuranceWaiting?<p className="muted">Answer the insurance questions, including where you are based, so your price includes them.</p>:!priced?<p className="muted" role="status">{(q.error)?q.error:'Working out your price…'}</p>:<>
         {f.insurance&&<BlockedNotice quote={priced}/>}
-        <p className="muted">You pay {money(dueToday(priced))} today.</p>
-        {f.insurance&&<PolicyDocuments values={iv}/>}
+        {!referral&&<p className="muted">You pay {money(dueToday(priced))} today.</p>}
+        {f.insurance&&!referral&&<PolicyDocuments values={iv}/>}
+        {referral?<ReferralPanel outcome={referral}><p>Your membership has not been taken either. To join now, choose "No, membership only" above, or change your insurance answers.</p></ReferralPanel>:<>
         <label className="check-choice"><input type="checkbox" checked={f.accepted} onChange={e=>set({accepted:e.target.checked})}/><span>I accept the <a href={LEGAL.ethics.href} target="_blank" rel="noopener noreferrer">Code of Ethics</a> and the Guild's <a href={LEGAL.terms.href} target="_blank" rel="noopener noreferrer">Terms of Business</a> and <a href={LEGAL.privacy.href} target="_blank" rel="noopener noreferrer">Privacy Policy</a>.</span></label>
         {payError&&<Notice title="Payment unavailable">{payError}</Notice>}
         {guest?<><p className="muted">To pay you need an account. Your answers are kept while you sign in or sign up. Final checks, including any insurance checks, are done when you pay.</p>
           <Link className="btn btn-primary btn-block" to={loginTo}><LockKeyhole size={16}/> Sign in or create an account to continue</Link></>:
         <button type="button" className="btn btn-primary btn-block" disabled={busy||!f.accepted||priced.payable===false} onClick={pay}><LockKeyhole size={16}/>{busy?'Opening secure payment…':'Pay '+money(dueToday(priced))+' securely with Stripe'}</button>}
+        </>}
         </>}
     </section>
     {!previousId&&<SaveApplication saver={saver} className="save-main"/>}</div>

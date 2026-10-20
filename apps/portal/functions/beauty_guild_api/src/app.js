@@ -85,7 +85,7 @@ function createApp({
   app.use((req, res, next) => next(new HttpError(404, 'NOT_FOUND', 'Not found.')));
   // eslint-disable-next-line no-unused-vars
   app.use((err, req, res, next) => {
-    if (err instanceof HttpError) return res.status(err.status).json({ error: err.message, code: err.code });
+    if (err instanceof HttpError) return res.status(err.status).json({ error: err.message, code: err.code, ...(err.details ? { details: err.details } : {}) });
     log('Unhandled error', err && err.name, err && err.message);
     return res.status(500).json({ error: 'Something went wrong.', code: 'INTERNAL' });
   });

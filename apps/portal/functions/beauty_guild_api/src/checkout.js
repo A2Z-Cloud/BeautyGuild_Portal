@@ -119,12 +119,12 @@ function registerCheckoutRoutes(app, {publicQuotesEnabled = false, enabled, getC
   async function recordReferral(req, b) {
     const key = crypto.createHash('sha256').update([req.portalUser.id, b.prepared.fingerprint || '', b.prepared.blocked.status].join('|')).digest('hex');
     const hit = referrals.get(key);
-    if (hit && now() - hit.at < ATTEMPT_TTL) { await hit.promise; return; }
+    if (hit && now() - hit.at < ATTEMPT_TTL) return hit.promise;
     if (!insuranceMinute(req.portalUser.id) || !insuranceHour(req.portalUser.id)) throw new HttpError(429, 'RATE_LIMIT', 'Too many insurance attempts. Please wait a few minutes and try again.');
     const promise = b.prepared.refer((module, record) => crmCreate(req, module, record));
     referrals.set(key, {at: now(), promise});
     promise.catch(() => { if (referrals.get(key)?.promise === promise) referrals.delete(key); });
-    await promise;
+    return promise;
   }
 
   const send = fn => async (req, res, next) => { try { await fn(req, res); } catch (e) { next(e); } };
@@ -183,9 +183,11 @@ function registerCheckoutRoutes(app, {publicQuotesEnabled = false, enabled, getC
     if (b.alreadyPaid) return res.json({alreadyPaid: true});
     if (b.prepared.blocked) {
       const blocked = b.prepared.blocked;
-      if (blocked.status !== 'INCOMPLETE' && b.prepared.refer) await recordReferral(req, b);
+      const recorded = blocked.status !== 'INCOMPLETE' && b.prepared.refer ? await recordReferral(req, b) : null;
+      // What was recorded is returned so the portal can confirm it; only the id and the status, never CRM text.
+      const details = recorded?.policyId ? {reference: String(recorded.policyId), status: blocked.status === 'STOP' ? 'Stopped' : 'Referred'} : undefined;
       throw new HttpError(422, 'REFERRAL_REQUIRED', blocked.status === 'INCOMPLETE' ? blocked.reasons.join(' ')
-        : blocked.riskMessage || 'This insurance quote needs a review by the Insurance team, so it cannot be paid for online. We will be in touch.');
+        : blocked.riskMessage || 'This insurance quote needs a review by the Insurance team, so it cannot be paid for online. We will be in touch.', details);
     }
     // Reuse a session already started for this record rather than create a second charge.
     if (b.prepared.existingSessionId) {

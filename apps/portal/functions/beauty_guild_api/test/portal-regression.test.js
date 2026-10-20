@@ -94,20 +94,32 @@ test('Document download denies unauthorized record even if fileId is known',asyn
   assert.equal(result.status,404);
  });
 });
-test('an insurance application the Insurance team is reviewing (Referred) is not shown to the member as a policy',async()=>{
+test('a Referred insurance application is shown to its owner read-only as With the Insurance team; Stopped stays hidden',async()=>{
+ const owner={id:'1011174000000000001'},other={id:'1011174000000000009'};
+ const rows={
+  '1':{id:'1',Policy_Type:'Salon',Application_Status:'Active',Contact:owner},
+  '2':{id:'2',Policy_Type:'Salon',Application_Status:'Referred',Risk_Status:'Referred',Quoted_Amount:120,Quote_Expiry:'2099-01-01',Stripe_Checkout_Session_ID:'cs_x',Contact:owner},
+  '3':{id:'3',Policy_Type:'Salon',Application_Status:'Referred',Risk_Status:'Stopped',Contact:owner}};
  const fetchImpl=async url=>{
   url=String(url);
   const json=body=>({status:200,ok:true,json:async()=>body});
-  if(url.includes('Contacts/search'))return json({data:[{id:'1011174000000000001',Email:'alice@example.test'}]});
-  if(url.includes('Insurance_Policy/search'))return json({data:[
-   {id:'1',Policy_Type:'Salon',Application_Status:'Active',Contact:{id:'1011174000000000001'}},
-   {id:'2',Policy_Type:'Salon',Application_Status:'Referred',Contact:{id:'1011174000000000001'}}]});
-  if(url.includes('Insurance_Policy/1011174000000000002'))return json({data:[{id:'1011174000000000002',Policy_Type:'Salon',Application_Status:'Referred',Contact:{id:'1011174000000000001'}}]});
+  if(url.includes('Contacts/search'))return json({data:[{id:owner.id,Email:'alice@example.test'}]});
+  if(url.includes('Insurance_Policy/search'))return json({data:Object.values(rows)});
+  const m=url.match(/Insurance_Policy\/(\d+)\?/);
+  if(m)return json({data:[{...rows[m[1].slice(-1)]||rows['2'],id:m[1],Contact:m[1].endsWith('7')?other:owner,...(m[1].endsWith('3')?rows['3']:m[1].endsWith('2')?rows['2']:{})}]});
   return json({data:[]});
  };
  await withApp({fetchImpl},async({call})=>{
   const list=await call('/portal/records/?kind=insurance');
-  assert.deepEqual(list.body.records.map(r=>r.id),['1']);
-  assert.equal((await call('/portal/records/insurance/1011174000000000002')).status,404);
+  assert.deepEqual(list.body.records.map(r=>[r.id,r.status]),[['1','Active'],['2','With the Insurance team']]);
+  const review=list.body.records[1];
+  assert.deepEqual([review.underReview,review.canPay,review.quotedAmount],[true,false,null]);
+  const one=await call('/portal/records/insurance/1011174000000000002');
+  assert.equal(one.status,200);
+  assert.deepEqual([one.body.record.status,one.body.record.underReview,one.body.record.canPay],['With the Insurance team',true,false]);
+  assert.equal((await call('/portal/records/insurance/1011174000000000003')).status,404);
+  assert.equal((await call('/portal/records/insurance/1011174000000000007')).status,404);
+  const summary=await call('/portal/records/summary');
+  assert.equal(summary.body.summary.insurance,2);
  });
 });

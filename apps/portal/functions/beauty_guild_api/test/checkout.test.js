@@ -398,6 +398,9 @@ test('a REFER or STOP quote is not payable, never reaches Stripe, and is recorde
       const r = await post({...INSURE, insurance});
       assert.equal(r.status, 422, status);
       assert.equal(r.body.code, 'REFERRAL_REQUIRED');
+      assert.deepEqual(Object.keys(r.body.details).sort(), ['reference', 'status']);
+      assert.equal(r.body.details.status, status === 'REFER' ? 'Referred' : 'Stopped');
+      assert.match(r.body.details.reference, /^\d+$/);
     }
     assert.equal(w.stripePosts.length, 0);
     const policies = w.crmPosts.filter(c => c.module === 'Insurance_Policy').map(c => c.record);
@@ -621,6 +624,8 @@ test('a sanctions match: not payable, the customer is told to contact the Guild,
     assert.equal(r.body.code, 'REFERRAL_REQUIRED');
     assert.equal(r.body.error, 'We cannot complete this online. Please contact the Guild on 01332 224830.');
     assert.ok(!/sanction|secret|alice/i.test(JSON.stringify(r.body)), 'nothing about the match reaches the customer');
+    assert.deepEqual(r.body.details, {reference: r.body.details.reference, status: 'Referred'});
+    assert.ok(r.body.details.reference);
     assert.equal(w.stripePosts.length, 0);
     const policy = w.crmPosts.find(c => c.module === 'Insurance_Policy').record;
     assert.deepEqual([policy.Application_Status, policy.Risk_Status], ['Referred', 'Referred']);
@@ -697,6 +702,7 @@ test('an incomplete application (a postcode that is not a postcode) is the membe
     const r = await post({...INSURE, insurance: {...SALON_PREMISES, insPremisesAddress: {l1: '1 High St', postcode: 'HELLO'}}});
     assert.equal(r.status, 422);
     assert.match(r.body.error, /valid UK postcode/);
+    assert.equal(r.body.details, undefined);
     assert.equal(w.crmPosts, undefined);
   }, RISK_ENV);
 });
