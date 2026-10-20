@@ -251,3 +251,20 @@ test('an optional age limit still refers old data when one is set', async () => 
   assert.equal(r.results[0].status, 'REFER');
   assert.match(r.audits[0].detail, /out of date/);
 });
+
+test('a common name is not stopped by a different person who shares only the first name, a lookalike surname or an initial', () => {
+  const row = (id, name, type = 'Primary name') => ({'Unique ID': id, 'OFSI Group ID': id, 'Designation Type': 'Individual', 'Name 1': name, 'Name type': type, 'Alias strength': 'good'});
+  // The three entries returned for "Mohammad Khawar" on Development.
+  const groups = groupRows([row('AFG0129', 'Khair Mohammad', 'Alias'), row('GIM0014', 'Mohammed K'), row('CTI0053', 'Adbelbasit Hamza Elhassan Mohamed Khair')]);
+  assert.deepEqual(screenSubject({name: 'Mohammad Khawar'}, groups), [], 'none of the three is a credible match');
+  assert.deepEqual(screenSubject({name: 'Khawar Mohammad'}, groups), [], 'order does not change that');
+  // Real matches still match: spelling variants, a reversed order, a missing middle name and an initial for a middle name.
+  const real = groupRows([row('R1', 'Mohammed Kawar'), row('R2', 'Mohammad Khawar Ali'), row('R3', 'John Michael Smith')]);
+  const ids = n => screenSubject({name: n}, real).map(h => h.id);
+  assert.ok(ids('Mohammad Khawar').includes('R1'), 'Kawar is close enough to Khawar');
+  assert.ok(ids('Mohammad Khawar').includes('R2'), 'a missing third name');
+  assert.ok(ids('John M Smith').includes('R3'), 'an initial for a middle name');
+  assert.ok(ids('Smith John').includes('R3'), 'reversed');
+  assert.ok(nameScore(tokens('Mohammad K'), tokens('Mohammed K')) >= 0.95, 'identical initials still agree');
+  assert.ok(nameScore(tokens('Mohammad Khawar'), tokens('Mohammed K')) < 0.7, 'an initial is not a surname');
+});

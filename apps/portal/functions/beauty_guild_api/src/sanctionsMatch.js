@@ -17,7 +17,9 @@ const VARIANTS = [
 ];
 const CANON = new Map();
 for (const group of VARIANTS) for (const w of group) CANON.set(w, group[0]);
-const MIN_TOKEN = 0.84;
+// Two different words must be this alike to count as the same name word. 0.88 keeps spelling variants (Smith and Smyth score 0.89) and
+// drops different names that merely look similar (Khawar and Khair score 0.88).
+const MIN_TOKEN = 0.88;
 
 // "José  O'Brien-Smith" -> ['jose', 'o', 'brien', 'smith']. Words with no Latin letters or digits vanish.
 function tokens(value) {
@@ -49,13 +51,17 @@ function jaroWinkler(a, b) {
 }
 function tokenSimilarity(a, b) {
   if (a === b || (CANON.has(a) && CANON.get(a) === CANON.get(b))) return 1;
-  if (a.length === 1 || b.length === 1) return a[0] === b[0] ? 0.85 : 0;
+  // An initial is not evidence of the same name: "K" must never stand in for Khawar. Two identical initials are handled by a === b above.
+  if (a.length === 1 || b.length === 1) return 0;
   return jaroWinkler(a, b);
 }
 
 // 0..1. Every word of the shorter name must match for a middle-name difference to be forgiven, and
 // then only when that shorter name has at least two words (a lone surname never matches a full name).
-function nameScore(subject, candidate) {
+// Initials are dropped from a name that has at least two full words (they stand for middle names), and kept otherwise.
+const withoutInitials = words => { const full = words.filter(w => w.length > 1); return full.length >= 2 ? full : words; };
+function nameScore(subjectWords, candidateWords) {
+  const subject = withoutInitials(subjectWords), candidate = withoutInitials(candidateWords);
   if (!subject.length || !candidate.length) return 0;
   const pairs = [];
   subject.forEach((s, i) => candidate.forEach((c, j) => { const sim = tokenSimilarity(s, c); if (sim >= MIN_TOKEN) pairs.push({i, j, sim}); }));

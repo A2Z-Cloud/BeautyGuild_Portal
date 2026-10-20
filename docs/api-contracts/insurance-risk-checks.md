@@ -58,3 +58,8 @@ Off by default. `PORTAL_DIAGNOSTICS_ENABLED=true` plus an allow-list: `PORTAL_DI
 - The sanctions query is a bulk export job, so a first screening of a new name takes a few seconds. Repeats are cached.
 - Business names are not collected by the insurance form today, so only people are screened.
 - The existing insurance form text after a blocked quote ("You cannot pay for this cover online. Please contact the Guild Insurance team...") follows the new wording; a later pass can tidy the duplication.
+
+
+## Name matching (false positives)
+
+A name is compared word by word. Two different words count as the same name word only when they score at least 0.88 (spelling variants such as Smith and Smyth pass, lookalike surnames such as Khawar and Khair do not). An initial never stands in for a full word, and initials are ignored in a name that has two full words (they stand for middle names). Reversed order, a missing middle name and transliteration variants (Mohammad, Mohammed, Mohamed) still match. This stopped "Mohammad Khawar" being referred because of "Khair Mohammad", "Mohammed K" and a five-word entry containing "Mohamed Khair". Existing members are also screened in the CRM.
