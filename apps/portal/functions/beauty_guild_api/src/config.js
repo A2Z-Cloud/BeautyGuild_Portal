@@ -38,6 +38,8 @@ function loadConfig(env = process.env) {
     diagnosticsDomains:String(env.PORTAL_DIAGNOSTICS_DOMAINS||'').split(',').map(s=>s.trim().toLowerCase().replace(/^@/,'')).filter(d=>/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(d)),
     crmDraftsEnabled:env.PORTAL_CRM_DRAFTS_ENABLED === 'true',
     draftStatus:String(env.PORTAL_CRM_DRAFT_STATUS||'Draft'),
+    // A verified user with no CRM Contact gets one at first save. Set to 'false' to refuse instead.
+    draftCreateContact:env.PORTAL_CRM_DRAFT_CREATE_CONTACT !== 'false',
     accreditationEnabled:env.PORTAL_CRM_DRAFTS_ENABLED === 'true' && env.PORTAL_CRM_ACCREDITATION_ENABLED === 'true',
     dealStage:String(env.PORTAL_CRM_DRAFT_DEAL_STAGE||''),
     // Journey_ID should be a unique CRM field so a repeated save cannot create a duplicate. Set this to 'false' only on a test system.
