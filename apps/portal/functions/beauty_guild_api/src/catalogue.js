@@ -182,10 +182,10 @@ async function insuranceLines({req, contact, input, member, risk, start, end}) {
   return {
     inline, blocked, quote, fingerprint: JSON.stringify([country, ins, start]),
     beforePay: (create, extra = {}) => insurance.createRecords(create, {contactId: contact?.id || '', membershipDealId: member?.id || null, ins, quote, start, end,
-      entryRoute: contact ? 'Existing Member' : 'Public Prospect', termsAccepted: input.accepted === 'yes', audits: screening.audits, ...extra}),
+      entryRoute: contact && !contact.createdNow ? 'Existing Member' : 'Public Prospect', termsAccepted: input.accepted === 'yes', audits: screening.audits, ...extra}),
     // A REFER or STOP is recorded in the CRM for the Insurance team, never sent to Stripe (INCOMPLETE is the member's to fix).
     refer: blocked && blocked.status !== 'INCOMPLETE' ? create => insurance.createRecords(create, {contactId: contact?.id || '', membershipDealId: member?.id || null, ins, quote, start, end,
-      entryRoute: contact ? 'Existing Member' : 'Public Prospect', termsAccepted: input.accepted === 'yes', audits: screening.audits,
+      entryRoute: contact && !contact.createdNow ? 'Existing Member' : 'Public Prospect', termsAccepted: input.accepted === 'yes', audits: screening.audits,
       referral: {status: blocked.status === 'STOP' ? 'Stopped' : 'Referred', summary}}) : null,
     metadata: ids => ({
       insurance_start_date: start, insurance_end_date: end, insurance_amount: pounds(quote.totalPence), insurance_net_amount: pounds(quote.netPence), insurance_ipt_amount: pounds(quote.iptPence), insurance_route: ins.insRoute,
@@ -220,7 +220,7 @@ SERVICES.insurance = {
     return {
       lines: [], inline: ins.inline, blocked: ins.blocked, beforePay: ins.beforePay, refer: ins.refer, fingerprint: ins.fingerprint, noContact: !contact,
       metadata: ({total, insuranceIds}) => ({
-        type: 'insurance', quote_reference: 'BGP-' + Date.now().toString(36).toUpperCase(), entry_point: contact ? 'member' : 'public',
+        type: 'insurance', quote_reference: 'BGP-' + Date.now().toString(36).toUpperCase(), entry_point: contact && !contact.createdNow ? 'member' : 'public',
         contact_id: contact?.id || '', membership_deal_id: member?.id || '', membership_profile_id: member?.profileId || '', name,
         insurance_requested: 'true', ...ins.metadata(insuranceIds), total_amount: total, total_amount_net: total,
       }),
@@ -281,7 +281,7 @@ SERVICES.membership = {
         const base = priced[0].item;
         const totalNet = priced.reduce((t, l) => t + Number(netPounds(l.item, l.totalPence, l.quantity)), 0).toFixed(2);
         return {
-          type: ins ? 'membership_insurance' : 'membership', quote_reference: 'BGP-' + Date.now().toString(36).toUpperCase(), entry_point: contact ? 'member' : 'public',
+          type: ins ? 'membership_insurance' : 'membership', quote_reference: 'BGP-' + Date.now().toString(36).toUpperCase(), entry_point: contact && !contact.createdNow ? 'member' : 'public',
           contact_id: contact?.id || '', membership_profile_id: member?.profileId || '',
           existing_membership: member ? JSON.stringify({type: member.type, start_date: member.start, expiry_date: member.expiry, deal_id: member.id}) : '',
           previous_membership_id: previous || '', change_type: change,
