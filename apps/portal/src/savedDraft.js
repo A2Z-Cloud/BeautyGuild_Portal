@@ -10,8 +10,53 @@ export const CHANGED_MESSAGE='This application has changed elsewhere. Please rel
 const REF='draft',PENDING='save_pending';
 export const noConfirmations=iv=>{const o={...(iv||{})};for(const k of CONFIRMATIONS)delete o[k];return o;};
 export const validStart=start=>start&&start>=startLimits().min?start:'';
+
+// Waiting to save across an emailed sign-up link. The link opens in a new tab with no sessionStorage, so when a visitor chooses Save
+// while signed out, a copy of the tab's answers and a marker (page, service, time) go to localStorage. It is restored once, for the same
+// page, when the visitor is signed in, and removed after the save, after payment, on discard, and after WAITING_HOURS. The same rules
+// apply as for the draft: no agreement box, no insurance confirmations, no payment data.
+const WAITING='bg_save_waiting',PREFIX='bg_buy_',WAITING_HOURS=24;
+const local=()=>{try{return globalThis.localStorage;}catch{return undefined;}};
+const session=()=>{try{return globalThis.sessionStorage;}catch{return undefined;}};
+export const safeEntries=e=>{
+  const o={...(e||{})};
+  if(o.membership&&typeof o.membership==='object')o.membership={...o.membership,accepted:false};
+  if(o.membership_insurance?.iv)o.membership_insurance={...o.membership_insurance,iv:noConfirmations(o.membership_insurance.iv)};
+  if(o.insurance?.values)o.insurance={...o.insurance,values:noConfirmations(o.insurance.values)};
+  return o;
+};
+export function snapshotStored(storage=session()){
+  const out={};
+  try{for(let i=0;i<(storage?.length||0);i++){const k=storage.key(i);if(k&&k.startsWith(PREFIX)&&k!==PREFIX+PENDING){const raw=storage.getItem(k);if(raw)out[k.slice(PREFIX.length)]=JSON.parse(raw);}}}catch{/* storage can be blocked */}
+  return out;
+}
+export const clearWaiting=(store=local())=>{try{store?.removeItem(WAITING);}catch{/* storage can be blocked */}};
+export function writeWaiting(page,entries,store=local(),now=Date.now()){
+  try{store?.setItem(WAITING,JSON.stringify({page,service:page==='/insurance/buy'?'insurance':'membership',savedAt:now,restored:false,entries:safeEntries(entries)}));}catch{/* storage can be blocked */}
+}
+// The waiting answers for this page, or null (none, another page, expired, damaged or already restored). Expired or damaged ones are removed.
+export function readWaiting(page,store=local(),now=Date.now()){
+  try{
+    const raw=store?.getItem(WAITING);
+    if(!raw)return null;
+    const w=JSON.parse(raw);
+    if(!w||typeof w.savedAt!=='number'||now-w.savedAt>WAITING_HOURS*36e5||now<w.savedAt-6e4||!w.entries||typeof w.entries!=='object'){clearWaiting(store);return null;}
+    return w.page===page&&!w.restored?{...w,entries:safeEntries(w.entries)}:null;
+  }catch{clearWaiting(store);return null;}
+}
+export function markWaitingRestored(store=local()){
+  try{const w=JSON.parse(store?.getItem(WAITING)||'null');if(w)store.setItem(WAITING,JSON.stringify({...w,restored:true}));}catch{/* storage can be blocked */}
+}
+// Puts waiting answers into this tab's stored state (and flags a save), so the page can reload with them. Returns true if it did.
+export function restoreWaiting(page,storage=session(),store=local(),now=Date.now()){
+  const w=readWaiting(page,store,now);
+  if(!w)return false;
+  for(const [k,v] of Object.entries(w.entries))writeStored(k,v,storage);
+  setSavePending(true,storage);markWaitingRestored(store);
+  return true;
+}
 export const draftRef=storage=>{const r=readStored(REF,null,storage);return r&&r.id?r:null;};
-export const forgetDraftRef=(id,storage)=>{const r=draftRef(storage);if(r&&(!id||String(r.id)===String(id)))writeStored(REF,{},storage);};
+export const forgetDraftRef=(id,storage)=>{const r=draftRef(storage);if(r&&(!id||String(r.id)===String(id)))writeStored(REF,{},storage);clearWaiting();};
 export const setSavePending=(on,storage)=>writeStored(PENDING,{pending:Boolean(on)},storage);
 export const takeSavePending=storage=>{const on=readStored(PENDING,null,storage)?.pending===true;if(on)setSavePending(false,storage);return on;};
 
@@ -26,7 +71,7 @@ export const buyDraft=({values,country,start})=>({service:'insurance',answers:{i
 export function restoreDraftToTab(draft,storage){
   const a=draft?.answers,page=draft?.service==='insurance'?(a?.insurance?.iv?'/insurance/buy':null):(a?.membership?.f?'/membership/buy':null);
   if(!page)return null;
-  clearStored(storage);
+  clearStored(storage);clearWaiting();
   if(draft.service==='insurance'){
     const {iv,country,start}=a.insurance;
     writeStored('insurance',{values:noConfirmations(iv),country:country||'',start:validStart(start)},storage);
@@ -55,7 +100,7 @@ export async function saveDraft(api,{service,answers,names},storage){
 // After a successful payment the saved draft is removed, so the paid purchase is the only record. Read before the answers are cleared.
 export function finishPaidDraft(api,paidService,storage){
   const ref=draftRef(storage);
-  clearStored(storage);
+  clearStored(storage);clearWaiting();
   const match=paidService==='insurance'?ref?.service==='insurance':paidService==='membership'&&(ref?.service==='membership'||ref?.service==='combined');
   return match?api.discardDraft(ref.service,ref.id).then(()=>true,()=>false):Promise.resolve(false);
 }

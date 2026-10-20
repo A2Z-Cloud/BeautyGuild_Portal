@@ -2,28 +2,33 @@ import React,{useEffect,useRef,useState} from 'react';
 import {Link,useNavigate} from 'react-router-dom';
 import {Save} from 'lucide-react';
 import {INTEGRATIONS,portalApi} from './services/api.js';
-import {CHANGED_MESSAGE,SAVED_MESSAGE,saveDraft,setSavePending,takeSavePending} from './savedDraft.js';
+import {CHANGED_MESSAGE,SAVED_MESSAGE,clearWaiting,restoreWaiting,saveDraft,setSavePending,snapshotStored,takeSavePending,writeWaiting} from './savedDraft.js';
 
 // Save my application. A signed-out visitor is sent to sign in or create an account and comes back to the same page with their answers;
 // the draft is then saved once, automatically. `build()` returns {service,answers,names}; `hint` explains why saving is not yet possible.
 export function useSaveApplication({signedIn,route,canSave,hint,build}){
   const navigate=useNavigate(),[s,setS]=useState({busy:false,ok:false,msg:''}),now=useRef();
   now.current={canSave,hint,build,busy:s.busy};
-  const toCheckpoint=()=>{setSavePending(true);navigate('/account/checkpoint?returnTo='+encodeURIComponent(route)+'&intent=save');};
+  const toCheckpoint=()=>{setSavePending(true);writeWaiting(route,snapshotStored());navigate('/account/checkpoint?returnTo='+encodeURIComponent(route)+'&intent=save');};
   async function save(){
     const c=now.current;
     if(c.busy)return;
     if(!c.canSave){setS({busy:false,ok:false,msg:c.hint});return;}
     if(!signedIn){toCheckpoint();return;}
     setS({busy:true,ok:false,msg:''});
-    try{await saveDraft(portalApi,c.build());setS({busy:false,ok:true,msg:SAVED_MESSAGE});}
+    try{await saveDraft(portalApi,c.build());clearWaiting();setS({busy:false,ok:true,msg:SAVED_MESSAGE});}
     catch(e){
       if(e.status===401||e.code==='NOT_AUTHENTICATED'){toCheckpoint();return;}
       setS({busy:false,ok:false,msg:e.code==='REVISION_CONFLICT'?CHANGED_MESSAGE:e.status===422||e.status===409?e.message:'We could not save your application. Please try again.'});
     }
   }
   // Back from signing in with the save still pending: save once.
-  useEffect(()=>{if(signedIn&&takeSavePending())save();},[signedIn]);// eslint-disable-line react-hooks/exhaustive-deps
+  // Opened in a new tab by the emailed link, the answers wait in localStorage: restore them and reload once so the page starts from them.
+  useEffect(()=>{
+    if(!signedIn)return;
+    if(takeSavePending())save();
+    else if(restoreWaiting(route))window.location.reload();
+  },[signedIn]);// eslint-disable-line react-hooks/exhaustive-deps
   return {...s,save};
 }
 export default function SaveApplication({saver,className=''}){
