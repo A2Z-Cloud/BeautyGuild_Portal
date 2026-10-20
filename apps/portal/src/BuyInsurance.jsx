@@ -12,8 +12,9 @@ import {START_WINDOW_DAYS,isFuture,startLimits} from './startDate.js';
 import {formatDate} from './format.js';
 import {validate} from './logic.mjs';
 import {stopMessages,toRequest,visibleFields} from './insuranceInputs.js';
-import {BlockedNotice,CoverSummary,InsuranceForm,useInsuranceQuote} from './InsuranceForm.jsx';
+import {BlockedNotice,CoverSummary,InsuranceForm,ReferralPanel,useInsuranceQuote} from './InsuranceForm.jsx';
 import {useStoredState} from './storedState.js';
+import {referralFrom,sameAnswers} from './referral.js';
 import SaveApplication,{useSaveApplication} from './SaveApplication.jsx';
 import {buyDraft,noConfirmations,validStart} from './savedDraft.js';
 
@@ -26,6 +27,9 @@ export default function BuyInsurance(){
   // The answers are kept in this tab (and saved to the account on request). Confirmation boxes are never restored.
   const [kept,setKept]=useStoredState('insurance',{values:{},country:'',start:''},x=>({...x,values:noConfirmations(x.values),start:validStart(x.start)}));
   const {values,country,start}=kept,[accepted,setAccepted]=useState(false);
+  // An application the Insurance team now holds is kept with the answers it was for, so a refresh still shows it.
+  const [sent,setSent]=useStoredState('insurance_referral',{outcome:null});
+  const answersKey=JSON.stringify([country,start,toRequest(values)]),referral=sameAnswers(sent.outcome,answersKey)?sent.outcome:null;
   const field=name=>next=>setKept(o=>({...o,[name]:typeof next==='function'?next(o[name]):next}));
   const setValues=field('values'),setCountry=field('country'),setStart=field('start');
   const [errors,setErrors]=useState({}),[countryError,setCountryError]=useState(''),[busy,setBusy]=useState(false),[payError,setPayError]=useState('');
@@ -62,7 +66,11 @@ export default function BuyInsurance(){
       const r=await portalApi.startCheckout({service:'insurance',country,...(start?{start}:{}),insurance:ins,accepted:'yes',firstName:who.firstName,lastName:who.lastName});
       if(!/^https:\/\/checkout\.stripe\.com\//.test(r.checkoutUrl))throw new Error('We could not open the payment page. Please try again.');
       window.location.assign(r.checkoutUrl);
-    }catch(e){setPayError(e.message);setBusy(false);}
+    }catch(e){
+      const outcome=referralFrom(e);
+      if(outcome){setSent({outcome:{...outcome,key:answersKey}});setPayError('');}else setPayError(e.message);
+      setBusy(false);
+    }
   }
   const quote=q.quote,payable=quote&&quote.payable;
   return <div className="page buy-page"><Link to="/insurance" className="back-link"><ArrowLeft size={16}/> Back to insurance</Link>
@@ -77,14 +85,14 @@ export default function BuyInsurance(){
       {!enabled?<p className="muted">Choose where you are based and how you work to see your price.</p>:q.error&&!quote?<Notice title="Unable to price this">{q.error}</Notice>:!quote?<p className="muted" role="status">Working out your price…</p>:<>
         <BlockedNotice quote={quote}/>
         {quote.lines.length>0&&<><CoverSummary quote={quote} values={values} onRemove={remove}/>{q.loading&&<p className="muted" role="status">Updating your price…</p>}</>}
-        {payable&&<>
+        {payable&&(referral?<ReferralPanel outcome={referral}/>:<>
           <p className="muted">You pay {money(dueToday(quote))} today, including Insurance Premium Tax.</p>
           {start&&isFuture(start)&&<p className="muted">Starts on {formatDate(start)}. It shows as Coming soon until then.</p>}
           <PolicyDocuments values={values}/>
           <label className="check-choice"><input type="checkbox" checked={accepted} onChange={e=>setAccepted(e.target.checked)}/><span>I accept the <a href={LEGAL.ethics.href} target="_blank" rel="noopener noreferrer">Code of Ethics</a> and the Guild's <a href={LEGAL.terms.href} target="_blank" rel="noopener noreferrer">Terms of Business</a> and <a href={LEGAL.privacy.href} target="_blank" rel="noopener noreferrer">Privacy Policy</a>.</span></label>
           {payError&&<Notice title="Payment unavailable">{payError}</Notice>}
           <button type="button" className="btn btn-primary btn-block" disabled={busy||!accepted||!(who.firstName||who.lastName)} onClick={pay}><LockKeyhole size={16}/>{busy?'Opening secure payment…':'Pay '+money(dueToday(quote))+' securely with Stripe'}</button>
-          {!(who.firstName||who.lastName)&&<p className="muted">Add your name to your account before buying.</p>}</>}</>}
+          {!(who.firstName||who.lastName)&&<p className="muted">Add your name to your account before buying.</p>}</>)}</>}
     </section>
     <SaveApplication saver={saver} className="save-inline"/></div>}
   </div>;

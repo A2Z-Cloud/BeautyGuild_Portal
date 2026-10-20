@@ -5,9 +5,10 @@ const ID=/^\d{10,25}$/;
 const DEFINITIONS={
  membership:{module:'Deals',draftField:'Application_Status',owner:'Contact_Name',fields:['Deal_Name','Stage','Membership_Type','Membership_Branch','Expiry_Date','Start_Date','Contact_Name','Amount','Payment_Status','Created_Time'],label:'Deal_Name',status:'Stage'},
  accreditation:{module:'Training_Centre_Accred',draftField:'Application_Stage',owner:'Applicant_Contact',fields:['Name','Account','Accreditation_Status','Application_Stage','Accreditation_Level','Valid_From','Valid_To','Applicant_Contact','Payment_Status','Created_Time'],label:'Account',status:'Accreditation_Status'},
- insurance:{module:'Insurance_Policy',draftField:'Application_Status',owner:'Contact',fields:['Application_Status','Policy_Type','Policy_Start_Date','Policy_End_Date','Contact','Created_Time','Quoted_Amount','Quote_Expiry','Stripe_Checkout_Session_ID'],label:'Policy_Type',status:'Application_Status'}
+ insurance:{module:'Insurance_Policy',draftField:'Application_Status',owner:'Contact',fields:['Application_Status','Policy_Type','Policy_Start_Date','Policy_End_Date','Contact','Created_Time','Quoted_Amount','Quote_Expiry','Stripe_Checkout_Session_ID','Risk_Status'],label:'Policy_Type',status:'Application_Status'}
 };
 const DRAFT_STAGE='Draft';
+const UNDER_REVIEW='With the Insurance team';
 const uri=(s)=>encodeURIComponent(String(s));
 // The member's own contact details, used to fill in forms. Same Contact fields V1 read for its wizards.
 const MY_FIELDS=['Salutation','First_Name','Last_Name','Email','Phone','Mobile','Interests','Correspondence_Address_Line_1','Correspondence_Address_Line_2',
@@ -52,6 +53,8 @@ function recordTitle(kind,base){
 // A quote waiting for payment: what was quoted, whether its payment link can still be used, and Expired once the day has passed.
 // The CRM status changes to Expired when someone tries to pay for a quote whose Stripe session has run out.
 function insuranceQuoteFields(r){
+  // Under review: no amount, no payment, no documents; the status is shown as the team holding it.
+  if(r.Application_Status==='Referred')return {quotedAmount:null,quoteExpiry:null,status:UNDER_REVIEW,underReview:true,canPay:false};
   const waiting=r.Application_Status==='Ready for Payment',lapsed=waiting&&r.Quote_Expiry&&String(r.Quote_Expiry)<new Date().toISOString().slice(0,10);
   const amount=r.Quoted_Amount==null||r.Quoted_Amount===''?null:Number(r.Quoted_Amount);
   return {quotedAmount:Number.isFinite(amount)?amount:null,quoteExpiry:r.Quote_Expiry||null,
@@ -71,9 +74,10 @@ function registerRecordRoutes(app,{enabled,getCurrentUser,getCrmHeaders,crmApiDo
   // Saved drafts live in the same CRM modules; they are never shown as real memberships, policies or accreditations.
   // Each module marks a draft in its own field: Deals and Insurance_Policy use Application_Status, Training_Centre_Accred uses
   // Application_Stage. V1 saves accreditation applications at stage Draft, so those are hidden even before V2 drafts are switched on.
-  // Insurance applications the Insurance team is reviewing (Referred) are not shown to the member as a policy.
-  const reviewing=(row,d)=>d.module==='Insurance_Policy'&&row.Application_Status==='Referred';
-  const isDraft=(row,d)=>Boolean(row)&&(reviewing(row,d)||(d.draftField==='Application_Stage'?row.Application_Stage===DRAFT_STAGE:hideDrafts&&row[d.draftField]===draftStatus));
+  // An insurance application the Insurance team is reviewing (Referred) is shown to its owner, read-only, as "With the Insurance team".
+  // A Stopped one is also stored at Application_Status Referred (Risk_Status Stopped) and stays hidden.
+  const stopped=(row,d)=>d.module==='Insurance_Policy'&&row.Application_Status==='Referred'&&row.Risk_Status==='Stopped';
+  const isDraft=(row,d)=>Boolean(row)&&(stopped(row,d)||(d.draftField==='Application_Stage'?row.Application_Stage===DRAFT_STAGE:hideDrafts&&row[d.draftField]===draftStatus));
   const fieldList=d=>[...new Set([...d.fields,'Modified_Time',...(hideDrafts||d.draftField==='Application_Stage'||d.module==='Insurance_Policy'?[d.draftField]:[])])];
   const router=express.Router();
   const {call}=createCrmClient({getCrmHeaders,crmApiDomain,fetchImpl});

@@ -1,5 +1,7 @@
 import React,{useEffect,useRef,useState} from 'react';
+import {Link} from 'react-router-dom';
 import {Notice} from './UiParts.jsx';
+import {referralCopy} from './referral.js';
 import {Blocks,InsField} from './InsuranceFields.jsx';
 import {COUNTRY_OPTIONS} from './JourneyConfig.js';
 import {coverAction,demandsAndNeeds,visibleSteps} from './insuranceInputs.js';
@@ -38,6 +40,17 @@ export function BlockedNotice({quote}){
   const refer=quote.blocked?.status==='REFER',incomplete=quote.blocked?.status==='INCOMPLETE';
   return <Notice title={incomplete?'A few more answers needed':refer?'Our Insurance team needs to review this':'We cannot offer this cover online'}>
     {(quote.blocked?.reasons||[]).join(' ')}{!incomplete&&' You cannot pay for this cover online. Please contact the Guild Insurance team and we will help you.'}</Notice>;
+}
+// Shown in place of Pay once the server has recorded a REFER or STOP application: what happened, the reference, and where to see it.
+// `children` is extra wording for the page (for example, that nothing has been charged).
+export function ReferralPanel({outcome,children}){
+  const c=referralCopy(outcome);
+  if(!c)return null;
+  return <section className={'referral-panel'+(c.stopped?' stopped':'')} role="status" aria-live="polite"><h3>{c.title}</h3>
+    {c.lines.map(l=><p key={l}>{l}</p>)}
+    <p className="referral-reference"><span>Reference</span> <strong>{outcome.reference}</strong> <small>{c.referenceNote}</small></p>
+    <p>Nothing has been charged. Your answers are kept on this page.</p>{children}
+    {!c.stopped&&<p><Link className="btn btn-secondary" to="/records?type=insurance">View it in My records</Link></p>}</section>;
 }
 export const InsuranceLines=({quote})=><>{(quote.lines||[]).map(l=><div key={l.name}><span>{l.name}</span><strong>{money(l.totalPence)}</strong></div>)}</>;
 // The quote summary: each cover with its price and, where it can be changed, Edit (back to its section) and Remove (takes it off the quote).
