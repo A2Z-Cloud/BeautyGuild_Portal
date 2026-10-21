@@ -1,5 +1,7 @@
 # Beauty Guild Staff Workspace
 
+**V1 processing widget implementation is now present in [`app/`](app/).** This is a test candidate using the Zoho CRM widget SDK. The **customer/application creation and Stripe payment-link features are explicitly Coming soon**. See [installation and UAT guide](INSTALLATION.md).
+
 Zoho CRM-hosted staff workspace for Membership, Insurance and Accreditation processing and customer-assisted application creation.
 
 **Specification:** [Functional and UX Specification V2.2](SPECIFICATION.md) is the **current design and capability reference**, based on the Beauty Guild Portal V2 source in this repository and our recent Staff Workspace reviews. It separates agreed capabilities, proposed UX decisions, code that already exists elsewhere, deferred integrations and outstanding technical validation.
@@ -17,18 +19,18 @@ The widget is **not** the customer portal and does not replace CRM Blueprints, C
 | Staff workspace | Compact overview, application queues and customer directory |
 | Navigation | CRM Web Tab and optional record context; breadcrumb and back-state retention |
 | Lists | Filtering, sorting, search and **API-backed pagination** across supported lists |
-| Record view | Compact fields, independent status badges, notes, tasks, documents and real related records |
-| Processing | Open native CRM record for existing buttons, approval actions and Blueprint transitions |
-| Assisted creation | Find/create Contact first, reuse Portal V2 conditional application forms, save and resume at any step |
+| Record view | Compact fields, independent statuses, in-widget CRM Notes and Tasks; supported related lists and native CRM document access |
+| Processing | Use **Send Email in CRM** and **CRM Buttons/Actions** to open the existing record with its native controls; no unverified workflow execution |
+| Assisted creation | **Coming soon (V1):** future release will reuse the Portal V2 conditional application forms and shared CRM drafts |
 | Declarations | Staff entry, audit trail and customer confirmation where required |
 | Design | Portal V2 visual language, consistent Lucide icons, accessible typography and compact layouts |
-| Payment link | Use the existing Portal V2 quote and Stripe Checkout to generate/copy/share a customer-specific link; existing Creator/CRM automation processes payment |
+| Payment link | **Coming soon (V1):** future release will reuse the existing Catalyst/Stripe link generation and Creator fulfilment |
 
 **Proposed navigation:** Overview, Applications, Customers and New Application; Membership / Insurance / Accreditation are service filters. This change and the exact list page sizes require final UX approval.
 
 ## Source and deployment status
 
-- **This repository:** this directory presently contains **documentation only**. It does not yet contain the earlier widget implementation or a deployable CRM package.
+- **This repository:** V1 implementation source is under [`app/`](app/), offline tests under [`tests/`](tests/) and the official ZET packaging helper is [`build-on-mac.sh`](build-on-mac.sh). An SDK-mocked test build exists, but **ZET validation, installation and live CRM UAT remain outstanding**.
 - **Earlier candidate widget:** separate downloadable source/build kit outside this repo, with CRM SDK integrations and mock-tested lists, note/task actions, and draft starter. Previous client-facing HTML demo used simulated data.
 - **Portal V2:** actively developed separately in [apps/portal](../../../apps/portal/), including journey source, CRM draft adapters, records, checkout and insurance risk rules. Those features may require configuration/feature flags and do **not** automatically become widget capabilities.
 - **Deployment:** independent Zoho CRM widget project, prepared with Zoho ZET validate/pack and installed into a test CRM organisation. No Catalyst portal deploy is implied.
@@ -43,4 +45,4 @@ The widget is **not** the customer portal and does not replace CRM Blueprints, C
 - [CRM widget guidance](../README.md)
 - [Workspace deployment boundaries](../../../docs/architecture/workspace.md)
 
-**Document updated:** 20 October 2026. Source and design specifications are not evidence of deployment.
+**Document updated:** 21 October 2026. Source and design specifications are not evidence of deployment.
