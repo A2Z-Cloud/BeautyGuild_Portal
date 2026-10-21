@@ -1,68 +1,60 @@
-# Beauty Guild CRM Staff Workspace | V1 test installation
+# Beauty Guild CRM Staff Workspace V1.1 | Test installation and UAT
 
-**Release:** 1.0.0 test candidate, 21 October 2026. **Live CRM SDK data only; no sample records.**
+**Build:** 21 October 2026. **Test candidate**, not a signed-off CRM production release.
 
-## What this build supports
+## Improvements since V1
 
-- Overview, Membership, Insurance and Accreditation processing queues, customer search and permitted Contact directory.
-- CRM Contact 360 and existing application record detail views, linked record tables and direct opening of native CRM records.
-- Notes, Tasks and supported CRM related lists using the logged-in staff member's CRM permissions.
-- Send email and CRM button/action entry points **open the existing CRM record**; they do not silently send email or execute workflow functions within the widget.
-- New Contact, new application, staff/customer shared draft and payment-link functionality all show **Coming soon**. No application or Contact creation is possible in this release.
+- **Browse first:** Membership (`Deals`), Insurance (`Insurance_Policy`), Accreditation (`Training_Centre_Accred`) and Customers (`Contacts`) show the CRM records available to the logged-in staff member without requiring a search first. Lists load 100 CRM records at a time and let staff explicitly load the next batch, instead of claiming a limited batch represents the entire organisation. The "Requires attention" filter applies only to loaded records.
+- **Actionable list rows:** reference, CRM Contact name where returned or resolvable, business/details, all relevant independent statuses, View Details and Open in CRM. A field absent from CRM is labelled **Not recorded**, not silently omitted.
+- **CRM error handling:** no brittle multi-status criteria searches in queue mode; navigation, related-list failures and missing values are surfaced clearly.
+- **Record detail:** explicit customer/application context, independent status summary, CRM details, native related lists, related record cards, Notes, Tasks, native CRM Send Email/buttons hand-off.
+- **Portal styling:** responsive sidebar and denser layouts, repaired New Application label, clearer processing hierarchy.
+- **New Application walkthrough:** interactive *demonstration* for Membership, Insurance and Accreditation, including customer lookup / optional **real CRM Contact creation**, service questions, review, and a disabled **Generate payment link** stopping point.
 
-## Verification status
+## Important limitations / safety
 
-- Node static check and mocked Zoho CRM SDK unit/integration tests: passed, using synthetic test fixtures **only in the tests**.
-- **Not yet validated in a live Beauty Guild CRM organisation**. Real permissions, related-list API names, emails, record navigation, Notes and Tasks need a test installation.
-- A `plugin-manifest.json` candidate ZIP may be included for convenience, but **the official Zoho ZET validation and pack have not run in this environment**. Use ZET to produce an officially validated upload ZIP.
+- The **application journey is a UI preview**. It uses a subset of the existing Portal V2 question groups but is **not** yet integrated with the authoritative saved-draft adapters, Catalyst pricing, sanctions, Stripe Checkout or Creator. No application draft is saved and no cross-channel customer resumption is offered. No premium, policy activation or paid state is fabricated. This preview is not appropriate for a real customer submission.
+- **Creating a CRM Contact is real** if a staff user fills out and explicitly clicks **Create CRM Contact**. It is guarded by a same-email lookup but still writes into the current CRM organisation. Use **test customer details in a sandbox** and ensure the staff member is authorised. Do not use this for live customer onboarding until the shared journey backend is complete.
+- Existing Notes and Tasks are real CRM writes. Email and CRM custom buttons open the native record; they are not sent or executed by the widget.
+- The browse mode uses CRM API paged reads. "Requires attention" filtering is based on records **already fetched**; use **Load next CRM records** to expand coverage. It does not claim an organisation-wide count.
+- Related list APIs may be unavailable to some profiles or may need additional mapping. Staff must use **Open in CRM** for actions requiring native layout context.
 
-## Build the validated Zoho upload ZIP
+## Build the official Zoho upload ZIP
 
-Run on a workstation with Node.js, npm, internet access and Zoho Extension Toolkit:
+The provided candidate archive is **not a ZET-validated package**. On a workstation with Node.js and Zoho Extension Toolkit:
 
 ```sh
 npm install -g zoho-extension-toolkit
-cd BeautyGuild_Staff_Workspace_V1_Source
+cd BeautyGuild_Staff_Workspace_Usability_V1_1_Source
 node --test tests/*.test.js
 sh build-on-mac.sh
 ```
 
-During `zet init`, select **Zoho CRM** and use the requested project name `beauty_guild_processing`. The build script then copies the current app into the generated scaffold, runs `zet validate` and `zet pack`, and prints the output directory. Upload **that ZIP** to CRM. Do not assume that a hand-assembled candidate ZIP passes ZET validation.
+If prompted by `zet init`, choose Zoho CRM and use the project name `beauty_guild_processing`. The script copies `widget.html`, `widget.js`, `styles.css`, `brand-processing.css` **and `usability.css`** into the official ZET scaffold, then runs `zet validate` and `zet pack`.
 
-## Install without disturbing the existing widget
+## Install and test
 
-1. Log in to Beauty Guild **CRM development/sandbox** as an authorised administrator.
-2. Setup > Developer Hub > Widgets > Create Widget. Name it `Beauty Guild Staff Workspace - V1 Test`, service Zoho CRM, hosting Zoho/Internal.
-3. Upload the ZET-generated ZIP and set the index page to `/widget.html`.
-4. Create or link a **test Web Tab** to this widget. Restrict to your test-staff profile initially.
-5. Open the tab in CRM. Confirm it shows `Connected`, the staff identity, and real CRM records.
-6. No Catalyst, Stripe, Creator, Deluge deployment or CRM field creation is required to test this read/processing release.
+1. In **Beauty Guild CRM sandbox/development**, create or update a **test** widget, hosted internally. Set `/widget.html` as the index page. Do not replace production blindly.
+2. Confirm **Connected** and a permitted staff user.
+3. Click **Insurance**, **Accreditation**, **Membership** and **Customers** without searching. Confirm full loaded lists, real customer details, each module's relevant statuses and a working Load next records button where needed.
+4. In **Applications**, switch module tabs and filters; there should be **no Invalid query formed** message. Check that attention filters are labelled as applying to loaded rows only.
+5. Select existing records, inspect related lists, return to the full list, add a Note/Task to **disposable test records** and test Send Email / CRM buttons navigation.
+6. Open **New application**. Select Membership, Insurance and Accreditation in turn; follow the step validation to the disabled payment button. Do **not** test this as a real submission.
+7. For customer creation, use a sandbox email and confirm it creates exactly one CRM Contact. Try the same email again to verify duplicate warning.
 
-## Safe test plan
+### UAT checkpoints
 
-Use existing *approved test records* only, and reserve Notes/Tasks creation for disposable records:
-
-| Test | Steps | Expected |
+| ID | Check | Expected |
 | --- | --- | --- |
-| Connect | Open CRM test Web Tab | Connected state and logged-in staff; no demo fixtures |
-| Search | Search a known Contact email | Actual Contact returned, view its membership/insurance/accreditation relationships |
-| Customer directory | Customers > Refresh | Permitted Contacts from CRM, with limited counts labelled honestly |
-| Insurance queue | Applications > Insurance | Referral/underwriting records and status badges, real CRM data |
-| Accreditation queue | Applications > Accreditation | Applications requiring processing, record drill-in and related Centres/Tutors/Courses where accessible |
-| Membership queue | Applications > Membership | Existing memberships and exceptions |
-| Related lists | Open a policy/accreditation/Contact | Notes, Tasks, attachments and supported custom related lists; permission errors shown instead of blank fabricated counts |
-| Email | Click Send email in CRM | Native CRM record opens for the usual email action; no email is sent automatically |
-| Buttons | Click CRM buttons / actions | Native CRM record opens with its existing custom actions and automation permissions |
-| Notes | Add a note on a disposable test record | Exactly one CRM Note inserted |
-| Task | Create a follow-up task on disposable test record | One real CRM Task linked to that record |
-| New application | Open New application | Coming soon only; no Contact/application record is inserted |
-| Payment | Explore record view | No Stripe link, payment change, policy issue or Catalyst call |
+| U01 | Insurance list without search | All accessible rows in first CRM page displayed with reference/customer/status indicators |
+| U02 | Load more | Next CRM page fetched, existing rows retained, no fabricated total |
+| U03 | Queue filters | No malformed CRM criteria; attention filter applies to loaded rows |
+| U04 | Accreditation / Membership list | Independent payment/application/policy statuses clearly displayed |
+| U05 | Contact name resolution | Contact lookup label or CRM Contact record resolves name where permitted |
+| U06 | Record review | Detail summary and related lists load or provide explicit error/fallback |
+| U07 | CRM actions | Native Send Email / CRM custom buttons open the existing record |
+| U08 | Notes / Tasks | One record inserted with correct parent link in approved test CRM |
+| U09 | Assisted journey | Contact selection, conditional steps, review and disabled payment CTA accessible |
+| U10 | Safety | No application draft, Stripe charge, policy activation or fake successful payment |
 
-**Known source limitations:** application queues use CRM status searches with paginated bounded scanning and optional Load more, not an absolute CRM count. Related-list APIs and some custom list API names depend on CRM access; when unavailable, Open in CRM is provided. Email and CRM buttons are not executed within the widget. No live CRM UAT has been performed.
-
-## Troubleshooting
-
-- SDK does not initialise: verify upload index page, widget context and that `https://live.zwidgets.com/js-sdk/1.2/ZohoEmbededAppSDK.min.js` loads.
-- Related list fails: verify CRM module, related-list API name and current staff role; use Open in CRM fallback.
-- No queue records: test a known Contact or open from CRM record context; queue filters intentionally show matching processing candidates only.
-- Notes/Tasks rejected: check record access, module permissions and CRM field requirements; do not grant blanket elevated scopes.
+**Verification completed locally:** JavaScript syntax and three Node-based tests with an SDK stub. **Not completed:** official ZET packaging or live Zoho CRM UAT.
