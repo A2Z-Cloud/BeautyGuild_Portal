@@ -13,7 +13,7 @@ const nap=()=>new Promise(resolve=>setTimeout(resolve,70));
 function delegate(action,entity,id){let t={dataset:{action,entity,id},closest:()=>t};el['#contentArea'].callbacks.click({target:t})}
 (async()=>{
  await nap();assert.match(el['#contentArea'].innerHTML,/Live Example/);assert.match(el['#contentArea'].innerHTML,/Member profiles/);assert.ok(calls.search.some(x=>x[0]==='Insurance_Policy'));
- nav[4].callbacks.click();await nap();assert.match(el['#contentArea'].innerHTML,/POL-1/);assert.match(el['#contentArea'].innerHTML,/Insurance covers/);assert.ok(calls.related.some(x=>x[2]==='Risk_Screenings'));assert.match(el['#contentArea'].innerHTML,/Treatment/);
+ nav[4].callbacks.click();await nap();assert.match(el['#contentArea'].innerHTML,/POL-1/);assert.match(el['#contentArea'].innerHTML,/All records/);assert.match(el['#contentArea'].innerHTML,/Underwriting Status/);assert.match(el['#contentArea'].innerHTML,/Live Example/);delegate('select','Insurance_Policy',ids.policy);await nap();assert.match(el['#contentArea'].innerHTML,/Insurance covers/);assert.ok(calls.related.some(x=>x[2]==='Risk_Screenings'));assert.match(el['#contentArea'].innerHTML,/Treatment/);
  delegate('note','Insurance_Policy',ids.policy);assert.equal(el['#actionModal'].open,true);el['#actionSubject'].value='Policy follow-up';el['#actionDescription'].value='Review cover';await el['#actionForm'].callbacks.submit({preventDefault(){}});await nap();assert.equal(calls.notes.length,1);assert.equal(calls.notes[0].RecordID,ids.policy);
  delegate('task','Insurance_Policy',ids.policy);el['#actionSubject'].value='Call member';el['#actionDue'].value='2026-10-23';await el['#actionForm'].callbacks.submit({preventDefault(){}});await nap();assert.equal(calls.tasks.length,1);assert.equal(calls.tasks[0].APIData.What_Id.id,ids.policy);assert.equal(calls.tasks[0].APIData.Who_Id.id,ids.contact);assert.equal(calls.tasks[0].APIData.$se_module,'Insurance_Policy');
  delegate('open','Insurance_Policy',ids.policy);await nap();assert.equal(calls.open.length,1);delegate('email','Insurance_Policy',ids.policy);await nap();assert.equal(calls.open.length,2);delegate('crm-actions','Insurance_Policy',ids.policy);await nap();assert.equal(calls.open.length,3);
@@ -23,10 +23,24 @@ function delegate(action,entity,id){let t={dataset:{action,entity,id},closest:()
  const before=calls.notes.length;
  delegate('refresh-record','Insurance_Policy',ids.policy);await nap();
  assert.equal(calls.notes.length,before);
- // New application remains inaccessible in V1.
+ // New application walkthrough is interactive but stops before payment.
  nav[6].callbacks.click();await nap();
- assert.match(el['#contentArea'].innerHTML,/coming soon/i);
- assert.doesNotMatch(el['#contentArea'].innerHTML,/Save draft|Create new customer/);
+ assert.match(el['#contentArea'].innerHTML,/Select application type/);
+ let t={dataset:{action:'journey-type',kind:'insurance'},closest:()=>t};el['#contentArea'].callbacks.click({target:t});await nap();
+ assert.match(el['#contentArea'].innerHTML,/Journey preview only/);
+ assert.match(el['#contentArea'].innerHTML,/Continue with customer/);
+ // Check a full preview journey reaches a disabled payment step without CRM application writes.
+ let type={dataset:{action:'journey-type',kind:'membership'},closest:()=>type};el['#contentArea'].callbacks.click({target:type});
+ delegate('journey-next');await nap();assert.match(el['#contentArea'].innerHTML,/Membership options/);
+ const setField=(name,value,type='text',checked=false)=>{const input={dataset:{journeyField:name},value,type,checked};el['#contentArea'].callbacks.input({target:input});};
+ setField('membershipLevel','associate');setField('membershipBranch','beauty');setField('billing','annual');setField('joinType','new');
+ delegate('journey-next');await nap();assert.match(el['#contentArea'].innerHTML,/Applicant details/);
+ delegate('journey-next');await nap();assert.match(el['#contentArea'].innerHTML,/Additional branches/);
+ setField('insuranceWanted','no');delegate('journey-next');await nap();assert.match(el['#contentArea'].innerHTML,/Declarations/);
+ setField('codeAccepted','yes');setField('termsAccepted','yes');delegate('journey-next');await nap();
+ assert.match(el['#contentArea'].innerHTML,/Application preview complete/);
+ assert.match(el['#contentArea'].innerHTML,/Generate payment link · Coming soon/);
+ assert.doesNotMatch(el['#contentArea'].innerHTML,/checkoutUrl/);
  assert.equal(calls.tasks.length,1);
- console.log('PASS CRM mock SDK context, live lookups, native related lists, Notes, Tasks, Email/CRM actions fallback, creation disabled');
+ console.log('PASS CRM mock SDK, browse-first lists, records, related lists, Notes/Tasks, native CRM actions and payment-stopped journey');
 })().catch(e=>{console.error(e);process.exit(1)});
