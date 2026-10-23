@@ -71,13 +71,17 @@ const SERVICES = {
         : bundle ? 'Accreditation + Associate Membership' : 'Accreditation';
       const item = international ? (bundle ? 'accreditation_international_bundle' : 'accreditation_international')
         : bundle ? 'accreditation_associate_bundle' : 'accreditation';
+      // Yearly or monthly, and either way it renews by itself: a yearly subscription, or a monthly plan of 12 payments (plans.js).
+      const billing = input.billing === 'monthly' ? 'monthly' : 'annual';
       return {
-        lines: [{item, quantity: 1}],
+        lines: [{item, quantity: 1, term: 'ongoing'}],
+        monthly: billing === 'monthly', renews: true, billing,
         existingSessionId: acc.Stripe_Checkout_Session_ID || null,
         record: {module: 'Training_Centre_Accred', id, update: sessionId => ({Stripe_Checkout_Session_ID: sessionId, Payment_Status: PROCESSING_STATUS.Training_Centre_Accred})},
-        metadata: ({total}) => ({
-          type: 'accreditation', accreditation_id: id, application_id: id, contact_id: contact.id,
-          product_amount: total, product_details: label, product_name: bundle || international ? label : 'Standard Accreditation',
+        metadata: ({total, annualPence}) => ({
+          type: 'accreditation', accreditation_id: id, application_id: id, contact_id: contact.id, subscription_type: billing,
+          // product_amount is what is charged now (the first payment on a monthly plan); product_yearly_amount is the yearly price either way.
+          product_amount: total, product_yearly_amount: pounds(annualPence), product_details: label, product_name: bundle || international ? label : 'Standard Accreditation',
           membership_required: bundle ? 'true' : 'false', membership_id: membership?.profileId || '',
           membership_details: JSON.stringify({required: bundle, type: bundle ? (international ? 'International' : 'Associate') : null,
             start_date: membership?.start || null, expiry_date: membership?.expiry || null}),

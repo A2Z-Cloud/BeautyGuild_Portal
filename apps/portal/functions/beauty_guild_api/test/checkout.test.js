@@ -60,6 +60,15 @@ async function withApp(state, fn, env = {}) {
 }
 const activeDeal = {id: DEAL, Stage: 'Active', Membership_Type: 'Associate Member', Start_Date: '2020-01-01', Expiry_Date: '2999-01-01'};
 
+
+// Accreditation renews by itself: a yearly subscription line at the live Stripe amount, carrying its price list code.
+const yearlyLine = (p, i, pence, sku) => {
+  assert.equal(p.get('mode'), 'subscription');
+  assert.equal(p.get('line_items[' + i + '][price_data][unit_amount]'), String(pence));
+  assert.equal(p.get('line_items[' + i + '][price_data][recurring][interval]'), 'year');
+  assert.equal(p.get('line_items[' + i + '][price_data][product_data][metadata][sku]'), sku);
+  assert.equal(p.has('line_items[' + i + '][price]'), false);
+};
 test('accreditation without a membership is charged the combined bundle price, amount from Stripe', async () => {
   const w = world();
   await withApp(w, async ({post, get}) => {
@@ -69,8 +78,10 @@ test('accreditation without a membership is charged the combined bundle price, a
     assert.equal(r.status, 201);
     assert.equal(r.body.checkoutUrl, 'https://checkout.stripe.com/c/pay/cs_test_1');
     const p = w.stripePosts[0].params;
-    assert.equal(p.get('mode'), 'payment');
-    assert.equal(p.get('line_items[0][price]'), 'price_bundle22222');
+    yearlyLine(p, 0, 40900, 'ACC-ASSOC');
+    assert.equal(p.get('subscription_data[metadata][plan]'), 'annual');
+    assert.equal(p.get('metadata[subscription_type]'), 'annual');
+    assert.equal(p.get('metadata[product_yearly_amount]'), '409.00');
     assert.equal(p.get('customer_email'), 'alice@example.test');
     assert.equal(p.get('metadata[type]'), 'accreditation');
     assert.equal(p.get('metadata[accreditation_id]'), ACC);
@@ -87,7 +98,7 @@ test('accreditation with a current membership pays the plain accreditation price
   await withApp(w, async ({post}) => {
     assert.equal((await post({service: 'accreditation', recordId: ACC})).status, 201);
     const p = w.stripePosts[0].params;
-    assert.equal(p.get('line_items[0][price]'), 'price_accr111111');
+    yearlyLine(p, 0, 35400, 'ACC-STD');
     assert.equal(p.get('metadata[product_amount]'), '354.00');
     assert.equal(p.get('metadata[membership_id]'), 'prof1');
     assert.equal(p.get('metadata[membership_required]'), 'false');
@@ -100,7 +111,7 @@ test('an international school without a membership pays the flat 405 pound inter
     assert.equal((await get('service=accreditation&recordId=' + ACC)).body.quote.totalPence, 40500);
     assert.equal((await post({service: 'accreditation', recordId: ACC})).status, 201);
     const p = w.stripePosts[0].params;
-    assert.equal(p.get('line_items[0][price]'), 'price_intlbundle1');
+    yearlyLine(p, 0, 40500, 'ACC-INTL-MEM');
     assert.equal(p.get('metadata[product_amount]'), '405.00');
     assert.equal(p.get('metadata[product_name]'), 'International Accreditation + International Membership');
     assert.equal(JSON.parse(p.get('metadata[membership_details]')).type, 'International');
@@ -111,7 +122,7 @@ test('an international school with a current membership pays the flat 350 pound 
   await withApp(w, async ({post}) => {
     assert.equal((await post({service: 'accreditation', recordId: ACC})).status, 201);
     const p = w.stripePosts[0].params;
-    assert.equal(p.get('line_items[0][price]'), 'price_intl111111');
+    yearlyLine(p, 0, 35000, 'ACC-INTL');
     assert.equal(p.get('metadata[product_amount]'), '350.00');
     assert.equal(p.get('metadata[membership_required]'), 'false');
   }, INTL_ENV);
@@ -136,8 +147,7 @@ test('a browser-supplied amount is ignored', async () => {
   const w = world();
   await withApp(w, async ({post}) => {
     await post({service: 'accreditation', recordId: ACC, amount: 1, totalPence: 1, price: 'price_x'});
-    assert.equal(w.stripePosts[0].params.get('line_items[0][price]'), 'price_bundle22222');
-    assert.equal(w.stripePosts[0].params.has('line_items[0][price_data][unit_amount]'), false);
+    assert.equal(w.stripePosts[0].params.get('line_items[0][price_data][unit_amount]'), '40900', 'the amount is Stripe\'s, whatever the browser sent');
   });
 });
 test("someone else's accreditation is not found", async () => {
@@ -154,11 +164,20 @@ test('an already paid accreditation creates no session', async () => {
   });
 });
 test('an open session for the record is reused, not duplicated', async () => {
-  const w = world({acc: {Stripe_Checkout_Session_ID: 'cs_old'}, sessions: {cs_old: {status: 'open', payment_status: 'unpaid', url: 'https://checkout.stripe.com/c/pay/cs_old'}}});
+  const w = world({acc: {Stripe_Checkout_Session_ID: 'cs_old'}, sessions: {cs_old: {status: 'open', payment_status: 'unpaid', url: 'https://checkout.stripe.com/c/pay/cs_old', metadata: {subscription_type: 'annual'}}}, priceOverride: RECURRING});
   await withApp(w, async ({post}) => {
     const r = await post({service: 'accreditation', recordId: ACC});
     assert.equal(r.body.checkoutUrl, 'https://checkout.stripe.com/c/pay/cs_old');
     assert.equal(w.stripePosts.length, 0);
+    // someone who now chooses monthly is not handed the yearly session, and nor is an old one-off session reused
+    const monthly = await post({service: 'accreditation', recordId: ACC, billing: 'monthly'});
+    assert.equal(monthly.status, 201);
+    assert.equal(w.stripePosts.length, 1);
+  });
+  const old = world({acc: {Stripe_Checkout_Session_ID: 'cs_old'}, sessions: {cs_old: {status: 'open', payment_status: 'unpaid', url: 'https://checkout.stripe.com/c/pay/cs_old'}}});
+  await withApp(old, async ({post}) => {
+    assert.equal((await post({service: 'accreditation', recordId: ACC})).status, 201, 'a session from before plans carries no plan, so it is not reused');
+    assert.equal(old.stripePosts.length, 1);
   });
 });
 test('additional venue must belong to the member\'s accreditation', async () => {
@@ -1118,4 +1137,41 @@ test('a yearly extra branch and every line of a monthly plan carry their codes; 
     assert.deepEqual(codes, ['MEM-FULLNS-Y', 'MEM-JOIN', 'MEM-BRANCH', 'MEM-BADGE']);
     assert.equal(p.get('line_items[4][price]'), 'price_admin1111111', 'the admin fee is a catalogue price with the lookup key MEM-ADMIN');
   }, MEM_ENV);
+});
+
+// ---- Accreditation: monthly plans and yearly renewal ----
+test('monthly accreditation: the yearly price divided by 12 and rounded up, plus the admin fee, all ongoing', async () => {
+  const w = world({deals: [activeDeal], priceOverride: RECURRING});
+  await withApp(w, async ({post, get}) => {
+    const q = await get('service=accreditation&recordId=' + ACC + '&billing=monthly');
+    assert.equal(q.status, 200, JSON.stringify(q.body));
+    // 354.00 a year is 29.50 a month; the admin fee is 1.50: 31.00, the same all year (nothing is one-off)
+    assert.deepEqual(q.body.quote.plan, {payments: 12, firstPaymentPence: 3100, laterPaymentPence: 3100, yearOneTotalPence: 37200, adminFeePence: 150});
+    assert.equal((await post({service: 'accreditation', recordId: ACC, billing: 'monthly'})).status, 201);
+    const p = w.stripePosts[0].params;
+    assert.equal(p.get('mode'), 'subscription');
+    assert.equal(p.get('line_items[0][price_data][unit_amount]'), '2950');
+    assert.equal(p.get('line_items[0][price_data][recurring][interval]'), 'month');
+    assert.equal(p.get('line_items[0][price_data][product_data][metadata][sku]'), 'ACC-STD');
+    assert.equal(p.get('line_items[0][price_data][product_data][metadata][phase]'), 'ongoing');
+    assert.equal(p.get('line_items[1][price]'), 'price_admin1111111');
+    assert.equal(p.get('subscription_data[metadata][plan]'), 'monthly');
+    assert.equal(p.get('subscription_data[metadata][phased]'), 'false', 'nothing drops at payment 13, so it needs no schedule');
+    assert.equal(p.get('metadata[subscription_type]'), 'monthly');
+    assert.equal(p.get('metadata[product_amount]'), '31.00', 'what is charged now');
+    assert.equal(p.get('metadata[product_yearly_amount]'), '354.00');
+    assert.match(p.get('success_url'), /session_id=\{CHECKOUT_SESSION_ID\}$/);
+  });
+});
+test('monthly accreditation with Associate membership: 409.00 a year is 35.59 a month with the admin fee', async () => {
+  const w = world({priceOverride: RECURRING});
+  await withApp(w, async ({post, get}) => {
+    const q = await get('service=accreditation&recordId=' + ACC + '&billing=monthly');
+    assert.equal(q.body.quote.totalPence, 3559);
+    assert.equal((await post({service: 'accreditation', recordId: ACC, billing: 'monthly'})).status, 201);
+    const p = w.stripePosts[0].params;
+    assert.equal(p.get('line_items[0][price_data][unit_amount]'), '3409');
+    assert.equal(p.get('line_items[0][price_data][product_data][metadata][sku]'), 'ACC-ASSOC');
+    assert.equal(p.get('metadata[product_yearly_amount]'), '409.00');
+  });
 });

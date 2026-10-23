@@ -112,6 +112,8 @@ function registerCheckoutRoutes(app, {publicQuotesEnabled = false, enabled, getC
       lines.push({item: null, fee: l.priceItem || null, sku: l.sku || null, name: l.name, quantity: l.quantity, priceId: null, unitPence: unit, totalPence: unit * l.quantity, interval: null, term: 'ongoing'});
     }
     if (!lines.length && !prepared.blocked) throw new HttpError(422, 'INVALID_REQUEST', 'Choose something to pay for.');
+    // What the yearly price is, before a monthly plan turns it into shares.
+    const annualPence = lines.reduce((t, l) => t + l.totalPence, 0);
     const feeLines = lines.filter(l => l.fee);
     const fees = {count: feeLines.reduce((t, l) => t + l.quantity, 0), grossPence: feeLines.reduce((t, l) => t + l.totalPence, 0),
       netPence: Math.round(feeLines.reduce((t, l) => t + Number(netPounds(l.fee, l.totalPence, l.quantity)) * 100, 0))};
@@ -125,9 +127,9 @@ function registerCheckoutRoutes(app, {publicQuotesEnabled = false, enabled, getC
       const monthly = plan.lines.filter(l => l.monthlyPence > 0).map(l => ({item: l.item, fee: l.fee, sku: l.sku, name: l.name.replace('(annual)', '(monthly)') + (l.quantity > 1 && !l.fee ? ' x ' + l.quantity : ''), quantity: 1, origQuantity: l.quantity, scale: 1 / plans.PAYMENTS,
         priceId: null, unitPence: l.monthlyPence, totalPence: l.monthlyPence, interval: 'month', term: l.term}));
       monthly.push({item: 'admin_fee_monthly', sku: ITEMS.admin_fee_monthly.code, name: ITEMS.admin_fee_monthly.name, quantity: 1, priceId: admin.id, unitPence: admin.unit, totalPence: admin.unit, interval: 'month', term: 'ongoing'});
-      return {service, contact, prepared, lines: monthly, fees, plan, totalPence: plan.firstPaymentPence, mode: 'subscription'};
+      return {service, contact, prepared, lines: monthly, fees, plan, annualPence, totalPence: plan.firstPaymentPence, mode: 'subscription'};
     }
-    return {service, contact, prepared, lines, fees, totalPence: lines.reduce((t, l) => t + l.totalPence, 0),
+    return {service, contact, prepared, lines, fees, annualPence, totalPence: lines.reduce((t, l) => t + l.totalPence, 0),
       mode: lines.some(l => l.interval) ? 'subscription' : 'payment'};
   }
   const view = b => b.alreadyPaid ? {service: b.service.title, alreadyPaid: true} :
@@ -277,7 +279,8 @@ function registerCheckoutRoutes(app, {publicQuotesEnabled = false, enabled, getC
     if (b.prepared.existingSessionId) {
       const old = await stripe('GET', '/checkout/sessions/' + encodeURIComponent(b.prepared.existingSessionId)).catch(() => null);
       if (old?.payment_status === 'paid') return res.json({alreadyPaid: true});
-      if (old?.status === 'open' && typeof old.url === 'string' && old.url.startsWith('https://checkout.stripe.com/'))
+      // Reused only if it is for the same plan: a session opened for yearly payment is not handed back to someone who now chose monthly.
+      if (old?.status === 'open' && typeof old.url === 'string' && old.url.startsWith('https://checkout.stripe.com/') && (old.metadata?.subscription_type || '') === (b.prepared.billing || ''))
         return res.json({checkoutUrl: old.url, reused: true});
     }
     // Insurance CRM records are created now, before payment, as V1 does: Creator's webhook reads their ids from the metadata.
@@ -292,7 +295,7 @@ function registerCheckoutRoutes(app, {publicQuotesEnabled = false, enabled, getC
       const meta = {
         email: req.portalUser.email, name: b.contact ? [b.contact.First_Name, b.contact.Last_Name].filter(Boolean).join(' ') : '',
         currency: 'GBP', status: 'pending', source: 'portal_v2',
-        ...b.prepared.metadata({amounts, total: pounds(b.totalPence), lines: catalogue, insuranceIds, fees: b.fees}),
+        ...b.prepared.metadata({amounts, total: pounds(b.totalPence), lines: catalogue, insuranceIds, fees: b.fees, annualPence: b.annualPence}),
       };
       // Stripe allows 50 metadata keys. The plan is also on the subscription, so it is only added here while there is room.
       if (b.plan && Object.keys(meta).length < 50) meta.monthly_plan = JSON.stringify({payments: plans.PAYMENTS, first_payment: pounds(b.plan.firstPaymentPence), later_payment: pounds(b.plan.laterPaymentPence),
