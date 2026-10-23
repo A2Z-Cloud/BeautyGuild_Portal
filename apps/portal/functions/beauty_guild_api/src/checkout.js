@@ -8,14 +8,14 @@ const crypto = require('node:crypto');
 const {HttpError} = require('./errors');
 const {resolveContact, createCrmClient} = require('./records');
 const {createRateLimiter, clientKey} = require('./rateLimit');
-const {ITEMS, SERVICES, pounds} = require('./catalogue');
+const {ITEMS, SERVICES, pounds, netPounds} = require('./catalogue');
 
 const STRIPE = 'https://api.stripe.com/v1';
 const ID = /^\d{10,25}$/;
 const EXPIRED = 'This quote has expired. Please get a new quote.';
 const PRICE_ID = /^price_[A-Za-z0-9]{6,}$/;
 
-function registerCheckoutRoutes(app, {publicQuotesEnabled = false, enabled, getCurrentUser, getCrmHeaders, crmApiDomain, stripeKey, prices = {}, publicOrigin, riskChecks = null, fetchImpl = fetch, now = Date.now}) {
+function registerCheckoutRoutes(app, {publicQuotesEnabled = false, enabled, getCurrentUser, getCrmHeaders, crmApiDomain, stripeKey, publicOrigin, riskChecks = null, fetchImpl = fetch, now = Date.now}) {
   const router = express.Router();
   const {call: crm} = createCrmClient({getCrmHeaders, crmApiDomain, fetchImpl});
   const limiter = createRateLimiter({limit: 20, windowMs: 60 * 1000, now});
@@ -38,20 +38,20 @@ function registerCheckoutRoutes(app, {publicQuotesEnabled = false, enabled, getC
     if (!r.ok || !body) throw new HttpError(502, 'PAYMENT_UNAVAILABLE', 'Secure checkout is unavailable.');
     return body;
   }
-  // The price a catalogue item points at, read from Stripe (Books keeps it in step) and held briefly.
+  // The price a catalogue item points at: the active Stripe price whose lookup key is the item's price list code. Books keeps the
+  // list; a price change is a new Stripe price that takes the lookup key over. Read live and held briefly.
   async function priceFor(itemKey) {
-    const id = prices[ITEMS[itemKey].env];
-    if (!PRICE_ID.test(String(id || ''))) throw new HttpError(409, 'ITEM_NOT_AVAILABLE', ITEMS[itemKey].name + ' cannot be bought online yet.');
-    const hit = priceCache.get(id);
+    const item = ITEMS[itemKey], unavailable409 = () => new HttpError(409, 'ITEM_NOT_AVAILABLE', item.name + ' cannot be bought online yet.');
+    const hit = priceCache.get(item.code);
     if (hit && now() - hit.at < 60000) return hit.price;
-    const p = await stripe('GET', '/prices/' + id);
-    if (!p.active || p.currency !== 'gbp' || !Number.isSafeInteger(p.unit_amount) || p.unit_amount < 50 || p.unit_amount > 10000000)
-      throw new HttpError(409, 'ITEM_NOT_AVAILABLE', ITEMS[itemKey].name + ' cannot be bought online yet.');
+    const found = await stripe('GET', '/prices?lookup_keys[]=' + encodeURIComponent(item.code) + '&active=true&limit=1');
+    const p = Array.isArray(found.data) ? found.data[0] : null;
+    if (!p || !PRICE_ID.test(String(p.id || ''))) throw unavailable409();
+    if (!p.active || p.currency !== 'gbp' || !Number.isSafeInteger(p.unit_amount) || p.unit_amount < 50 || p.unit_amount > 10000000) throw unavailable409();
     // The catalogue says whether an item is one-off or recurring; a mismatched Stripe price is refused.
-    if ((ITEMS[itemKey].interval || null) !== (p.recurring?.interval || null) || (p.recurring && p.recurring.interval_count !== 1))
-      throw new HttpError(409, 'ITEM_NOT_AVAILABLE', ITEMS[itemKey].name + ' cannot be bought online yet.');
-    const price = {id, unit: p.unit_amount, interval: p.recurring?.interval || null};
-    priceCache.set(id, {price, at: now()});
+    if (!item.oneOff && ((item.interval || null) !== (p.recurring?.interval || null) || (p.recurring && p.recurring.interval_count !== 1))) throw unavailable409();
+    const price = {id: p.id, unit: p.unit_amount, interval: item.oneOff ? null : p.recurring?.interval || null};
+    priceCache.set(item.code, {price, at: now()});
     return price;
   }
 
@@ -104,10 +104,17 @@ function registerCheckoutRoutes(app, {publicQuotesEnabled = false, enabled, getC
       lines.push({item: l.item, name: ITEMS[l.item].name, quantity: l.quantity, priceId: price.id, unitPence: price.unit,
         totalPence: price.unit * l.quantity, interval: price.interval});
     }
-    // Computed items (insurance premiums) have no catalogue price: they travel as inline price_data.
-    for (const l of prepared.inline || []) lines.push({item: null, name: l.name, quantity: l.quantity, priceId: null, unitPence: l.unitPence, totalPence: l.unitPence * l.quantity, interval: null});
+    // Computed items (insurance premiums) have no catalogue price: they travel as inline price_data. A named employee's membership fee is
+    // charged once, inline, at the live membership price (priceItem).
+    for (const l of prepared.inline || []) {
+      const unit = l.priceItem ? (await priceFor(l.priceItem)).unit : l.unitPence;
+      lines.push({item: null, fee: l.priceItem || null, name: l.name, quantity: l.quantity, priceId: null, unitPence: unit, totalPence: unit * l.quantity, interval: null});
+    }
     if (!lines.length && !prepared.blocked) throw new HttpError(422, 'INVALID_REQUEST', 'Choose something to pay for.');
-    return {service, contact, prepared, lines, totalPence: lines.reduce((t, l) => t + l.totalPence, 0),
+    const feeLines = lines.filter(l => l.fee);
+    const fees = {count: feeLines.reduce((t, l) => t + l.quantity, 0), grossPence: feeLines.reduce((t, l) => t + l.totalPence, 0),
+      netPence: Math.round(feeLines.reduce((t, l) => t + Number(netPounds(l.fee, l.totalPence, l.quantity)) * 100, 0))};
+    return {service, contact, prepared, lines, fees, totalPence: lines.reduce((t, l) => t + l.totalPence, 0),
       mode: lines.some(l => l.interval) ? 'subscription' : 'payment'};
   }
   const view = b => b.alreadyPaid ? {service: b.service.title, alreadyPaid: true} :
@@ -237,14 +244,14 @@ function registerCheckoutRoutes(app, {publicQuotesEnabled = false, enabled, getC
       // Insurance CRM records are created now, before payment, as V1 does: Creator's webhook reads their ids from the metadata.
       // A payable insurance quote lives as long as its Stripe session: 23 hours 50 minutes (Stripe's limit is 24 hours).
       const expiresAt = b.prepared.beforePay ? new Date(now() + QUOTE_LIFE_MS) : null;
-      const insuranceIds = b.prepared.beforePay ? await b.prepared.beforePay((module, record) => crmCreate(req, module, record), {expiresAt}) : null;
+      const insuranceIds = b.prepared.beforePay ? await b.prepared.beforePay((module, record) => crmCreate(req, module, record), {expiresAt, feesPence: b.fees.grossPence}) : null;
       const catalogue = b.lines.filter(l => l.item);
       const amounts = {};
       for (const l of catalogue) amounts[l.item] = pounds(l.totalPence);
       const meta = {
         email: req.portalUser.email, name: b.contact ? [b.contact.First_Name, b.contact.Last_Name].filter(Boolean).join(' ') : '',
         currency: 'GBP', status: 'pending', source: 'portal_v2',
-        ...b.prepared.metadata({amounts, total: pounds(b.totalPence), lines: catalogue, insuranceIds}),
+        ...b.prepared.metadata({amounts, total: pounds(b.totalPence), lines: catalogue, insuranceIds, fees: b.fees}),
       };
       const params = new URLSearchParams({mode: b.mode, customer_email: req.portalUser.email, ...(expiresAt ? {expires_at: String(Math.floor(expiresAt.getTime() / 1000))} : {}),
         success_url: publicOrigin + '/app/#/payment-return?result=success&service=' + encodeURIComponent(input.service),

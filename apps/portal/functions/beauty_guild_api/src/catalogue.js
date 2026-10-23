@@ -1,8 +1,8 @@
 'use strict';
 // What members can pay for. Books is the source of truth for prices and keeps Stripe in step, so
-// nothing here holds an amount: each ITEM points at a Stripe price ID, supplied per environment as
-// an env var, and the checkout reads the live amount from Stripe. To add a new item, add it here
-// and set its STRIPE_PRICE_* env var. To add a new service, add an entry to SERVICES: it says who
+// nothing here holds an amount: each ITEM points at a Stripe price by its lookup key (the price list code),
+// and the checkout reads the live amount from Stripe. To add a new item, add it here and give its Stripe
+// price the matching lookup key. To add a new service, add an entry to SERVICES: it says who
 // may pay (ownership), which items to charge, and the metadata Creator expects after payment.
 const {HttpError} = require('./errors');
 const insurance = require('./insurance');
@@ -13,26 +13,29 @@ const START_WINDOW_DAYS = Object.freeze({membership: 30, insurance: 30});
 // The Payment_Status value each CRM module accepts while a payment is in progress. A module with no entry has no such value
 // (Deals use Pending, Paid, Not Paid and Failed), so nothing is written there.
 const PROCESSING_STATUS = Object.freeze({Training_Centre_Accred: 'Payment Processing'});
+// Each item names the Stripe price by its lookup key, which is the price list code (the same code is the SKU in Books).
+// A price change is a new Stripe price that takes over the lookup key, so nothing here or in the environment changes.
 const ITEMS = Object.freeze({
-  accreditation: {name: 'Accreditation', env: 'STRIPE_PRICE_ACCREDITATION'},
-  accreditation_associate_bundle: {name: 'Accreditation and Associate Membership', env: 'STRIPE_PRICE_ASSOCIATE_MEMBERSHIP'},
+  accreditation: {name: 'Accreditation', code: 'ACC-STD'},
+  accreditation_associate_bundle: {name: 'Accreditation and Associate Membership', code: 'ACC-ASSOC'},
   // International schools pay a flat, VAT-free fee (V1: £350, or £405 with the £55 International membership).
-  accreditation_international: {name: 'International Accreditation', env: 'STRIPE_PRICE_ACCREDITATION_INTERNATIONAL', vatFree: true},
-  accreditation_international_bundle: {name: 'International Accreditation and International Membership', env: 'STRIPE_PRICE_ACCREDITATION_INTERNATIONAL_BUNDLE', vatFree: true},
-  additional_venue: {name: 'Additional venue', env: 'STRIPE_PRICE_ADDITIONAL_VENUE'},
-  addon_bundle: {name: 'Membership bundle', env: 'STRIPE_PRICE_ADDON_BUNDLE'},
-  addon_certificate: {name: 'Certificate', env: 'STRIPE_PRICE_ADDON_CERTIFICATE'},
-  addon_badge: {name: 'Badge', env: 'STRIPE_PRICE_ADDON_BADGE'},
-  addon_sticker: {name: 'Window sticker', env: 'STRIPE_PRICE_ADDON_STICKER'},
-  joining_fee: {name: 'Membership joining fee', env: 'STRIPE_PRICE_MEMBERSHIP_JOINING_FEE'},
-  membership_branch: {name: 'Additional branch', env: 'STRIPE_PRICE_MEMBERSHIP_BRANCH'},
-  // Memberships are subscriptions. Each level has an annual and a monthly Stripe price (interval is checked).
+  accreditation_international: {name: 'International Accreditation', code: 'ACC-INTL', vatFree: true},
+  accreditation_international_bundle: {name: 'International Accreditation and International Membership', code: 'ACC-INTL-MEM', vatFree: true},
+  additional_venue: {name: 'Additional venue', code: 'ACC-VENUE'},
+  addon_bundle: {name: 'Membership bundle', code: 'MEM-BUNDLE'},
+  addon_certificate: {name: 'Certificate', code: 'MEM-CERT'},
+  addon_badge: {name: 'Badge', code: 'MEM-BADGE'},
+  addon_sticker: {name: 'Window sticker', code: 'MEM-STICKER'},
+  joining_fee: {name: 'Membership joining fee', code: 'MEM-JOIN'},
+  membership_branch: {name: 'Additional branch', code: 'MEM-BRANCH'},
+  // Yearly memberships are subscriptions (the interval is checked). Every level is £55 today but has its own price so they can differ later.
   // zeroRatedPence is the zero-rated part of the fee, used only to split net from gross for Creator.
-  ...Object.fromEntries(Object.entries({associate: 'Associate Member', full_non_salon: 'Full Member (Non-Salon)', full_salon: 'Full Member (Salon)'})
-    .flatMap(([id, name]) => [
-      ['membership_' + id + '_annual', {name: name + ' membership (annual)', env: 'STRIPE_PRICE_MEMBERSHIP_' + id.toUpperCase() + '_ANNUAL', interval: 'year', zeroRatedPence: 3570}],
-      ['membership_' + id + '_monthly', {name: name + ' membership (monthly)', env: 'STRIPE_PRICE_MEMBERSHIP_' + id.toUpperCase() + '_MONTHLY', interval: 'month', zeroRatedPence: 297.5}],
-    ])),
+  membership_associate_annual: {name: 'Associate Member membership (annual)', code: 'MEM-ASSOC-Y', interval: 'year', zeroRatedPence: 3800},
+  membership_full_non_salon_annual: {name: 'Full Member (Non-Salon) membership (annual)', code: 'MEM-FULLNS-Y', interval: 'year', zeroRatedPence: 3800},
+  membership_full_salon_annual: {name: 'Full Member (Salon) membership (annual)', code: 'MEM-FULLS-Y', interval: 'year', zeroRatedPence: 3800},
+  // What a named employee pays as their membership fee on an insurance policy. Read live from the membership price, charged once.
+  employee_fee_non_salon: {name: 'Named employee membership fee', code: 'MEM-FULLNS-Y', interval: 'year', zeroRatedPence: 3800, oneOff: true},
+  employee_fee_salon: {name: 'Named employee membership fee', code: 'MEM-FULLS-Y', interval: 'year', zeroRatedPence: 3800, oneOff: true},
 });
 const ADDONS = Object.freeze({bundle: 'addon_bundle', certificate: 'addon_certificate', badge: 'addon_badge', sticker: 'addon_sticker'});
 const LEVELS = Object.freeze({associate: 'Associate Member', full_non_salon: 'Full Member (Non-Salon)', full_salon: 'Full Member (Salon)'});
@@ -179,6 +182,9 @@ async function insuranceLines({req, contact, input, member, risk, start, end}) {
   if (!quote.rows.length && !blocked) bad('Choose the insurance cover you need.');
   const inline = quote.rows.map(r => ({name: 'Insurance - ' + r.label, unitPence: r.premiumPence, quantity: 1}));
   if (quote.iptPence) inline.push({name: 'Insurance Premium Tax (' + Math.round(insurance.IPT_RATE * 100) + '%)', unitPence: quote.iptPence, quantity: 1});
+  // Each named employee also pays a membership fee, read live from the membership price (build() fills in the amount).
+  const employees = insurance.employeeCount(ins), feeItem = ins.insRoute === 'salon' ? 'employee_fee_salon' : 'employee_fee_non_salon';
+  if (employees) inline.push({name: ITEMS[feeItem].name, priceItem: feeItem, quantity: employees});
   return {
     inline, blocked, quote, fingerprint: JSON.stringify([country, ins, start]),
     beforePay: (create, extra = {}) => insurance.createRecords(create, {contactId: contact?.id || '', membershipDealId: member?.id || null, ins, quote, start, end,
@@ -187,8 +193,10 @@ async function insuranceLines({req, contact, input, member, risk, start, end}) {
     refer: blocked && blocked.status !== 'INCOMPLETE' ? create => insurance.createRecords(create, {contactId: contact?.id || '', membershipDealId: member?.id || null, ins, quote, start, end,
       entryRoute: contact && !contact.createdNow ? 'Existing Member' : 'Public Prospect', termsAccepted: input.accepted === 'yes', audits: screening.audits,
       referral: {status: blocked.status === 'STOP' ? 'Stopped' : 'Referred', summary}}) : null,
-    metadata: ids => ({
+    metadata: (ids, fees = {count: 0, grossPence: 0, netPence: 0}) => ({
       insurance_start_date: start, insurance_end_date: end, insurance_amount: pounds(quote.totalPence), insurance_net_amount: pounds(quote.netPence), insurance_ipt_amount: pounds(quote.iptPence), insurance_route: ins.insRoute,
+      // One key, because Stripe allows 50 metadata keys and a membership with insurance is close to the limit.
+      named_employee_membership: JSON.stringify({count: fees.count, amount: pounds(fees.grossPence), amount_net: pounds(fees.netPence)}),
       insurance_policy_id: ids?.policyId || '', insured_premises_id: ids?.premisesId || '', insured_people_ids: (ids?.insuredPeopleIds || []).join(','),
       insurance_extension_ids: (ids?.extensionIds || []).join(','), insurance_declarations_id: ids?.declarationsId || '',
     }),
@@ -219,10 +227,12 @@ SERVICES.insurance = {
     const ins = await insuranceLines({req, contact, input, member, risk, start, end});
     return {
       lines: [], inline: ins.inline, blocked: ins.blocked, beforePay: ins.beforePay, refer: ins.refer, fingerprint: ins.fingerprint, noContact: !contact,
-      metadata: ({total, insuranceIds}) => ({
+      metadata: ({total, insuranceIds, fees}) => ({
         type: 'insurance', quote_reference: 'BGP-' + Date.now().toString(36).toUpperCase(), entry_point: contact && !contact.createdNow ? 'member' : 'public',
         contact_id: contact?.id || '', membership_deal_id: member?.id || '', membership_profile_id: member?.profileId || '', name,
-        insurance_requested: 'true', ...ins.metadata(insuranceIds), total_amount: total, total_amount_net: total,
+        insurance_requested: 'true', ...ins.metadata(insuranceIds, fees), total_amount: total,
+        // Premiums are VAT exempt, so only the employee membership fees have a VAT part to take off.
+        total_amount_net: (Number(total) - fees.grossPence / 100 + fees.netPence / 100).toFixed(2),
       }),
     };
   },
@@ -240,6 +250,7 @@ SERVICES.membership = {
     for (const b of secondary) if (!BRANCHES[b] || b === branch) bad('Choose each additional branch once, other than your main branch.');
     if (new Set(secondary).size !== secondary.length) bad('Choose each additional branch once.');
     const billing = input.billing === 'monthly' ? 'monthly' : input.billing === 'annual' ? 'annual' : bad('Choose annual or monthly payment.');
+    if (billing === 'monthly') bad('Monthly payment is being updated and is not available for a moment. Please choose annual payment.', 409, 'MONTHLY_UNAVAILABLE');
     const asked = input.addons && typeof input.addons === 'object' ? input.addons : {};
     const addons = {};
     for (const [key, raw] of Object.entries(asked)) {
@@ -265,7 +276,7 @@ SERVICES.membership = {
     } else if (member) bad('You already have an active membership. Renew or upgrade it instead of buying a new one.', 409, 'MEMBERSHIP_EXISTS');
     const {start, end: expiry} = resolveStart(input.start, 'membership');
 
-    const lines = [{item: 'membership_' + level + '_' + billing, quantity: 1}];
+    const lines = [{item: 'membership_' + level + '_annual', quantity: 1}];
     if (!previous) lines.push({item: 'joining_fee', quantity: 1});
     if (secondary.length) lines.push({item: 'membership_branch', quantity: secondary.length});
     for (const [key, quantity] of Object.entries(addons)) lines.push({item: ADDONS[key], quantity});
@@ -274,7 +285,7 @@ SERVICES.membership = {
     const ins = input.insurance ? await insuranceLines({req, contact, input, member, risk, start, end: expiry}) : null;
     return {
       lines, noContact: !contact, inline: ins?.inline || [], blocked: ins?.blocked || null, beforePay: ins?.beforePay, refer: ins?.refer, fingerprint: ins?.fingerprint,
-      metadata: ({lines: priced, total, insuranceIds}) => {
+      metadata: ({lines: priced, total, insuranceIds, fees}) => {
         const by = item => priced.find(l => l.item === item);
         const gross = item => by(item) ? pounds(by(item).totalPence) : '0.00';
         const net = item => by(item) ? netPounds(item, by(item).totalPence, by(item).quantity) : '0.00';
@@ -294,10 +305,10 @@ SERVICES.membership = {
           certificate_amount: gross('addon_certificate'), certificate_amount_net: net('addon_certificate'),
           badge_amount: gross('addon_badge'), badge_amount_net: net('addon_badge'),
           sticker_amount: gross('addon_sticker'), sticker_amount_net: net('addon_sticker'),
-          ...(ins ? ins.metadata(insuranceIds) : {
+          ...(ins ? ins.metadata(insuranceIds, fees) : {
             insurance_amount: 'not_requested', insurance_net_amount: '', insurance_ipt_amount: '', insurance_route: '',
             insurance_policy_id: '', insured_premises_id: '', insured_people_ids: '', insurance_extension_ids: '', insurance_declarations_id: ''}),
-          total_amount: total, total_amount_net: (Number(totalNet) + (ins ? ins.quote.totalPence / 100 : 0)).toFixed(2),
+          total_amount: total, total_amount_net: (Number(totalNet) + (ins ? ins.quote.totalPence / 100 + fees.netPence / 100 : 0)).toFixed(2),
         };
       },
     };
@@ -305,4 +316,4 @@ SERVICES.membership = {
 };
 const list = v => (Array.isArray(v) ? v : String(v || '').split(',')).map(x => String(x).trim()).filter(Boolean);
 
-module.exports = {ITEMS, SERVICES, ADDONS, pounds, ID, START_WINDOW_DAYS, PROCESSING_STATUS, isPaidStatus, isPayableAccreditation};
+module.exports = {ITEMS, SERVICES, ADDONS, pounds, netPounds, ID, START_WINDOW_DAYS, PROCESSING_STATUS, isPaidStatus, isPayableAccreditation};

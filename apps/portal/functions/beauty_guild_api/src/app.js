@@ -78,7 +78,7 @@ function createApp({
     registrationModule:config.schoolRegistrationModule,registrationField:config.schoolRegistrationField,
     activeStatus:config.schoolActiveStatus,getCrmHeaders,crmApiDomain:config.crmApiDomain,fetchImpl,now});
   registerRecordRoutes(app,{enabled:config.recordsEnabled,getCurrentUser,getCrmHeaders,crmApiDomain:config.crmApiDomain,fetchImpl,hideDrafts:config.crmDraftsEnabled,draftStatus:config.draftStatus});
-  registerCheckoutRoutes(app,{publicQuotesEnabled:config.publicQuotesEnabled,enabled:config.billingEnabled,getCurrentUser,getCrmHeaders,crmApiDomain:config.crmApiDomain,stripeKey:config.stripeSecretKey,prices:config.stripePrices,publicOrigin:config.portalPublicOrigin,riskChecks,fetchImpl,now});
+  registerCheckoutRoutes(app,{publicQuotesEnabled:config.publicQuotesEnabled,enabled:config.billingEnabled,getCurrentUser,getCrmHeaders,crmApiDomain:config.crmApiDomain,stripeKey:config.stripeSecretKey,publicOrigin:config.portalPublicOrigin,riskChecks,fetchImpl,now});
   registerDraftRoutes(app,{enabled:config.crmDraftsEnabled,getCurrentUser,getCrmHeaders,crmApiDomain:config.crmApiDomain,config,fetchImpl,listCourses:req=>courses.listActiveGti(req),sleep:accreditationSleep});
   registerDiagnosticsRoutes(app,{enabled:config.diagnosticsEnabled,allowedEmails:config.diagnosticsEmails,allowedDomains:config.diagnosticsDomains,getCurrentUser,getCrmHeaders,crmApiDomain:config.crmApiDomain,fetchImpl,risk:config.risk,getAnalyticsHeaders,getCreatorHeaders});
   registerDocumentRoutes(app,{enabled:config.documentsEnabled,getCurrentUser,getCrmHeaders,getWorkdriveHeaders,crmApiDomain:config.crmApiDomain,workdriveApiDomain:config.workdriveApiDomain,fetchImpl});

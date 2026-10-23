@@ -152,17 +152,16 @@ test('the Employers Liability wage roll figure is still rated at 0.2%, minimum �
   assert.ok(codes(rules({insSalon: true, insSalonEL: true, insWageRoll: 125001})).includes('WAGE_ROLL_LIMIT'));
   assert.ok(!codes(rules({insSalon: true, insSalonEL: true, insWageRoll: 125000})).includes('WAGE_ROLL_LIMIT'));
 });
-test('a single property away item over £10,000 stops the quote', () => {
+test('the £10,000 single property away item is a condition of cover in the journey, not a check on the quote (agreed 21 October)', () => {
   const base = {insSalon: true, insPropertyAwayCover: true, insPropertyAwaySI: 20000};
-  assert.ok(codes(rules({...base, insPropertyAwayMaxItem: 10001})).includes('PROPERTY_AWAY_ITEM_LIMIT'));
-  assert.ok(!codes(rules({...base, insPropertyAwayMaxItem: 10000})).includes('PROPERTY_AWAY_ITEM_LIMIT'));
-  assert.ok(!codes(rules({insSalon: true, insPropertyAwayMaxItem: 50000})).includes('PROPERTY_AWAY_ITEM_LIMIT'));
+  assert.ok(!codes(rules({...base, insPropertyAwayMaxItem: 50000})).includes('PROPERTY_AWAY_ITEM_LIMIT'));
+  assert.ok(codes(rules({...base, insPropertyAwaySI: 30000})).includes('PROPERTY_AWAY_LIMIT'), 'the £25,000 total limit still stops the quote');
 });
 test('treatment extensions carry the customer\'s names and their prices with IPT are the ones the portal shows', () => {
   const gross = id => { const t = TREATMENT_EXTENSIONS.find(x => x.id === id); return Math.round(t.premium * 100 * (1 + IPT_RATE)) / 100; };
   assert.deepEqual(TREATMENT_EXTENSIONS.map(t => t.name), ['Red Veins, Skin Tags, Milia, Warts & Moles by Advanced Electrolysis', 'Microneedling or Dermarolling', 'Nose and Cartilage Piercing',
     'Microblading, Semi-Permanent Make Up & Micropigmentation', 'Dermaplaning']);
-  // The customer's list says £33.60 for electrolysis, which is £30 net: the table has £28 (£31.36), held for the customer (AL-INS-021).
-  assert.deepEqual(['advanced_electrolysis', 'microneedling', 'piercing', 'spmu', 'dermaplaning'].map(gross), [31.36, 200.76, 15.85, 200.76, 200.76]);
+  // Electrolysis is £30 net, £33.60 with IPT (the Guild confirmed this on 21 October; the Fees Table said £28).
+  assert.deepEqual(['advanced_electrolysis', 'microneedling', 'piercing', 'spmu', 'dermaplaning'].map(gross), [33.6, 200.76, 15.85, 200.76, 200.76]);
   assert.deepEqual([75, 150].map(n => Math.round(n * 100 * (1 + IPT_RATE)) / 100), [84, 168]);
 });
