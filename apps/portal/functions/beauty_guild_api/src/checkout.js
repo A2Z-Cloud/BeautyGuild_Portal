@@ -115,6 +115,9 @@ function registerCheckoutRoutes(app, {publicQuotesEnabled = false, enabled, getC
     const feeLines = lines.filter(l => l.fee);
     const fees = {count: feeLines.reduce((t, l) => t + l.quantity, 0), grossPence: feeLines.reduce((t, l) => t + l.totalPence, 0),
       netPence: Math.round(feeLines.reduce((t, l) => t + Number(netPounds(l.fee, l.totalPence, l.quantity)) * 100, 0))};
+    // Membership and insurance renew by themselves. A yearly purchase's ongoing lines (the membership, extra branches, insurance premiums, IPT and
+    // employee fees) are therefore yearly subscription lines too, so everything carries on together; the joining fee and add-ons are paid once.
+    if (prepared.renews && !prepared.monthly) for (const l of lines) if (!l.interval && l.term === 'ongoing') { l.interval = 'year'; l.priceId = null; }
     if (prepared.monthly) {
       // A monthly plan is charged as 12 payments of the yearly price divided by 12, plus the admin fee. See plans.js.
       const admin = await priceFor('admin_fee_monthly');
@@ -303,11 +306,16 @@ function registerCheckoutRoutes(app, {publicQuotesEnabled = false, enabled, getC
         if (l.priceId) params.set('line_items[' + i + '][price]', l.priceId);
         else {
           params.set('line_items[' + i + '][price_data][currency]', 'gbp'); params.set('line_items[' + i + '][price_data][product_data][name]', l.name); params.set('line_items[' + i + '][price_data][unit_amount]', String(l.unitPence));
-          // A monthly plan line recurs every month; its term travels on the product so the schedule knows which lines stop after 12 payments.
-          if (b.plan) { params.set('line_items[' + i + '][price_data][recurring][interval]', 'month'); params.set('line_items[' + i + '][price_data][product_data][metadata][phase]', l.term); }
+          // A line that renews recurs. A monthly plan's lines also carry their term on the product so the schedule knows which stop after 12 payments.
+          if (l.interval) params.set('line_items[' + i + '][price_data][recurring][interval]', l.interval);
+          if (b.plan) params.set('line_items[' + i + '][price_data][product_data][metadata][phase]', l.term);
         }
         params.set('line_items[' + i + '][quantity]', String(l.quantity));
       });
+      if (b.mode === 'subscription' && !b.plan && b.prepared.renews) {
+        params.set('subscription_data[metadata][plan]', 'annual');
+        params.set('subscription_data[metadata][contact_id]', String(b.contact?.id || ''));
+      }
       if (b.plan) {
         params.set('subscription_data[metadata][plan]', 'monthly');
         params.set('subscription_data[metadata][phased]', b.lines.some(l => l.term === 'year_one') ? 'true' : 'false');

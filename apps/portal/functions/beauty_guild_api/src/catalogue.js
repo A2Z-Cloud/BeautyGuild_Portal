@@ -229,7 +229,7 @@ SERVICES.insurance = {
     const {start, end} = resolveStart(input.start, 'insurance');
     const ins = await insuranceLines({req, contact, input, member, risk, start, end});
     return {
-      lines: [], inline: ins.inline, blocked: ins.blocked, beforePay: ins.beforePay, refer: ins.refer, fingerprint: ins.fingerprint, noContact: !contact,
+      renews: true, lines: [], inline: ins.inline, blocked: ins.blocked, beforePay: ins.beforePay, refer: ins.refer, fingerprint: ins.fingerprint, noContact: !contact,
       metadata: ({total, insuranceIds, fees}) => ({
         type: 'insurance', quote_reference: 'BGP-' + Date.now().toString(36).toUpperCase(), entry_point: contact && !contact.createdNow ? 'member' : 'public',
         contact_id: contact?.id || '', membership_deal_id: member?.id || '', membership_profile_id: member?.profileId || '', name,
@@ -288,7 +288,7 @@ SERVICES.membership = {
     // One date covers both: the membership and its insurance start together.
     const ins = input.insurance ? await insuranceLines({req, contact, input, member, risk, start, end: expiry}) : null;
     return {
-      lines, monthly: billing === 'monthly', noContact: !contact, inline: ins?.inline || [], blocked: ins?.blocked || null, beforePay: ins?.beforePay, refer: ins?.refer, fingerprint: ins?.fingerprint,
+      lines, monthly: billing === 'monthly', renews: true, noContact: !contact, inline: ins?.inline || [], blocked: ins?.blocked || null, beforePay: ins?.beforePay, refer: ins?.refer, fingerprint: ins?.fingerprint,
       metadata: ({lines: priced, total, insuranceIds, fees}) => {
         const by = item => priced.find(l => l.item === item);
         const gross = item => by(item) ? pounds(by(item).totalPence) : '0.00';

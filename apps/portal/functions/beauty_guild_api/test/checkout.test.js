@@ -250,8 +250,10 @@ test('a signed-in member without a Contact can buy: a Contact is made first, the
     assert.equal(p.get('mode'), 'subscription');
     assert.equal(p.get('line_items[0][price]'), 'price_assocY1111');
     assert.equal(p.get('line_items[1][price]'), 'price_join111111');
-    assert.equal(p.get('line_items[2][price]'), 'price_branch1111');
-    assert.equal(p.get('line_items[3][price]'), 'price_badge44444');
+    // an extra branch is yearly, so it renews with the membership: an inline yearly price at the live branch amount
+    assert.equal(p.get('line_items[2][price_data][unit_amount]'), '1500');
+    assert.equal(p.get('line_items[2][price_data][recurring][interval]'), 'year');
+    assert.equal(p.get('line_items[3][price]'), 'price_badge44444', 'add-ons are paid once');
     assert.equal(p.get('metadata[type]'), 'membership');
     assert.equal(p.get('metadata[contact_id]'), '9000000000000000001', 'the Contact made for this customer');
     assert.equal(p.get('metadata[entry_point]'), 'public');
@@ -371,7 +373,10 @@ test('standalone insurance: inline premium lines and IPT, CRM records first, ids
     const r = await post(INSURE);
     assert.equal(r.status, 201);
     const p = w.stripePosts[0].params;
-    assert.equal(p.get('mode'), 'payment');
+    // insurance renews by itself, so even on its own it is a yearly subscription
+    assert.equal(p.get('mode'), 'subscription');
+    assert.equal(p.get('subscription_data[metadata][plan]'), 'annual');
+    assert.deepEqual([0, 1, 2].map(i => p.get('line_items[' + i + '][price_data][recurring][interval]')), ['year', 'year', 'year']);
     assert.deepEqual(lineNames(p), ['Insurance - Medical Malpractice', 'Insurance - Business Equipment', 'Insurance Premium Tax (12%)']);
     assert.equal(p.get('line_items[0][price_data][unit_amount]'), '3250');
     assert.equal(p.get('line_items[1][price_data][unit_amount]'), '6500');
@@ -444,6 +449,7 @@ test('salon property cover creates premises, people and linked extensions; a sal
     assert.equal(p.get('metadata[total_amount_net]'), '288.49');
     assert.equal(rec[0].Quoted_Amount, 291.32, 'the policy records what the customer is asked to pay, fees included');
     assert.ok(lineNames(p).includes('Named employee membership fee'));
+    assert.equal(p.get('line_items[' + lineNames(p).indexOf('Named employee membership fee') + '][price_data][recurring][interval]'), 'year', 'the employee fee renews with the policy');
     assert.equal(p.get('line_items[' + lineNames(p).indexOf('Named employee membership fee') + '][price_data][unit_amount]'), '5500');
   });
 });
@@ -550,6 +556,8 @@ test('membership with insurance: recurring membership plus one-off inline premiu
     assert.equal(p.get('line_items[0][price]'), 'price_fullY11111');
     assert.equal(p.get('line_items[1][price]'), 'price_join111111');
     assert.deepEqual(lineNames(p), ['Insurance - Medical Malpractice', 'Insurance - Business Equipment', 'Insurance Premium Tax (12%)']);
+    assert.deepEqual([2, 3, 4].map(i => p.get('line_items[' + i + '][price_data][recurring][interval]')), ['year', 'year', 'year'], 'the insurance renews with the membership');
+    assert.equal(p.has('line_items[1][price_data][recurring][interval]'), false, 'the joining fee is paid once');
     assert.equal(p.get('metadata[type]'), 'membership_insurance');
     assert.equal(p.get('metadata[insurance_requested]'), 'true');
     assert.equal(p.get('metadata[insurance_policy_id]'), '9000000000000000002', 'the Contact is made first, so the policy is the second record');
