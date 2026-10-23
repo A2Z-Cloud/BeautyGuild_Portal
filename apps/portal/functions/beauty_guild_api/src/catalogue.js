@@ -33,6 +33,8 @@ const ITEMS = Object.freeze({
   membership_associate_annual: {name: 'Associate Member membership (annual)', code: 'MEM-ASSOC-Y', interval: 'year', zeroRatedPence: 3800},
   membership_full_non_salon_annual: {name: 'Full Member (Non-Salon) membership (annual)', code: 'MEM-FULLNS-Y', interval: 'year', zeroRatedPence: 3800},
   membership_full_salon_annual: {name: 'Full Member (Salon) membership (annual)', code: 'MEM-FULLS-Y', interval: 'year', zeroRatedPence: 3800},
+  // On every monthly plan, once, whatever the plan is for. A monthly subscription at £1.50.
+  admin_fee_monthly: {name: 'Monthly payment admin fee', code: 'MEM-ADMIN', interval: 'month'},
   // What a named employee pays as their membership fee on an insurance policy. Read live from the membership price, charged once.
   employee_fee_non_salon: {name: 'Named employee membership fee', code: 'MEM-FULLNS-Y', interval: 'year', zeroRatedPence: 3800, oneOff: true},
   employee_fee_salon: {name: 'Named employee membership fee', code: 'MEM-FULLS-Y', interval: 'year', zeroRatedPence: 3800, oneOff: true},
@@ -129,9 +131,10 @@ const SERVICES = {
 };
 
 // Net (ex VAT) pounds for a priced line: standard rate 20%, except the zero-rated part of a membership fee.
-function netPounds(item, totalPence, quantity = 1) {
+function netPounds(item, totalPence, quantity = 1, scale = 1) {
   if (ITEMS[item].vatFree) return (totalPence / 100).toFixed(2);
-  const zr = (ITEMS[item].zeroRatedPence || 0) * quantity;
+  // scale is 1/12 for a monthly payment: the zero-rated part of the share is the same fraction of the yearly zero-rated part.
+  const zr = (ITEMS[item].zeroRatedPence || 0) * quantity * scale;
   return ((zr + (totalPence - zr) / 1.2) / 100).toFixed(2);
 }
 const isoDay = d => d.toISOString().slice(0, 10);
@@ -250,7 +253,6 @@ SERVICES.membership = {
     for (const b of secondary) if (!BRANCHES[b] || b === branch) bad('Choose each additional branch once, other than your main branch.');
     if (new Set(secondary).size !== secondary.length) bad('Choose each additional branch once.');
     const billing = input.billing === 'monthly' ? 'monthly' : input.billing === 'annual' ? 'annual' : bad('Choose annual or monthly payment.');
-    if (billing === 'monthly') bad('Monthly payment is being updated and is not available for a moment. Please choose annual payment.', 409, 'MONTHLY_UNAVAILABLE');
     const asked = input.addons && typeof input.addons === 'object' ? input.addons : {};
     const addons = {};
     for (const [key, raw] of Object.entries(asked)) {
@@ -276,21 +278,24 @@ SERVICES.membership = {
     } else if (member) bad('You already have an active membership. Renew or upgrade it instead of buying a new one.', 409, 'MEMBERSHIP_EXISTS');
     const {start, end: expiry} = resolveStart(input.start, 'membership');
 
-    const lines = [{item: 'membership_' + level + '_annual', quantity: 1}];
-    if (!previous) lines.push({item: 'joining_fee', quantity: 1});
-    if (secondary.length) lines.push({item: 'membership_branch', quantity: secondary.length});
-    for (const [key, quantity] of Object.entries(addons)) lines.push({item: ADDONS[key], quantity});
+    // On a monthly plan the yearly price is divided by 12. The joining fee and the add-ons are spread over the first 12 payments only
+    // (term year_one); the membership and any extra branches carry on (see plans.js).
+    const lines = [{item: 'membership_' + level + '_annual', quantity: 1, term: 'ongoing'}];
+    if (!previous) lines.push({item: 'joining_fee', quantity: 1, term: 'year_one'});
+    if (secondary.length) lines.push({item: 'membership_branch', quantity: secondary.length, term: 'ongoing'});
+    for (const [key, quantity] of Object.entries(addons)) lines.push({item: ADDONS[key], quantity, term: 'year_one'});
     if (input.insurance && level === 'associate') throw NEEDS_FULL();
     // One date covers both: the membership and its insurance start together.
     const ins = input.insurance ? await insuranceLines({req, contact, input, member, risk, start, end: expiry}) : null;
     return {
-      lines, noContact: !contact, inline: ins?.inline || [], blocked: ins?.blocked || null, beforePay: ins?.beforePay, refer: ins?.refer, fingerprint: ins?.fingerprint,
+      lines, monthly: billing === 'monthly', noContact: !contact, inline: ins?.inline || [], blocked: ins?.blocked || null, beforePay: ins?.beforePay, refer: ins?.refer, fingerprint: ins?.fingerprint,
       metadata: ({lines: priced, total, insuranceIds, fees}) => {
         const by = item => priced.find(l => l.item === item);
         const gross = item => by(item) ? pounds(by(item).totalPence) : '0.00';
-        const net = item => by(item) ? netPounds(item, by(item).totalPence, by(item).quantity) : '0.00';
+        const netOf = l => netPounds(l.item, l.totalPence, l.origQuantity ?? l.quantity, l.scale ?? 1);
+        const net = item => by(item) ? netOf(by(item)) : '0.00';
         const base = priced[0].item;
-        const totalNet = priced.reduce((t, l) => t + Number(netPounds(l.item, l.totalPence, l.quantity)), 0).toFixed(2);
+        const totalNet = priced.reduce((t, l) => t + Number(netOf(l)), 0).toFixed(2);
         return {
           type: ins ? 'membership_insurance' : 'membership', quote_reference: 'BGP-' + Date.now().toString(36).toUpperCase(), entry_point: contact && !contact.createdNow ? 'member' : 'public',
           contact_id: contact?.id || '', membership_profile_id: member?.profileId || '',

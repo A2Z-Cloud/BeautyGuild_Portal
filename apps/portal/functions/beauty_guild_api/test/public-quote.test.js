@@ -7,7 +7,7 @@ const {loadConfig} = require('../src/config');
 const ENV = {PORTAL_BILLING_ENABLED: 'true', PUBLIC_QUOTES_ENABLED: 'true', STRIPE_SECRET_KEY: 'sk_test_example_only', PORTAL_PUBLIC_ORIGIN: 'https://portal.example.test',
   PORTAL_RISK_SANCTIONS: 'true', PORTAL_RISK_FLOOD: 'true', PORTAL_RISK_SUBSIDENCE: 'true'};
 // Stripe prices are found by lookup key (the price list code).
-const PRICES = {'MEM-ASSOC-Y': [5500, 'year'], 'MEM-FULLNS-Y': [5500, 'year'], 'MEM-JOIN': [1000, null], 'MEM-BRANCH': [1500, null]};
+const PRICES = {'MEM-ASSOC-Y': [5500, 'year'], 'MEM-FULLNS-Y': [5500, 'year'], 'MEM-JOIN': [1000, null], 'MEM-BRANCH': [1500, null], 'MEM-ADMIN': [150, 'month']};
 const json = (body, status = 200) => ({status, ok: status < 400, json: async () => body});
 
 async function withApp(fn, env = {}) {
@@ -41,11 +41,14 @@ test('a signed-out visitor can price a membership: first charge with the joining
     assert.ok(calls.every(u => u.startsWith('https://api.stripe.com/v1/prices?')), 'only Stripe prices are read');
   });
 });
-test('monthly guest pricing is not available until monthly plans are rebuilt', async () => {
+test('monthly guest pricing: the yearly price and the joining fee spread over 12 payments, rounded up, plus the admin fee', async () => {
   await withApp(async ({quote}) => {
     const r = await quote({...BUY, billing: 'monthly'});
-    assert.equal(r.status, 409);
-    assert.equal(r.body.code, 'MONTHLY_UNAVAILABLE');
+    assert.equal(r.status, 200);
+    // 55.00 a year is 4.59 a month (rounded up); the 10.00 joining fee adds 0.83; the admin fee is 1.50
+    assert.equal(r.body.quote.totalPence, 459 + 83 + 150);
+    assert.deepEqual(r.body.quote.plan, {payments: 12, firstPaymentPence: 692, laterPaymentPence: 609, yearOneTotalPence: 692 * 12, adminFeePence: 150});
+    assert.deepEqual(r.body.quote.lines.map(l => [l.name, l.totalPence, l.interval]), [['Associate Member membership (monthly)', 459, 'month'], ['Membership joining fee', 83, 'month'], ['Monthly payment admin fee', 150, 'month']]);
   });
 });
 test('a guest cannot price a renewal, an upgrade, standalone insurance or accreditation', async () => {

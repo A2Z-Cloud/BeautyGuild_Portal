@@ -39,7 +39,7 @@ function createApp({
   });
   // Read-only function: reject anything but GET before any route logic runs.
   app.use((req, res, next) => {
-    if (req.method !== 'GET' && !req.path.startsWith('/portal/checkout') && !req.path.startsWith('/public/quote') && !req.path.startsWith('/portal/drafts') && !req.path.startsWith('/portal/management')) return next(new HttpError(405, 'METHOD_NOT_ALLOWED', 'Method not allowed.'));
+    if (req.method !== 'GET' && !req.path.startsWith('/portal/checkout') && !req.path.startsWith('/stripe/webhook') && !req.path.startsWith('/public/quote') && !req.path.startsWith('/portal/drafts') && !req.path.startsWith('/portal/management')) return next(new HttpError(405, 'METHOD_NOT_ALLOWED', 'Method not allowed.'));
     return next();
   });
 
@@ -78,7 +78,7 @@ function createApp({
     registrationModule:config.schoolRegistrationModule,registrationField:config.schoolRegistrationField,
     activeStatus:config.schoolActiveStatus,getCrmHeaders,crmApiDomain:config.crmApiDomain,fetchImpl,now});
   registerRecordRoutes(app,{enabled:config.recordsEnabled,getCurrentUser,getCrmHeaders,crmApiDomain:config.crmApiDomain,fetchImpl,hideDrafts:config.crmDraftsEnabled,draftStatus:config.draftStatus});
-  registerCheckoutRoutes(app,{publicQuotesEnabled:config.publicQuotesEnabled,enabled:config.billingEnabled,getCurrentUser,getCrmHeaders,crmApiDomain:config.crmApiDomain,stripeKey:config.stripeSecretKey,publicOrigin:config.portalPublicOrigin,riskChecks,fetchImpl,now});
+  registerCheckoutRoutes(app,{publicQuotesEnabled:config.publicQuotesEnabled,enabled:config.billingEnabled,getCurrentUser,getCrmHeaders,crmApiDomain:config.crmApiDomain,stripeKey:config.stripeSecretKey,scheduleWebhookSecret:config.stripeScheduleWebhookSecret,publicOrigin:config.portalPublicOrigin,riskChecks,fetchImpl,now});
   registerDraftRoutes(app,{enabled:config.crmDraftsEnabled,getCurrentUser,getCrmHeaders,crmApiDomain:config.crmApiDomain,config,fetchImpl,listCourses:req=>courses.listActiveGti(req),sleep:accreditationSleep});
   registerDiagnosticsRoutes(app,{enabled:config.diagnosticsEnabled,allowedEmails:config.diagnosticsEmails,allowedDomains:config.diagnosticsDomains,getCurrentUser,getCrmHeaders,crmApiDomain:config.crmApiDomain,fetchImpl,risk:config.risk,getAnalyticsHeaders,getCreatorHeaders});
   registerDocumentRoutes(app,{enabled:config.documentsEnabled,getCurrentUser,getCrmHeaders,getWorkdriveHeaders,crmApiDomain:config.crmApiDomain,workdriveApiDomain:config.workdriveApiDomain,fetchImpl});
