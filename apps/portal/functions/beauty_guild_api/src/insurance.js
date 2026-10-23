@@ -12,6 +12,9 @@ const TREATMENT_EXTENSIONS = Object.freeze([
   {id: 'spmu', name: 'Microblading, Semi-Permanent Make Up & Micropigmentation', premium: 179.25},
   {id: 'dermaplaning', name: 'Dermaplaning', premium: 179.25},
 ]);
+// The Books SKU of each treatment extension.
+const TREATMENT_SKU = Object.freeze({advanced_electrolysis: 'INS-EXT-ELEC', microneedling: 'INS-EXT-NEEDLE', piercing: 'INS-EXT-PIERCE', spmu: 'INS-EXT-SPMU', dermaplaning: 'INS-EXT-DERMA'});
+const IPT_SKU = 'INS-IPT';
 const NON_SALON_EQUIPMENT = Object.freeze([{value: 0, premium: 0}, {value: 5000, premium: 65}, {value: 10000, premium: 100}, {value: 15000, premium: 150}, {value: 20000, premium: 200}]);
 const NON_SALON_EQUIPMENT_NON_STANDARD = Object.freeze([{value: 0, premium: 0}, {value: 5000, premium: 97.5}, {value: 10000, premium: 150}, {value: 15000, premium: 225}, {value: 20000, premium: 300}]);
 const NON_SALON_EL = Object.freeze([{value: 1, premium: 75}, {value: 3, premium: 120}, {value: 5, premium: 150}]);
@@ -89,31 +92,33 @@ function calculateQuote(ins) {
   const rows = [];
   const add = (code, label, premium, extra = {}) => { const pence = Math.round(Number(premium || 0) * 100); if (pence > 0) rows.push({code, label, premiumPence: pence, ...extra}); };
   const salon = ins.insRoute === 'salon';
-  add('MEDMAL', 'Medical Malpractice', salon ? salonMedMal(ins.insTurnover) || 0 : 32.5);
+  // Every row carries its price list code (sku), the same code as the item in Books, so Creator can find the Books item by code.
+  const turnoverTier = Number(ins.insTurnover || 0) <= 100000 ? 'S1' : Number(ins.insTurnover) <= 175000 ? 'S2' : 'S3';
+  add('MEDMAL', 'Medical Malpractice', salon ? salonMedMal(ins.insTurnover) || 0 : 32.5, {sku: salon ? 'INS-MEDMAL-' + turnoverTier : 'INS-MEDMAL-NS'});
   // A salon pays no premium for its named people: a salon employee pays the membership fee only (see employeeCount) and a
   // salon subcontractor pays nothing. A non-salon employee pays the premium and the membership fee; a subcontractor, £15.
   namedPeople(ins).forEach((p, i) => {
     if (salon) return;
     const label = personName(p);
-    if (p.type === 'subcontractor') add('NAMED_SUBCONTRACTORS', ('Named subcontractor cover (' + label + ')').trim(), 15, {person: i});
-    else add('NAMED_EMPLOYEES', ('Named employee cover (' + label + ')').trim(), 32.5, {person: i});
+    if (p.type === 'subcontractor') add('NAMED_SUBCONTRACTORS', ('Named subcontractor cover (' + label + ')').trim(), 15, {person: i, sku: 'INS-NAMED-SUB-NS'});
+    else add('NAMED_EMPLOYEES', ('Named employee cover (' + label + ')').trim(), 32.5, {person: i, sku: 'INS-NAMED-EMP-NS'});
   });
-  for (const id of ins.insTreatmentExtensions) { const e = TREATMENT_EXTENSIONS.find(t => t.id === id); if (e) add('TREATMENT_' + id.toUpperCase(), e.name, e.premium); }
-  if (ins.insTeachingCover === 'standard') add('TEACHING', 'Teaching + Student Cover', 75);
-  if (ins.insTeachingCover === 'additional') add('TEACHING_PLUS', 'Teaching + Student Cover + Additional Treatments', 150);
+  for (const id of ins.insTreatmentExtensions) { const e = TREATMENT_EXTENSIONS.find(t => t.id === id); if (e) add('TREATMENT_' + id.toUpperCase(), e.name, e.premium, {sku: TREATMENT_SKU[id]}); }
+  if (ins.insTeachingCover === 'standard') add('TEACHING', 'Teaching + Student Cover', 75, {sku: 'INS-TEACH'});
+  if (ins.insTeachingCover === 'additional') add('TEACHING_PLUS', 'Teaching + Student Cover + Additional Treatments', 150, {sku: 'INS-TEACH-PLUS'});
   if (!salon) {
     const nonStandard = ins.insStandardConstruction === 'no';
     const equipment = (nonStandard ? NON_SALON_EQUIPMENT_NON_STANDARD : NON_SALON_EQUIPMENT).find(t => t.value === ins.insEquipmentTier);
-    if (equipment) add('BUSINESS_EQUIPMENT', 'Business Equipment' + (nonStandard ? ' (non-standard construction)' : ''), equipment.premium);
-    if (ins.insNonSalonEL) { const el = NON_SALON_EL.find(t => t.value === ins.insNonSalonELTier); if (el) add('EMPLOYERS_LIABILITY', "Employers' Liability", el.premium); }
+    if (equipment) add('BUSINESS_EQUIPMENT', 'Business Equipment' + (nonStandard ? ' (non-standard construction)' : ''), equipment.premium, {sku: 'INS-EQ-' + equipment.value / 1000 + 'K' + (nonStandard ? '-NS' : '')});
+    if (ins.insNonSalonEL) { const el = NON_SALON_EL.find(t => t.value === ins.insNonSalonELTier); if (el) add('EMPLOYERS_LIABILITY', "Employers' Liability", el.premium, {sku: 'INS-EL-' + el.value}); }
   } else {
-    if (ins.insSalonEL) add('EMPLOYERS_LIABILITY', "Employers' Liability", Math.max(positive(ins.insWageRoll) * 0.002, 75));
+    if (ins.insSalonEL) add('EMPLOYERS_LIABILITY', "Employers' Liability", Math.max(positive(ins.insWageRoll) * 0.002, 75), {sku: 'CALC-EL-S'});
     if (ins.insContents) add('CONTENTS', 'Contents', Math.max(positive(ins.insComputers) * 0.008 + positive(ins.insEquipment) * 0.02 + positive(ins.insStock) * 0.008
-      + positive(ins.insGeneralContents) * 0.005 + positive(ins.insTenantImprovements) * 0.0015 + positive(ins.insRentPayable) * 0.0015, 50));
-    if (ins.insMoneyCover) add('MONEY', 'Money', 20);
-    if (ins.insBuildingsCover) add('BUILDINGS', 'Buildings', Math.max(positive(ins.insBuildingsSI) * 0.0015 + positive(ins.insFixturesSI) * 0.0015 + positive(ins.insRentReceivableSI) * 0.0015, 75));
-    if (ins.insBiCover) add('BUSINESS_INTERRUPTION', 'Business Interruption', Math.max(positive(ins.insBiIncome) * 0.0008 + positive(ins.insBiDebts) * 0.0006, 50));
-    if (ins.insPropertyAwayCover) add('PROPERTY_AWAY', 'Property Away', Math.max(positive(ins.insPropertyAwaySI) * 0.025, 50));
+      + positive(ins.insGeneralContents) * 0.005 + positive(ins.insTenantImprovements) * 0.0015 + positive(ins.insRentPayable) * 0.0015, 50), {sku: 'CALC-CON'});
+    if (ins.insMoneyCover) add('MONEY', 'Money', 20, {sku: 'INS-MONEY'});
+    if (ins.insBuildingsCover) add('BUILDINGS', 'Buildings', Math.max(positive(ins.insBuildingsSI) * 0.0015 + positive(ins.insFixturesSI) * 0.0015 + positive(ins.insRentReceivableSI) * 0.0015, 75), {sku: 'CALC-BLD'});
+    if (ins.insBiCover) add('BUSINESS_INTERRUPTION', 'Business Interruption', Math.max(positive(ins.insBiIncome) * 0.0008 + positive(ins.insBiDebts) * 0.0006, 50), {sku: 'CALC-BI'});
+    if (ins.insPropertyAwayCover) add('PROPERTY_AWAY', 'Property Away', Math.max(positive(ins.insPropertyAwaySI) * 0.025, 50), {sku: 'CALC-PA'});
   }
   const netPence = rows.reduce((t, r) => t + r.premiumPence, 0), iptPence = Math.round(netPence * IPT_RATE);
   return {rows, netPence, iptPence, totalPence: netPence + iptPence};
@@ -249,4 +254,4 @@ async function createRecords(create, {contactId, membershipDealId, ins, quote, s
   return {policyId, premisesId, insuredPeopleIds: personIds, extensionIds, declarationsId, screeningIds};
 }
 
-module.exports = {IPT_RATE, TREATMENT_EXTENSIONS, clean, calculateQuote, employeeCount, evaluateRules, summarise, createRecords, propertyRequired, territory};
+module.exports = {IPT_RATE, IPT_SKU, TREATMENT_EXTENSIONS, clean, calculateQuote, employeeCount, evaluateRules, summarise, createRecords, propertyRequired, territory};
