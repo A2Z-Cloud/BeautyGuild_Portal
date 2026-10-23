@@ -6,7 +6,7 @@
 // route or eligibility is trusted: the server rates and rules on the cleaned answers only.
 const IPT_RATE = 0.12;
 const TREATMENT_EXTENSIONS = Object.freeze([
-  {id: 'advanced_electrolysis', name: 'Red Veins, Skin Tags, Milia, Warts & Moles by Advanced Electrolysis', premium: 28},
+  {id: 'advanced_electrolysis', name: 'Red Veins, Skin Tags, Milia, Warts & Moles by Advanced Electrolysis', premium: 30},
   {id: 'microneedling', name: 'Microneedling or Dermarolling', premium: 179.25},
   {id: 'piercing', name: 'Nose and Cartilage Piercing', premium: 14.15},
   {id: 'spmu', name: 'Microblading, Semi-Permanent Make Up & Micropigmentation', premium: 179.25},
@@ -80,6 +80,8 @@ function territory(country) {
 const personName = p => (p.firstName + ' ' + p.lastName).trim();
 const propertyRequired = ins => ins.insRoute === 'salon' && (ins.insContents || ins.insMoneyCover || ins.insBuildingsCover || ins.insBiCover || ins.insPropertyAwayCover);
 const namedPeople = ins => (ins.insNamedPeopleCover ? ins.insNamedPeople : []);
+// Every named employee, salon or not, pays a membership fee on top of any premium. Subcontractors pay none.
+const employeeCount = ins => namedPeople(ins).filter(p => p.type !== 'subcontractor').length;
 
 // Rates the cleaned answers. Rows carry premiums in pence (each rounded to the penny, as the
 // customer sees them); IPT is 12% of the net total, rounded once. Same tables and formulas as V1.
@@ -88,7 +90,10 @@ function calculateQuote(ins) {
   const add = (code, label, premium, extra = {}) => { const pence = Math.round(Number(premium || 0) * 100); if (pence > 0) rows.push({code, label, premiumPence: pence, ...extra}); };
   const salon = ins.insRoute === 'salon';
   add('MEDMAL', 'Medical Malpractice', salon ? salonMedMal(ins.insTurnover) || 0 : 32.5);
+  // A salon pays no premium for its named people: a salon employee pays the membership fee only (see employeeCount) and a
+  // salon subcontractor pays nothing. A non-salon employee pays the premium and the membership fee; a subcontractor, £15.
   namedPeople(ins).forEach((p, i) => {
+    if (salon) return;
     const label = personName(p);
     if (p.type === 'subcontractor') add('NAMED_SUBCONTRACTORS', ('Named subcontractor cover (' + label + ')').trim(), 15, {person: i});
     else add('NAMED_EMPLOYEES', ('Named employee cover (' + label + ')').trim(), 32.5, {person: i});
@@ -138,7 +143,7 @@ function evaluateRules(ins, country, {complete = false} = {}) {
     if (ins.insBuildingsCover && positive(ins.insBuildingsSI) + positive(ins.insFixturesSI) + positive(ins.insRentReceivableSI) > 500000) push('STOP', 'BUILDINGS_LIMIT', 'Your Buildings sum insured is above £500,000.');
     if (ins.insBiCover && positive(ins.insBiIncome) + positive(ins.insBiDebts) > 300000) push('STOP', 'BI_LIMIT', 'Your Business Interruption sum insured is above £300,000.');
     if (ins.insPropertyAwayCover && ins.insPropertyAwaySI > 25000) push('STOP', 'PROPERTY_AWAY_LIMIT', 'Your Property Away sum insured is above £25,000.');
-    if (ins.insPropertyAwayCover && ins.insPropertyAwayMaxItem > 10000) push('STOP', 'PROPERTY_AWAY_ITEM_LIMIT', 'We cannot provide cover if the value of any single item exceeds £10,000.');
+    // The £10,000 single item limit is a condition of cover shown in the journey, not a check (agreed with the Guild 21 October).
     // Each of these refers on its own (UAT AL-INS-053, AL-INS-054, AL-INS-057); V1 only referred flood together with a basement.
     if (ins.insFloodHistory === 'yes') push('REFER', 'FLOOD_HISTORY', 'The Insurance team needs to review the flood history for this premises.');
     if (ins.insBasement === 'yes') push('REFER', 'BASEMENT', 'The Insurance team needs to review the basement at this premises.');
@@ -183,7 +188,7 @@ const money2 = pence => Math.round(pence) / 100;
 // A quote that is REFER or STOP also gets these records ({referral}: Application_Status Referred, Risk_Status
 // Referred or Stopped) so the Insurance team can pick it up; it never reaches Stripe. {audits} are the risk checks
 // run for this application: each becomes a staff-only Risk_Screenings row linked to the policy.
-async function createRecords(create, {contactId, membershipDealId, ins, quote, start, end, entryRoute, termsAccepted, referral = null, audits = [], expiresAt = null}) {
+async function createRecords(create, {contactId, membershipDealId, ins, quote, start, end, entryRoute, termsAccepted, referral = null, audits = [], expiresAt = null, feesPence = 0}) {
   const description = Object.entries(BUSINESS_DESCRIPTION_BY_FLAG).filter(([flag]) => ins[flag]).map(([, label]) => label);
   const policyId = await create('Insurance_Policy', {
     Contact: contactId || undefined, Membership: membershipDealId || undefined, Policy_Type: ins.insRoute === 'salon' ? 'Salon' : 'Non Salon',
@@ -191,7 +196,7 @@ async function createRecords(create, {contactId, membershipDealId, ins, quote, s
     Policy_Start_Date: start || undefined, Policy_End_Date: end || undefined,
     Application_Status: referral ? 'Referred' : 'Ready for Payment', Application_Source: 'Website', Entry_Route: entryRoute,
     // What was quoted (gross, with IPT) and, for a payable quote, the day its Stripe session runs out.
-    Quoted_Amount: money2(quote.totalPence), Quote_Expiry: expiresAt ? expiresAt.toISOString().slice(0, 10) : undefined,
+    Quoted_Amount: money2(quote.totalPence + feesPence), Quote_Expiry: expiresAt ? expiresAt.toISOString().slice(0, 10) : undefined,
     ...(referral ? {Risk_Status: referral.status, Risk_Summary: referral.summary} : audits.length ? {Risk_Status: 'Clear'} : {}),
   });
   let premisesId = null;
@@ -244,4 +249,4 @@ async function createRecords(create, {contactId, membershipDealId, ins, quote, s
   return {policyId, premisesId, insuredPeopleIds: personIds, extensionIds, declarationsId, screeningIds};
 }
 
-module.exports = {IPT_RATE, TREATMENT_EXTENSIONS, clean, calculateQuote, evaluateRules, summarise, createRecords, propertyRequired, territory};
+module.exports = {IPT_RATE, TREATMENT_EXTENSIONS, clean, calculateQuote, employeeCount, evaluateRules, summarise, createRecords, propertyRequired, territory};

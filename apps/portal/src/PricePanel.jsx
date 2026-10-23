@@ -1,7 +1,7 @@
 import React,{useState} from 'react';
 import {formatDate} from './format.js';
 import {isFuture} from './startDate.js';
-import {dueToday,thenCharge} from './priceSummary.js';
+import {dueToday,planSummary,thenCharge} from './priceSummary.js';
 
 const money=pence=>'£'+(pence/100).toFixed(2);
 
@@ -9,7 +9,7 @@ const money=pence=>'£'+(pence/100).toFixed(2);
 // It shows the last price while a new one is worked out, so the figure never jumps to a blank.
 export default function PricePanel({quote,loading,error,ready=true,emptyText,note,billing,onBilling,start}){
   const [open,setOpen]=useState(()=>typeof window==='undefined'||window.innerWidth>900);
-  const then=thenCharge(quote),future=isFuture(start);
+  const then=thenCharge(quote),plan=planSummary(quote),future=isFuture(start);
   return <aside className="price-panel" aria-label="Your price" aria-live="polite">
     <details open={open} onToggle={e=>setOpen(e.currentTarget.open)}>
       <summary><span className="price-title">Price breakdown</span><strong className="price-sum">{quote?money(dueToday(quote)):'-'}</strong></summary>
@@ -22,6 +22,9 @@ export default function PricePanel({quote,loading,error,ready=true,emptyText,not
           <div className="price-total"><span>Due today</span><strong>{money(dueToday(quote))}</strong></div>
           {loading&&<p className="price-updating" role="status">Updating…</p>}
           {error&&<p className="price-error" role="alert">{error}</p>}
+          {plan&&<p className="price-then">{plan.same?'Monthly plan: '+money(plan.firstPence)+' a month, renewing automatically.'
+            :'Monthly plan: '+money(plan.firstPence)+' a month for the first '+plan.payments+' payments, which spreads your joining fee and extras over the year. From payment '+(plan.payments+1)+' it is '+money(plan.laterPence)+' a month, renewing automatically.'}
+            {' It includes a monthly admin fee of '+money(plan.adminPence)+'.'}</p>}
           {then&&<p className="price-then">Then {money(then.pence)} each {then.interval}{then.yearly?', equivalent to '+money(then.yearly)+' a year':''}, until you cancel.</p>}
           {future&&<p className="price-then">Starts on {formatDate(start)}. It shows as Coming soon until then.</p>}
           {note&&<p className="price-then">{note}</p>}

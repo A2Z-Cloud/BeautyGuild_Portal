@@ -8,7 +8,6 @@ import {LEGAL} from './legal.js';
 export const GUILD_PHONE='01332 224830';
 export const CALL_OFFICE='Please call the office to discuss your application';
 export const WAGE_ROLL_LIMIT=125000;
-export const PROPERTY_AWAY_ITEM_LIMIT=10000;
 const IPT=1.12;
 const yn=(name,label,extra={})=>({name,label,type:'radio',required:true,options:[{value:'yes',label:'Yes'},{value:'no',label:'No'}],...extra});
 const sum=(name,label,extra={})=>({name,label,type:'number',required:false,...extra});
@@ -40,7 +39,7 @@ const CONTENTS_WORDING='This covers you for damage to your business stock and eq
 
 // Prices include IPT: the net premiums are the function's TREATMENT_EXTENSIONS and teaching rows (insurance.js).
 export const TREATMENT_OPTIONS=[
-  {value:'advanced_electrolysis',label:'Red Veins, Skin Tags, Milia, Warts & Moles by Advanced Electrolysis',net:28},
+  {value:'advanced_electrolysis',label:'Red Veins, Skin Tags, Milia, Warts & Moles by Advanced Electrolysis',net:30},
   {value:'microneedling',label:'Microneedling or Dermarolling',net:179.25},
   {value:'piercing',label:'Nose and Cartilage Piercing',net:14.15},
   {value:'spmu',label:'Microblading, Semi-Permanent Make Up & Micropigmentation',net:179.25},
@@ -141,9 +140,7 @@ export const INSURANCE_STEPS=[
   salonSum('insBiDebts','Outstanding Debts','This would cover any of your outstanding debts which you are unable to recover following loss of your accounting records as a direct result of insured damage or insured failure.',salonAnd('insBiCover'))]},
  {id:'propertyAway',title:'Property Away in Transit',description:'',when:isSalon,intro:['Property away and in transit insurance protects you when your business equipment is damaged while away from the insured premises.',doc('SALON_PROPERTY_AWAY')],fields:[
   yn('insPropertyAwayCover','Do You Require Property Away in Transit cover? Anywhere in UK, Northern Ireland, Channel Islands and Isle of Man.',{when:isSalon,yesNote:[signedOff('of the value of your property')]}),
-  sum('insPropertyAwaySI','What is the total value you require for all property away in transit? (£)',{when:salonAnd('insPropertyAwayCover'),info:['Cover can be provided for up to £25,000']}),
-  sum('insPropertyAwayMaxItem','What is the value of the highest single item to be insured? (£)',{required:true,when:salonAnd('insPropertyAwayCover'),info:['We cannot provide cover if the value of any single item exceeds £10,000'],
-    stopAbove:PROPERTY_AWAY_ITEM_LIMIT,stopMessage:'We cannot provide cover if the value of any single item exceeds £10,000'})]},
+  sum('insPropertyAwaySI','What is the total value you require for all property away in transit? (£)',{when:salonAnd('insPropertyAwayCover'),info:['Cover can be provided for up to £25,000','The value of any single item to be insured does not exceed £10,000']})]},
  {id:'property',title:'Your premises',description:'We need the address and some details of the premises you are insuring.',when:propertyCover,fields:[
   {name:'insPremL1',label:'Premises address line 1',type:'text',required:true},{name:'insPremL2',label:'Premises address line 2',type:'text',required:false},
   {name:'insPremTown',label:'Town / city',type:'text',required:true},{name:'insPremCounty',label:'County',type:'text',required:false},{name:'insPremPostcode',label:'Postcode',type:'text',required:true},
@@ -169,7 +166,7 @@ const FLAGS=['insNamedPeopleCover','insContents','insMoneyCover','insBuildingsCo
 export const CONFIRMATIONS=['insInformationAccurate','insEthicsAccepted','insDemandsNeedsAccepted','insNonAdvisedAccepted'];
 // "Additional" teaching cover is only offered with an additional treatment; a stale choice is treated as none.
 export const effective=v=>v.insTeachingCover==='additional'&&!treatments(v)?{...v,insTeachingCover:''}:v;
-// The call-the-office messages that stop the customer going on (a wage roll over £125,000, a single item over £10,000).
+// The call-the-office messages that stop the customer going on (a wage roll over £125,000).
 export function stopMessages(v){
   return visibleFields(v).flatMap(f=>(f.stopOn&&v[f.name]===f.stopOn)||(f.stopAbove&&Number(v[f.name])>f.stopAbove)?[f.stopMessage]:[]);
 }

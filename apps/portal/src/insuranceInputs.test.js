@@ -51,15 +51,15 @@ test('AL-INS-044 and 049: wage roll is a yes/no for a salon, and the figure is o
   assert.equal(r.insWageRollOver125k,'no');assert.equal(r.insWageRoll,60000);
   assert.equal(toRequest({...SALON,insWageRollOver125k:'no',insWageRoll:'60000'}).insWageRoll,undefined);
 });
-test('AL-INS-073: a single property away item over £10,000 blocks',()=>{
+test('AL-INS-073: the £10,000 single item limit is wording on the page, not a question or a block',()=>{
   const v={...SALON,insPropertyAwayCover:'yes'};
-  assert.ok(names(v).includes('insPropertyAwayMaxItem'));
-  assert.equal(stopMessages({...v,insPropertyAwayMaxItem:'10001'}).length,1);
-  assert.equal(stopMessages({...v,insPropertyAwayMaxItem:'10000'}).length,0);
-  assert.equal(toRequest({...v,insPropertyAwayMaxItem:'4500'}).insPropertyAwayMaxItem,4500);
+  assert.ok(!names(v).includes('insPropertyAwayMaxItem'));
+  assert.equal(stopMessages({...v,insPropertyAwayMaxItem:'50000'}).length,0);
+  const field=visibleFields(v).find(f=>f.name==='insPropertyAwaySI');
+  assert.ok(field.info.includes('The value of any single item to be insured does not exceed £10,000'));
 });
 test('AL-INS-008 and 009: treatment and teaching prices show with IPT, and additional teaching needs an additional treatment',()=>{
-  assert.deepEqual(TREATMENT_OPTIONS.map(o=>o.price),['£31.36','£200.76','£15.85','£200.76','£200.76']);
+  assert.deepEqual(TREATMENT_OPTIONS.map(o=>o.price),['£33.60','£200.76','£15.85','£200.76','£200.76']);
   assert.equal(withIpt(75),'£84.00');assert.equal(withIpt(150),'£168.00');
   const teaching=INSURANCE_STEPS.find(s=>s.id==='teaching').fields[0];
   assert.deepEqual(teaching.options.map(o=>o.price).filter(Boolean),['£84.00','£168.00']);
