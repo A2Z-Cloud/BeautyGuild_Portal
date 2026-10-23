@@ -183,11 +183,11 @@ async function insuranceLines({req, contact, input, member, risk, start, end}) {
   const blocked = merged.overall === 'PASS' ? null : {status: merged.overall, reasons: [...new Set(merged.results.map(r => r.customerMessage))], riskMessage: screening.riskMessage};
   const summary = blocked ? merged.results.map(r => r.code + ': ' + r.customerMessage).join('; ').slice(0, 1900) : '';
   if (!quote.rows.length && !blocked) bad('Choose the insurance cover you need.');
-  const inline = quote.rows.map(r => ({name: 'Insurance - ' + r.label, unitPence: r.premiumPence, quantity: 1}));
-  if (quote.iptPence) inline.push({name: 'Insurance Premium Tax (' + Math.round(insurance.IPT_RATE * 100) + '%)', unitPence: quote.iptPence, quantity: 1});
+  const inline = quote.rows.map(r => ({name: 'Insurance - ' + r.label, unitPence: r.premiumPence, quantity: 1, sku: r.sku}));
+  if (quote.iptPence) inline.push({name: 'Insurance Premium Tax (' + Math.round(insurance.IPT_RATE * 100) + '%)', unitPence: quote.iptPence, quantity: 1, sku: insurance.IPT_SKU});
   // Each named employee also pays a membership fee, read live from the membership price (build() fills in the amount).
   const employees = insurance.employeeCount(ins), feeItem = ins.insRoute === 'salon' ? 'employee_fee_salon' : 'employee_fee_non_salon';
-  if (employees) inline.push({name: ITEMS[feeItem].name, priceItem: feeItem, quantity: employees});
+  if (employees) inline.push({name: ITEMS[feeItem].name, priceItem: feeItem, quantity: employees, sku: ITEMS[feeItem].code});
   return {
     inline, blocked, quote, fingerprint: JSON.stringify([country, ins, start]),
     beforePay: (create, extra = {}) => insurance.createRecords(create, {contactId: contact?.id || '', membershipDealId: member?.id || null, ins, quote, start, end,

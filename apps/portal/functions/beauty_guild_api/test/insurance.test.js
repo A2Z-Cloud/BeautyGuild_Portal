@@ -165,3 +165,23 @@ test('treatment extensions carry the customer\'s names and their prices with IPT
   assert.deepEqual(['advanced_electrolysis', 'microneedling', 'piercing', 'spmu', 'dermaplaning'].map(gross), [33.6, 200.76, 15.85, 200.76, 200.76]);
   assert.deepEqual([75, 150].map(n => Math.round(n * 100 * (1 + IPT_RATE)) / 100), [84, 168]);
 });
+
+// ---- Price list codes (the SKUs in Books) on every quote row ----
+const BOOKS_INSURANCE_SKUS = new Set(['INS-MEDMAL-NS', 'INS-MEDMAL-S1', 'INS-MEDMAL-S2', 'INS-MEDMAL-S3', 'INS-EQ-5K', 'INS-EQ-10K', 'INS-EQ-15K', 'INS-EQ-20K',
+  'INS-EQ-5K-NS', 'INS-EQ-10K-NS', 'INS-EQ-15K-NS', 'INS-EQ-20K-NS', 'INS-EL-1', 'INS-EL-3', 'INS-EL-5', 'INS-TEACH', 'INS-TEACH-PLUS', 'INS-EXT-ELEC', 'INS-EXT-NEEDLE',
+  'INS-EXT-PIERCE', 'INS-EXT-SPMU', 'INS-EXT-DERMA', 'INS-MONEY', 'INS-NAMED-EMP-NS', 'INS-NAMED-SUB-NS', 'CALC-EL-S', 'CALC-CON', 'CALC-BLD', 'CALC-BI', 'CALC-PA', 'INS-IPT', 'INS-ADJ']);
+test('every quote row carries a price list code that exists in Books, whatever the cover', () => {
+  const seen = new Set();
+  const check = answers => { for (const r of calculateQuote(clean(answers)).rows) { assert.ok(BOOKS_INSURANCE_SKUS.has(r.sku), r.code + ' has no valid code: ' + r.sku); seen.add(r.sku); } };
+  for (const nonStd of ['yes', 'no']) for (const tier of [5000, 10000, 15000, 20000]) check({insEquipmentTier: tier, insStandardConstruction: nonStd});
+  for (const tier of [1, 3, 5]) check({insNonSalonEL: true, insNonSalonELTier: tier});
+  for (const turnover of [50000, 100000, 100001, 175000, 175001, 250000]) check({insSalon: true, insTurnover: turnover});
+  check({insTeachingCover: 'standard'}); check({insTeachingCover: 'additional'});
+  check({insTreatmentExtensions: TREATMENT_EXTENSIONS.map(t => t.id)});
+  check({insNamedPeopleCover: true, insNamedPeople: [{type: 'employee', firstName: 'A', lastName: 'B'}, {type: 'subcontractor', firstName: 'C', lastName: 'D'}]});
+  check({insSalon: true, insTurnover: 90000, insSalonEL: true, insWageRoll: 60000, insContents: true, insComputers: 2000, insMoneyCover: true, insBuildingsCover: true, insBuildingsSI: 100000,
+    insBiCover: true, insBiIncome: 100000, insPropertyAwayCover: true, insPropertyAwaySI: 10000});
+  // every Books insurance code except the staff-only adjustment and IPT (which is its own line) is reachable from the portal
+  const unreachable = [...BOOKS_INSURANCE_SKUS].filter(c => !seen.has(c) && !['INS-ADJ', 'INS-IPT'].includes(c));
+  assert.deepEqual(unreachable, []);
+});

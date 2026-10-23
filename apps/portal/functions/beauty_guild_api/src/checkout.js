@@ -103,13 +103,13 @@ function registerCheckoutRoutes(app, {publicQuotesEnabled = false, enabled, getC
     for (const l of prepared.lines) {
       const price = await priceFor(l.item);
       lines.push({item: l.item, name: ITEMS[l.item].name, quantity: l.quantity, priceId: price.id, unitPence: price.unit,
-        totalPence: price.unit * l.quantity, interval: price.interval, term: l.term || 'ongoing'});
+        totalPence: price.unit * l.quantity, interval: price.interval, term: l.term || 'ongoing', sku: ITEMS[l.item].code});
     }
     // Computed items (insurance premiums) have no catalogue price: they travel as inline price_data. A named employee's membership fee is
     // charged once, inline, at the live membership price (priceItem).
     for (const l of prepared.inline || []) {
       const unit = l.priceItem ? (await priceFor(l.priceItem)).unit : l.unitPence;
-      lines.push({item: null, fee: l.priceItem || null, name: l.name, quantity: l.quantity, priceId: null, unitPence: unit, totalPence: unit * l.quantity, interval: null, term: 'ongoing'});
+      lines.push({item: null, fee: l.priceItem || null, sku: l.sku || null, name: l.name, quantity: l.quantity, priceId: null, unitPence: unit, totalPence: unit * l.quantity, interval: null, term: 'ongoing'});
     }
     if (!lines.length && !prepared.blocked) throw new HttpError(422, 'INVALID_REQUEST', 'Choose something to pay for.');
     const feeLines = lines.filter(l => l.fee);
@@ -122,9 +122,9 @@ function registerCheckoutRoutes(app, {publicQuotesEnabled = false, enabled, getC
       // A monthly plan is charged as 12 payments of the yearly price divided by 12, plus the admin fee. See plans.js.
       const admin = await priceFor('admin_fee_monthly');
       const plan = plans.splitMonthly(lines, admin.unit);
-      const monthly = plan.lines.filter(l => l.monthlyPence > 0).map(l => ({item: l.item, fee: l.fee, name: l.name.replace('(annual)', '(monthly)') + (l.quantity > 1 && !l.fee ? ' x ' + l.quantity : ''), quantity: 1, origQuantity: l.quantity, scale: 1 / plans.PAYMENTS,
+      const monthly = plan.lines.filter(l => l.monthlyPence > 0).map(l => ({item: l.item, fee: l.fee, sku: l.sku, name: l.name.replace('(annual)', '(monthly)') + (l.quantity > 1 && !l.fee ? ' x ' + l.quantity : ''), quantity: 1, origQuantity: l.quantity, scale: 1 / plans.PAYMENTS,
         priceId: null, unitPence: l.monthlyPence, totalPence: l.monthlyPence, interval: 'month', term: l.term}));
-      monthly.push({item: 'admin_fee_monthly', name: ITEMS.admin_fee_monthly.name, quantity: 1, priceId: admin.id, unitPence: admin.unit, totalPence: admin.unit, interval: 'month', term: 'ongoing'});
+      monthly.push({item: 'admin_fee_monthly', sku: ITEMS.admin_fee_monthly.code, name: ITEMS.admin_fee_monthly.name, quantity: 1, priceId: admin.id, unitPence: admin.unit, totalPence: admin.unit, interval: 'month', term: 'ongoing'});
       return {service, contact, prepared, lines: monthly, fees, plan, totalPence: plan.firstPaymentPence, mode: 'subscription'};
     }
     return {service, contact, prepared, lines, fees, totalPence: lines.reduce((t, l) => t + l.totalPence, 0),
@@ -306,6 +306,8 @@ function registerCheckoutRoutes(app, {publicQuotesEnabled = false, enabled, getC
         if (l.priceId) params.set('line_items[' + i + '][price]', l.priceId);
         else {
           params.set('line_items[' + i + '][price_data][currency]', 'gbp'); params.set('line_items[' + i + '][price_data][product_data][name]', l.name); params.set('line_items[' + i + '][price_data][unit_amount]', String(l.unitPence));
+          // The price list code (the item's SKU in Books) travels on the line's product, so Creator can find the Books item by code, not by name.
+          if (l.sku) params.set('line_items[' + i + '][price_data][product_data][metadata][sku]', l.sku);
           // A line that renews recurs. A monthly plan's lines also carry their term on the product so the schedule knows which stop after 12 payments.
           if (l.interval) params.set('line_items[' + i + '][price_data][recurring][interval]', l.interval);
           if (b.plan) params.set('line_items[' + i + '][price_data][product_data][metadata][phase]', l.term);

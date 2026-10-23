@@ -1092,3 +1092,30 @@ test('membership with insurance on a monthly plan: premiums and IPT are ongoing 
     assert.deepEqual(phases, ['ongoing', 'year_one', 'ongoing', 'ongoing', 'ongoing']);
   }, MEM_ENV);
 });
+
+// ---- Price list codes on every inline Stripe line ----
+const skuOf = (p, i) => p.get('line_items[' + i + '][price_data][product_data][metadata][sku]');
+test('every inline Stripe line carries its price list code, so Creator can find the Books item by code', async () => {
+  const w = fullWorld();
+  const ins = {...INS_OK, insNamedPeopleCover: true, insNamedPeople: [{type: 'employee', firstName: 'Ada', lastName: 'Lee'}]};
+  await withApp(w, async ({post}) => {
+    assert.equal((await post({...INSURE, insurance: ins})).status, 201);
+    const p = w.stripePosts[0].params, names = lineNames(p);
+    assert.deepEqual(names.map((n, i) => [n, skuOf(p, i)]), [['Insurance - Medical Malpractice', 'INS-MEDMAL-NS'], ['Insurance - Named employee cover (Ada Lee)', 'INS-NAMED-EMP-NS'],
+      ['Insurance - Business Equipment', 'INS-EQ-5K'], ['Insurance Premium Tax (12%)', 'INS-IPT'], ['Named employee membership fee', 'MEM-FULLNS-Y']]);
+  });
+});
+test('a yearly extra branch and every line of a monthly plan carry their codes; a catalogue price is found by its lookup key', async () => {
+  const w = unlinked(world({priceOverride: RECURRING}));
+  await withApp(w, async ({post}) => {
+    assert.equal((await post({...BUY, branches: 'nails'})).status, 201);
+    let p = w.stripePosts[0].params;
+    assert.equal(p.get('line_items[0][price]'), 'price_assocY1111', 'the membership is a catalogue price, whose lookup key is its code');
+    assert.equal(skuOf(p, 2), 'MEM-BRANCH');
+    assert.equal((await post({...BUY, billing: 'monthly', branches: 'nails', addons: {badge: 1}, level: 'full_non_salon'})).status, 201);
+    p = w.stripePosts[1].params;
+    const codes = [0, 1, 2, 3].map(i => skuOf(p, i));
+    assert.deepEqual(codes, ['MEM-FULLNS-Y', 'MEM-JOIN', 'MEM-BRANCH', 'MEM-BADGE']);
+    assert.equal(p.get('line_items[4][price]'), 'price_admin1111111', 'the admin fee is a catalogue price with the lookup key MEM-ADMIN');
+  }, MEM_ENV);
+});
