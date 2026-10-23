@@ -37,7 +37,7 @@ test('a signed-out visitor can price a membership: first charge with the joining
     assert.equal(r.status, 200);
     assert.equal(r.body.quote.totalPence, 5500 + 1000 + 1500);
     assert.equal(r.body.quote.indicative, true);
-    assert.deepEqual(r.body.quote.lines.map(l => l.interval), ['year', null, null]);
+    assert.deepEqual(r.body.quote.lines.map(l => l.interval), ['year', null, 'year'], 'the membership and the extra branch renew; the joining fee is paid once');
     assert.ok(calls.every(u => u.startsWith('https://api.stripe.com/v1/prices?')), 'only Stripe prices are read');
   });
 });

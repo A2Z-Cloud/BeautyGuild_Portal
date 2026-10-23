@@ -4,9 +4,11 @@ export const dueToday=quote=>quote?quote.totalPence:0;
 export const thenCharge=quote=>{
   // A monthly plan has its own summary (planSummary), with the payments that change after the first year.
   if(quote?.plan)return null;
-  const line=quote?.lines?.find(l=>l.interval);
-  if(!line)return null;
-  return {pence:line.unitPence,interval:line.interval,yearly:line.interval==='month'?line.unitPence*12:null};
+  // Everything that renews comes back together: the membership, extra branches, insurance premiums, IPT and employee fees.
+  const recurring=(quote?.lines||[]).filter(l=>l.interval);
+  if(!recurring.length)return null;
+  const interval=recurring[0].interval,pence=recurring.filter(l=>l.interval===interval).reduce((t,l)=>t+l.totalPence,0);
+  return {pence,interval,yearly:interval==='month'?pence*12:null};
 };
 
 // A monthly plan: 12 payments built from the yearly price, then the same payment, or a lower one once the joining fee and one-off

@@ -25,7 +25,7 @@ export default function PricePanel({quote,loading,error,ready=true,emptyText,not
           {plan&&<p className="price-then">{plan.same?'Monthly plan: '+money(plan.firstPence)+' a month, renewing automatically.'
             :'Monthly plan: '+money(plan.firstPence)+' a month for the first '+plan.payments+' payments, which spreads your joining fee and extras over the year. From payment '+(plan.payments+1)+' it is '+money(plan.laterPence)+' a month, renewing automatically.'}
             {' It includes a monthly admin fee of '+money(plan.adminPence)+'.'}</p>}
-          {then&&<p className="price-then">Then {money(then.pence)} each {then.interval}{then.yearly?', equivalent to '+money(then.yearly)+' a year':''}, until you cancel.</p>}
+          {then&&<p className="price-then">Then {money(then.pence)} each {then.interval}{then.yearly?', equivalent to '+money(then.yearly)+' a year':''}, renewing automatically until you cancel.</p>}
           {future&&<p className="price-then">Starts on {formatDate(start)}. It shows as Coming soon until then.</p>}
           {note&&<p className="price-then">{note}</p>}
           <p className="price-vat">Prices include VAT and Insurance Premium Tax where they apply.</p></>}
