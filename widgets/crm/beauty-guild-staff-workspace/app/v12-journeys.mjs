@@ -25,7 +25,9 @@ const membershipBase=[
   field('county','County'),field('postcode','Postcode','text',true),field('country','Country','select',true,{options:choices(countries.map(c=>[c,c]))})]},
  {id:'extras',title:'Additional branches and add-ons',description:'Membership products are selected here; pricing remains in Catalyst.',fields:[
   field('branches','Additional branches','multi',false,{options:choices(branches),excludePrimary:true}),
-  ...['bundle','certificate','badge','sticker'].map(x=>field('addon_'+x,({bundle:'Membership bundle',certificate:'Certificate',badge:'Badge',sticker:'Window sticker'})[x],'number',false,{min:0,max:10}))]}
+  ...['bundle','certificate','badge','sticker'].map(x=>field('addon_'+x,({bundle:'Membership bundle',certificate:'Certificate',badge:'Badge',sticker:'Window sticker'})[x],'number',false,{min:0,max:10}))]},
+ {id:'terms',title:'Membership declarations',description:'Record whether the customer confirmed the Guild terms and Code of Ethics; staff entry is not independent customer consent.',fields:[
+  field('accepted','Customer confirmed the Guild Terms of Business, Privacy Policy and Code of Ethics','checkbox',true)]}
 ];
 const insuranceAbout=[{id:'about',title:'Applicant and territory',description:'Customer details and location used by the Insurance quotation.',fields:[
  field('firstName','First name','text',true),field('lastName','Surname','text',true),field('email','Email address','email',true),
