@@ -140,7 +140,7 @@ export const joinPhone = (iso, local) => {
 export function phoneIssue(raw) {
   const text = String(raw ?? '').trim();
   if (!text) return '';
-  if (/[^\d\s()+.\-]/.test(text)) return 'Phone numbers can only contain digits, spaces and + ( ) -.';
+  if (/[^\d\s()+.-]/.test(text)) return 'Phone numbers can only contain digits, spaces and + ( ) -.';
   let digits = text.replace(/\D/g, '');
   let international = text.startsWith('+');
   if (!international && digits.startsWith('00')) {

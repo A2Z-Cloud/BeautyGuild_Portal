@@ -1,0 +1,5 @@
+# Commits that only reformat code, so git blame skips them.
+# Use: git config blame.ignoreRevsFile .git-blame-ignore-revs
+
+# Prettier reformat of apps/portal (no behaviour change)
+f98621e185320b5181ce315caabbc0146217e5cf

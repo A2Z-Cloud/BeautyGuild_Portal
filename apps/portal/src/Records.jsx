@@ -1,3 +1,6 @@
+/* eslint-disable react-hooks/rules-of-hooks --
+   These two screens return early on build-time flags (INTEGRATIONS, DATA_MODE) that never change while the app runs,
+   so their hooks are always called in the same order. */
 import React from 'react';
 import { ArrowLeft, ArrowRight, CalendarClock, FileText, ListFilter } from 'lucide-react';
 import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom';

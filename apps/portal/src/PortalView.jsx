@@ -132,7 +132,9 @@ export default function PortalView({ children }) {
     setCollapsed(old => {
       try {
         window.localStorage.setItem('bg-preview-sidebar', old ? 'expanded' : 'collapsed');
-      } catch {}
+      } catch {
+        // Storage can be blocked (private windows); the sidebar state is then simply not remembered.
+      }
       return !old;
     });
   return (

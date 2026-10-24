@@ -11,7 +11,7 @@ class AnalyticsError extends Error {
 
 // RFC 4180: quoted fields, doubled quotes, line breaks inside quotes; a leading BOM is dropped.
 function parseCsv(text) {
-  const src = String(text || '').replace(/^﻿/, '');
+  const src = String(text || '').replace(/^\uFEFF/, '');
   const rows = [];
   let row = [],
     field = '',
