@@ -14,7 +14,8 @@
     "format:check": "prettier --check \"src/**/*.{js,jsx,mjs,css}\" \"functions/beauty_guild_api/**/*.js\" \"scripts/*.mjs\" auth-css/overrides.css vite.config.js eslint.config.js",
     "lint": "eslint . --max-warnings 27",
     "docs:metadata": "node scripts/build-metadata-doc.mjs",
-    "typecheck": "tsc -p tsconfig.check.json"
+    "typecheck": "tsc -p tsconfig.check.json",
+    "test:stripe": "cd functions/beauty_guild_api && node --test test/stripe-contract.test.js"
   },
   "dependencies": {
     "lucide-react": "^0.468.0",
