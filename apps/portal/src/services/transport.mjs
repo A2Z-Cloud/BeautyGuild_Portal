@@ -1,8 +1,8 @@
 import {isSafePath} from './config.mjs';
 
 export class ApiError extends Error {
-  constructor(message,{status=0,code='API_ERROR'}={}) {
-    super(message);this.name='ApiError';this.status=status;this.code=code;
+  constructor(message,{status=0,code='API_ERROR',details}={}) {
+    super(message);this.name='ApiError';this.status=status;this.code=code;if(details!==undefined)this.details=details;
   }
 }
 const allowedMethods=new Set(['GET','POST','PUT','PATCH','DELETE']);
@@ -12,6 +12,8 @@ const KNOWN_CODES=Object.freeze({
   CHECKOUT_UNAVAILABLE:'Online payment is not available yet. Please contact the Guild.',
   BILLING_DISABLED:'Online payment is not available yet. Please contact the Guild.',
   PAYMENT_UNAVAILABLE:'We could not open the secure payment page. Please try again in a moment.',
+  QUOTE_EXPIRED:'This quote has expired. Please get a new quote.',
+  NOT_PAYABLE:'This quote cannot be paid for online. Please contact the Guild.',
   CONTACT_AMBIGUOUS:'We need to check your details before we can show your records. Please contact the Guild.',
 });
 const SAFE_MESSAGES=Object.freeze({
@@ -47,7 +49,7 @@ export function createHttpClient({baseUrl,fetchImpl=fetch,timeoutMs=15000}) {
         // 422 and 409 come only from our own validation (bad input, duplicates), whose wording is written for customers.
         // Failures from upstream systems use other statuses and never reach this branch.
         if((response.status===422||response.status===409)&&typeof data?.error==='string'&&data.error.length>0&&data.error.length<=200)
-          throw new ApiError(data.error,{status:response.status,code:typeof data.code==='string'?data.code:'VALIDATION'});
+          throw new ApiError(data.error,{status:response.status,code:typeof data.code==='string'?data.code:'VALIDATION',details:data.code==='REFERRAL_REQUIRED'?data.details:undefined});
         const code=response.status===401?'NOT_AUTHENTICATED':response.status===403?'NOT_AUTHORISED':response.status===429?'RATE_LIMIT':'HTTP_ERROR';
         throw new ApiError(SAFE_MESSAGES[code],{status:response.status,code});
       }

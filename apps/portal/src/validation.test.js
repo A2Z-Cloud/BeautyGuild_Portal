@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {accreditationType, validate} from './logic.mjs';
 import {JOURNEYS,countryOption,COUNTRY_OPTIONS} from './JourneyConfig.js';
+import {toRequest} from './insuranceInputs.js';
 
 test('all three journeys contain multi-step data collection and review', () => {
   for(const kind of ['membership','accreditation','insurance']){
@@ -38,11 +39,26 @@ test('UK constituent nations and international accreditation',()=>{
   }
   assert.equal(accreditationType('Ireland'),'International Accreditation');
 });
-test('insurance property questions conditional on premises or property cover',()=>{
+test('insurance premises questions only for a salon with property cover, as V1',()=>{
   const property=JOURNEYS.insurance.steps.find(s=>s.id==='property');
-  assert.equal(property.when({workingMethods:['mobile']}),false);
-  assert.equal(property.when({workingMethods:['salon']}),true);
-  assert.equal(property.when({workingMethods:['mobile'],contents:'yes'}),true);
+  assert.equal(property.when({insWorking:['insMobile'],insContents:'yes'}),false);
+  assert.equal(property.when({insWorking:['insSalon']}),false);
+  assert.equal(property.when({insWorking:['insSalon'],insContents:'yes'}),true);
+  assert.equal(property.when({insWorking:['insSalon','insMobile'],insBuildingsCover:'yes'}),true);
+});
+test('insurance answers become the V1 request shape and hidden answers are not sent',()=>{
+  const r=toRequest({insWorking:['insSalon','insMobile'],insTurnover:'90000',insSalonCount:'1',insNamedPeopleCover:'yes',insNamedPeople:[{type:'employee',firstName:'Ada',lastName:'Lee'},{type:'employee',firstName:'',lastName:''}],
+    insContents:'yes',insStock:'2000',insEquipmentTier:'5000',insPremL1:'1 High St',insPremPostcode:'AB1 2CD',insSoleOccupation:'yes',insDecl1:'agree',insDecl6:'disagree',insEthicsAccepted:true,insTreatmentExtensions:['spmu']});
+  assert.equal(r.insSalon,true);assert.equal(r.insMobile,true);assert.equal(r.insWorkingFromHome,undefined);
+  assert.equal(r.insTurnover,90000);assert.equal(r.insContents,true);assert.equal(r.insMoneyCover,false);assert.equal(r.insStock,2000);
+  assert.equal(r.insEquipmentTier,undefined);
+  assert.deepEqual(r.insNamedPeople,[{type:'employee',firstName:'Ada',lastName:'Lee'}]);
+  assert.deepEqual(r.insPremisesAddress,{l1:'1 High St',l2:'',town:'',county:'',postcode:'AB1 2CD'});
+  assert.deepEqual(r.insDeclarations,['no','','','','','no','']);
+  assert.equal(r.insEthicsAccepted,'yes');assert.equal(r.insInformationAccurate,'');
+  assert.deepEqual(r.insTreatmentExtensions,['spmu']);
+  const non=toRequest({insWorking:['insMobile'],insEquipmentTier:'10000',insTurnover:'5'});
+  assert.equal(non.insEquipmentTier,10000);assert.equal(non.insTurnover,undefined);
 });
 test('membership insurance questions conditional on selection',()=>{
   const cover=JOURNEYS.membership.steps.find(s=>s.id==='insurance');

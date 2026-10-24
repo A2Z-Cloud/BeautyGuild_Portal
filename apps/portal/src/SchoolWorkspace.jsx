@@ -44,7 +44,8 @@ export function SchoolsList(){
 function SchoolProfile({data}){
  const p=data.profile;
  return <><h2>School profile</h2><p className="muted">You cannot change these details online. Contact the Accreditation team to update them.</p>
- {INTEGRATIONS.stripeCheckout&&<p><Link className="btn btn-secondary" to={'/pay/accreditation/'+p.id}>Pay for accreditation</Link></p>}
+ {INTEGRATIONS.stripeCheckout&&p.payable&&<p><Link className="btn btn-primary" to={'/pay/accreditation/'+p.id}>Pay for accreditation</Link></p>}
+ {p.paid&&<p><Status value="Paid"/></p>}
  <dl className="detail-list">{Object.entries({'Training centre':p.name,'Town / City':p.town,County:p.county,Country:p.country,Postcode:p.postcode,
  'Accreditation status':p.status,'Valid until':formatDate(p.expires),'Accreditation level':p.level,'Referral code':p.referralCode}).map(([k,v])=><div key={k}><dt>{k}</dt><dd>{v||'—'}</dd></div>)}</dl>
  {p.referralCode&&p.referralActive&&<p><a className="reference" href={'https://beautyguild.com/Join/'+encodeURIComponent(p.referralCode)} target="_blank" rel="noreferrer">View school referral landing page <ArrowRight size={15}/></a></p>}</>;
@@ -86,8 +87,8 @@ function SchoolSection({id,section}){
  <SimpleTable rows={(x.tutors||[]).filter(t=>t.active)} columns={[col('name','Tutor'),col('membershipNumber','Membership number'),dateCol('membershipExpiry','Membership expiry'),col('status','Membership')]}/>
  <h3>Inactive tutors</h3><p>These tutors have been added but are not active yet. They become active once they hold a current Guild membership.</p>
  <SimpleTable rows={(x.tutors||[]).filter(t=>!t.active)} columns={[col('name','Tutor'),col('membershipNumber','Membership number'),dateCol('membershipExpiry','Membership expiry'),col('status','Membership')]}/></>;
- case 'qualifications':return <><div className="school-dialog-head"><h2>Qualifications</h2>{INTEGRATIONS.schoolWrites&&<button type="button" className="btn btn-primary" onClick={()=>setEditing(v=>!v)}>{editing?'Cancel':'Add qualification'}</button>}</div>{editing&&<QualificationForm schoolId={id} onDone={saved}/>}<SimpleTable rows={x.qualifications||[]} columns={[col('name','Qualification'),
- {key:'month',label:'Completed',render:r=>[r.month,r.year].filter(Boolean).join('/')||'—'},col('status','Verification')]}/></>;
+ case 'qualifications':return <><div className="school-dialog-head"><h2>Your Qualifications</h2>{INTEGRATIONS.schoolWrites&&<button type="button" className="btn btn-primary" onClick={()=>setEditing(v=>!v)}>{editing?'Cancel':'Add qualification'}</button>}</div>{editing&&<QualificationForm schoolId={id} onDone={saved}/>}<SimpleTable rows={x.qualifications||[]} columns={[col('name','Qualification'),
+ {key:'month',label:'Completed',render:r=>[['January','February','March','April','May','June','July','August','September','October','November','December'][Number(r.month)-1],r.year].filter(Boolean).join(' ')||'—'},col('status','Verification')]}/></>;
  case 'sessions':return <><div className="school-dialog-head"><h2>Course dates and bookings</h2>{INTEGRATIONS.schoolWrites&&<button type="button" className="btn btn-primary" onClick={()=>setEditing(v=>!v)}>{editing?'Cancel':'Create session'}</button>}</div><p>Your published fixed and flexible course dates, with the places booked so far.</p>{editing&&<SessionForm schoolId={id} onDone={saved}/>}
  <SimpleTable rows={x.sessions||[]} columns={[col('name','Course / session'),col('availabilityType','Availability'),dateCol('start','Date',{time:true}),
  {key:'placesBooked',label:'Places booked',render:r=>r.maximumPlaces==null?String(r.placesBooked):r.placesBooked+' / '+r.maximumPlaces},
@@ -114,7 +115,7 @@ export function SchoolWorkspace(){
  current.loading?<p>Loading school…</p>:current.error?<Notice title="Unable to load school">{current.error}</Notice>:
  !school?<Notice title="School unavailable">No school linked to your account matches this reference.</Notice>:
  <div className="school-layout"><nav aria-label="School sections" className="school-nav">{GROUPS.map(g=><div className="school-nav-group" key={g.label}><span className="school-nav-label">{g.label}</span><div className="school-nav-links">{g.items.map(([key,label,Icon])=><Link key={key} className={key===section?'active':''} aria-current={key===section?'page':undefined} to={'/schools/'+id+'/'+key}><Icon size={16} aria-hidden="true"/>{label}</Link>)}</div></div>)}</nav>
- <section className="surface padded school-workspace-panel">{section==='documents'?<DocumentsPanel kind="accreditation" id={id}/>:<SchoolSection id={id} section={section}/>}</section></div>}
+ <section className="surface padded school-workspace-panel">{section==='documents'?<DocumentsPanel kind="accreditation" id={id}/>:<SchoolSection key={id+'/'+section} id={id} section={section}/>}</section></div>}
  </div>;
 }
 export function AccountInvoices(){

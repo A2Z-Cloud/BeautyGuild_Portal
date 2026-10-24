@@ -24,6 +24,10 @@ Frontend: VITE_DATA_MODE=api, VITE_CATALYST_AUTH=true, VITE_API_BASE_URL=/server
 
 Do not activate until the verified-email Contact match, the CRM field names and both connection permissions are verified. Course date and qualification creation also reject invalid dates, prices and text and refuse identical repeats. Read from real CRM/Creator via the new backend. No fake records are displayed in live mode.
 
+## Qualification form (UAT ACC-048, 050, 051, 052)
+
+The page title is "Your Qualifications". Month is chosen by name (the CRM still receives 1 to 12). Completion year is a list from the current year back to 1970, with no year pre-selected; the server also rejects a future year, or a future month in the current year (422 INVALID_QUALIFICATION). "Training Centre" is required free text of up to 200 characters, unrelated to the accredited school (`trainingCentre` in the POST body). The CRM Qualifications module has no suitable text field today, so the value is written only when `PORTAL_QUALIFICATION_CENTRE_FIELD` holds the field API name (unset by default: nothing is sent). Needed in CRM: a single line text field on Qualifications, label "Training Centre", up to 200 characters.
+
 ## Critical V1 parity still outstanding
 
 - **Added, behind separate write flags:** CRM qualification creation using the V1 field mapping, and Creator Course_Sessions creation with server-verified Accreditation, offering and tutor. These are unverified in live Development and should remain disabled until CRM/Creator data types, connections, validations and idempotency are tested.

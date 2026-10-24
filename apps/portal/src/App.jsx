@@ -12,6 +12,8 @@ import { PaymentPreview,PaymentReturn } from './PaymentPreview.jsx';
 import { INTEGRATIONS } from './services/api.js';
 import { CourseCatalogue } from './components/CourseCatalogue.jsx';
 import BuyMembership from './BuyMembership.jsx';
+import BuyInsurance from './BuyInsurance.jsx';
+import ErrorBoundary from './ErrorBoundary.jsx';
 import CheckoutPage from './CheckoutPage.jsx';
 import PublicSchoolVerification from './PublicSchoolVerification.jsx';
 import SavedDrafts from './SavedDrafts.jsx';
@@ -36,7 +38,8 @@ function NotFound() {
 const STANDALONE_ROUTES = ['/login', '/signup', '/forgot-password', '/account/checkpoint'];
 function Layout({ children }) {
   const { pathname } = useLocation();
-  return STANDALONE_ROUTES.includes(pathname.replace(/\/+$/, '')) || pathname==='/verify' || pathname.startsWith('/verify/') ? children : <PortalView>{children}</PortalView>;
+  const safe = <ErrorBoundary resetKey={pathname}>{children}</ErrorBoundary>;
+  return STANDALONE_ROUTES.includes(pathname.replace(/\/+$/, '')) || pathname==='/verify' || pathname.startsWith('/verify/') ? safe : <PortalView>{safe}</PortalView>;
 }
 export default function App() {
   return <PreviewStateProvider><Layout><Routes>
@@ -45,7 +48,8 @@ export default function App() {
     <Route path="/insurance" element={<ServiceHome kind="insurance" />} />
     <Route path="/accreditation" element={<ServiceHome kind="accreditation" />} />
     <Route path="/membership/buy" element={<BuyMembership />} />
-    <Route path="/membership/new" element={<Journey kind="membership" />} />
+    <Route path="/insurance/buy" element={<BuyInsurance />} />
+    <Route path="/membership/new" element={INTEGRATIONS.stripeCheckout ? <Navigate to="/membership/buy" replace /> : <Journey kind="membership" />} />
     <Route path="/insurance/new" element={<Journey kind="insurance" />} />
     <Route path="/accreditation/new" element={<Journey kind="accreditation" />} />
     <Route path="/verify" element={<PublicSchoolVerification />} />

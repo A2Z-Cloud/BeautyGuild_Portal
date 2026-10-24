@@ -1,4 +1,5 @@
 import React, {useState} from 'react';
+import {ReviewedLabel} from './LegalLinks.jsx';
 import {Link, useSearchParams} from 'react-router-dom';
 import {ArrowLeft,ArrowRight,CheckCircle2,KeyRound,Lock,Mail,Shield,UserRound,UserPlus} from 'lucide-react';
 import {Logo,Notice,PageHeading} from './UiParts.jsx';
@@ -6,7 +7,7 @@ import {DEMO_USER} from './data/demo.js';
 import {INTEGRATIONS} from './services/api.js';
 import {CatalystSignIn,CatalystRegistration,CatalystAccountOverview} from './components/CatalystAuthViews.jsx';
 
-const validReturn = path => ['/membership/new','/insurance/new','/accreditation/new'].includes(path) ? path : '/';
+const validReturn = path => ['/membership/new','/insurance/new','/accreditation/new','/membership/buy','/insurance/buy'].includes(path) ? path : '/';
 function useReturn(){
   const [params]=useSearchParams();
   const route=validReturn(params.get('returnTo'));
@@ -66,7 +67,7 @@ export function SignupPage() {
       <label htmlFor="reg-email">Email address</label><input id="reg-email" type="email" required placeholder="you@example.com" autoComplete="off"/>
       <label htmlFor="reg-mobile">Contact number</label><input id="reg-mobile" type="tel" placeholder="Mobile number"/>
       <label htmlFor="reg-password">Password</label><input id="reg-password" type="password" minLength={8} required placeholder="At least 8 characters" autoComplete="new-password"/>
-      <label className="auth-checkbox"><input type="checkbox" checked={agreed} onChange={e=>setAgreed(e.target.checked)}/><span>I have reviewed the Guild terms and privacy information.</span></label>
+      <label className="auth-checkbox"><input type="checkbox" checked={agreed} onChange={e=>setAgreed(e.target.checked)}/><ReviewedLabel/></label>
       <button className="btn btn-primary btn-block" type="submit" disabled={!agreed}>Create account <ArrowRight size={16}/></button>
       {message&&<Unavailable message={message}/>}
       <p className="auth-small">Already have an account? <Link to={'/login'+tail}>Sign in</Link></p>

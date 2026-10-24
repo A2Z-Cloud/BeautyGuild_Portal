@@ -256,3 +256,113 @@ img,svg,video,iframe{max-width:100%}
 /* Checkout */
 .addon-picker{margin-bottom:18px}.addon-row{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:10px 0;border-bottom:1px solid #f3edf0;font-size:13px}.addon-row input{width:72px;border:1px solid #e3d8df;border-radius:9px;padding:9px 10px;min-height:42px}
 .buy-section{margin-bottom:16px}.buy-section h2{margin-bottom:14px}.buy-options{display:grid;gap:10px;margin-bottom:18px}.buy-options .radio-choice small{display:block;margin-top:3px}.buy-fieldset{border:0;padding:0;margin:18px 0 0;display:grid;gap:10px}.buy-fieldset legend{font-size:12px;font-weight:700;margin-bottom:10px;padding:0}
+
+/* Type scale guard: plain paragraphs and form controls on pages use the portal body size, not the browser default (16px).
+   :where keeps this at the lowest specificity, so every component that sets its own size still wins. */
+:where(.page) p{font-size:13px;line-height:1.6}
+.field select,.field input:not([type=radio]):not([type=checkbox]),.field textarea,.addon-row input{font-size:13px}
+.ins-step{border:0;border-top:1px solid #efe7ed;padding:18px 0 0;margin:18px 0 0}.ins-step legend{font-size:14px;font-weight:700;padding:0 8px 0 0}
+.people-list{display:grid;gap:10px}.people-row{display:grid;grid-template-columns:150px 1fr 1fr auto;gap:8px;align-items:center}.people-row select,.people-row input{border:1px solid #e3d8df;border-radius:9px;padding:9px 10px;min-height:42px}
+@media(max-width:600px){.people-row{grid-template-columns:1fr}}
+
+.field-warning{display:block;border:1.5px solid #ee3e96;border-radius:10px;padding:12px 14px;margin-top:10px;color:#633b51;font-size:12px;line-height:1.55}.course-check{display:flex;align-items:center;gap:10px;cursor:pointer}.course-check input{accent-color:#ee3e96}.course-picker-count{font-size:12px;font-weight:700;margin:0 0 10px}.course-help{margin-top:14px;font-size:12px}.course-help summary{cursor:pointer;color:#d02b7c;font-weight:700}.submitted-card{text-align:center;padding:40px 24px}.submitted-card .btn{margin-top:14px}
+/* Running price beside the buy forms (V1 style): sticky on desktop, a bar at the foot of the screen on a phone. */
+.buy-page{max-width:1080px}
+.buy-layout{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:20px;align-items:start}
+.buy-main{min-width:0}
+.price-panel{position:sticky;top:92px;background:#fff;border:1px solid #eee6eb;border-radius:14px;box-shadow:0 8px 24px #38213110}
+.price-panel summary{list-style:none;display:flex;justify-content:space-between;align-items:center;gap:12px;padding:16px 18px;cursor:pointer}
+.price-panel summary::-webkit-details-marker{display:none}
+.price-title{font:700 18px 'Alegreya Sans',sans-serif}
+.price-sum{font:700 22px 'Alegreya Sans',sans-serif;color:#a42369}
+.price-body{padding:0 18px 18px;border-top:1px solid #f3edf0}
+.price-toggle{display:flex;background:#faf9fa;border-radius:8px;padding:3px;margin:14px 0}
+.price-toggle button{flex:1;border:0;background:transparent;color:#807984;font-size:12px;font-weight:700;padding:8px;border-radius:6px}
+.price-toggle button.on{background:#fff;color:#25212a;box-shadow:0 1px 2px #00000014}
+.price-rows{display:grid;margin-top:12px}
+.price-row{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid #f3edf0;font-size:12px}
+.price-row span{color:#6f6670}.price-row strong{text-align:right;white-space:nowrap}
+.price-total{display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding:14px;background:#fff3f9;border-radius:10px;font-weight:700;font-size:13px}
+.price-total strong{font:700 20px 'Alegreya Sans',sans-serif;color:#a42369}
+.price-then,.price-vat,.price-updating,.price-error{font-size:11px;line-height:1.5;color:#807984;margin:10px 0 0}
+.price-error{color:#b42362}
+.price-vat{margin-top:12px}
+@media(max-width:900px){
+  .buy-layout{grid-template-columns:1fr}
+  .price-panel{position:sticky;bottom:0;top:auto;order:2;border-radius:14px 14px 0 0;box-shadow:0 -8px 24px #38213118;z-index:5}
+  .price-panel details[open] .price-body{max-height:55vh;overflow:auto}
+}
+.phone-input{display:grid;grid-template-columns:minmax(120px,170px) 1fr;gap:8px}.phone-input select,.phone-input input{min-width:0}
+.tutor-rows{display:grid;gap:12px}.tutor-row{display:grid;grid-template-columns:1fr 1fr 1.4fr;gap:8px;border:1px solid #e9dfe5;border-radius:12px;padding:10px 12px;margin:0}.tutor-row legend{font-size:12px;font-weight:700;padding:0 6px;color:#633b51}
+.copy-home{grid-column:1/-1;display:flex;flex-direction:column;gap:6px;align-items:flex-start;background:#fdeaf4;border-radius:12px;padding:12px 14px}.copy-home small{color:#633b51;font-size:12px}
+.course-view{font-size:12px;margin-left:auto;white-space:nowrap}
+.course-modal-backdrop{position:fixed;inset:0;background:rgba(37,33,42,.55);z-index:80;display:flex;align-items:center;justify-content:center;padding:16px}
+.course-modal{position:relative;background:#fff;border-radius:16px;max-width:520px;width:100%;max-height:85vh;overflow:auto;padding:24px 22px}.course-modal h3{margin:0 28px 12px 0}.course-modal h4{margin:16px 0 4px;font-size:13px}
+.course-modal-close{position:absolute;top:12px;right:12px;border:0;background:#f4eef2;border-radius:50%;width:32px;height:32px;display:grid;place-items:center;cursor:pointer}
+.course-facts{display:grid;gap:8px;margin:0}.course-facts div{display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid #f0e8ed;padding-bottom:6px;font-size:13px}.course-facts dt{color:#6f6670}.course-facts dd{margin:0;font-weight:700;text-align:right}
+.course-requirements{white-space:pre-wrap;font-size:13px;line-height:1.55;margin:0}.course-modal-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
+@media(max-width:600px){.tutor-row{grid-template-columns:1fr}.phone-input{grid-template-columns:1fr}.course-view{margin-left:0}}
+.quote-action{margin-top:18px}.quote-action .error{margin-top:8px}
+.my-service-records{margin:0 0 26px}.my-service-records .section-row{margin-top:0}.service-record-list{display:grid;gap:12px}
+.service-record{display:flex;align-items:center;gap:16px;border:1px solid #eee6eb;background:#fff;border-radius:14px;padding:16px 18px;transition:box-shadow .2s,transform .2s}.service-record:hover{transform:translateY(-1px);box-shadow:0 8px 20px #38213110}
+.service-record .service-icon{margin:0;flex-shrink:0;background:#fff0f8}.service-record-copy{flex:1;min-width:0}.service-record-copy strong,.service-record-copy small{display:block}.service-record-copy small{margin-top:4px;font-size:12px}
+.service-record>span:nth-of-type(3){text-align:right}.service-record>span small{display:block;margin-top:4px;font-size:11px}.service-record>svg{color:#d32a7d;flex-shrink:0}.service-record.expired{background:#faf8f9}.service-record.expired .service-icon{background:#f1edf0}
+@media(max-width:600px){.service-record{flex-wrap:wrap}.service-record>span:nth-of-type(3){text-align:left;flex-basis:100%}}
+.legal-links{display:inline-flex;gap:14px;flex-wrap:wrap}.legal-links a,.legal-note a,.policy-docs a,.auth-checkbox a,.check-choice a{color:#d02b7c;text-decoration:underline;text-underline-offset:2px}
+.page-footer .legal-links a{color:#8a7c86}.legal-note{margin-top:14px;font-size:12px}
+.policy-docs{border:1px solid #efe3eb;border-radius:12px;padding:14px 16px;margin:14px 0;background:#fffafd}.policy-docs h3{display:flex;align-items:center;gap:8px;font-size:1rem;margin:0 0 8px}
+.policy-docs ul{list-style:none;margin:0 0 8px;padding:0}.policy-docs li{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-top:1px solid #f4edf1;font-size:12px}.policy-docs li small{color:#807984}.policy-docs p{font-size:12px;margin:0}
+/* Side navigation: every item visible without scrolling on a normal laptop screen. */
+.sidebar-brand{min-height:clamp(64px,10vh,88px);padding-block:12px}.sidebar-brand .brand small{margin-top:6px}
+.nav-content{padding:10px 12px}.nav-group{gap:2px}.nav-caption{margin:10px 12px 6px}.nav-divider{margin:10px 8px}
+.nav-item{padding:clamp(6px,1.25vh,10px) 14px;gap:12px}.sidebar-footer{padding:clamp(10px,1.6vh,16px) 19px}
+.compact .nav-item{padding:clamp(8px,1.5vh,12px) 7px}.compact .sidebar-brand{padding:10px}
+@media(max-height:700px){.sidebar-brand{min-height:56px}.nav-caption{margin:6px 12px 4px}.nav-divider{margin:6px 8px}.nav-item{padding:6px 12px;font-size:12.5px}.sidebar-footer{display:none}}
+@media(max-width:640px){.sidebar .nav-item,.compact .sidebar .nav-item{padding:10px 13px}.sidebar .sidebar-brand,.compact .sidebar .sidebar-brand{padding:14px 20px}}
+.accreditation-status{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;border:1px solid #f4cce0;background:#fff5fa;border-radius:14px;padding:18px 20px;margin:0 0 20px}
+.accreditation-status strong{display:block;font-size:15px}.accreditation-status p{margin:4px 0 0;font-size:13px;color:#726b74}
+.accreditation-status.status-approved{background:#f6fbf7;border-color:#cfe8d5}.accreditation-status.status-review{background:#f0ebf7;border-color:#ddd2ee}
+
+/* Insurance journey (UAT AL-INS): question pop-ups, wording blocks, price lists and the quote summary. */
+.ins-field{grid-column:1/-1}
+.ins-label{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px;font-size:12px;font-weight:700}.ins-label label{margin:0}
+.ins-tip{position:relative;display:inline-flex;align-items:center;vertical-align:middle}
+.ins-tip-btn{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border:0;border-radius:50%;background:transparent;color:#a92a70;cursor:pointer;padding:0}.ins-tip-btn:hover,.ins-tip-btn[aria-expanded=true]{background:#fff2f8}
+.ins-tip-box{position:absolute;z-index:30;top:100%;left:-8px;width:min(380px,calc(100vw - 56px));max-height:60vh;overflow:auto;margin-top:4px;padding:14px 16px;background:#fff;border:1px solid #ed6fab;border-radius:11px;box-shadow:0 12px 28px #38213122;font-size:12px;font-weight:400;line-height:1.55;color:#25212a}
+.ins-tip-box p,.ins-note p,.ins-intro p{margin:0 0 8px;font-size:12px;line-height:1.55}.ins-tip-box ul,.ins-note ul,.ins-intro ul{margin:0 0 8px;padding-left:18px;font-size:12px;line-height:1.55}.ins-tip-box>:last-child,.ins-note>:last-child,.ins-intro>:last-child{margin-bottom:0}
+.ins-option{display:flex;align-items:center;gap:4px}.ins-option .radio-choice{flex:1;min-width:0}
+.ins-list{display:grid;gap:8px}
+.ins-price{margin-left:6px;color:#a92a70}.ins-price small{display:inline;font-weight:400;color:#726b74}
+.ins-note,.ins-intro{margin-top:8px;padding:12px 14px;background:#fbf7fa;border:1px solid #efe7ed;border-radius:10px}.ins-intro{margin:0 0 4px}
+.ins-doc{font-weight:700}.ins-check{display:flex;align-items:flex-start;gap:4px}.ins-check .check-choice{flex:1}
+.cover-summary{list-style:none;margin:0 0 14px;padding:0;display:grid}.cover-summary li{display:grid;grid-template-columns:1fr auto auto;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid #f3edf0;font-size:13px}
+.cover-actions{display:inline-flex;gap:12px;min-width:90px;justify-content:flex-end}
+@media(max-width:600px){.cover-summary li{grid-template-columns:1fr auto}.cover-actions{grid-column:1/-1;justify-content:flex-start}}
+/* UAT membership feedback (MEM-016, 033, 034): Join the Guild page only. Pink titles and outlines to match the accreditation form.
+   Brand pink #ee3e96 is 3.4:1 on white, enough for the large titles and the outlines; smaller question text uses #b02c70 (5.9:1). */
+.membership-journey .buy-section h2{color:#ee3e96}.membership-journey .buy-section h3.buy-subtitle{color:#b02c70;font-size:1.15rem;margin:22px 0 8px}
+.membership-journey .buy-section legend,.membership-journey .buy-section .field>label{color:#b02c70;font-weight:700}
+.membership-journey .buy-section .field input:not([type=radio]):not([type=checkbox]),.membership-journey .buy-section .field select,.membership-journey .buy-section .addon-row input,.membership-journey .buy-section .radio-choice{border:1px solid #ee3e96}
+.membership-journey .buy-section .field.invalid input{border:2px solid #b3261e}.membership-journey .buy-section .field .error,.membership-journey .buy-section p.error{color:#b3261e;font-weight:600}
+.membership-journey .buy-section p.error{font-size:12px;margin:14px 0 0}
+.membership-journey .buy-section .radio-choice.selected{border-width:2px}
+.membership-journey .branch-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:10px}.membership-journey .branch-card{min-height:64px}.membership-journey .branch-logo{object-fit:contain;flex-shrink:0}
+.membership-journey .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+@media(max-width:640px){.membership-journey .branch-grid{grid-template-columns:1fr}}
+
+/* UAT qualification form: future-date message */
+.school-ops-form .field-error{color:var(--danger,#b42318);font-size:.9rem;margin:.25rem 0 0}
+
+/* Save my application (Join the Guild and Buy insurance) */
+.buy-side{align-self:stretch;display:flex;flex-direction:column;gap:12px}
+.save-card{background:#fff;border:1px solid #eee6eb;border-radius:14px;padding:14px 16px;margin-top:16px}
+.buy-side .save-card{margin-top:0}
+.save-card .muted{margin:8px 0 0;font-size:.9rem}
+.save-card .save-ok{margin:8px 0 0;color:#146c43;font-weight:600}
+.save-card .error{margin:8px 0 0}
+.save-main{display:none}
+@media(max-width:900px){.buy-side{display:contents}.save-side{display:none}.save-main{display:block}}
+/* Branch logos (supplied by the Guild). */
+.membership-journey .branch-card{min-height:76px;justify-content:center}.membership-journey .branch-logo{height:44px;width:auto;max-width:100%}.membership-journey .branch-logo-small{height:30px;width:auto}
+/* Insurance application sent to the Insurance team (Referred or Stopped) */
+.referral-panel{border:1px solid #cfe7d6;background:#f4fbf6;border-radius:12px;padding:20px 22px;margin:16px 0}.referral-panel.stopped{border-color:#f7d4e6;background:#fff6fa}.referral-panel h3{margin:0 0 10px}.referral-panel p{font-size:13px;line-height:1.6;color:#46404a;margin:0 0 10px}.referral-reference span{font-weight:700}.referral-reference strong{overflow-wrap:anywhere}.referral-reference small{display:block;margin-top:4px}

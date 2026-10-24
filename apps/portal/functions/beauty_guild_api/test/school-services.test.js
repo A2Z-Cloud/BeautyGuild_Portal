@@ -8,7 +8,8 @@ const cfg=loadConfig({PORTAL_SCHOOL_SERVICES_ENABLED:'true'});
 function upstream(url) {
  const str=String(url),u=decodeURIComponent(str);
  if(u.includes('Contacts/search'))return {data:[{id:'101',Email:'owner@example.test'}]};
- if(u.includes('Training_Centre_Accred/search'))return {data:[{id:'301',Applicant_Contact:{id:'101'},Account:{id:'201',name:'Grace School'},Accreditation_Status:'Accredited'}]};
+ if(u.includes('Training_Centre_Accred/search'))return {data:[{id:'301',Applicant_Contact:{id:'101'},Account:{id:'201',name:'Grace School'},Accreditation_Status:'Accredited',Application_Stage:'Paid',Payment_Status:'Paid'}]};
+ if(u.includes('Qualifications/search'))return {data:[{id:'q1',Primary_Accreditation:{id:'301'}},{id:'q2',Primary_Accreditation:{id:'301'}},{id:'q3',Primary_Accreditation:{id:'999'}}]};
  if(u.includes('Training_Centre_Accred/301'))return {data:[{id:'301',Applicant_Contact:{id:'101'},Account:{id:'201',name:'Grace School'},Accreditation_Status:'Accredited'}]};
  if(u.includes('Training_Centre_Accred/302'))return {data:[{id:'302',Applicant_Contact:{id:'other'},Account:{id:'202',name:'Other School'}}]};
  if(u.includes('Deals/1000000000401'))return {data:[{id:'1000000000401',Contact_Name:{id:'101'}}]};
@@ -118,7 +119,28 @@ async function withWrites(extra,action){
   async call=>action(call,calls));
 }
 const jpost=body=>({method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});
-const goodQual={name:'Level 3 Beauty',month:'5',year:2020,delivery:['Online only'],assessment:['Other'],assessmentOther:'Practical review'};
+const goodQual={name:'Level 3 Beauty',trainingCentre:'Academy of Beauty, Leeds',month:'5',year:2020,delivery:['Online only'],assessment:['Other'],assessmentOther:'Practical review'};
+test('qualification create rejects future dates and a missing training centre, and sends the centre only when its field is configured',async()=>{
+ const y=new Date().getFullYear();
+ await withWrites({},async(call,calls)=>{
+  const url='/portal/management/schools/1000000000301/qualifications';
+  assert.equal((await call(url,jpost({...goodQual,year:y+1}))).status,422);
+  assert.equal((await call(url,jpost({...goodQual,trainingCentre:' '}))).status,422);
+  assert.equal((await call(url,jpost({...goodQual,trainingCentre:'x'.repeat(201)}))).status,422);
+  assert.equal(calls.filter(c=>c.method==='POST').length,0);
+ });
+ const bodies=[];
+ const cfg=loadConfig({PORTAL_SCHOOL_SERVICES_ENABLED:'true',PORTAL_SCHOOL_WRITES_ENABLED:'true',PORTAL_QUALIFICATION_CENTRE_FIELD:'Training_Centre_Text'});
+ await withServer({config:cfg,fetchImpl:async(u,o)=>{if(o&&o.method==='POST'&&String(u).includes('/Qualifications'))bodies.push(o.body);return{status:200,ok:true,json:async()=>writeUpstream({})(u,o)};}},async call=>{
+  assert.equal((await call('/portal/management/schools/1000000000301/qualifications',jpost(goodQual))).status,201);
+ });
+ assert.match(bodies[0],/"Training_Centre_Text":"Academy of Beauty, Leeds"/);
+ const plain=[];
+ await withServer({config:writeCfg,fetchImpl:async(u,o)=>{if(o&&o.method==='POST'&&String(u).includes('/Qualifications'))plain.push(o.body);return{status:200,ok:true,json:async()=>writeUpstream({})(u,o)};}},async call=>{
+  await call('/portal/management/schools/1000000000301/qualifications',jpost(goodQual));
+ });
+ assert.doesNotMatch(plain[0],/Academy of Beauty/);
+});
 test('qualification create validates free text and blocks an identical repeat',async()=>{
  await withWrites({},async(call,calls)=>{
   assert.equal((await call('/portal/management/schools/1000000000301/qualifications',jpost({...goodQual,assessmentOther:'x'.repeat(201)}))).status,422);
@@ -150,4 +172,12 @@ test('course date create validates dates, price and days, and blocks a repeat',a
   assert.equal(ok.status,201);assert.equal(ok.body.session.id,'sess1');
  });
  await withWrites({},async(call)=>{await call('/portal/management/schools/1000000000301/sessions',jpost(goodSession));});
+});
+test('the school list carries what the Accreditation card needs: stage, payment and the qualification count',async()=>{
+ await withServer({},async call=>{
+  const r=await call('/portal/management/schools');
+  assert.equal(r.status,200);
+  const s=r.body.schools[0];
+  assert.equal(s.stage,'Paid');assert.equal(s.paid,true);assert.equal(s.payable,false);assert.equal(s.qualificationCount,2);
+ });
 });

@@ -21,6 +21,9 @@ const recordsOn=integrationConfig.baseConfigured && integrationConfig.catalystAu
 const recordHttp=recordsOn?createHttpClient({baseUrl:integrationConfig.apiBaseUrl}):null;
 const recordReq=path=>recordHttp?recordHttp('/portal/records'+path):unavailable('Authenticated CRM records');
 const billingOn=integrationConfig.baseConfigured && integrationConfig.catalystAuth && import.meta.env.VITE_PORTAL_BILLING==='true';
+// Signed-out visitors can price a membership (no account, no CRM access); the server also has to have PUBLIC_QUOTES_ENABLED on.
+const publicQuotesOn=billingOn&&import.meta.env.VITE_PORTAL_PUBLIC_QUOTES==='true';
+const publicHttp=publicQuotesOn?createHttpClient({baseUrl:integrationConfig.apiBaseUrl}):null;
 const billingHttp=billingOn?createHttpClient({baseUrl:integrationConfig.apiBaseUrl}):null;
 const billingReq=(path,options)=>billingHttp?billingHttp('/portal/checkout'+path,options):unavailable('Authorised pricing and checkout');
 const documentsOn=integrationConfig.baseConfigured && integrationConfig.catalystAuth && import.meta.env.VITE_PORTAL_DOCUMENTS==='true';
@@ -29,15 +32,16 @@ const documentPath=(kind,id)=>'/portal/documents/'+encodeURIComponent(kind)+'/'+
 const clone=obj=>JSON.parse(JSON.stringify(obj));
 const unavailable=name=>{throw new IntegrationUnavailableError(name);};
 
-// No CRM identity resolution exists in V2 yet; obtaining a Catalyst user does not
-// establish ownership of CRM records. Do not pass a Contact ID supplied by the browser
-// to legacy V1 write APIs until backend identity resolution + ownership checks are verified.
+// Contact identity is resolved on the server from the verified Catalyst email (src/records.js resolveContact), and every record is
+// ownership-checked there. Never pass a Contact ID from the browser to the API.
 export const INTEGRATIONS=Object.freeze({
   catalystAuth:integrationConfig.catalystAuth,
   courses:isEnabled(integrationConfig,'courses'),
   address:isEnabled(integrationConfig,'address'),
-  schoolServices:schoolOn,schoolWrites:schoolWritesOn,crmRecords:recordsOn,crmDrafts:draftsOn,crmContactMapping:false,pricing:false,
-  underwriting:false,stripeCheckout:billingOn,policyIssuance:false,workdrive:documentsOn,
+  schoolServices:schoolOn,schoolWrites:schoolWritesOn,crmRecords:recordsOn,crmDrafts:draftsOn,
+  // The accreditation application writes the V1 record set, so it has its own switch on top of saved drafts.
+  crmAccreditation:draftsOn&&import.meta.env.VITE_PORTAL_CRM_ACCREDITATION==='true',crmContactMapping:recordsOn,pricing:false,
+  underwriting:false,stripeCheckout:billingOn,publicQuotes:publicQuotesOn,policyIssuance:false,workdrive:documentsOn,
 });
 export const portalApi=Object.freeze({
   mode:DATA_MODE,
@@ -58,6 +62,8 @@ export const portalApi=Object.freeze({
   getMembershipInvoices:async(id)=>(await schoolReq('/memberships/'+encodeURIComponent(id)+'/invoices')).invoices,
   getMembershipExtensions:async(id)=>(await schoolReq('/memberships/'+encodeURIComponent(id)+'/extensions')).extensions,
   getIdentity:()=>auth.currentUser(),
+  // The signed-in member's contact details from the CRM, to fill in forms. Resolved on the server from the verified email.
+  getMyDetails:async()=>(await recordReq('/me')).details,
   register:profile=>auth.signUp(profile),
   signInEmbed:container=>auth.signInEmbed(container),
   // Always uses the email of the verified signed-in user, never a typed address.
@@ -70,10 +76,16 @@ export const portalApi=Object.freeze({
   updateDraft:async (service,id,data)=>(await draftReq('/'+service+'/'+encodeURIComponent(id),{method:'PUT',body:data})).draft,
   getDraft:async (service,id)=>(await draftReq('/'+service+'/'+encodeURIComponent(id))).draft,
   listDrafts:async ()=>(await draftReq('/')).drafts,
+  submitAccreditation:async data=>(await draftReq('/accreditation/submit',{method:'POST',body:data})).accreditation,
   discardDraft:async (service,id)=>draftReq('/'+service+'/'+encodeURIComponent(id),{method:'DELETE'}),
   checkoutQuote:async params=>(await billingReq('/quote?'+new URLSearchParams(params).toString())).quote,
+  checkoutQuotePost:async body=>(await billingReq('/quote',{method:'POST',body})).quote,
+  publicQuote:async body=>publicHttp?(await publicHttp('/public/quote',{method:'POST',body})).quote:unavailable('Pricing'),
   submit:async()=>unavailable('CRM submission'),
   startCheckout:async body=>billingReq('/',{method:'POST',body}),
+  // After a monthly plan is paid for, asks the server to put it on its 12 month schedule. Safe to repeat.
+  finishCheckout:async sessionId=>billingReq('/finish',{method:'POST',body:{sessionId}}),
+  resumePayment:async policyId=>billingReq('/resume',{method:'POST',body:{policyId}}),
   getDocuments:async(kind,id,path='')=>documentHttp?documentHttp(documentPath(kind,id)+(path?'?path='+encodeURIComponent(path):'')):unavailable('Authorised document listing'),
   getDocumentDownloadUrl:(kind,id,fileId,path='')=>documentsOn?integrationConfig.apiBaseUrl+documentPath(kind,id)+'/file/'+encodeURIComponent(fileId)+(path?'?path='+encodeURIComponent(path):''):null,
 });

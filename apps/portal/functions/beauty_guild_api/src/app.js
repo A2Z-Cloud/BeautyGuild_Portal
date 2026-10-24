@@ -11,6 +11,7 @@ const {registerDiagnosticsRoutes}=require('./diagnostics');
 const {registerPublicSchoolVerification}=require('./publicSchoolVerification');
 const {registerDraftRoutes}=require('./crmDrafts');
 const {registerSchoolRoutes}=require('./schoolServices');
+const {createRiskChecks}=require('./riskChecks');
 
 const TEXT_MIN = 3;
 const TEXT_MAX = 100;
@@ -24,7 +25,7 @@ function cleanText(value) {
 
 function createApp({
   config, getCrmHeaders, fetchImpl = fetch, now = Date.now, log = console.log,
-  addressLimit = 60, addressWindowMs = 60 * 1000, getCurrentUser, getWorkdriveHeaders, getCreatorHeaders,
+  addressLimit = 60, addressWindowMs = 60 * 1000, getCurrentUser, getWorkdriveHeaders, getCreatorHeaders, getAnalyticsHeaders, accreditationSleep,
 }) {
   const loqate = createLoqate({ config, fetchImpl, log });
   const courses = createCourses({ config, getCrmHeaders, fetchImpl, now, log });
@@ -38,7 +39,7 @@ function createApp({
   });
   // Read-only function: reject anything but GET before any route logic runs.
   app.use((req, res, next) => {
-    if (req.method !== 'GET' && !req.path.startsWith('/portal/checkout') && !req.path.startsWith('/portal/drafts') && !req.path.startsWith('/portal/management')) return next(new HttpError(405, 'METHOD_NOT_ALLOWED', 'Method not allowed.'));
+    if (req.method !== 'GET' && !req.path.startsWith('/portal/checkout') && !req.path.startsWith('/stripe/webhook') && !req.path.startsWith('/public/quote') && !req.path.startsWith('/portal/drafts') && !req.path.startsWith('/portal/management')) return next(new HttpError(405, 'METHOD_NOT_ALLOWED', 'Method not allowed.'));
     return next();
   });
 
@@ -71,19 +72,20 @@ function createApp({
     res.json({ address: await loqate.retrieve(id) });
   }));
 
+  const riskChecks = createRiskChecks({config: config.risk, getAnalyticsHeaders, getCreatorHeaders, fetchImpl, now, log});
   registerSchoolRoutes(app,{enabled:config.schoolServicesEnabled,writesEnabled:config.schoolWritesEnabled,getCurrentUser,getCrmHeaders,getCreatorHeaders,config,fetchImpl});
   registerPublicSchoolVerification(app,{enabled:config.publicVerificationEnabled,
     registrationModule:config.schoolRegistrationModule,registrationField:config.schoolRegistrationField,
     activeStatus:config.schoolActiveStatus,getCrmHeaders,crmApiDomain:config.crmApiDomain,fetchImpl,now});
   registerRecordRoutes(app,{enabled:config.recordsEnabled,getCurrentUser,getCrmHeaders,crmApiDomain:config.crmApiDomain,fetchImpl,hideDrafts:config.crmDraftsEnabled,draftStatus:config.draftStatus});
-  registerCheckoutRoutes(app,{enabled:config.billingEnabled,getCurrentUser,getCrmHeaders,crmApiDomain:config.crmApiDomain,stripeKey:config.stripeSecretKey,prices:config.stripePrices,publicOrigin:config.portalPublicOrigin,fetchImpl,now});
-  registerDraftRoutes(app,{enabled:config.crmDraftsEnabled,getCurrentUser,getCrmHeaders,crmApiDomain:config.crmApiDomain,config,fetchImpl});
-  registerDiagnosticsRoutes(app,{enabled:config.diagnosticsEnabled,allowedEmails:config.diagnosticsEmails,getCurrentUser,getCrmHeaders,crmApiDomain:config.crmApiDomain,fetchImpl});
+  registerCheckoutRoutes(app,{publicQuotesEnabled:config.publicQuotesEnabled,enabled:config.billingEnabled,getCurrentUser,getCrmHeaders,crmApiDomain:config.crmApiDomain,stripeKey:config.stripeSecretKey,scheduleWebhookSecret:config.stripeScheduleWebhookSecret,publicOrigin:config.portalPublicOrigin,riskChecks,fetchImpl,now});
+  registerDraftRoutes(app,{enabled:config.crmDraftsEnabled,getCurrentUser,getCrmHeaders,crmApiDomain:config.crmApiDomain,config,fetchImpl,listCourses:req=>courses.listActiveGti(req),sleep:accreditationSleep});
+  registerDiagnosticsRoutes(app,{enabled:config.diagnosticsEnabled,allowedEmails:config.diagnosticsEmails,allowedDomains:config.diagnosticsDomains,getCurrentUser,getCrmHeaders,crmApiDomain:config.crmApiDomain,fetchImpl,risk:config.risk,getAnalyticsHeaders,getCreatorHeaders});
   registerDocumentRoutes(app,{enabled:config.documentsEnabled,getCurrentUser,getCrmHeaders,getWorkdriveHeaders,crmApiDomain:config.crmApiDomain,workdriveApiDomain:config.workdriveApiDomain,fetchImpl});
   app.use((req, res, next) => next(new HttpError(404, 'NOT_FOUND', 'Not found.')));
   // eslint-disable-next-line no-unused-vars
   app.use((err, req, res, next) => {
-    if (err instanceof HttpError) return res.status(err.status).json({ error: err.message, code: err.code });
+    if (err instanceof HttpError) return res.status(err.status).json({ error: err.message, code: err.code, ...(err.details ? { details: err.details } : {}) });
     log('Unhandled error', err && err.name, err && err.message);
     return res.status(500).json({ error: 'Something went wrong.', code: 'INTERNAL' });
   });

@@ -1,0 +1,205 @@
+# Creator payments app: where we are and what is next
+
+Written 24 October 2026 so the Creator work can be picked up later. The portal side is done and deployed to Development (Stripe test mode only). The Creator app is a **new app built from scratch**, separate from the V1 Creator app, and it only covers **payments**. Mid-term changes, cancellations and vouchers come afterwards.
+
+## 1. Where things stand
+
+**Portal (Development, `main` plus [PR 65](https://github.com/A2Z-Cloud/BeautyGuild_Portal/pull/65), which is deployed but not yet merged)**
+- Price list v2 is built. Prices are found in Stripe by **lookup key** (the price list code), so a price change is a new Stripe price and no deployment.
+- Every membership level is £55 (£38.00 zero-rated, £14.17 standard-rated, £2.83 VAT). Named employees pay a £55 membership fee as well as any premium.
+- **Monthly plans:** the yearly price plus a £1.50 monthly admin fee, divided by 12, each payment rounded up. The joining fee and add-ons are spread over the first 12 payments and a Stripe schedule drops them at payment 13.
+- **Renewal:** membership, insurance, extra branches, employee fees and accreditation all renew automatically, yearly or monthly.
+- Every inline Stripe line carries its price list code (the Books SKU) in product metadata. Catalogue lines have it as the price's `lookup_key`.
+- Full detail: [pricing-payments.md](../api-contracts/pricing-payments.md).
+
+**Stripe (test mode):** 16 catalogue prices with lookup keys, the old prices archived, the old test subscriptions cancelled. Two webhook endpoints: Creator's (V1 handler, `zohoapis.eu`) and the portal function's own (`/stripe/webhook`, schedules monthly plans). `invoice.paid` has been added to Creator's endpoint.
+
+**Books:** 53 items imported with SKUs, taxes and (for 18 of them) Stripe price IDs. A membership is two Books items (zero-rated and standard-rated). Insurance premiums are VAT exempt; IPT is its own item (`INS-IPT`).
+
+**Verified with a real payment:** an annual accreditation with Associate membership (£409). Session `mode=subscription`, `subscription_type=annual`, line `sku=ACC-ASSOC`, subscription metadata `plan=annual` and `contact_id`.
+**Not yet verified with a real payment:** monthly membership with a joining fee and a badge (to see the two phase schedule), annual membership with insurance, insurance on its own, monthly accreditation, a one-off additional venue.
+
+## 2. The Creator app (agreed shape)
+
+Flow: **Stripe event, then the log, then (fetched from Stripe) payment, invoice and subscription, then the CRM update, then Books.** Each step records what it did so it can be retried.
+
+Forms already built: **Stripe Webhook Log**, **Invoice Records**, **Subscription**. What each purchase sends to Stripe, the metadata keys and how to test are in the [Creator handover](creator-handover-price-list-v2.md); the fields are on the forms themselves. Decisions taken:
+- The log is a plain inbox: Event ID (no duplicates), type, raw payload, status, attempts, Stripe object id, livemode. No business logic in it.
+- Invoice details stay lean: lines are saved as **JSON** in one field (code, name, qty, gross, interval; a `discounts` array stays empty for now). Line reporting is Books' job, not Creator's.
+- Invoices have **Stripe Invoice ID (no duplicates)** and a **Subscription** lookup, plus **Books Sync Status** and **Books Error** so a failed push is visible and retryable.
+- Subscriptions hold the checkout metadata snapshot, because renewals do not carry it.
+- Creator **fetches the object from Stripe by id** (with `expand`) rather than trusting the event payload, pinned to API version `2026-06-24.dahlia` (what Creator's endpoint already sends) through one constant.
+- One trigger per outcome so nothing activates twice: a subscription activates on its **first paid invoice** (`billing_reason=subscription_create`); a one-off activates on `checkout.session.completed` when paid. Later invoices (`subscription_cycle`) only extend dates and record the payment.
+
+**Facts learned from real events**
+- **Events arrive out of order.** For a subscription purchase `invoice.paid` arrived a second **before** `checkout.session.completed`. On the first paid invoice the processor must fetch the session with `GET /v1/checkout/sessions?subscription=sub_...` (expand `line_items`) to get the full metadata and codes.
+- On the 2026 API versions an invoice's subscription is under `parent.subscription_details` (`subscription`, `metadata`), not at the top.
+- Invoice lines carry only `price` and `product` ids and Stripe's own description. The code is on the **product** (`metadata.sku`) for inline lines, or the price's `lookup_key` for catalogue lines. Never map by description or name.
+- `invoice_payment.paid` is a separate event Creator's endpoint does not listen to. It is not needed.
+
+## 3. What Creator must handle (check against the V1 handler)
+See section 5 of the [Creator handover](creator-handover-price-list-v2.md). In short: `subscription_type` (`annual` or `monthly`) on membership and accreditation; monthly lines are **monthly shares** and the amount drops at payment 13 when there were year-one lines; insurance on its own is now `mode=subscription`; `named_employee_membership` (JSON) is new and sits outside IPT; `contact_id` is now set for new customers too; every renewal arrives as `invoice.paid`.
+
+**Splitting a membership into the two Books items:** take 38/55 of the membership line as the zero-rated item and the rest as the standard-rated item (VAT is 20% of that), putting any rounding on the standard line, so the invoice total always equals Stripe's.
+
+## 4. Open decisions
+- Additional venues (£60 a year) are still a single payment. Should they renew with the accreditation?
+- Renewals charge the same amounts as year one (no re-rating), and renew a year after payment, not after the chosen policy start date (up to 30 days apart).
+- International Accreditation: zero-rated or outside the scope of VAT (finance)? Currently Zero Rate in Books. The IPT item should post to an IPT payable account (name needed).
+- Creator should record failed payments and cancellations as statuses only for now.
+- The portal function's own Stripe webhook is registered for test mode only.
+
+## 5. Next steps, in order
+1. **Receiver, log only.** A new Creator function (appendix A) that verifies nothing it cannot (the endpoint may not expose the signature header; the fetch is the defence), saves one log row per Event ID, and returns 200. Register it as a **second** Stripe test endpoint with the same events including `invoice.paid`. Leave the V1 endpoint alone until cutover.
+2. Run the real test purchases listed above and confirm one row per event, the right types and nothing duplicated. Real full events can be pulled any time with the Stripe events API (`GET /v1/events`); do not commit them (they hold test customer details).
+3. **Processor skeleton:** read a Received row, fetch the object with the pinned version and `expand`, route by event type.
+4. **First full slice: a one-off payment** (additional venue), end to end: fetch, invoice, CRM update, Books push.
+5. Subscription first payment (annual), then monthly first payment (with the metadata snapshot on the Subscription), then renewals (`invoice.paid` with `subscription_cycle`), then failures and cancellations.
+6. **Books push** as its own scheduled function with retry and a Failed view. Use `get_books_item` (appendix B) and never create items; the invoice number should be the Stripe invoice id so a retry cannot duplicate.
+7. Cut over once each path has passed.
+
+Carry-over from V1 **not to repeat:** the additional venue branch swapped VAT and net (`vat_amount = gross / 1.2` is the net; VAT is `gross - gross / 1.2`); the log was marked Processed before the work finished; `books_customer_id` was used after a failed lookup; and the Books item function created a £0.00 item for any unmatched name (the source of the junk "1 × ..." items).
+
+## Appendix A: V2 receiver (log only)
+Adjust the field link names to the form (V1 used `status_field` for Status).
+
+```deluge
+string Stripe_Webhook.stripe_webhook_v2(string payload)
+{
+	// NOTE: V2 receiver. It only LOGS the Stripe event (once, by Event ID). It does not create
+	// or update anything in the CRM or Books. Processing happens later, from the log row.
+	try 
+	{
+		json_payload = payload.toMap();
+		incoming_event_id = json_payload.get("id");
+		incoming_type = json_payload.get("type");
+		if(incoming_event_id == null || incoming_type == null)
+		{
+			return "Not a Stripe event: missing id or type.";
+		}
+		existing_log = Stripe_Webhook_Log[Event_ID == incoming_event_id];
+		if(existing_log.count() > 0)
+		{
+			return "";
+		}
+		event_object = Map();
+		data = json_payload.get("data");
+		if(data != null && data.get("object") != null)
+		{
+			event_object = data.get("object");
+		}
+		subscription_details = Map();
+		parent = event_object.get("parent");
+		if(parent != null && parent.get("subscription_details") != null)
+		{
+			subscription_details = parent.get("subscription_details");
+		}
+		else if(event_object.get("subscription_details") != null)
+		{
+			subscription_details = event_object.get("subscription_details");
+		}
+		payment_type = "";
+		metadata = Map();
+		if(incoming_type == "checkout.session.completed")
+		{
+			metadata = ifnull(event_object.get("metadata"),Map());
+			payment_type = ifnull(metadata.get("type"),"");
+		}
+		else if(incoming_type.startsWith("invoice."))
+		{
+			metadata = ifnull(subscription_details.get("metadata"),Map());
+			if(event_object.get("billing_reason") == "subscription_cycle")
+			{
+				payment_type = "Renewal";
+			}
+			else
+			{
+				payment_type = "Subscription";
+			}
+		}
+		else if(incoming_type.startsWith("customer.subscription."))
+		{
+			metadata = ifnull(event_object.get("metadata"),Map());
+			payment_type = "Subscription";
+		}
+		related = Map();
+		related.put("contact_id",ifnull(metadata.get("contact_id"),""));
+		related.put("accreditation_id",ifnull(metadata.get("accreditation_id"),""));
+		related.put("insurance_policy_id",ifnull(metadata.get("insurance_policy_id"),""));
+		related.put("membership_profile_id",ifnull(metadata.get("membership_profile_id"),""));
+		stripe_created = null;
+		created = json_payload.get("created");
+		if(created != null)
+		{
+			stripe_created = (created.toLong() * 1000).toTime();
+		}
+		log_id = insert into Stripe_Webhook_Log
+		[
+			Added_User=zoho.loginuser
+			Event_ID=incoming_event_id
+			Event_Type=incoming_type
+			Raw_Payload=payload
+			Received_Time=zoho.currenttime
+			Status="Received"
+			Payment_Type=payment_type
+			Related_CRM_Records=related.toString()
+			Stripe_Object_ID=event_object.get("id")
+			Livemode=(json_payload.get("livemode") == true)
+			Attempts=0
+			Stripe_Created=stripe_created
+		];
+		info "Logged " + incoming_event_id + " (" + incoming_type + ")";
+	}
+	catch (e)
+	{
+		return e;
+	}
+	return "";
+}
+```
+
+## Appendix B: get-only Books item lookup (never creates)
+
+```deluge
+map Books.get_books_item(String sku)
+{
+	// NOTE: Finds an ACTIVE Zoho Books item by its SKU (the price list code). It only reads.
+	// If the SKU is not in Books the caller must mark the invoice Failed.
+	if(sku == null || sku.trim() == "")
+	{
+		return {"status":"error","message":"No SKU supplied."};
+	}
+	wanted = sku.trim();
+	organisation_id = "20117176507";
+	books_base_url = "https://www.zohoapis.eu/books/v3";
+	// Deluge has no while loop, so the pages are a short list.
+	pages = {1,2,3};
+	more_pages = true;
+	for each  page in pages
+	{
+		if(more_pages == true)
+		{
+			list_url = books_base_url + "/items?organization_id=" + organisation_id + "&filter_by=Status.Active&per_page=200&page=" + page;
+			list_response = invokeurl
+			[
+				url :list_url
+				type :GET
+				connection:"zoho_books_connection"
+			];
+			if(list_response.get("code") != 0)
+			{
+				return {"status":"error","message":"Books item lookup failed. Response: " + list_response.toString()};
+			}
+			for each  item in list_response.get("items")
+			{
+				if(item.get("sku") != null && item.get("sku").trim() == wanted)
+				{
+					return {"status":"success","item_id":item.get("item_id"),"name":item.get("name"),"rate":item.get("rate"),"tax_id":item.get("tax_id"),"tax_name":item.get("tax_name")};
+				}
+			}
+			more_pages = list_response.get("page_context").get("has_more_page");
+		}
+	}
+	return {"status":"not_found","message":"No active Books item has the SKU " + wanted + "."};
+}
+```

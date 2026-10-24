@@ -2,6 +2,7 @@
 const express=require('express');
 const {HttpError}=require('./errors');
 const {resolveContact}=require('./records');
+const {isPaidStatus,isPayableAccreditation}=require('./catalogue');
 const {assess}=require('./publicSchoolVerification');
 const ID=/^\d{10,25}$/;
 const esc=v=>encodeURIComponent(String(v));
@@ -40,7 +41,7 @@ function createSchoolApi({getCrmHeaders,getCreatorHeaders,crmApiDomain,creatorAp
  async function contact(req,user){return resolveContact(req,crm,user);}
  async function acc(req,id,contactId){
   if(!ID.test(String(id)))fail('Training centre not found.',404,'NOT_FOUND');
-  const r=(await crm(req,'Training_Centre_Accred/'+id+'?fields='+esc('Applicant_Contact,Account,Accreditation_Status,Accreditation_Level,Application_Stage,Valid_To,Number_of_Tutors')))[0];
+  const r=(await crm(req,'Training_Centre_Accred/'+id+'?fields='+esc('Applicant_Contact,Account,Accreditation_Status,Accreditation_Level,Application_Stage,Valid_To,Number_of_Tutors,Payment_Status')))[0];
   if(!r||String(r.Applicant_Contact?.id)!==String(contactId))fail('Training centre not found.',404,'NOT_FOUND');
   return r;
  }
@@ -93,11 +94,18 @@ function registerSchoolRoutes(app,{enabled,writesEnabled,getCurrentUser,getCrmHe
   next();
  }catch(e){next(e);}});
  router.get('/schools',handle(async(req,res)=>{
-  const rows=await api.crm(req,'Training_Centre_Accred/search?criteria='+esc('(Applicant_Contact:equals:'+req.memberContact.id+')')+'&fields='+esc('Applicant_Contact,Account,Accreditation_Status,Accreditation_Level,Valid_To,Application_Stage')+'&per_page=200');
-  const schools=rows.filter(x=>String(x.Applicant_Contact?.id)===String(req.memberContact.id))
-  .map(a=>({id:String(a.id),name:a.Account?.name||'Training centre',accountId:a.Account?.id||null,
-   status:a.Accreditation_Status||a.Application_Stage||'Unknown',level:a.Accreditation_Level||null,
-   validTo:a.Valid_To||null}));
+  const rows=await api.crm(req,'Training_Centre_Accred/search?criteria='+esc('(Applicant_Contact:equals:'+req.memberContact.id+')')+'&fields='+esc('Applicant_Contact,Account,Accreditation_Status,Accreditation_Level,Valid_To,Application_Stage,Payment_Status')+'&per_page=200');
+  const mine=rows.filter(x=>String(x.Applicant_Contact?.id)===String(req.memberContact.id));
+  // How many qualifications each application has, so the portal can say whether any are still outstanding.
+  const counts={};
+  if(mine.length){
+   const quals=await api.crm(req,'Qualifications/search?criteria='+esc('(Contact:equals:'+req.memberContact.id+')')+'&fields='+esc('Primary_Accreditation')+'&per_page=200');
+   for(const q of quals){const k=String(q.Primary_Accreditation?.id||'');if(k)counts[k]=(counts[k]||0)+1;}
+  }
+  const schools=mine.map(a=>({id:String(a.id),name:a.Account?.name||'Training centre',accountId:a.Account?.id||null,
+   status:a.Accreditation_Status||a.Application_Stage||'Unknown',stage:a.Application_Stage||null,level:a.Accreditation_Level||null,
+   validTo:a.Valid_To||null,paymentStatus:a.Payment_Status||null,paid:isPaidStatus(a.Payment_Status),payable:isPayableAccreditation(a),
+   qualificationCount:counts[String(a.id)]||0}));
   res.json({schools});
  }));
  // Registered before the catch-all section route below, which would otherwise swallow it as an unknown section.
@@ -119,7 +127,8 @@ function registerSchoolRoutes(app,{enabled,writesEnabled,getCurrentUser,getCrmHe
    const account=accountId?(await api.crm(req,'Accounts/'+accountId+'?fields='+esc('Referral_Code,Referral_Code_Active')))[0]:null;
    return res.json({profile:{id,name:centre?.Name||a.Account?.name||'Training centre',town:centre?.Town||null,county:centre?.County||null,
     country:centre?.Country||null,postcode:centre?.Postcode||null,status:a.Accreditation_Status,expires:a.Valid_To,level:a.Accreditation_Level,
-    referralCode:account?.Referral_Code||null,referralActive:account?.Referral_Code_Active||false}});
+    referralCode:account?.Referral_Code||null,referralActive:account?.Referral_Code_Active||false,
+    paymentStatus:a.Payment_Status||null,paid:isPaidStatus(a.Payment_Status),payable:isPayableAccreditation(a)}});
   }
   if(section==='courses'){
    const offerings=await api.crm(req,'TC_Course_Offering/search?criteria='+esc('(Accreditation:equals:'+id+')')+'&fields='+esc('Course,Training_Centre'));
@@ -250,6 +259,11 @@ function registerSchoolRoutes(app,{enabled,writesEnabled,getCurrentUser,getCrmHe
   const body=req.body||{},name=String(body.name||'').trim(),month=String(body.month||'').trim(),year=Number(body.year);
   if(!name||name.length>180||!/^(?:[1-9]|1[0-2])$/.test(month)||!Number.isInteger(year)||year<1900||year>2200)
    fail('A qualification name and valid completion month and year are required.',422,'INVALID_QUALIFICATION');
+  const now=new Date();
+  if(year>now.getFullYear()||(year===now.getFullYear()&&Number(month)>now.getMonth()+1))
+   fail('The completion date must be this month or earlier, not in the future.',422,'INVALID_QUALIFICATION');
+  const centre=String(body.trainingCentre||'').trim();
+  if(!centre||centre.length>200)fail('Enter where you completed your qualification, up to 200 characters.',422,'INVALID_QUALIFICATION');
   if(!Array.isArray(body.delivery)||!body.delivery.length||body.delivery.some(x=>!DELIVERY.includes(x))||
    !Array.isArray(body.assessment)||!body.assessment.length||body.assessment.some(x=>!ASSESS.includes(x)))
    fail('Choose valid practical delivery and assessment methods.',422,'INVALID_QUALIFICATION');
@@ -262,6 +276,8 @@ function registerSchoolRoutes(app,{enabled,writesEnabled,getCurrentUser,getCrmHe
    Practical_Delivery_Type:body.delivery,Practical_Delivery_Other:deliveryOther,
    Practical_Assessment_Type:body.assessment,Practical_Assessment_Other:assessmentOther,
    Verification_Status:'Not Verified'};
+  // Free text, never linked to the accredited school. Sent only once the CRM field exists and its API name is configured.
+  if(config.qualificationCentreField)record[config.qualificationCentreField]=centre;
   // Refuse an identical qualification so a double click or retry cannot create it twice.
   const existing=await api.crm(req,'Qualifications/search?criteria='+esc('(Contact:equals:'+req.memberContact.id+')')+'&fields='+esc('Name,Primary_Accreditation,Date_Completed_Month,Date_Completed_Year'));
   if(existing.some(x=>String(x.Primary_Accreditation?.id)===String(acc.id)&&String(x.Name||'').trim().toLowerCase()===name.toLowerCase()&&
