@@ -21,3 +21,8 @@ V1.1's current source remains the **test candidate**, not the V1.2 implementatio
 ## Catalyst Slate Git deployment (24 October 2026)
 
 [View Slate deployment settings](SLATE-DEPLOYMENT.md). The prepared branch is `feature/beauty-guild-staff-workspace-slate`, framework `Static`, and root path `widgets/crm/beauty-guild-staff-workspace/app`. Use external hosting in a **separate CRM Development test Web Tab**. The latest committed implementation is still V1.1; V1.2 is only the build brief.
+
+
+## V1.2 development candidate (24 October 2026)
+
+The Slate-connected branch now has a separate V1.2 implementation branch, `feature/staff-workspace-v12-m1-m2`. See [V1.2 Implementation Notes](V1.2-IMPLEMENTATION-NOTES.md) for delivered scope and limitations. New modules `app/v12-crm.js`, `app/v12-journeys.mjs`, `app/v12.css` and `app/portal-defs/` implement CRM metadata-driven record/details navigation, full Portal V2 Insurance and Accreditation question steps, Membership intake, CRM customer prefill and active CRM GTi Course selection. **The staff/shared CRM draft adapter, Catalyst checks/quote and actual payment are not connected**. Do not use for live application submission or mistake this for completed V1.2 UAT.
