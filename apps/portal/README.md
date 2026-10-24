@@ -95,3 +95,13 @@ Test using [INTEGRATION-TEST.md](INTEGRATION-TEST.md) and see [Milestone 2 Contr
 A public school number search has been added at the standalone hash routes /app/#/verify and /app/#/verify/12345. The lookup is implemented in the existing Catalyst API as GET /server/beauty_guild_api/public/verify/:number and is **disabled until the exact CRM School Registration Number field is configured**. It uses only actual CRM data and never fabricates an accredited result.
 
 The requested beautyguild.com/verify/12345 address needs a separate WordPress route or redirect; QR codes are not part of this change. See [School Verification V1 handover](../../docs/school-accreditation-verification-v1.md) for setup, CRM dependencies, security and testing.
+
+## Formatting and linting
+
+Code style is Prettier's job and real mistakes are ESLint's, so reviews can be about behaviour.
+
+- `npm run format` rewrites the source (client, Catalyst function, scripts and the sign-in overrides) in the house style. `npm run format:check` fails if anything is off.
+- `npm run lint` must report no errors. Warnings are allowed but capped (`--max-warnings 27`): fix some and lower the number, never raise it.
+- `npm run check` runs formatting, lint, the client tests and the build. CI runs it, then the function tests.
+- Generated or vendored files are skipped (`public/auth`, `auth-css/base`, lock files; see `.prettierignore`).
+- To make `git blame` skip the one-off reformat commit: `git config blame.ignoreRevsFile .git-blame-ignore-revs`.
