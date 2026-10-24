@@ -20,6 +20,7 @@ const PRICE_TABLE = {
   'MEM-ASSOC-Y': [5500, 'year'],
   'MEM-FULLNS-Y': [5500, 'year'],
   'MEM-FULLS-Y': [5500, 'year'],
+  'MEM-INTL-Y': [5500, 'year'],
   'MEM-JOIN': [1000, null],
   'MEM-BRANCH': [1500, null],
   'MEM-BUNDLE': [1000, null],
@@ -35,11 +36,22 @@ const IDS = {
   centre: '1011174000000000004',
 };
 
-function world({ deals = [], acc = {}, unlinked = false } = {}) {
-  const state = { stripePosts: [], crmPosts: [] };
+// liveStripe: true sends every Stripe request to the real Stripe API (test mode, with the key in env.STRIPE_SECRET_KEY) and records
+// the sessions it made in state.liveSessions; the CRM stays fake.
+function world({ deals = [], acc = {}, unlinked = false, liveStripe = false } = {}) {
+  const state = { stripePosts: [], crmPosts: [], liveSessions: [] };
   const json = (body, status = 200) => ({ status, ok: status < 400, json: async () => body });
   state.fetchImpl = async (url, init = {}) => {
     url = String(url);
+    if (liveStripe && url.startsWith('https://api.stripe.com/')) {
+      if (init.method === 'POST' && url.endsWith('/checkout/sessions'))
+        state.stripePosts.push({ params: new URLSearchParams(init.body) });
+      const r = await fetch(url, init);
+      const text = await r.text();
+      if (init.method === 'POST' && url.endsWith('/checkout/sessions') && r.ok)
+        state.liveSessions.push(JSON.parse(text).id);
+      return { status: r.status, ok: r.ok, json: async () => JSON.parse(text) };
+    }
     if (url.startsWith('https://api.stripe.com/v1/prices?')) {
       const code = new URL(url).searchParams.get('lookup_keys[]');
       const row = PRICE_TABLE[code];
@@ -98,9 +110,9 @@ function world({ deals = [], acc = {}, unlinked = false } = {}) {
 }
 
 // Runs fn({ post }) against the real app, wired to the fake world. post(body) is a signed-in POST /portal/checkout.
-async function withApp(state, fn) {
+async function withApp(state, fn, env = {}) {
   const app = createApp({
-    config: loadConfig(ENV),
+    config: loadConfig({ ...ENV, ...env }),
     getCurrentUser: async () => ({ id: 'user-1', email: 'alice@example.test' }),
     getCrmHeaders: async () => ({ Authorization: 'Bearer test' }),
     getAnalyticsHeaders: async () => ({ Authorization: 'a' }),
@@ -125,4 +137,4 @@ async function withApp(state, fn) {
   }
 }
 
-module.exports = { world, withApp, IDS };
+module.exports = { world, withApp, IDS, PRICE_TABLE };
