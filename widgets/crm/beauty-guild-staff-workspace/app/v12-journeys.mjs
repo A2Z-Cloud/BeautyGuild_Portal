@@ -80,10 +80,18 @@ function introText(v){
  }
  return '';
 }
+function linkedLabel(f){
+ let result=esc(f.label);
+ for(const [label,url] of Object.entries(f.links||{})){
+   if(typeof url!=='string'||!/^https:\/\//.test(url))continue;
+   const part=esc(label);result=result.replace(part,'<a href="'+esc(url)+'" target="_blank" rel="noopener noreferrer">'+part+'</a>');
+ }
+ return result;
+}
 function fieldHtml(f,v,errors){
  if(!show(f,v))return '';
  const name=f.name,raw=v[name],fid='v12-'+name,required=typeof f.required==='function'?f.required(v):f.required;
- const label=esc(f.label)+(required?' *':'');const err=errors?.[name]?'<span class="v12-form-error" role="alert">'+esc(errors[name])+'</span>':'';
+ const label=linkedLabel(f)+(required?' *':'');const err=errors?.[name]?'<span class="v12-form-error" role="alert">'+esc(errors[name])+'</span>':'';
  const options=(f.options||[]).map(opt).filter(o=>!f.optionWhen?.[o.value]||f.optionWhen[o.value](v)).filter(o=>!f.excludePrimary||o.value!==v.branch);
  const base=' data-v12-field="'+esc(name)+'" ';
  let control='';
@@ -126,7 +134,7 @@ function fieldHtml(f,v,errors){
    if(type==='number'){attr+=' min="'+(f.min??0)+'"';if(f.max)attr+=' max="'+f.max+'"';}
    control='<input id="'+fid+'" type="'+type+'"'+base+attr+' value="'+esc(raw??'')+'" />';
  }
- const info=introText(f.info)+introText(f.note)+(raw==='yes'?introText(f.yesNote):'')+(f.hint?'<p class="v12-muted">'+esc(f.hint)+'</p>':'');
+ const triggered=(f.stopOn!==undefined&&raw===f.stopOn)||(f.stopAbove!==undefined&&Number(raw)>f.stopAbove);const info=introText(f.info)+introText(f.note)+(raw==='yes'?introText(f.yesNote):'')+(f.hint?'<p class="v12-muted">'+esc(f.hint)+'</p>':'')+(f.noMessage&&raw==='no'?'<p class="v12-warning">'+esc(f.noMessage)+'</p>':'')+(triggered?'<p class="v12-warning">'+esc(f.stopMessage||'Please contact the Guild before proceeding.')+'</p>':'');
  return '<div class="v12-form-field '+(errors?.[name]?'invalid':'')+'">'+(f.type==='checkbox'?'':'<label for="'+fid+'">'+label+'</label>')+control+info+err+'</div>';
 }
 function prefill(j){
