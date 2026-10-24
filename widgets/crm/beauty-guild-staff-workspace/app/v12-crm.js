@@ -126,6 +126,7 @@
     }catch(e){item.error=String(e.message||e);}
     finally{item.loading=false;rerender();}
   }
+  const navigable=new Set(['Contacts','Accounts','Deals','Membership','Membership_Extension','Insurance_Policy','Insurance_Extension','Insured_People','Insured_Premises','Declarations','Risk_Screenings','Policy_Revisions','Training_Centre_Accred','Training_Centres','Qualifications','TC_Course_Offering','Tutor_Relationships','Accreditation_Centre_Link','Accreditation_Extensions','Tasks']);
   function tableRows(entity,rows,ctx){
     const meta=fieldMap(entity);
     const preferred=tableColumns[entity]||['Name','Status','Owner','Modified_Time'];
@@ -133,9 +134,9 @@
     if(!columns.length&&rows.length)columns=Object.keys(rows[0]).filter(k=>k!=='id'&&!k.startsWith('$')&&(meta.size===0||meta.has(k))).slice(0,6);
     if(!columns.length)columns=['Name'];
     const headings=columns.map(k=>'<th scope="col">'+safe(meta.get(k)?.field_label||pretty(k))+'</th>').join('');
-    return '<div class="v12-table-wrap"><table class="v12-table"><thead><tr>'+headings+'<th scope="col">Action</th></tr></thead><tbody>'+
+    return '<div class="v12-table-wrap"><table class="v12-table"><thead><tr>'+headings+(navigable.has(entity)?'<th scope="col">Action</th>':'')+'</tr></thead><tbody>'+
       rows.map(r=>'<tr>'+columns.map(k=>'<td>'+safe(format(k,r[k]))+'</td>').join('')+
-      '<td><button class="v12-link" data-action="select" data-entity="'+safe(entity)+'" data-id="'+safe(r.id)+'">Open</button></td></tr>').join('')+
+      (navigable.has(entity)?'<td><button class="v12-link" data-action="select" data-entity="'+safe(entity)+'" data-id="'+safe(r.id)+'">Open</button></td>':'')+'</tr>').join('')+
       '</tbody></table></div>';
   }
   function relationContent(entity,record,name,api,rerender){
