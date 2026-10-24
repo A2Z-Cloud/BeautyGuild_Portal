@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="light" />
+  <title>Beauty Guild | Staff Workspace</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="brand-processing.css" />
+  <script src="https://live.zwidgets.com/js-sdk/1.2/ZohoEmbededAppSDK.min.js" defer></script>
+  <script src="widget.js" defer></script>
+</head>
+<body>
+<div class="shell" id="app">
+  <aside class="sidebar" aria-label="Workspace navigation">
+    <div class="brand"><div><strong>Beauty <span>Guild</span></strong><small>Staff Workspace</small></div></div>
+    <div class="side-label">WORKSPACE</div>
+    <nav class="nav" id="nav" aria-label="Main menu">
+      <button type="button" class="nav-item active" data-view="processing"><span class="nav-icon" data-icon="layout-dashboard"></span> Overview</button>
+      <button type="button" class="nav-item" data-view="queue"><span class="nav-icon" data-icon="clipboard-list"></span> Applications</button>
+      <button type="button" class="nav-item" data-view="overview"><span class="nav-icon" data-icon="contact-round"></span> Customers</button>
+      <button type="button" class="nav-item" data-view="membership"><span class="nav-icon" data-icon="users-round"></span> Membership</button>
+      <button type="button" class="nav-item" data-view="insurance"><span class="nav-icon" data-icon="shield-check"></span> Insurance</button>
+      <button type="button" class="nav-item" data-view="accreditation"><span class="nav-icon" data-icon="graduation-cap"></span> Accreditation</button>
+      <button type="button" class="nav-item" data-view="create"><span class="nav-icon" data-icon="plus-circle"></span> New application <span class="soon-mini">Coming soon</span></button>
+    </nav>
+    <div class="side-bottom"><span class="status-indicator" id="connectionDot"></span><span id="connectionLabel">Connecting…</span><small id="identityLabel"></small></div>
+  </aside>
+  <main class="workspace">
+    <header class="topbar">
+      <div class="top-title"><div class="eyebrow">BEAUTY GUILD</div><h1 id="pageTitle">Staff Workspace</h1><p id="pageSubtitle">Applications and customer records</p></div>
+      <button type="button" class="button secondary" id="refreshBtn" title="Refresh current records"><span class="inline-icon" data-icon="refresh-cw"></span> Refresh</button>
+    </header>
+    <div class="content">
+      <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+      <section class="search-panel" aria-label="Record search">
+        <div class="search-row"><span class="search-mark" data-icon="search"></span><input id="globalSearch" aria-label="Search records" placeholder="Search name, email or reference" autocomplete="off" /><button class="button primary" id="searchBtn" type="button">Search</button></div>
+        
+      </section>
+      <div id="searchResults" hidden></div>
+      <div id="contentArea" aria-live="polite"></div>
+    </div>
+  </main>
+</div>
+<dialog id="actionModal" aria-labelledby="modalTitle">
+  <form id="actionForm">
+    <div class="modal-header"><h2 id="modalTitle">Add a note</h2><button type="button" class="icon-btn" id="cancelModal" aria-label="Close">×</button></div>
+    <p class="muted" id="modalContext"></p>
+    <label for="actionSubject" id="actionSubjectLabel">Title</label><input id="actionSubject" maxlength="255" required />
+    <div id="dueRow" hidden><label for="actionDue">Due date</label><input type="date" id="actionDue" /></div>
+    <label for="actionDescription" id="actionDescriptionLabel">Details</label><textarea id="actionDescription" rows="5" maxlength="16000" placeholder="Add relevant details"></textarea>
+    <div class="modal-actions"><button type="button" class="button secondary" id="cancelModal2">Cancel</button><button type="submit" class="button primary" id="saveAction">Save</button></div>
+  </form>
+</dialog>
+</body>
+</html>
