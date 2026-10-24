@@ -112,7 +112,7 @@
   }
   function relationKey(entity,id,list){return entity+':'+id+':'+list;}
   async function loadRelation(entity,id,list,api,rerender,{page=1}={}){
-    const key=relationKey(entity,id,list), item=relatedCache.get(key)||{pages:new Map(),more:false,error:null};
+    const key=relationKey(entity,id,list), item=relatedCache.get(key)||{pages:new Map(),moreByPage:new Map(),more:false,error:null};
     if(item.loading)return;
     if(item.pages.has(page)){item.page=page;relatedCache.set(key,item);rerender();return;}
     item.loading=true;item.page=page;item.error=null;relatedCache.set(key,item);rerender();
@@ -122,7 +122,7 @@
       if(result?.code&&result.code!=='SUCCESS'&&result.code!=='NO_CONTENT'&&!Array.isArray(result.data))throw Error(result.message||result.code);
       const rows=Array.isArray(result?.data)?result.data:Array.isArray(result)?result:[];
       item.pages.set(page,rows);
-      item.more=result?.info?.more_records===true||(result?.info?.more_records==null&&rows.length===100);
+      item.more=result?.info?.more_records===true||(result?.info?.more_records==null&&rows.length===100);item.moreByPage.set(page,item.more);
     }catch(e){item.error=String(e.message||e);}
     finally{item.loading=false;rerender();}
   }
@@ -143,15 +143,15 @@
     const key=relationKey(entity,record.id,name),item=relatedCache.get(key);
     if(!item){loadRelation(entity,record.id,name,api,rerender);return '<p class="v12-muted" role="status">Loading CRM related records…</p>';}
     if(item.loading&&!item.pages.has(item.page||1))return '<p class="v12-muted" role="status">Loading related records…</p>';
-    const rows=item.pages.get(item.page||1)||[];
+    const rows=item.pages.get(item.page||1)||[];const hasNext=item.pages.has((item.page||1)+1)||item.moreByPage?.get(item.page||1)===true;
     const rel=relationList(entity).find(x=>x.id===name),mod=rel?.mod;
     const guess={'Insurance_Extensions':'Insurance_Extension','Training_Centre_Course_Offering':'TC_Course_Offering','Tutor_Relationship':'Tutor_Relationships','Membership_Extension1':'Membership_Extension'}[name];
     const linkedModule=mod||guess||name;
     const body=rows.length?tableRows(linkedModule,rows):'<p class="v12-muted">'+(item.error?'The related list could not be retrieved.':'No linked records were returned.')+'</p>';
-    return '<div class="v12-related-head"><div><h3>'+safe(rel?.label||pretty(name))+'</h3><p>'+rows.length+' records on page '+(item.page||1)+(item.more?' · More available':'')+'</p></div><button class="button secondary" data-action="v12-rel-refresh" data-list="'+safe(name)+'">Refresh</button></div>'+
+    return '<div class="v12-related-head"><div><h3>'+safe(rel?.label||pretty(name))+'</h3><p>'+rows.length+' records on page '+(item.page||1)+(hasNext?' · More available':'')+'</p></div><button class="button secondary" data-action="v12-rel-refresh" data-list="'+safe(name)+'">Refresh</button></div>'+
        (item.error?'<div class="v12-warning" role="alert">'+safe(item.error)+' <span>Use Open in CRM if needed.</span></div>':'')+
        body+
-       '<div class="v12-pager"><button class="button secondary" data-action="v12-rel-page" data-list="'+safe(name)+'" data-page="'+((item.page||1)-1)+'" '+((item.page||1)===1?'disabled':'')+'>Previous</button><span>Page '+(item.page||1)+'</span><button class="button secondary" data-action="v12-rel-page" data-list="'+safe(name)+'" data-page="'+((item.page||1)+1)+'" '+(!item.more?'disabled':'')+'>Next</button></div>';
+       '<div class="v12-pager"><button class="button secondary" data-action="v12-rel-page" data-list="'+safe(name)+'" data-page="'+((item.page||1)-1)+'" '+((item.page||1)===1?'disabled':'')+'>Previous</button><span>Page '+(item.page||1)+'</span><button class="button secondary" data-action="v12-rel-page" data-list="'+safe(name)+'" data-page="'+((item.page||1)+1)+'" '+(!hasNext?'disabled':'')+'>Next</button></div>';
   }
   function detailPage(entity,record,ctx){
     const id=String(record.id),key=entity+':'+id,selection=chosen.get(key)||'details';
