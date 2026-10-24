@@ -224,7 +224,7 @@ Design in outline:
 | **Accreditation pay page (`/pay/accreditation/:recordId`)** | Same link beside the Annual or Monthly choice | Referral codes do not apply (no Joining Fee in the bundle). Bespoke vouchers might. School credit shows as its own line (3.8) |
 | **Insurance (`/insurance/buy`, and "Add insurance" on Join)** | Do not show a code box in phase 1 | The document gives no code that discounts insurance, and the IPT effect (3.2) makes it risky. On the Join page, a referral code covers the Joining Fee whether or not insurance is added |
 | **Add-ons (`membership_addon`)** | Phase 2, when bespoke vouchers on extras are live | |
-| **Renewal** | Nothing in phase 1 | The Joining Fee is already waived. A bespoke voucher may be wanted here (question 4.4) |
+| **Renewal** | Nothing in phase 1 | The Joining Fee is already waived. A bespoke voucher may be wanted here (question 12) |
 
 ### 3.8 School credits (the balance, not a code)
 
