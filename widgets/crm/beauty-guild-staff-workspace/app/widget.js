@@ -450,7 +450,7 @@
   async function loadBrowse(kind,{reset=false}={}){
     if(!BROWSE_MODULE[kind])return;
     const data=browseData(kind);
-    if(reset){data.rows=[];data.next=1;data.hasMore=true;data.loaded=false;data.error='';state.pages['browse:'+kind]=1;}
+    if(reset){data.rows=[];data.next=1;data.hasMore=true;data.loaded=false;data.error='';data.serverActive=false;data.serverRows=[];state.pages['browse:'+kind]=1;}
     if(data.loading||(!data.hasMore&&data.loaded))return;
     data.loading=true;data.error='';state.browseKind=kind;if(window.BGCRM12)window.BGCRM12.prime(BROWSE_MODULE[kind],ZOHO.CRM,render);
     if(!data.loaded)state.busy=true;
@@ -469,18 +469,36 @@
     }catch(err){data.error=String(err.message||err);data.loaded=true;}
     finally{data.loading=false;state.busy=false;render();}
   }
+  async function searchBrowse(kind,{more=false}={}){
+    const data=browseData(kind),term=(state.browseSearch||'').trim();
+    if(!term||term.length<2){data.error='Enter at least two characters to search all CRM records.';render();return;}
+    if(data.serverBusy)return;
+    if(!more){data.serverRows=[];data.serverPage=1;data.serverHasMore=true;data.serverTerm=term;state.pages['browse:'+kind]=1;}
+    if(more&&(!data.serverActive||!data.serverHasMore))return;
+    data.serverActive=true;data.serverBusy=true;data.error='';render();
+    try{
+      const result=await api().searchRecord({Entity:BROWSE_MODULE[kind],Type:'word',Query:data.serverTerm,page:data.serverPage,per_page:100});
+      if(result?.code&& !['SUCCESS','NO_CONTENT'].includes(result.code)&&!Array.isArray(result.data))throw Error(result.message||result.code);
+      const rows=asRows(result),ids=new Set(data.serverRows.map(r=>String(r.id)));
+      data.serverRows.push(...rows.filter(r=>r.id&&!ids.has(String(r.id))));
+      data.serverHasMore=result?.info?.more_records===true||(result?.info?.more_records==null&&rows.length===100);
+      data.serverPage++;
+      if(kind!=='customers')enrichCustomerRows(kind,rows.slice(0,15)).catch(()=>{});
+    }catch(err){data.error='CRM search could not complete: '+String(err.message||err);data.serverHasMore=false;}
+    finally{data.serverBusy=false;render();}
+  }
   function browserList(kind,onlyAttention=false){
     const data=browseData(kind),entity=BROWSE_MODULE[kind];
     const key='browse:'+kind;
-    const filtered=onlyAttention?data.rows.filter(r=>isQueueItem(kind,entity,r)):data.rows;
+    const available=data.serverActive?(data.serverRows||[]):data.rows;const filtered=onlyAttention?available.filter(r=>isQueueItem(kind,entity,r)):available;
     const term=(state.browseSearch||'').trim().toLowerCase();
-    const rows=term?filtered.filter(r=>([rowTitle(entity,r),customerName(entity,r),r.Name,r.Deal_Name,r.Insured_Trading_Name,r.Application_Stage,r.Application_Status,r.Underwriting_Status,r.Payment_Status,r.Policy_Status,r.Email].join(' ').toLowerCase().includes(term))):filtered;
+    const rows=!data.serverActive&&term?filtered.filter(r=>([rowTitle(entity,r),customerName(entity,r),r.Name,r.Deal_Name,r.Insured_Trading_Name,r.Application_Stage,r.Application_Status,r.Underwriting_Status,r.Payment_Status,r.Policy_Status,r.Email].join(' ').toLowerCase().includes(term))):filtered;
     const p=pageItems(key,rows,SIZES.queue);
-    return `<div class="browse-shell"><div class="browse-header"><div><span class="process-kicker">LIVE CRM RECORDS</span><h2>${esc(META[entity]?.title||entity)}</h2><p>Browse the records your CRM account can access. Search is optional.</p></div><div class="browse-counter">${data.rows.length} loaded${data.hasMore?' · more may exist':''}</div></div>
-    <div class="browse-controls"><label class="browse-search-label">Filter loaded records<input class="browse-search" type="search" data-browse-search="true" placeholder="Customer, reference or status" value="${esc(state.browseSearch||'')}" /></label>${kind==='customers'?'':`<div class="filter-switch"><button class="${onlyAttention?'':'selected'}" data-action="browse-filter" data-filter="all">All records</button><button class="${onlyAttention?'selected':''}" data-action="browse-filter" data-filter="attention">Requires attention</button></div>`}<button class="button secondary" data-action="browse-refresh" data-kind="${kind}">${icon('refresh-cw')} Refresh list</button></div>
+    return `<div class="browse-shell"><div class="browse-header"><div><span class="process-kicker">LIVE CRM RECORDS</span><h2>${esc(META[entity]?.title||entity)}</h2><p>Browse the records your CRM account can access. Search is optional.</p></div><div class="browse-counter">${available.length} ${data.serverActive?'CRM search matches':'loaded'}${(data.serverActive?data.serverHasMore:data.hasMore)?' · more may exist':''}</div></div>
+    <div class="browse-controls"><label class="browse-search-label">Filter loaded records or enter CRM search<input class="browse-search" type="search" data-browse-search="true" placeholder="Customer, reference or status" value="${esc(state.browseSearch||'')}" /></label><button class="button secondary" data-action="browse-search-crm" data-kind="${kind}" ${data.serverBusy?"disabled":""}>Search all CRM</button>${data.serverActive?`<button class="button secondary" data-action="browse-clear-crm" data-kind="${kind}">Clear CRM search</button>`:""}${kind==='customers'?'':`<div class="filter-switch"><button class="${onlyAttention?'':'selected'}" data-action="browse-filter" data-filter="all">All records</button><button class="${onlyAttention?'selected':''}" data-action="browse-filter" data-filter="attention">Requires attention</button></div>`}<button class="button secondary" data-action="browse-refresh" data-kind="${kind}">${icon('refresh-cw')} Refresh list</button></div>
     ${data.error?`<div class="notice error">CRM could not load ${esc(META[entity]?.title||entity)}: ${esc(data.error)} <button data-action="browse-refresh" data-kind="${kind}">Retry</button></div>`:''}
     ${data.loading&&!data.rows.length?loading():rows.length?(window.BGCRM12?window.BGCRM12.tableRows(entity,p.rows):p.rows.map(r=>recordRow(entity,r)).join(''))+p.controls:empty(onlyAttention?'No matching attention records':'No records on this page',data.hasMore?'More records may be available on the next CRM page.':'No records match the current filter.')}
-    ${data.hasMore?`<div class="browse-more"><button class="button secondary" data-action="load-browse-more" data-kind="${kind}" ${data.loading?'disabled':''}>${data.loading?'Loading…':'Load next CRM records'}</button><small>Filters apply to loaded records; continue loading for broader coverage.</small></div>`:''}</div>`;
+    ${(data.serverActive?data.serverHasMore:data.hasMore)?`<div class="browse-more"><button class="button secondary" data-action="${data.serverActive?'browse-search-more':'load-browse-more'}" data-kind="${kind}" ${data.loading||data.serverBusy?'disabled':''}>${data.loading||data.serverBusy?'Loading…':data.serverActive?'Load more CRM search results':'Load next CRM records'}</button><small>${data.serverActive?'Search is run against the CRM module, subject to API search support and permissions.':'Local filters apply to loaded records. Choose Search all CRM to search beyond loaded pages.'}</small></div>`:''}</div>`;
   }
   async function loadQueue(kind){state.queueKind=kind;state.browseKind=kind;state.browseFilter='attention';state.browseSearch='';state.view='queue';const data=browseData(kind);if(!data.loaded)await loadBrowse(kind);else render();}
   function openAction(type,entity,id){if(!ALL_ENTITIES.has(entity)||!/^\d{8,30}$/.test(String(id||''))){setNotice('Select a valid CRM record first.');return}state.actionType=type;state.actionTarget={entity,id};$('#modalTitle').textContent=type==='note'?'Add note':'Create follow-up task';$('#modalContext').textContent=`For ${META[entity]?.title||'selected record'}`;$('#actionSubject').value='';$('#actionDescription').value='';$('#actionSubjectLabel').textContent=type==='note'?'Note title':'Task subject';$('#actionDescriptionLabel').textContent=type==='note'?'Note content':'Task description';$('#dueRow').hidden=type!=='task';$('#actionDue').required=type==='task';$('#actionDue').value='';$('#saveAction').textContent=type==='note'?'Save note':'Create task';$('#actionModal').showModal();$('#actionSubject').focus()}
@@ -507,6 +525,9 @@
     else if(action==='launchqueue'){state.view='queue';await loadQueue(el.dataset.kind||'insurance');}
     else if(action==='browse-refresh')await loadBrowse(el.dataset.kind,{reset:true});
     else if(action==='load-browse-more')await loadBrowse(el.dataset.kind);
+     else if(action==='browse-search-crm')await searchBrowse(el.dataset.kind);
+     else if(action==='browse-search-more')await searchBrowse(el.dataset.kind,{more:true});
+     else if(action==='browse-clear-crm'){const d=browseData(el.dataset.kind);d.serverActive=false;d.serverRows=[];d.serverHasMore=false;state.browseSearch='';state.pages['browse:'+el.dataset.kind]=1;render();}
     else if(action==='browse-filter'){state.browseFilter=el.dataset.filter==='attention'?'attention':'all';state.pages['browse:'+state.browseKind]=1;render();}
     else if(action==='back-to-list'){state.focus=null;state.focusEntityView=null;state.view=el.dataset.kind==='customers'?'overview':el.dataset.kind||'insurance';state.contact=state.view==='overview'?null:state.contact;render();}
     else if(action==='coming-soon'||action==='journey-start'){state.view='create';initJourney(el.dataset.kind);render();}
