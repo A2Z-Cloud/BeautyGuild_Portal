@@ -103,7 +103,7 @@ function fieldHtml(f,v,errors){
    control='<div class="v12-repeat">'+rows.slice(0,f.type==='people'?4:Math.max(1,count)).map((p,i)=>{
      const keys=f.type==='people'?['type','firstName','lastName']:['firstName','surname','email'];
      return '<fieldset class="v12-person"><legend>'+(f.type==='people'?'Named person ':'Tutor ')+(i+1)+'</legend>'+
-       keys.map(k=>'<label>'+esc(k==='type'?'Employee / subcontractor':k)+'<input type="text" data-v12-row="'+esc(name)+'" data-v12-index="'+i+'" data-v12-key="'+esc(k)+'" value="'+esc(p?.[k]||'')+'"></label>').join('')+
+       keys.map(k=>'<label>'+esc(k==='type'?'Employee / subcontractor':k)+(k==='type'?'<select data-v12-row="'+esc(name)+'" data-v12-index="'+i+'" data-v12-key="'+esc(k)+'"><option value="employee" '+(p?.type!=='subcontractor'?'selected':'')+'>Employee</option><option value="subcontractor" '+(p?.type==='subcontractor'?'selected':'')+'>Subcontractor</option></select>':'<input type="text" data-v12-row="'+esc(name)+'" data-v12-index="'+i+'" data-v12-key="'+esc(k)+'" value="'+esc(p?.[k]||'')+'">')+'</label>').join('')+
        '<button type="button" class="v12-link" data-v12-remove="'+esc(name)+'" data-v12-index="'+i+'">Remove</button></fieldset>';
    }).join('')+'<button class="button secondary" type="button" data-v12-add="'+esc(name)+'" '+(rows.length>=(f.type==='people'?4:20)?'disabled':'')+'>Add '+(f.type==='people'?'person':'tutor')+'</button></div>';
   }else if(f.type==='courses'){
@@ -159,6 +159,7 @@ function render(j){
    const errors=j.v12Errors||{};
    const intro=typeof step.intro==='function'?step.intro(j.answers):step.intro;
    body='<span class="process-kicker">STEP '+(idx+1)+' OF '+steps.length+'</span><h3>'+esc(step.title)+'</h3><p class="v12-muted">'+esc(step.description||'')+'</p>'+introText(intro)+
+      (j.kind==='accreditation'&&step.id==='centre'?'<button type="button" class="button secondary" data-v12-copy="centre">Copy applicant contact details to training centre</button>':'')+
      '<div class="v12-form-grid">'+(step.fields||[]).map(f=>fieldHtml(f,j.answers,errors)).join('')+'</div>'+
      (step.demands?'<p class="v12-warning">Staff must obtain and record the customer’s actual confirmation of the demands-and-needs information.</p>':'');
  }
@@ -197,6 +198,10 @@ function input(j,el){
 }
 function click(j,el){
  if(!j||j.step<0)return false;
+ if(el.dataset?.v12Copy==='centre'&&j.kind==='accreditation'){
+   for(const [from,to]of Object.entries(COPY_HOME_MAP))if(nonblank(j.answers[from]))j.answers[to]=j.answers[from];
+   return true;
+ }
  const add=el.dataset?.v12Add,remove=el.dataset?.v12Remove;
  const name=add||remove;if(!['insNamedPeople','tutors'].includes(name))return false;
  const a=Array.isArray(j.answers[name])?[...j.answers[name]]:[];
