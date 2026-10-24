@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "strict": false,
+    "noImplicitAny": false,
+    "module": "commonjs",
+    "target": "es2022",
+    "moduleResolution": "node",
+    "types": [
+      "node"
+    ],
+    "skipLibCheck": true
+  },
+  "files": [
+    "functions/beauty_guild_api/src/plans.js",
+    "functions/beauty_guild_api/src/catalogue.js",
+    "functions/beauty_guild_api/src/checkout.js",
+    "functions/beauty_guild_api/src/insurance.js",
+    "functions/beauty_guild_api/src/config.js",
+    "functions/beauty_guild_api/src/metadataContract.js"
+  ]
+}
