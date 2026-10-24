@@ -325,6 +325,7 @@ async function insuranceLines({ req, contact, input, member, risk, start, end })
         .slice(0, 1900)
     : '';
   if (!quote.rows.length && !blocked) bad('Choose the insurance cover you need.');
+  /** @type {{ name: string, unitPence?: number, priceItem?: string, quantity: number, sku: string }[]} */
   const inline = quote.rows.map(r => ({
     name: 'Insurance - ' + r.label,
     unitPence: r.premiumPence,
