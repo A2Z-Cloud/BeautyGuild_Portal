@@ -10,6 +10,7 @@ const { resolveContact, createCrmClient } = require('./records');
 const { createRateLimiter, clientKey } = require('./rateLimit');
 const { ITEMS, SERVICES, pounds, netPounds } = require('./catalogue');
 const plans = require('./plans');
+const { fitToStripeLimit, filledCount, MAX_FILLED_KEYS } = require('./metadataContract');
 
 const STRIPE = 'https://api.stripe.com/v1';
 const ID = /^\d{10,25}$/;
@@ -604,7 +605,7 @@ function registerCheckoutRoutes(
         const catalogue = b.lines.filter(l => l.item);
         const amounts = {};
         for (const l of catalogue) amounts[l.item] = pounds(l.totalPence);
-        const meta = {
+        let meta = {
           email: req.portalUser.email,
           name: b.contact ? [b.contact.First_Name, b.contact.Last_Name].filter(Boolean).join(' ') : '',
           currency: 'GBP',
@@ -619,8 +620,8 @@ function registerCheckoutRoutes(
             annualPence: b.annualPence,
           }),
         };
-        // Stripe allows 50 metadata keys. The plan is also on the subscription, so it is only added here while there is room.
-        if (b.plan && Object.keys(meta).length < 50)
+        // Stripe allows 50 filled metadata keys. The plan is also on the subscription, so it is only added here while there is room.
+        if (b.plan && filledCount(meta) < MAX_FILLED_KEYS)
           meta.monthly_plan = JSON.stringify({
             payments: plans.PAYMENTS,
             first_payment: pounds(b.plan.firstPaymentPence),
@@ -629,6 +630,7 @@ function registerCheckoutRoutes(
             admin_fee: pounds(b.plan.adminPence),
             admin_fee_net: (b.plan.adminPence / 120).toFixed(2),
           });
+        meta = fitToStripeLimit(meta);
         const params = new URLSearchParams({
           mode: b.mode,
           customer_email: req.portalUser.email,

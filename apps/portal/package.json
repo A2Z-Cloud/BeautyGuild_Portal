@@ -12,7 +12,8 @@
     "build:auth-css": "node scripts/build-auth-css.mjs",
     "format": "prettier --write \"src/**/*.{js,jsx,mjs,css}\" \"functions/beauty_guild_api/**/*.js\" \"scripts/*.mjs\" auth-css/overrides.css vite.config.js eslint.config.js",
     "format:check": "prettier --check \"src/**/*.{js,jsx,mjs,css}\" \"functions/beauty_guild_api/**/*.js\" \"scripts/*.mjs\" auth-css/overrides.css vite.config.js eslint.config.js",
-    "lint": "eslint . --max-warnings 27"
+    "lint": "eslint . --max-warnings 27",
+    "docs:metadata": "node scripts/build-metadata-doc.mjs"
   },
   "dependencies": {
     "lucide-react": "^0.468.0",
