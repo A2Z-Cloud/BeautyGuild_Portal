@@ -10,20 +10,34 @@ const config = loadConfig();
 module.exports = createApp({
   config,
   async getCurrentUser(req) {
-    const user=await catalyst.initialize(req).userManagement().getCurrentUser();
-    if(!user || !user.user_id || user.status!=='ACTIVE' || user.is_confirmed!==true)return null;
-    return {id:String(user.user_id),email:String(user.email_id||'').trim().toLowerCase()};
+    const user = await catalyst.initialize(req).userManagement().getCurrentUser();
+    if (!user || !user.user_id || user.status !== 'ACTIVE' || user.is_confirmed !== true) return null;
+    return {
+      id: String(user.user_id),
+      email: String(user.email_id || '')
+        .trim()
+        .toLowerCase(),
+    };
   },
   async getWorkdriveHeaders(req) {
-    const {headers}=await catalyst.initialize(req).connections().getConnectionCredentials(config.workdriveConnectionName);
+    const { headers } = await catalyst
+      .initialize(req)
+      .connections()
+      .getConnectionCredentials(config.workdriveConnectionName);
     return headers;
   },
   async getCreatorHeaders(req) {
-    const {headers}=await catalyst.initialize(req).connections().getConnectionCredentials(config.creatorConnectionName);
+    const { headers } = await catalyst
+      .initialize(req)
+      .connections()
+      .getConnectionCredentials(config.creatorConnectionName);
     return headers;
   },
   async getAnalyticsHeaders(req) {
-    const {headers}=await catalyst.initialize(req).connections().getConnectionCredentials(config.analyticsConnectionName);
+    const { headers } = await catalyst
+      .initialize(req)
+      .connections()
+      .getConnectionCredentials(config.analyticsConnectionName);
     return headers;
   },
   async getCrmHeaders(req) {

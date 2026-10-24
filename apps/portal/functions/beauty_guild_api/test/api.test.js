@@ -11,9 +11,15 @@ const json = (body, status = 200) => ({ ok: status >= 200 && status < 300, statu
 
 async function withServer(opts, fn) {
   const app = createApp({ log: quiet, getCrmHeaders: async () => ({ Authorization: 'Zoho-oauthtoken T' }), ...opts });
-  const server = await new Promise((resolve) => { const s = app.listen(0, '127.0.0.1', () => resolve(s)); });
+  const server = await new Promise(resolve => {
+    const s = app.listen(0, '127.0.0.1', () => resolve(s));
+  });
   const base = `http://127.0.0.1:${server.address().port}`;
-  try { return await fn(base); } finally { await new Promise((r) => server.close(r)); }
+  try {
+    return await fn(base);
+  } finally {
+    await new Promise(r => server.close(r));
+  }
 }
 const get = async (base, path, init) => {
   const res = await fetch(base + path, init);
@@ -30,15 +36,17 @@ test('config: https origins only and bounded values', () => {
 
 test('address/find returns only whitelisted fields, trims to max, sends key and filter upstream', async () => {
   const calls = [];
-  const fetchImpl = async (url) => {
+  const fetchImpl = async url => {
     calls.push(String(url));
-    return json({ Items: [
-      { Id: 'GB|1', Type: 'Postcode', Text: 'AB1 2CD', Description: '5 Addresses', Extra: 'drop-me' },
-      { Id: 'GB|2', Type: 'Address', Text: '1 High St', Description: 'Town' },
-      { Id: 'GB|3', Type: 'Address', Text: '2 High St', Description: 'Town' },
-    ] });
+    return json({
+      Items: [
+        { Id: 'GB|1', Type: 'Postcode', Text: 'AB1 2CD', Description: '5 Addresses', Extra: 'drop-me' },
+        { Id: 'GB|2', Type: 'Address', Text: '1 High St', Description: 'Town' },
+        { Id: 'GB|3', Type: 'Address', Text: '2 High St', Description: 'Town' },
+      ],
+    });
   };
-  await withServer({ config: loadConfig(baseEnv), fetchImpl }, async (base) => {
+  await withServer({ config: loadConfig(baseEnv), fetchImpl }, async base => {
     const r = await get(base, '/address/find?text=AB1%202CD&container=GB%7C9');
     assert.equal(r.status, 200);
     assert.equal(r.body.items.length, 2);
@@ -55,7 +63,7 @@ test('address/find returns only whitelisted fields, trims to max, sends key and 
 
 test('address/find allows ".." in search text and validates input', async () => {
   const fetchImpl = async () => json({ Items: [] });
-  await withServer({ config: loadConfig(baseEnv), fetchImpl }, async (base) => {
+  await withServer({ config: loadConfig(baseEnv), fetchImpl }, async base => {
     assert.equal((await get(base, '/address/find?text=Flat%201..%20High%20St')).status, 200);
     assert.equal((await get(base, '/address/find')).status, 400);
     assert.equal((await get(base, '/address/find?text=ab')).status, 400);
@@ -66,13 +74,31 @@ test('address/find allows ".." in search text and validates input', async () => 
 });
 
 test('address/retrieve maps the address and rejects bad ids', async () => {
-  const fetchImpl = async () => json({ Items: [{ Company: 'Glow Salon', Street: 'High St', BuildingNumber: '12', City: 'Leeds', ProvinceName: 'West Yorkshire', PostalCode: 'LS1 1AA', CountryName: 'United Kingdom' }] });
-  await withServer({ config: loadConfig(baseEnv), fetchImpl }, async (base) => {
+  const fetchImpl = async () =>
+    json({
+      Items: [
+        {
+          Company: 'Glow Salon',
+          Street: 'High St',
+          BuildingNumber: '12',
+          City: 'Leeds',
+          ProvinceName: 'West Yorkshire',
+          PostalCode: 'LS1 1AA',
+          CountryName: 'United Kingdom',
+        },
+      ],
+    });
+  await withServer({ config: loadConfig(baseEnv), fetchImpl }, async base => {
     const r = await get(base, '/address/retrieve?id=GB%7C123');
     assert.equal(r.status, 200);
     assert.deepEqual(r.body.address, {
-      addressLine1: 'Glow Salon', addressLine2: '12 High St', addressLine3: '',
-      town: 'Leeds', county: 'West Yorkshire', postcode: 'LS1 1AA', country: 'United Kingdom',
+      addressLine1: 'Glow Salon',
+      addressLine2: '12 High St',
+      addressLine3: '',
+      town: 'Leeds',
+      county: 'West Yorkshire',
+      postcode: 'LS1 1AA',
+      country: 'United Kingdom',
     });
     assert.equal((await get(base, '/address/retrieve')).status, 400);
     assert.equal((await get(base, '/address/retrieve?id=../../x')).status, 400);
@@ -84,10 +110,12 @@ test('upstream failures are hidden from the browser and never expose the key', a
   const cases = [
     async () => json({ Items: [{ Error: '2', Description: leak }] }),
     async () => json({ error: leak }, 500),
-    async () => { throw new Error(leak); },
+    async () => {
+      throw new Error(leak);
+    },
   ];
   for (const fetchImpl of cases) {
-    await withServer({ config: loadConfig(baseEnv), fetchImpl }, async (base) => {
+    await withServer({ config: loadConfig(baseEnv), fetchImpl }, async base => {
       const r = await get(base, '/address/find?text=abc');
       assert.equal(r.status, 502);
       assert.equal(r.body.code, 'ADDRESS_UNAVAILABLE');
@@ -97,15 +125,17 @@ test('upstream failures are hidden from the browser and never expose the key', a
 });
 
 test('missing Loqate key returns 503 without calling upstream', async () => {
-  const fetchImpl = async () => { throw new Error('must not be called'); };
-  await withServer({ config: loadConfig({}), fetchImpl }, async (base) => {
+  const fetchImpl = async () => {
+    throw new Error('must not be called');
+  };
+  await withServer({ config: loadConfig({}), fetchImpl }, async base => {
     assert.equal((await get(base, '/address/find?text=abc')).status, 503);
   });
 });
 
 test('address routes are rate limited per client', async () => {
   const fetchImpl = async () => json({ Items: [] });
-  await withServer({ config: loadConfig(baseEnv), fetchImpl, addressLimit: 3 }, async (base) => {
+  await withServer({ config: loadConfig(baseEnv), fetchImpl, addressLimit: 3 }, async base => {
     const statuses = [];
     for (let i = 0; i < 5; i += 1) statuses.push((await get(base, '/address/find?text=abc')).status);
     assert.deepEqual(statuses, [200, 200, 200, 429, 429]);
@@ -118,16 +148,36 @@ test('courses maps CRM records, uses connection headers, and caches', async () =
   let calls = 0;
   let seen;
   const fetchImpl = async (url, init) => {
-    calls += 1; seen = { url: String(url), init };
-    return json({ data: [{ id: '1', Name: 'Facials L3', Course_Category: 'Beauty', CPD_Points: 0, Member_Price: 99, Secret_Field: 'drop-me' }] });
+    calls += 1;
+    seen = { url: String(url), init };
+    return json({
+      data: [
+        {
+          id: '1',
+          Name: 'Facials L3',
+          Course_Category: 'Beauty',
+          CPD_Points: 0,
+          Member_Price: 99,
+          Secret_Field: 'drop-me',
+        },
+      ],
+    });
   };
   let t = 1000;
-  await withServer({ config: loadConfig(baseEnv), fetchImpl, now: () => t }, async (base) => {
+  await withServer({ config: loadConfig(baseEnv), fetchImpl, now: () => t }, async base => {
     const r = await get(base, '/courses');
     assert.equal(r.status, 200);
     assert.deepEqual(r.body.courses[0], {
-      id: '1', name: 'Facials L3', category: 'Beauty', treatmentGroup: null, courseType: null,
-      duration: null, cpdPoints: 0, memberPrice: 99, nonMemberPrice: null, entryRequirements: null,
+      id: '1',
+      name: 'Facials L3',
+      category: 'Beauty',
+      treatmentGroup: null,
+      courseType: null,
+      duration: null,
+      cpdPoints: 0,
+      memberPrice: 99,
+      nonMemberPrice: null,
+      entryRequirements: null,
     });
     assert.equal(seen.init.headers.Authorization, 'Zoho-oauthtoken T');
     assert.ok(seen.url.startsWith('https://www.zohoapis.eu/crm/v3/Courses/search?criteria='));
@@ -141,16 +191,33 @@ test('courses maps CRM records, uses connection headers, and caches', async () =
 });
 
 test('courses: 204 is an empty list; CRM or connection failures are generic 502', async () => {
-  await withServer({ config: loadConfig(baseEnv), fetchImpl: async () => ({ ok: true, status: 204, json: async () => { throw new Error('no body'); } }) }, async (base) => {
-    assert.deepEqual((await get(base, '/courses')).body, { courses: [] });
-  });
+  await withServer(
+    {
+      config: loadConfig(baseEnv),
+      fetchImpl: async () => ({
+        ok: true,
+        status: 204,
+        json: async () => {
+          throw new Error('no body');
+        },
+      }),
+    },
+    async base => {
+      assert.deepEqual((await get(base, '/courses')).body, { courses: [] });
+    },
+  );
   const failures = [
     { fetchImpl: async () => json({ message: 'INTERNAL SECRET' }, 500) },
     { fetchImpl: async () => json({ nope: true }) },
-    { fetchImpl: async () => json({}), getCrmHeaders: async () => { throw new Error('connection INTERNAL SECRET'); } },
+    {
+      fetchImpl: async () => json({}),
+      getCrmHeaders: async () => {
+        throw new Error('connection INTERNAL SECRET');
+      },
+    },
   ];
   for (const f of failures) {
-    await withServer({ config: loadConfig(baseEnv), ...f }, async (base) => {
+    await withServer({ config: loadConfig(baseEnv), ...f }, async base => {
       const r = await get(base, '/courses');
       assert.equal(r.status, 502);
       assert.equal(r.body.code, 'COURSES_UNAVAILABLE');
@@ -160,8 +227,10 @@ test('courses: 204 is an empty list; CRM or connection failures are generic 502'
 });
 
 test('read-only: non-GET methods and unknown routes are rejected', async () => {
-  const fetchImpl = async () => { throw new Error('must not be called'); };
-  await withServer({ config: loadConfig(baseEnv), fetchImpl }, async (base) => {
+  const fetchImpl = async () => {
+    throw new Error('must not be called');
+  };
+  await withServer({ config: loadConfig(baseEnv), fetchImpl }, async base => {
     for (const method of ['POST', 'PUT', 'PATCH', 'DELETE']) {
       assert.equal((await get(base, '/courses', { method })).status, 405, method);
     }

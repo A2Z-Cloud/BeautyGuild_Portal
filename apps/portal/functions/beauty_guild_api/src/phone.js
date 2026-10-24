@@ -7,10 +7,16 @@ function phoneIssue(raw) {
   if (/[^\d\s()+.\-]/.test(text)) return 'Phone numbers can only contain digits, spaces and + ( ) -.';
   let digits = text.replace(/\D/g, '');
   let international = text.startsWith('+');
-  if (!international && digits.startsWith('00')) { international = true; digits = digits.slice(2); }
+  if (!international && digits.startsWith('00')) {
+    international = true;
+    digits = digits.slice(2);
+  }
   const uk = !international || digits.startsWith('44');
   const national = (international ? (uk ? digits.slice(2) : digits) : digits).replace(/^0/, '');
-  if (uk) return national.length >= 9 && national.length <= 10 ? '' : 'Enter a UK number with at least 9 digits after the country code.';
+  if (uk)
+    return national.length >= 9 && national.length <= 10
+      ? ''
+      : 'Enter a UK number with at least 9 digits after the country code.';
   return digits.length >= 8 && digits.length <= 15 ? '' : 'Enter a valid phone number with its country code.';
 }
-module.exports = {phoneIssue};
+module.exports = { phoneIssue };

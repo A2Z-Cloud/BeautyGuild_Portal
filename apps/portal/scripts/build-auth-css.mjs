@@ -9,7 +9,8 @@ import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const FILES = ['embedded_signin.css', 'embedded_password_reset.css', 'confirm_password.css'];
-const FONTS = "@import url('https://fonts.googleapis.com/css2?family=Alegreya+Sans:wght@400;500;600;700&family=Open+Sans:wght@400;500;600;700&display=swap');\n";
+const FONTS =
+  "@import url('https://fonts.googleapis.com/css2?family=Alegreya+Sans:wght@400;500;600;700&family=Open+Sans:wght@400;500;600;700&display=swap');\n";
 const overrides = readFileSync(join(root, 'auth-css', 'overrides.css'), 'utf8');
 
 mkdirSync(join(root, 'public', 'auth'), { recursive: true });
