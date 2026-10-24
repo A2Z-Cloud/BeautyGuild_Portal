@@ -16,3 +16,8 @@ Refer to [INSTALLATION.md](INSTALLATION.md) for the test plan, limitations and Z
 - Live server-calculated quotations using Stripe lookup keys/Books SKUs, and a **payment stopping point** until Creator V2 payment handling is ready.
 
 V1.1's current source remains the **test candidate**, not the V1.2 implementation. Do not confuse the two or deploy as though V1.2 is complete.
+
+
+## Catalyst Slate Git deployment (24 October 2026)
+
+[View Slate deployment settings](SLATE-DEPLOYMENT.md). The prepared branch is `feature/beauty-guild-staff-workspace-slate`, framework `Static`, and root path `widgets/crm/beauty-guild-staff-workspace/app`. Use external hosting in a **separate CRM Development test Web Tab**. The latest committed implementation is still V1.1; V1.2 is only the build brief.
