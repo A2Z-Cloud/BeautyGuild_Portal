@@ -26,3 +26,29 @@ test('form controls and plain paragraphs sit on the portal text scale, not the b
   assert.match(css,/:where\(\.page\)\s*p\s*\{[^}]*font-size:13px/);
   assert.match(css,/\.field select[^{]*\{[^}]*font-size:13px/);
 });
+
+// ---- The Catalyst sign-in screens (an iframe, so they have their own stylesheet) ----
+const authFiles=['embedded_signin.css','embedded_password_reset.css','confirm_password.css'];
+const weightsFor=(css,family)=>{const m=css.match(new RegExp('family='+family+':wght@([0-9;]+)'));return m?m[1].split(';'):[];};
+test('sign-in form controls use the portal body font, not the browser default (Arial)',()=>{
+  const css=readFileSync('auth-css/overrides.css','utf8');
+  assert.match(css,/input\s*,\s*button[^{]*\{[^}]*font-family:\s*'Open Sans'/);
+});
+test('the built sign-in stylesheets are current: they carry the overrides after Catalyst\'s base sheet',()=>{
+  const overrides=readFileSync('auth-css/overrides.css','utf8');
+  for(const name of authFiles){
+    const built=readFileSync(join('public','auth',name),'utf8');
+    assert.ok(built.endsWith(overrides),name+' is out of date: run npm run build:auth-css');
+  }
+});
+test('the sign-in screens and the portal load the same font weights',()=>{
+  const html=readFileSync('index.html','utf8');
+  for(const family of ['Alegreya\\+Sans','Open\\+Sans']){
+    const wanted=weightsFor(html,family);
+    assert.ok(wanted.length>0,family+' not found in index.html');
+    for(const name of authFiles){
+      const loaded=weightsFor(readFileSync(join('public','auth',name),'utf8'),family);
+      assert.deepEqual(wanted.filter(w=>!loaded.includes(w)),[],name+' is missing '+family+' weights');
+    }
+  }
+});

@@ -22,6 +22,12 @@ body {
   background: transparent !important;
 }
 
+/* Form controls do not inherit the page font, and Catalyst's base sheet leaves them in the browser default (Arial).
+   Set them here so the sign-in, password and OTP screens use the same type as the rest of the portal. Icon fonts are untouched. */
+input, button, select, textarea, .btn, .btn span, .text_box, .textbox {
+  font-family: 'Open Sans', Arial, sans-serif !important;
+}
+
 #headtitle, .confirmtitle {
   font-family: 'Alegreya Sans', Arial, sans-serif !important;
   font-weight: 700 !important;
