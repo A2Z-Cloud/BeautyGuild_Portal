@@ -43,6 +43,29 @@ const show=(f,v)=>!f.when||f.when(v);
 const opt=(p)=>typeof p==='string'?{value:p,label:p}:p;
 const readonlyTerms=new Set(['terms','termsAccepted','insInformationAccurate','insEthicsAccepted','insDemandsNeedsAccepted','insNonAdvisedAccepted']);
 const legal='These statements must be confirmed by the customer. Staff entry alone is not evidence of customer acceptance.';
+const courseSource={items:[],loading:false,loaded:false,error:'',incomplete:false};
+const COURSE_CRITERIA='((Status:equals:Active)and(Course_Type:equals:GTI))';
+async function loadCourses(crm,rerender){
+ if(courseSource.loading||courseSource.loaded)return;
+ courseSource.loading=true;courseSource.error='';rerender();
+ try{
+   if(typeof crm?.API?.searchRecord!=='function')throw Error('CRM course search is unavailable for this staff account.');
+   const seen=new Set(),list=[];
+   let more=true;
+   for(let page=1;page<=10&&more;page++){
+     const result=await crm.API.searchRecord({Entity:'Courses',Type:'criteria',Query:COURSE_CRITERIA,page,per_page:100});
+     if(result?.code==='NO_CONTENT'||result?.status===204)break;
+     if(result?.code&&result.code!=='SUCCESS'&&!Array.isArray(result?.data))throw Error(result.message||result.code);
+     const rows=Array.isArray(result?.data)?result.data:Array.isArray(result)?result:[];
+     for(const row of rows){if(!row?.id||seen.has(String(row.id)))continue;if(row.Status!=='Active'||row.Course_Type!=='GTI')continue;
+       seen.add(String(row.id));list.push({id:String(row.id),name:row.Name||String(row.id),category:row.Course_Category||'',requirements:row.Entry_Requirements||''});}
+     more=result?.info?.more_records===true||(result?.info?.more_records==null&&rows.length===100);
+     if(page===10&&more)courseSource.incomplete=true;
+   }
+   courseSource.items=list;courseSource.loaded=true;
+ }catch(e){courseSource.error=String(e.message||e);}
+ finally{courseSource.loading=false;rerender();}
+}
 function introText(v){
  if(v==null)return '';
  if(Array.isArray(v))return v.map(introText).join('');
@@ -81,8 +104,16 @@ function fieldHtml(f,v,errors){
        keys.map(k=>'<label>'+esc(k==='type'?'Employee / subcontractor':k)+'<input type="text" data-v12-row="'+esc(name)+'" data-v12-index="'+i+'" data-v12-key="'+esc(k)+'" value="'+esc(p?.[k]||'')+'"></label>').join('')+
        '<button type="button" class="v12-link" data-v12-remove="'+esc(name)+'" data-v12-index="'+i+'">Remove</button></fieldset>';
    }).join('')+'<button class="button secondary" type="button" data-v12-add="'+esc(name)+'" '+(rows.length>=(f.type==='people'?4:20)?'disabled':'')+'>Add '+(f.type==='people'?'person':'tutor')+'</button></div>';
- }else if(f.type==='courses'){
-   control='<p class="v12-warning">The authoritative GTi course catalogue must be loaded through the authorised CRM/Catalyst course service before this selection can be submitted. Free text is not a valid substitute.</p>';
+  }else if(f.type==='courses'){
+   if(courseSource.loading)control='<p class="v12-muted">Loading active GTi courses from the CRM Courses module…</p>';
+   else if(courseSource.error)control='<p class="v12-warning">GTi courses unavailable: '+esc(courseSource.error)+'. Do not substitute free-text course names.</p>';
+   else if(courseSource.incomplete)control='<p class="v12-warning">The CRM Courses result exceeded the supported page limit. A complete catalogue is required before continuing.</p>';
+   else if(!courseSource.loaded)control='<p class="v12-muted">Waiting for the active GTi course catalogue…</p>';
+   else if(!courseSource.items.length)control='<p class="v12-warning">No active GTi courses were returned from the CRM Courses module.</p>';
+   else{
+     const selected=Array.isArray(raw)?raw:[];
+     control='<div class="v12-choice-grid">'+courseSource.items.map(c=>'<label class="v12-choice"><input type="checkbox" '+base+' value="'+esc(c.id)+'" '+(selected.includes(c.id)?'checked':'')+'><span><strong>'+esc(c.name)+'</strong>'+(c.category?'<small> · '+esc(c.category)+'</small>':'')+'</span></label>').join('')+'</div>';
+   }
  }else if(f.type==='select'){
    control='<select id="'+fid+'"'+base+'><option value="">Choose an option</option>'+options.map(o=>'<option value="'+esc(o.value)+'" '+(String(raw||'')===String(o.value)?'selected':'')+'>'+esc(o.label)+'</option>').join('')+'</select>';
  }else if(f.type==='textarea'){
@@ -143,7 +174,7 @@ function setField(j,el){
  const f=config(j.kind,j.answers).flatMap(s=>s.fields||[]).find(x=>x.name===k);
  if(!f)return false;
  if(f.type==='checkbox')j.answers[k]=Boolean(el.checked);
- else if(f.type==='multi'){
+ else if(f.type==='multi'||f.type==='courses'){
   const a=Array.isArray(j.answers[k])?[...j.answers[k]]:[];
   j.answers[k]=el.checked?[...new Set([...a,el.value])]:a.filter(x=>x!==el.value);
  }else j.answers[k]=el.value;
@@ -177,11 +208,11 @@ function advance(j,delta){
  const section=steps[j.step];if(!section)return false;
  const fields=resolveFields((section.fields||[]).filter(f=>show(f,j.answers)),j.answers);
  const errors=validatePortal(fields.filter(f=>f.type!=='courses'),j.answers);
- if(fields.some(f=>f.type==='courses'&&f.required))errors.courseIds='The authorised GTi course catalogue is not yet available in this staff widget.';
+ if(fields.some(f=>f.type==='courses'&&f.required)&&(!courseSource.loaded||courseSource.error||courseSource.incomplete))errors.courseIds='A complete, authorised GTi course catalogue is required before continuing.';
  const stops=j.kind!=='accreditation'?stopMessages(j.answers):[];
  if(stops.length)j.formError=stops[0];
  if(Object.keys(errors).length){j.v12Errors=errors;j.formError=j.formError||'Complete the highlighted required fields before continuing.';return false;}
  if(stops.length)return false;
  j.v12Errors={};j.formError='';j.step=Math.min(steps.length,j.step+1);return true;
 }
-window.BGJourney12={config,prefill,render,advance,input,click,INSURANCE_STEPS,accreditationSteps};
+window.BGJourney12={config,prefill,render,advance,input,click,loadCourses,courseSource,INSURANCE_STEPS,accreditationSteps};
