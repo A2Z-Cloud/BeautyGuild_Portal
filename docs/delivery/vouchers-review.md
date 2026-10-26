@@ -76,6 +76,7 @@ Sources: the Guild's "Discount Codes and Vouchers" document (the Word version of
 | 12 | Any staff member may enter a code in the widget and on the link | No permission tiers. Every use is still recorded (13) |
 | 13 | Yes, record every waiver: who, what and why | A discount record on every staff-applied waiver (3.5) |
 | 30 days | The 30-day rule always applies | Implement as 30 days after the expiry date |
+| Scoped by the user, 26 October | A staff goodwill waiver of the joining fee is allowed **once per person** | The portal refuses a second staff waiver of the joining fee for the same Contact, using the waiver log. A referral code is not affected: it follows the joining fee (answer 3). A person who rejoins after more than 30 days has a new joining fee, and the Guild can be asked whether that resets the limit (4.2) |
 
 ### 2.2 Conflicts with the portal as built
 
@@ -147,7 +148,8 @@ Renewals use the same inline amounts as year one (no re-rating). So:
 2. The portal records each redemption in the CRM against the Contact and the application (code, date, session, payment status, who applied it), so a second code cannot be added to the same application, and the Guild can report on it.
 3. Stripe's own limits are not used for this. Stripe cannot say "unlimited uses overall, once per customer" for a shared code, and the portal opens Checkout with `customer_email`, which makes a new Stripe Customer for each payment. Customer-based rules in Stripe therefore have nothing to hold on to.
 4. **Guard against guessing.** Referral codes can be five-digit numbers. The code check needs a rate limit per user (for example 10 wrong codes an hour) and one message for every failure: "That code is not valid" (answer 10). The message does not say whether the code exists, has expired or is used up.
-5. **School expiry.** A code whose school has expired is still valid for the student (answer 10). The portal accepts any referral code found on a school Account. Whether a code can be withdrawn on purpose, for example after misuse, is a question for the Guild (section 4).
+5. **Staff waivers of the joining fee are once per person.** The waiver log is checked by Contact before a second waiver is accepted. The route tells the staff member who waived it before, when and why, and does not allow a second one.
+6. **School expiry.** A code whose school has expired is still valid for the student (answer 10). The portal accepts any referral code found on a school Account. Whether a code can be withdrawn on purpose, for example after misuse, is a question for the Guild (section 4).
 
 A persistent Stripe Customer per Contact would still help cancellations and the Stripe billing portal, but it is not needed for discounts. Recorded as optional work in phase 3.
 
@@ -226,7 +228,7 @@ Questions 1 to 5 and 7 to 13 are answered (section 2.1). Insurance, the joining 
 ### 4.2 Still open, plain wording for the Guild
 1. **Can a school's code ever be switched off on purpose?** A school whose accreditation has expired still gives students the £10. Is there ever a reason to stop a code working, for example if it is being misused?
 2. **What reasons will staff give when they waive something?** Should the system offer a short list (for example goodwill, complaint, promotion) or free text?
-3. **Do you want a limit on how often staff can waive the joining fee for the same person?** For example once. Any staff member can do it today, with nothing recorded.
+3. **If someone's membership lapses for more than a month and they rejoin, does their one joining fee waiver start again?** We are building the limit as one goodwill waiver of the joining fee per person. Please tell us whether a new joining fee after a lapse counts as a new start.
 4. **Are there vouchers live in Enki today that must keep working?** Staff will create and end vouchers in the CRM from now on. Please tell us which current vouchers must carry over, with their dates and limits.
 
 ### 4.3 For us to confirm ourselves
@@ -273,7 +275,7 @@ Each phase ships on its own, behind a switch (an environment flag such as `PORTA
 
 **How.**
 1. **A staff-only endpoint.** A separate route that only a signed-in Guild staff member can call. It builds the same basket and prices it with the same code as the customer route, so a phone payment and an online payment come out the same. The widget and the payment link both call it, and it returns either a payment link or the session the widget needs. This depends on the phone widget calling the portal's pricing and not re-pricing in its own code: to confirm with the widget build.
-2. **What staff can apply.** A referral code; a bespoke voucher code (looked up in the CRM `Voucher` record: dates, usage limit, restrictions such as members only, allowed items); and waivers on the joining fee, any of the one-off extras, and (when it exists) the £5 adjustment fee. A waiver needs a reason. Any staff member can do all of these (Guild answer 12).
+2. **What staff can apply.** A referral code; a bespoke voucher code (looked up in the CRM `Voucher` record: dates, usage limit, restrictions such as members only, allowed items); and waivers on the joining fee, any of the one-off extras, and (when it exists) the £5 adjustment fee. A waiver needs a reason. Any staff member can do all of these (Guild answer 12), except that a goodwill waiver of the joining fee is allowed once per person; a second is refused and the staff member is shown the earlier one.
 3. **Price it.** Same rule as phase 1 for every one-off line: left out when free, otherwise lowered, and on a monthly plan spread over the first 12 payments (Guild answer 9). A voucher can only discount the items its record allows.
 4. **Record it.** A waiver log record in the CRM (Contact, application, item, amount, code or none, reason, staff member, date) and the same `discounts` entry in the metadata, with `source` `voucher` or `staff_waiver`. Voucher use is counted against the voucher's usage limit when the payment succeeds.
 5. **Not in this phase.** A discount on the additional branch (phase 3).
