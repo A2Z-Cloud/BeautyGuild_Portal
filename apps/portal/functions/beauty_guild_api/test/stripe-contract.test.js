@@ -70,7 +70,7 @@ test(
             assert.equal(r.status, 201, label + ': ' + JSON.stringify(r.body));
             assert.match(r.body.checkoutUrl, /^https:\/\/checkout\.stripe\.com\//, label + ': checkout url');
           },
-          { STRIPE_SECRET_KEY: KEY },
+          { ...opts.env, STRIPE_SECRET_KEY: KEY },
         );
         made.push(...state.liveSessions);
         assert.equal(state.liveSessions.length, 1, label + ': one session');

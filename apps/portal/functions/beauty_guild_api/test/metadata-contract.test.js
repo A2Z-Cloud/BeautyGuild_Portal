@@ -14,10 +14,14 @@ async function build() {
   const sessions = [];
   for (const [label, opts, body] of SCENARIOS) {
     const state = world(opts);
-    await withApp(state, async ({ post }) => {
-      const r = await post(body);
-      assert.equal(r.status, 201, label + ' did not make a session: ' + JSON.stringify(r.body));
-    });
+    await withApp(
+      state,
+      async ({ post }) => {
+        const r = await post(body);
+        assert.equal(r.status, 201, label + ' did not make a session: ' + JSON.stringify(r.body));
+      },
+      opts.env,
+    );
     const params = state.stripePosts[0].params;
     const keys = [...params.keys()].filter(k => k.startsWith('metadata[')).map(k => k.slice('metadata['.length, -1));
     const subscription = [...params.keys()]

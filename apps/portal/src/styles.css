@@ -3097,6 +3097,18 @@ iframe {
     sans-serif;
   color: #a42369;
 }
+.price-waived strong {
+  color: #807984;
+}
+.price-waived strong s {
+  font-weight: 400;
+}
+.code-box {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  margin: 8px 0 16px;
+}
 .price-then,
 .price-vat,
 .price-updating,

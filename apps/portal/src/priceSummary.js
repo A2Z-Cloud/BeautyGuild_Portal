@@ -27,3 +27,11 @@ export const planSummary = quote => {
     yearOnePence: plan.yearOneTotalPence,
   };
 };
+
+// A school referral code that took the joining fee off: the line to show struck through and marked as waived. A guest's is indicative.
+export const waivedLine = quote => {
+  const d = quote?.discount;
+  return d ? { name: d.lineName, pence: d.amountPence, label: d.label, indicative: Boolean(d.indicative) } : null;
+};
+// The code box is offered only on a membership quote that says a joining fee is due.
+export const offersCode = quote => Boolean(quote?.joiningFee?.due);

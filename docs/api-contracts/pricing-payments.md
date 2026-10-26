@@ -46,6 +46,14 @@ Agreed with the Guild on 21 October (price list version 2). Code: `src/plans.js`
 ## Env
 `PORTAL_BILLING_ENABLED=true`, `STRIPE_SECRET_KEY` (test), `PORTAL_PUBLIC_ORIGIN`. No price IDs: prices are found by lookup key. Optional: `STRIPE_SCHEDULE_WEBHOOK_SECRET` (monthly plans, above). Client: `VITE_PORTAL_BILLING=true`. Not sent: the Stripe webhook secret.
 
+## School referral code and the 30 day joining fee rule
+Off unless `PORTAL_DISCOUNTS_ENABLED=true` (optional `PORTAL_DISCOUNT_REDEMPTION_MODULE`, default `Discount_Redemptions`). Plan: `docs/delivery/vouchers-review.md`, phases 0 and 1. Test mode only.
+- **Joining fee.** Charged to a new person, and to someone renewing whose membership expired **more than 30 days** ago (day 30 free, day 31 pays). The expiry is the previous Deal's `Expiry_Date`.
+- **Code.** The quote and checkout accept `code` on `service=membership`. The code is matched case-insensitively against `Accounts.Referral_Code` (an expired school still counts; a code held by two schools is refused). One message, "That code is not valid", and about 10 different wrong codes an hour per person (then HTTP 429). A code is ignored with a message when no joining fee is due.
+- **Pricing.** A valid code leaves the joining fee line out before `plans.splitMonthly`, so yearly and monthly are exact (monthly Associate first payment £6.09, not £6.92). The quote returns `joiningFee {due, amountPence}`, `discount {code, label, amountPence, line, lineName, indicative}` and `codeResult {status, message}`.
+- **Guests.** A guest quote is indicative: the code is only checked for shape and nothing is recorded. It is checked against the CRM once the customer is signed in.
+- **Paying.** A CRM `Discount_Redemptions` record (Code, School, Contact, Application_Reference, Status `Pending`, Item_Code, List_Amount, Discount_Amount, Stripe_Checkout_Session_ID) is written before the session, reused if the same Contact retries the same code. One `discounts` metadata key carries the list price and discount (see `stripe-metadata.md`).
+
 ## Insurance
 Ported from V1 (`calculateInsuranceQuote`, `evaluateInsuranceRules`, `createInsuranceRecords`) into `src/insurance.js`. Two entry points: `service=insurance` (standalone, now a yearly subscription so the insurance renews) and `service=membership` with an `insurance` object (membership subscription plus insurance in one checkout, metadata `type=membership_insurance`).
 - **Request**: `country` (territory) and `insurance` (the V1 `ins*` answers). The body is cleaned to a fixed shape: unknown keys are dropped, numbers are bounded, at most 10 named people, and the route is derived from `insSalon`, never trusted from the browser. Use `POST /portal/checkout/quote` (the answers are too big for a query string); `GET /quote` still serves the other services.

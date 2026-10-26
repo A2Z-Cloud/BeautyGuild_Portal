@@ -38,7 +38,7 @@ const IDS = {
 
 // liveStripe: true sends every Stripe request to the real Stripe API (test mode, with the key in env.STRIPE_SECRET_KEY) and records
 // the sessions it made in state.liveSessions; the CRM stays fake.
-function world({ deals = [], acc = {}, unlinked = false, liveStripe = false } = {}) {
+function world({ deals = [], acc = {}, unlinked = false, liveStripe = false, schools = [], previousDeal = {} } = {}) {
   const state = { stripePosts: [], crmPosts: [], liveSessions: [] };
   const json = (body, status = 200) => ({ status, ok: status < 400, json: async () => body });
   state.fetchImpl = async (url, init = {}) => {
@@ -101,9 +101,13 @@ function world({ deals = [], acc = {}, unlinked = false, liveStripe = false } = 
       });
     if (url.includes('Accreditation_Centre_Link/search'))
       return json({ data: [{ Training_Centre: { id: IDS.centre } }] });
+    if (url.includes('Accounts/search')) return json({ data: schools });
+    if (url.includes('Discount_Redemptions/search')) return json({ data: [] });
     if (url.includes('Deals/search')) return json({ data: deals });
     if (url.includes('Deals/' + IDS.deal))
-      return json({ data: [{ id: IDS.deal, Contact_Name: { id: IDS.me }, Member_Profile: { id: 'prof1' } }] });
+      return json({
+        data: [{ id: IDS.deal, Contact_Name: { id: IDS.me }, Member_Profile: { id: 'prof1' }, ...previousDeal }],
+      });
     return json({ data: [] });
   };
   return state;

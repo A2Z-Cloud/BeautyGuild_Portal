@@ -54,6 +54,8 @@ const JOIN_DETAILS = {
   county: 'Yorkshire',
   postcode: 'LS1 1AA',
 };
+const DISCOUNTS = { PORTAL_DISCOUNTS_ENABLED: 'true' };
+const SCHOOL = [{ id: '1011174000000000050', Account_Name: 'Test Academy', Referral_Code: 'TESTCODE' }];
 const SCENARIOS = [
   ['membership: new, yearly', { unlinked: true }, BUY],
   [
@@ -85,6 +87,26 @@ const SCENARIOS = [
       addons: { badge: 1, sticker: 1, certificate: 1 },
       insurance: WITH_EMPLOYEE,
       country: 'United Kingdom',
+    },
+  ],
+  [
+    'membership: school referral code, yearly',
+    { unlinked: true, env: DISCOUNTS, schools: SCHOOL },
+    { ...BUY, code: 'testcode' },
+  ],
+  [
+    'membership with insurance: referral code, everything at once, monthly',
+    { unlinked: true, env: DISCOUNTS, schools: SCHOOL },
+    {
+      ...BUY,
+      ...JOIN_DETAILS,
+      level: 'full_non_salon',
+      billing: 'monthly',
+      branches: 'nails',
+      addons: { badge: 1, sticker: 1, certificate: 1 },
+      insurance: WITH_EMPLOYEE,
+      country: 'United Kingdom',
+      code: 'TESTCODE',
     },
   ],
   ['insurance on its own', { deals: [FULL] }, INSURE],

@@ -150,6 +150,8 @@ export const joinDraft = ({ f, d, iv, country }) => {
       addons: f.addons,
       insurance: Boolean(f.insurance),
       start: f.start || '',
+      // A school referral code is kept with the other answers (checked again when the customer pays).
+      ...(f.code ? { code: f.code } : {}),
     },
     d,
   };
