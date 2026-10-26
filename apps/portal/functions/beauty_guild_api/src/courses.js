@@ -4,8 +4,16 @@ const { HttpError } = require('./errors');
 const UPSTREAM_TIMEOUT_MS = 10000;
 const CACHE_MS = 5 * 60 * 1000;
 const COURSE_FIELDS = [
-  'Name', 'Status', 'Course_Type', 'Duration', 'CPD_Points',
-  'Member_Price', 'Non_Member_Price', 'Course_Category', 'Treatment_Group', 'Entry_Requirements',
+  'Name',
+  'Status',
+  'Course_Type',
+  'Duration',
+  'CPD_Points',
+  'Member_Price',
+  'Non_Member_Price',
+  'Course_Category',
+  'Treatment_Group',
+  'Entry_Requirements',
 ];
 const CRITERIA = '((Status:equals:Active)and(Course_Type:equals:GTI))';
 
@@ -47,7 +55,8 @@ function createCourses({ config, getCrmHeaders, fetchImpl = fetch, now = Date.no
         throw new HttpError(502, 'COURSES_UNAVAILABLE', 'Courses are unavailable.');
       } else {
         const body = await crmRes.json().catch(() => null);
-        if (!body || !Array.isArray(body.data)) throw new HttpError(502, 'COURSES_UNAVAILABLE', 'Courses are unavailable.');
+        if (!body || !Array.isArray(body.data))
+          throw new HttpError(502, 'COURSES_UNAVAILABLE', 'Courses are unavailable.');
         courses = body.data.map(mapCourse);
       }
       cache = { at: now(), courses };

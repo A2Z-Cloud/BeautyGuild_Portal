@@ -1,11 +1,14 @@
-# CRM widgets
+# Zoho CRM widgets
 
-Create one directory per widget, such as `widgets/crm/accreditation-review/` once its workflow, UX and module placement are approved. Each widget is independently built and uploaded to CRM; it does not deploy through Catalyst.
+CRM widgets are independently packaged and deployed to Zoho CRM. They do **not** deploy automatically with the Catalyst member portal. Each widget owns its installation, SDK/permissions assumptions, API contracts, tests and release checklist.
 
-Record views, approval actions, insurance servicing, and other workstreams require individual specifications before code is added.
+## Beauty Guild Staff Workspace
 
-## Staff Workspace
+- [Widget overview and status](beauty-guild-staff-workspace/README.md)
+- [**Current functional and UX specification (V2)**](beauty-guild-staff-workspace/SPECIFICATION.md)
 
-The [Beauty Guild Staff Workspace](beauty-guild-staff-workspace/README.md) is the current CRM widget workstream. Its documentation covers live CRM record viewing, related-record navigation, queue and list pagination, Guild-aligned visual design, native CRM processing actions, assisted draft creation, safety boundaries and outstanding deployment tests.
+The current design covers a live CRM work overview, paginated application queues, Contacts and Accounts, universal record views and in-widget related-record navigation. Native CRM retains business-process actions. Future staff-assisted applications and shared Catalyst checkout are specified with explicit security and validation gates.
 
-**Status:** widget source and tests are supplied separately in the widget kit; only the README has been added to this repository so far. No Zoho CRM or Catalyst deployment is implied.
+**Implementation status:** documentation exists here; the earlier widget candidate source is not yet in this repository. Its implementation, ZET package, live installation and UAT are separate deliverables. Do not treat documentation as a deployed CRM widget.
+
+Create a separate directory for each future CRM widget. Do not copy customer portal authentication or API credentials into CRM-hosted clients.

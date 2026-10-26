@@ -100,3 +100,13 @@ The requested beautyguild.com/verify/12345 address needs a separate WordPress ro
 ## Proposed MTA self-service workstream (not implemented)
 
 The [customer portal MTA functional specification](../../requirements/mta/customer-portal-functional-spec.md) defines proposed contextual Membership/Insurance changes, quote and referral journeys, payment handling and revision documents. It is a review specification only: no MTA route, backend processing service, underwriting engine or policy endorsement is implemented or deployed by this link.
+
+## Formatting and linting
+
+Code style is Prettier's job and real mistakes are ESLint's, so reviews can be about behaviour.
+
+- `npm run format` rewrites the source (client, Catalyst function, scripts and the sign-in overrides) in the house style. `npm run format:check` fails if anything is off.
+- `npm run lint` must report no errors. Warnings are allowed but capped (`--max-warnings 27`): fix some and lower the number, never raise it.
+- `npm run check` runs formatting, lint, the client tests and the build. CI runs it, then the function tests.
+- Generated or vendored files are skipped (`public/auth`, `auth-css/base`, lock files; see `.prettierignore`).
+- To make `git blame` skip the one-off reformat commit: `git config blame.ignoreRevsFile .git-blame-ignore-revs`.

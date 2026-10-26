@@ -1,0 +1,8 @@
+# Generated, vendored or lockfile content is never formatted.
+dist
+node_modules
+functions/beauty_guild_api/node_modules
+public/auth
+auth-css/base
+package-lock.json
+functions/beauty_guild_api/package-lock.json

@@ -4,9 +4,13 @@ const { HttpError } = require('./errors');
 const UPSTREAM_TIMEOUT_MS = 8000;
 
 function mapAddress(item) {
-  const physicalLine = [item.SubBuilding, item.BuildingName, item.BuildingNumber, item.Street].filter(Boolean).join(' ').trim();
+  const physicalLine = [item.SubBuilding, item.BuildingName, item.BuildingNumber, item.Street]
+    .filter(Boolean)
+    .join(' ')
+    .trim();
   const addressLine1 = item.Line1 || item.Company || physicalLine || '';
-  const addressLine2 = item.Line2 || (!item.Line1 && item.Company && physicalLine && physicalLine !== addressLine1 ? physicalLine : '');
+  const addressLine2 =
+    item.Line2 || (!item.Line1 && item.Company && physicalLine && physicalLine !== addressLine1 ? physicalLine : '');
   return {
     addressLine1,
     addressLine2,
@@ -37,7 +41,7 @@ function createLoqate({ config, fetchImpl = fetch, log = console.log }) {
       throw new HttpError(502, 'ADDRESS_UNAVAILABLE', 'Address lookup is unavailable.');
     }
     const items = Array.isArray(body && body.Items) ? body.Items : [];
-    const failure = items.find((item) => item && item.Error);
+    const failure = items.find(item => item && item.Error);
     if (failure) {
       log('Loqate error item', path, failure.Error, failure.Description || failure.Cause);
       throw new HttpError(502, 'ADDRESS_UNAVAILABLE', 'Address lookup is unavailable.');
@@ -51,8 +55,11 @@ function createLoqate({ config, fetchImpl = fetch, log = console.log }) {
       if (container) params.Container = container;
       if (config.loqateCountries) params.Countries = config.loqateCountries;
       const items = await call('/Capture/Interactive/Find/v1.10/json3.ws', params);
-      return items.slice(0, config.loqateMaxResults).map((i) => ({
-        Id: i.Id, Type: i.Type, Text: i.Text, Description: i.Description,
+      return items.slice(0, config.loqateMaxResults).map(i => ({
+        Id: i.Id,
+        Type: i.Type,
+        Text: i.Text,
+        Description: i.Description,
       }));
     },
     async retrieve(id) {

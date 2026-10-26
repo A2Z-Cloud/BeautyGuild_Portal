@@ -1,65 +1,322 @@
-import React,{useEffect,useState} from 'react';
-import {Link,useParams,useSearchParams} from 'react-router-dom';
-import {portalApi} from './services/api.js';
-import {Notice,PageHeading,Status,IconFor} from './UiParts.jsx';
-import {comingSoon,formatDate,serviceLabel} from './format.js';
-import {DocumentsPanel} from './DocumentsPanel.jsx';
-export function LiveRecords(){
-  const [query,setQuery]=useSearchParams(),kind=query.get('type')||'';
-  const [data,setData]=useState({busy:true,error:'',rows:[]});
-  useEffect(()=>{let active=true;setData(x=>({...x,busy:true,error:''}));
-    portalApi.listRecords(kind).then(rows=>active&&setData({busy:false,error:'',rows})).catch(e=>active&&setData({busy:false,error:e.message,rows:[]}));
-    return()=>{active=false;};
-  },[kind]);
-  return <div className="page"><PageHeading eyebrow="MEMBER RECORDS" title="My Guild records" description="Your memberships, accreditations and insurance."/>
-    <div className="filter-wrap"><label htmlFor="live-type">Service</label><select id="live-type" value={kind} onChange={e=>setQuery(e.target.value?{type:e.target.value}:{})}>
-      <option value="">All</option>{['membership','accreditation','insurance'].map(k=><option value={k} key={k}>{serviceLabel(k)}</option>)}</select></div>
-    {data.busy?<p role="status">Loading your records…</p>:data.error?<Notice title="Unable to load records">{data.error}</Notice>:<section className="surface">
-      {data.rows.length?<div className="table-scroll"><table className="record-table"><thead><tr><th>Record</th><th>Status</th><th>Last updated</th></tr></thead><tbody>
-      {data.rows.map(x=><tr key={x.kind+x.id}><td><Link to={'/records/'+x.kind+'/'+x.id+'?from='+encodeURIComponent(kind||'all')} className="reference">{x.title}</Link><small>{serviceLabel(x.kind)}{x.quotedAmount!=null?' · Quoted '+poundsText(x.quotedAmount):''}</small></td><td>{comingSoon(x)?<><Status value="Coming soon"/><small>{comingSoon(x).note}</small></>:<Status value={x.status}/>}{x.canPay&&<small>Waiting for payment</small>}</td><td>{formatDate(x.updated)}</td></tr>)}</tbody></table></div>:<p className="padded">No records found for your account.</p>}</section>}
-  </div>;
+import React, { useEffect, useState } from 'react';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { portalApi } from './services/api.js';
+import { Notice, PageHeading, Status, IconFor } from './UiParts.jsx';
+import { comingSoon, formatDate, serviceLabel } from './format.js';
+import { DocumentsPanel } from './DocumentsPanel.jsx';
+export function LiveRecords() {
+  const [query, setQuery] = useSearchParams(),
+    kind = query.get('type') || '';
+  const [data, setData] = useState({ busy: true, error: '', rows: [] });
+  useEffect(() => {
+    let active = true;
+    setData(x => ({ ...x, busy: true, error: '' }));
+    portalApi
+      .listRecords(kind)
+      .then(rows => active && setData({ busy: false, error: '', rows }))
+      .catch(e => active && setData({ busy: false, error: e.message, rows: [] }));
+    return () => {
+      active = false;
+    };
+  }, [kind]);
+  return (
+    <div className="page">
+      <PageHeading
+        eyebrow="MEMBER RECORDS"
+        title="My Guild records"
+        description="Your memberships, accreditations and insurance."
+      />
+      <div className="filter-wrap">
+        <label htmlFor="live-type">Service</label>
+        <select id="live-type" value={kind} onChange={e => setQuery(e.target.value ? { type: e.target.value } : {})}>
+          <option value="">All</option>
+          {['membership', 'accreditation', 'insurance'].map(k => (
+            <option value={k} key={k}>
+              {serviceLabel(k)}
+            </option>
+          ))}
+        </select>
+      </div>
+      {data.busy ? (
+        <p role="status">Loading your records…</p>
+      ) : data.error ? (
+        <Notice title="Unable to load records">{data.error}</Notice>
+      ) : (
+        <section className="surface">
+          {data.rows.length ? (
+            <div className="table-scroll">
+              <table className="record-table">
+                <thead>
+                  <tr>
+                    <th>Record</th>
+                    <th>Status</th>
+                    <th>Last updated</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.rows.map(x => (
+                    <tr key={x.kind + x.id}>
+                      <td>
+                        <Link
+                          to={'/records/' + x.kind + '/' + x.id + '?from=' + encodeURIComponent(kind || 'all')}
+                          className="reference"
+                        >
+                          {x.title}
+                        </Link>
+                        <small>
+                          {serviceLabel(x.kind)}
+                          {x.quotedAmount != null ? ' · Quoted ' + poundsText(x.quotedAmount) : ''}
+                        </small>
+                      </td>
+                      <td>
+                        {comingSoon(x) ? (
+                          <>
+                            <Status value="Coming soon" />
+                            <small>{comingSoon(x).note}</small>
+                          </>
+                        ) : (
+                          <Status value={x.status} />
+                        )}
+                        {x.canPay && <small>Waiting for payment</small>}
+                      </td>
+                      <td>{formatDate(x.updated)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="padded">No records found for your account.</p>
+          )}
+        </section>
+      )}
+    </div>
+  );
 }
-const poundsText=v=>'£'+Number(v).toFixed(2);
+const poundsText = v => '£' + Number(v).toFixed(2);
 // A quote that is waiting for payment: pay on its existing Stripe session, or find out it has expired.
-function PayQuote({record,onExpired}){
-  const [busy,setBusy]=useState(false),[error,setError]=useState('');
-  async function pay(){
-    if(busy)return;setBusy(true);setError('');
-    try{
-      const r=await portalApi.resumePayment(record.id);
-      if(r.alreadyPaid){setError('This quote has already been paid. It will show as active shortly.');setBusy(false);return;}
-      if(!/^https:\/\/checkout\.stripe\.com\//.test(r.checkoutUrl))throw new Error('We could not open the payment page. Please try again.');
+function PayQuote({ record, onExpired }) {
+  const [busy, setBusy] = useState(false),
+    [error, setError] = useState('');
+  async function pay() {
+    if (busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      const r = await portalApi.resumePayment(record.id);
+      if (r.alreadyPaid) {
+        setError('This quote has already been paid. It will show as active shortly.');
+        setBusy(false);
+        return;
+      }
+      if (!/^https:\/\/checkout\.stripe\.com\//.test(r.checkoutUrl))
+        throw new Error('We could not open the payment page. Please try again.');
       window.location.assign(r.checkoutUrl);
-    }catch(e){if(e.code==='QUOTE_EXPIRED'&&onExpired)onExpired();setError(e.message);setBusy(false);}
+    } catch (e) {
+      if (e.code === 'QUOTE_EXPIRED' && onExpired) onExpired();
+      setError(e.message);
+      setBusy(false);
+    }
   }
-  return <div className="quote-action"><button type="button" className="btn btn-primary" disabled={busy} onClick={pay}>{busy?'Opening secure payment…':'Pay '+(record.quotedAmount!=null?poundsText(record.quotedAmount)+' ':'')+'now'}</button>
-    {error&&<p role="alert" className="error">{error}</p>}</div>;
+  return (
+    <div className="quote-action">
+      <button type="button" className="btn btn-primary" disabled={busy} onClick={pay}>
+        {busy
+          ? 'Opening secure payment…'
+          : 'Pay ' + (record.quotedAmount != null ? poundsText(record.quotedAmount) + ' ' : '') + 'now'}
+      </button>
+      {error && (
+        <p role="alert" className="error">
+          {error}
+        </p>
+      )}
+    </div>
+  );
 }
-const BANNER_THEME={membership:'pink',accreditation:'cream',insurance:'violet'};
-export function LiveRecordDetail({kindOverride}){
-  const params=useParams(),kind=kindOverride||params.kind,id=params.id;
-  const [record,setRecord]=useState(null),[error,setError]=useState(''),[loading,setLoading]=useState(true);
-  useEffect(()=>{let active=true;setLoading(true);portalApi.getRecord(kind,id).then(x=>{if(active){setRecord(x);setLoading(false);}}).catch(e=>{if(active){setError(e.message);setLoading(false);}});return()=>{active=false;};},[kind,id]);
-  return <div className="page"><Link to="/records" className="back-link">← Back to records</Link>
-    {loading?<p role="status">Loading record…</p>:error?<Notice title="Record unavailable">{error}</Notice>:record&&<><div className={'record-banner '+(BANNER_THEME[record.kind]||'pink')}><span className="service-icon"><IconFor kind={record.kind}/></span>
-      <div className="record-banner-copy"><small className="eyebrow">{serviceLabel(record.kind).toUpperCase()}</small><h1>{record.title}</h1>
-        <p>{[record.type,record.startDate&&record.endDate?formatDate(record.startDate)+' to '+formatDate(record.endDate):null].filter(Boolean).join(' · ')||'Your record details'}</p></div>
-      {comingSoon(record)?<div><Status value="Coming soon"/><small>{comingSoon(record).note}</small></div>:<Status value={record.status}/>}</div><div className="surface padded"><dl className="detail-list">
-      {Object.entries({Reference:record.reference||record.id,Service:serviceLabel(record.kind),Status:record.status,Type:record.type,'Start date':formatDate(record.startDate),'End date':formatDate(record.endDate),'Payment status':record.paymentStatus,...(record.quotedAmount!=null?{'Quoted amount':poundsText(record.quotedAmount)}:{})}).map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value||'—'}</dd></div>)}</dl></div>{record.canPay&&<PayQuote record={record} onExpired={()=>setRecord(r=>({...r,canPay:false,status:'Expired'}))}/>}{record.underReview&&<Notice title="With the Insurance team">We have your application and the Insurance team is reviewing it. They will contact you. You cannot pay for this cover online, and there is nothing more to do here.</Notice>}{record.kind==='insurance'&&record.status==='Expired'&&<Notice title="This quote has expired">Quotes last 24 hours. <Link className="text-link" to="/insurance/buy">Get a new quote</Link></Notice>}<div style={{marginTop:24}}>{kind==='membership'&&<p><Link className="btn btn-secondary" to={'/membership/manage/'+id}>Manage membership and invoices</Link></p>}{!record.underReview&&<DocumentsPanel kind={kind} id={id}/>}</div></>}
-  </div>;
+const BANNER_THEME = { membership: 'pink', accreditation: 'cream', insurance: 'violet' };
+export function LiveRecordDetail({ kindOverride }) {
+  const params = useParams(),
+    kind = kindOverride || params.kind,
+    id = params.id;
+  const [record, setRecord] = useState(null),
+    [error, setError] = useState(''),
+    [loading, setLoading] = useState(true);
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    portalApi
+      .getRecord(kind, id)
+      .then(x => {
+        if (active) {
+          setRecord(x);
+          setLoading(false);
+        }
+      })
+      .catch(e => {
+        if (active) {
+          setError(e.message);
+          setLoading(false);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [kind, id]);
+  return (
+    <div className="page">
+      <Link to="/records" className="back-link">
+        ← Back to records
+      </Link>
+      {loading ? (
+        <p role="status">Loading record…</p>
+      ) : error ? (
+        <Notice title="Record unavailable">{error}</Notice>
+      ) : (
+        record && (
+          <>
+            <div className={'record-banner ' + (BANNER_THEME[record.kind] || 'pink')}>
+              <span className="service-icon">
+                <IconFor kind={record.kind} />
+              </span>
+              <div className="record-banner-copy">
+                <small className="eyebrow">{serviceLabel(record.kind).toUpperCase()}</small>
+                <h1>{record.title}</h1>
+                <p>
+                  {[
+                    record.type,
+                    record.startDate && record.endDate
+                      ? formatDate(record.startDate) + ' to ' + formatDate(record.endDate)
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ') || 'Your record details'}
+                </p>
+              </div>
+              {comingSoon(record) ? (
+                <div>
+                  <Status value="Coming soon" />
+                  <small>{comingSoon(record).note}</small>
+                </div>
+              ) : (
+                <Status value={record.status} />
+              )}
+            </div>
+            <div className="surface padded">
+              <dl className="detail-list">
+                {Object.entries({
+                  Reference: record.reference || record.id,
+                  Service: serviceLabel(record.kind),
+                  Status: record.status,
+                  Type: record.type,
+                  'Start date': formatDate(record.startDate),
+                  'End date': formatDate(record.endDate),
+                  'Payment status': record.paymentStatus,
+                  ...(record.quotedAmount != null ? { 'Quoted amount': poundsText(record.quotedAmount) } : {}),
+                }).map(([label, value]) => (
+                  <div key={label}>
+                    <dt>{label}</dt>
+                    <dd>{value || '—'}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+            {record.canPay && (
+              <PayQuote
+                record={record}
+                onExpired={() => setRecord(r => ({ ...r, canPay: false, status: 'Expired' }))}
+              />
+            )}
+            {record.underReview && (
+              <Notice title="With the Insurance team">
+                We have your application and the Insurance team is reviewing it. They will contact you. You cannot pay
+                for this cover online, and there is nothing more to do here.
+              </Notice>
+            )}
+            {record.kind === 'insurance' && record.status === 'Expired' && (
+              <Notice title="This quote has expired">
+                Quotes last 24 hours.{' '}
+                <Link className="text-link" to="/insurance/buy">
+                  Get a new quote
+                </Link>
+              </Notice>
+            )}
+            <div style={{ marginTop: 24 }}>
+              {kind === 'membership' && (
+                <p>
+                  <Link className="btn btn-secondary" to={'/membership/manage/' + id}>
+                    Manage membership and invoices
+                  </Link>
+                </p>
+              )}
+              {!record.underReview && <DocumentsPanel kind={kind} id={id} />}
+            </div>
+          </>
+        )
+      )}
+    </div>
+  );
 }
-const SUMMARY_LABELS={total:'All records',memberships:'Memberships',accreditations:'Accreditations',insurance:'Insurance'};
+const SUMMARY_LABELS = {
+  total: 'All records',
+  memberships: 'Memberships',
+  accreditations: 'Accreditations',
+  insurance: 'Insurance',
+};
 // A summary of the member's records, shown under the service cards. A missing or unmatched record
 // is explained in plain words and never replaces the rest of the dashboard.
-export function RecordsSummary(){
-  const [data,setData]=useState(null),[error,setError]=useState(null);
-  useEffect(()=>{let active=true;portalApi.getDashboard().then(x=>active&&setData(x)).catch(e=>active&&setError(e));return()=>{active=false;};},[]);
-  if(error){
-    if(error.code==='NOT_AUTHENTICATED')return <Notice title="Sign in to see your records">Your memberships, accreditations and insurance will appear here once you are signed in.</Notice>;
+export function RecordsSummary() {
+  const [data, setData] = useState(null),
+    [error, setError] = useState(null);
+  useEffect(() => {
+    let active = true;
+    portalApi
+      .getDashboard()
+      .then(x => active && setData(x))
+      .catch(e => active && setError(e));
+    return () => {
+      active = false;
+    };
+  }, []);
+  if (error) {
+    if (error.code === 'NOT_AUTHENTICATED')
+      return (
+        <Notice title="Sign in to see your records">
+          Your memberships, accreditations and insurance will appear here once you are signed in.
+        </Notice>
+      );
     return <Notice title="Your records">{error.message}</Notice>;
   }
-  if(!data)return <p role="status">Loading your records…</p>;
-  return <section aria-label="Your records"><div className="section-row"><div><small className="eyebrow">YOUR RECORDS</small><h2>At a glance</h2></div><Link className="text-link" to="/records">All records</Link></div>
-    <div className="stat-row">{Object.entries(data.summary).map(([k,v])=><div className="stat" key={k}><span>{SUMMARY_LABELS[k]||k}</span><strong>{v}</strong></div>)}</div>
-    <section className="surface padded">{data.recent.map(r=><p key={r.kind+r.id}><Link className="reference" to={'/records/'+r.kind+'/'+r.id}>{r.title}</Link> · {r.status}</p>)}{data.recent.length===0&&<p>No records yet.</p>}</section></section>;
+  if (!data) return <p role="status">Loading your records…</p>;
+  return (
+    <section aria-label="Your records">
+      <div className="section-row">
+        <div>
+          <small className="eyebrow">YOUR RECORDS</small>
+          <h2>At a glance</h2>
+        </div>
+        <Link className="text-link" to="/records">
+          All records
+        </Link>
+      </div>
+      <div className="stat-row">
+        {Object.entries(data.summary).map(([k, v]) => (
+          <div className="stat" key={k}>
+            <span>{SUMMARY_LABELS[k] || k}</span>
+            <strong>{v}</strong>
+          </div>
+        ))}
+      </div>
+      <section className="surface padded">
+        {data.recent.map(r => (
+          <p key={r.kind + r.id}>
+            <Link className="reference" to={'/records/' + r.kind + '/' + r.id}>
+              {r.title}
+            </Link>{' '}
+            · {r.status}
+          </p>
+        ))}
+        {data.recent.length === 0 && <p>No records yet.</p>}
+      </section>
+    </section>
+  );
 }
