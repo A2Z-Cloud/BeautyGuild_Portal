@@ -38,3 +38,24 @@ fieldset.journey-field{padding:0;border:0;margin:0}fieldset.journey-field legend
 .native-empty{font-size:11px;color:#8b8089;margin:11px 0 3px}
 @media(max-width:1100px){.detail-section-grid{grid-template-columns:1fr}}
 @media(max-width:730px){.detail-section .kv-grid{grid-template-columns:1fr 1fr}}
+/* Record-view refinements, 26 October 2026. */
+.context-strip{border-left:0!important;border:1px solid #eee5ec;border-radius:10px;background:#fffafc;padding:17px 20px;margin:20px 0 28px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.context-strip .action-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.context-strip strong{font-size:14px;line-height:1.5}
+.detail-intro{margin:24px 0 26px;gap:22px;align-items:flex-start}
+.detail-intro h2{line-height:1.2;margin:6px 0 12px}
+.detail-intro p{line-height:1.6;margin-top:8px}
+.detail-statuses{gap:10px;align-items:stretch}
+.detail-statuses>div{min-width:135px;padding:10px 12px;display:flex;flex-direction:column;gap:5px;justify-content:center}
+.detail-statuses small{font-size:11px;line-height:1.35;color:#655664}
+.pill,.rich-record .pill,.detail-intro .pill{font-size:11px;font-weight:750;line-height:1.4;padding:5px 10px;border:1px solid #d6d0d6;color:#373039;background:#f4f2f4;border-radius:7px}
+.pill.ok{background:#e5f5eb;color:#175c36;border-color:#95c9a6}
+.pill.attention{background:#fff2df;color:#805000;border-color:#e7bc78}
+.pill.danger{background:#fde9e9;color:#942a2a;border-color:#edb0b0}
+.sheet-actions.workspace-actions{margin:24px 0 28px;padding:18px 0 0;border-top:1px solid #ebe5e9;gap:10px}
+.sheet-actions.workspace-actions .button{flex:0 1 auto;min-width:unset}
+.detail-section-grid{gap:22px;margin:22px 0 30px}
+.detail-section{padding:20px 22px}
+.panel{margin-bottom:22px}
+.context-strip+.detail-intro{margin-top:28px}
+@media(max-width:800px){.context-strip{margin:16px 0 22px;padding:14px}.detail-intro{margin:20px 0;gap:14px}.detail-statuses>div{min-width:0}.sheet-actions.workspace-actions{margin:18px 0 24px}}
