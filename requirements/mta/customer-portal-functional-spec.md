@@ -1,7 +1,8 @@
 # Beauty Guild | Customer Portal MTA Functional Specification
 
 **Status:** Proposed for Guild, Finance and insurer review. Not approved for implementation or production.
-**Version:** 0.3 | 24 October 2026
+**Version:** 0.4 | 26 October 2026
+**Change from 0.3:** records the Guild's replies of 26 October 2026 (email thread and the "MTA Portal Changes to Review" sheet, from Helen Delaney). Settled: the pro-rata rule (remaining days divided by days on the policy, 365 or 366, both end days counted), the GBP 30 minimum removed, one GBP 5 fee per set of regenerated documents, the swap rule, contents before other property cover (new business too), the joining fee gap rule, start dates, saved requests, Salon/Non-Salon quotes online, and monthly payers. New sections 7A (swaps), 10A (revisions and the fee) and 13B (monthly payers). The earlier statement that the sample letters used a 364-day basis is corrected: that was the old system. Decision changes are listed in section 18.
 **Change from 0.2:** brought up to date with Portal V2 main (8c85ca1). Price list v2 (agreed with the Guild on 21 October) closes MTA-D12, D13 and D15 and mostly closes D14; section 7 now uses the v2 figures. New section 13A covers renewing subscriptions (yearly and monthly), which every membership, insurance, branch, employee fee and accreditation purchase now is; MTA-D17 is re-worded and MTA-D20 and D21 are added. Section 15A is re-baselined. Prices are found in Stripe by lookup key, not price ID.
 **Change from 0.1 (in 0.2):** adds the Cancellations pack, Policy Documents pack and the sample adjustment letters; records what the samples settle; maps every journey to Portal V2 as built (section 15A); unblocks the Associate upgrade and Salon/Non-Salon replacement rules; adds new pricing conflicts to section 18. Build planning is in [docs/delivery/mta-build-scope.md](../../docs/delivery/mta-build-scope.md).
 **Scope:** Authenticated customer-facing Mid-Term Adjustments (MTA) in Portal V2. Separate from the staff MTA CRM widget.
@@ -17,6 +18,7 @@ The following supplied material informs this draft:
 - **CRM Cartographer JSON snapshot**: observed modules, fields and relationships. This is not proof of current CRM field permissions or automation behaviour.
 - **BeautyGuild_Portal (main at 8c85ca1, 24 October 2026)**: V2 route structure, MembershipManagement, records, document access, authenticated read services, the checkout adapter, plans and subscriptions ([pricing-payments.md](../../docs/api-contracts/pricing-payments.md)) and the Creator payments app notes ([creator-payments-app.md](../../docs/delivery/creator-payments-app.md)).
 - **Price list v2 (agreed with the Guild on 21 October 2026)**: the current prices for membership, named people, treatments and fees. It replaces the workbook figures where they differ (section 7).
+- **Guild replies of 26 October 2026 (added in 0.4)**: the answers to the portal questions in the email thread, and the "MTA Portal Changes to Review" sheet (every change marked Agree or Change, with comments, and nine questions answered). Where this differs from the workbook or the sample letters, the replies win.
 - **beauty-guild-catalyst (V1)**: insurance questionnaire, rule logic, membership add-on journeys and pricing code to reconcile, not blindly import.
 - **MTA Management widget workstream (PR #3)**: proposed shared MTA service and staff-only controls.
 - **Cancellations pack (added in 0.2)**: Cancellations.xlsx (Cancellation Summary, Upgrade to full, Documents tabs), A. Guild Membership Insurance Cancellation Receipt.msg, B. Membership Cancellation Letter.pdf, C. Cancellation Schedule.pdf, D. Membership Cancellation Letter 2.pdf.
@@ -38,10 +40,12 @@ These points are read from the Guild's own sample letters and schedules. They ar
 | --- | --- | --- |
 | GBP 5 adjustment fee | Added to the transaction when the customer pays (GBP 219.69 + GBP 5.00 = GBP 224.69). Netted against a refund when money is due back (minus GBP 33.60 + GBP 5.00 = minus GBP 28.60). | "Less the GBP 5 fee" in the upgrade wording means the fee is still charged. Resolves the addition versus deduction question previously open in section 10. |
 | Fee and IPT | The Endorsement Schedule shows the fee as "Policy Fees" with no IPT on it. IPT is 12% of the premium element only. | Fee is a separate line, outside IPT. The price list confirms the GBP 5 MTA fee (Books item FEE-MTA) and the GBP 10 cancellation fee (FEE-CANCEL) include VAT (MTA-D14). |
-| Pro-rata basis | GBP 200.00 Business Equipment, effective 07/10/2026, policy ending 29/09/2027, charged GBP 196.15. This equals 200 x 357/364 exactly; 358/365 would give GBP 196.16. | Day-count basis appears to be days remaining divided by 364. Must be confirmed with the Guild and Hiscox before coding (MTA-D03). |
+| Pro-rata basis | GBP 200.00 Business Equipment, effective 07/10/2026, policy ending 29/09/2027, charged GBP 196.15 on the sample letter. That equals 200 x 357/364. | **Corrected in 0.4.** The sample letters used the old system's 364-day basis. The Guild's current rule (26 October): remaining days divided by the days the policy is on cover (365, or 366 in a leap year), counting both end days. The same case gives 358/365, GBP 196.16 premium and GBP 23.54 IPT. Documents made in CRM and the portal must use the same rule. MTA-D03 is answered, apart from rounding. |
 | Advanced Electrolysis | Journey screenshot and the refund letter both use GBP 33.60 including IPT (GBP 30.00 net). | Settled by price list v2: GBP 30.00 net (GBP 33.60 with IPT), and Portal V2 now rates it so. MTA-D12 is closed. |
 | Cooling-off cancellation | Letter B refunds GBP 160.60, of which GBP 112.00 is insurance and IPT (Schedule C) and GBP 48.60 is the membership fee. | Letter B mislabels the whole amount as insurance. The template needs a separate membership refund line. |
 | Refund smaller than the fee | Letter D: GBP 8.00 refund less GBP 10.00 fee shows minus GBP 2.00 and "no refund is payable". | The customer is never invoiced the shortfall. The system must pick Letter D when the fee exceeds the refund. |
+| GBP 30 minimum | The Hiscox schedule prints "no refund or additional premium for any transaction less than GBP 30 (excluding IPT)", and several sample letters charged less. | The Guild removed the minimum recently (26 October): a pro-rata refund of premium and IPT is given at any amount. The GBP 10 cancellation fee still applies; a shortfall under GBP 10 is written off. The schedule template is out of date. |
+| Employee swap sample | Two new employees at GBP 12.61 each and a GBP 2.50 credit for one removed, on a Salon policy with more than four people (referred to Hiscox). | GBP 12.61 is the old employee price of GBP 85.00 (membership fee, premium and IPT) over 54 days of 364. It includes the membership fee, so it agrees with price list v2. The credit is a pro-rata refund of the removed person's membership fee. Consistent with the swap rule in section 7A. |
 | Salon base premium | Schedule C (May 2026, turnover GBP 18,000) shows a GBP 100.00 premium. | The Guild confirmed the Salon medical malpractice bands of GBP 75, GBP 100 and GBP 150 (price list v2), so GBP 75.00 applies up to GBP 100,000 turnover. Schedule C pre-dates the list. MTA-D13 is closed. |
 
 ## 2. Goal and boundary
@@ -98,10 +102,10 @@ Explain **Payment received**, **Awaiting confirmation**, **Scheduled for [date]*
 
 | Scenario | Associate | Non-Salon | Salon | Portal outcome | Source/conditions |
 | --- | --- | --- | --- | --- | --- |
-| Buy additional membership branch | Yes | Yes | Yes | Self-service | GBP 15 annual price, prorated to term end; no GBP 5 MTA fee |
-| Buy membership bundle | Yes | Yes | Yes | Self-service | GBP 10 each, not prorated, no GBP 5 fee |
-| Buy extra certificate, badge, window sticker | Yes | Yes | Yes | Self-service | GBP 4 per item, not prorated, no GBP 5 fee |
-| Add insurance to Associate membership (upgrade to Full) | Yes | N/A | N/A | Self-service, full new insurance quote | Section 8A. Net price after Associate refund; Full term runs 12 months from the insurance start date |
+| Buy additional membership branch | Yes | Yes | Yes | Self-service | GBP 15 annual price including VAT, prorated to term end (for an Associate, the membership end date); no GBP 5 MTA fee |
+| Buy membership bundle | Yes | Yes | Yes | Self-service | GBP 10 each including VAT, not prorated, no GBP 5 fee. A monthly payer pays at once (section 13B) |
+| Buy extra certificate, badge, window sticker | Yes | Yes | Yes | Self-service | GBP 4 per item including VAT, not prorated, no GBP 5 fee. A monthly payer pays at once (section 13B) |
+| Add insurance to Associate membership (upgrade to Full) | Yes | N/A | N/A | Self-service, full new insurance quote | Section 8A. Net price after the pro-rata Associate refund; Full term and insurance run 12 months from the new start date; no joining fee if moving straight on within 1 month of the Associate ending |
 | Change phone number | Yes | Yes | Yes | Self-service | CRM audit date and timestamp |
 | Change login email | Yes | Yes | Yes | Self-service with verified identity transition | CRM + Catalyst login must remain synchronised |
 | Change first/last name, trading name or correspondence address | No | No | No | Guild staff only | These fields are CRM-editable, not customer editable |
@@ -109,20 +113,21 @@ Explain **Payment received**, **Awaiting confirmation**, **Scheduled for [date]*
 | Add named employee or subcontractor (up to four in total) | N/A | Yes | Yes | Self-service subject to rules | Effective date, fee, classification declaration and member/policy rules |
 | More than four named people | N/A | Refer | Refer | Contact Guild | Requires staff underwriting referral |
 | Remove named person only | N/A | Refer | Refer | Contact Guild | Possible refund, staff-only process |
-| Swap named people with amount due | N/A | Yes | Yes | Self-service | Calculate net change, add applicable fee |
+| Swap named people with amount due | N/A | Yes | Yes | Self-service | Section 7A. Like for like: the membership fee carries over (no charge or credit), the member pays any premium and IPT difference plus the GBP 5 fee. Subcontractor to employee: payable online |
 | Swap named people with refund due | N/A | Refer | Refer | Contact Guild | Refund/credit staff-only |
-| Swap named people with no net premium difference | N/A | To confirm | To confirm | Decision needed | Workbook does not explicitly define neutral swap handling |
+| Swap named people with no net premium difference | N/A | Yes | Yes | Self-service | GBP 5 fee only, because the documents are re-issued (Guild, 26 October). Includes a Salon like-for-like swap |
 | Add advanced treatment extension | N/A | Yes | Yes | Self-service subject to qualifying rules | Display options, price incl. IPT, requirements, fee, prorate |
 | Add/change teaching insurance | N/A | Yes | Yes | Self-service subject to treatment coverage | Standard vs advanced teaching variants |
-| Add/increase business equipment | N/A | Yes | Applicable property cover | Self-service for increases | Non-Salon: 5k/10k/15k/20k bands; current tier comparison |
+| Add/increase business equipment | N/A | Yes | N/A | Self-service for increases | Non-Salon: 5k/10k/15k/20k bands; current tier comparison. Salon policies have contents cover and no separate business equipment (the workbook meant contents; Guild confirmed 26 October) |
 | Decrease equipment/other insured value | N/A | Refer | Refer | Contact Guild | Potential refund |
 | Add/increase Employers' Liability | N/A | Yes | Yes | Self-service where underwriting passes | Non-Salon: up to 1, 3 or 5; Salon: wage roll-based |
 | Decrease Employers' Liability | N/A | Refer | Refer | Contact Guild | Potential refund |
-| Add/increase Contents, Buildings, Money, Business Interruption, Property Away/In Transit | N/A | Only options applicable to product | Yes | Eligible additions/increases | Follow original conditional questionnaire, risk checks and wordings |
+| Add/increase Contents, Buildings, Money, Business Interruption, Property Away/In Transit | N/A | N/A | Yes | Eligible additions/increases | Salon only. Money, Buildings, Business Interruption and Property Away are offered only once the member holds Contents cover (Guild, 26 October; also at new business). Follow the original conditional questionnaire, risk checks and wordings |
 | Decrease existing property/liability cover | N/A | Refer | Refer | Contact Guild | Possible refund |
 | Increase Salon turnover band / wage roll | N/A | N/A | Yes, where approved | Self-service for permissible increases | Recheck underwriting and prorated premium difference |
+| Change turnover within the same band, or the insured premises address | N/A | Conditional | Yes | Self-service | GBP 5 fee only if the price does not change, because the schedule is re-issued (Guild, 26 October). Premises address changes rerun flood and subsidence checks |
 | Decrease Salon turnover band | N/A | N/A | Refer | Contact Guild | Possible refund |
-| Salon <-> Non-Salon product switch | N/A | Conditional | Conditional | Replacement policy journey | Section 8. New full-year policy, net of pro-rata refund on the old one, GBP 5 fee. Refund conflicts in MTA-D04 |
+| Salon <-> Non-Salon product switch | N/A | Conditional | Conditional | Online quote for the new policy; pay online if money is owed, call the office (request saved) if a refund is due | Section 8. New full-year policy, net of the pro-rata refund on the old one, plus GBP 5 fee |
 | Cancel Associate membership | No | N/A | N/A | Guild staff only (CRM) | No refund by default; staff may override with a full or partial refund. No fee |
 | Cancel Full membership | N/A | No | No | Guild staff only (CRM) | Section 8B. Pro-rata insurance refund less GBP 10; full refund within 14 days |
 | Downgrade Full to Associate | N/A | No | No | Guild staff only (CRM) | Section 8B. Associate runs to the original Full expiry date |
@@ -148,7 +153,7 @@ Explain **Payment received**, **Awaiting confirmation**, **Scheduled for [date]*
 
 ### Combining with insurance
 
-[SOURCE] Before completing a branch or item purchase, offer the member relevant insurance or other membership changes. [DESIGN] Treat the combination as a single revision/checkout only where common eligibility, dates, invoicing and fulfilment rules permit it. **Decision:** clarify whether the non-exempt insurance MTA fee is applied once when exempt branch/items share that transaction (proposed: one fee for the insurance revision, none on the exempt items).
+[SOURCE] Before completing a branch or item purchase, offer the member relevant insurance or other membership changes. [SOURCE, Guild 26 October] The GBP 5 fee follows document re-issue: one GBP 5 for each set of regenerated documents. A branch or items bought with an insurance change that goes through together pay one GBP 5 (for the insurance change), and the branch and items add nothing. Branches and items on their own carry no fee. Changes with different effective dates are separate revisions, each with its own fee (section 10A). MTA-D18 is closed.
 
 ## 7. Insurance amendments: common behaviour
 
@@ -159,7 +164,7 @@ Explain **Payment received**, **Awaiting confirmation**, **Scheduled for [date]*
 - [SOURCE] **One insurance effective date per revision.** Differing dates require separate revisions, each potentially subject to the GBP 5 fee.
 - [SOURCE] Re-ask all insurance declarations, including treatment declarations, even when cover was previously purchased.
 - [DESIGN] If a risk check generates STOP or REFER, disable checkout; explain next steps without disclosing confidential internal underwriting details.
-- [DESIGN] Use the current live policy snapshot and rule version; reject or re-quote if the source policy changes while the draft is in progress.
+- [DESIGN] Use the current live policy snapshot and rule version; reject or re-quote if the source policy changes while the draft is in progress. If a future-dated change in the same basket comes first, price the later one against the cover as it will then be (section 10A).
 
 ### Insured people [SOURCE]
 
@@ -177,7 +182,20 @@ The workbook figures (GBP 85.00 and a GBP 48.60 membership component) are out of
 
 Additions, and swaps where the net transaction is payable, are intended for online completion. Standalone removals and net refunds go to Guild staff.
 
-**MTA-D15 (answered by price list v2):** the MTA engine and new business now use one table. One point remains for MTA-D03: whether the GBP 55.00 employee membership fee is pro-rated over the remaining term like the premium, or charged in full when a person is added mid-term. The sample letters show premium and IPT only.
+**MTA-D15 (answered by price list v2):** the MTA engine and new business now use one table. The GBP 55.00 employee membership fee is pro-rated over the remaining term like the premium (Guild, 26 October: "a pro-rata amount of whatever they would pay if the employee was added at the start of the policy"). The sample letters agree once the old 364-day basis is allowed for (section 1A).
+
+### 7A. Swapping named people [SOURCE + DESIGN]
+
+[SOURCE] In a swap the new person takes the place of the one removed. The Guild's replies of 26 October say the existing membership fee should carry across, which gives the same money as crediting the old fee and charging the new one on the same day. Employees have no portal login, and the portal records named people on the policy only. [DECISION] MTA-D25: ask the Guild to confirm "the membership fee carries over on a like-for-like swap" in one line, because the Guild's reply on this point answered a different question (employee certificates).
+
+[DESIGN] Rule to build, per replaced person:
+- **Employee for employee:** no membership fee charged or credited. Pay the GBP 5 fee, and on a Non-Salon policy the premium and IPT difference (none for a like-for-like swap). A Salon swap is GBP 5.
+- **Subcontractor for subcontractor:** premium and IPT difference (none for like for like), plus GBP 5.
+- **Employee replaced by a subcontractor (Non-Salon):** the member gives up a GBP 55.00 membership fee and a GBP 32.50 premium for a GBP 15.00 premium, so a refund is due. Call the office (request saved).
+- **Subcontractor replaced by an employee:** a payment is due, online. The member pays the pro-rata membership fee, the premium difference and IPT.
+- **More people in than out:** the extra people are additions and pay in full (pro-rata fee, premium, IPT as applicable). **Fewer in than out** is a removal and goes to the office.
+- All amounts pro-rated by the rule in section 10, from the effective date.
+- On a Salon policy with more than four people (referred to Hiscox), if Hiscox approves, additional people are priced as Non-Salon employees (GBP 91.40) and subcontractors (GBP 16.80 including IPT); staff need an easy way to add these in CRM, and the dynamic documents must show them (Guild, 26 October). This is CRM work, not portal self-service.
 
 ### Advanced treatments and teaching [SOURCE]
 
@@ -198,8 +216,8 @@ Additions, and swaps where the net transaction is payable, are intended for onli
 - Prefill turnover, estimated annual gross wage roll and number of salons. Show dates of the actual policy in the question wording. Recheck limits and referral rules when answers change.
 - Turnover band increase: prorated increase where otherwise eligible. Decrease: refer to Guild.
 - New Employers' Liability: capture wage roll and apply original policy/questionnaire conditions.
-- New Contents: show all original values/underwriting questions; support insured premises address correction, flood/subsidence checks and property declarations. Offer Business Interruption, Property Away/In Transit, Buildings and Money cover when now eligible.
-- Existing property/other cover: increase online subject to rules, decrease/refund -> Guild. A limit increase with no premium difference may remain self-service if backend confirms eligibility; the GBP 5 fee rule still needs reconciliation.
+- New Contents: show all original values/underwriting questions; support insured premises address correction, flood/subsidence checks and property declarations. [SOURCE, Guild 26 October] Only once the member holds Contents cover, offer Business Interruption, Property Away/In Transit, Buildings and Money. Portal V2 currently offers these to any Salon applicant at new business, so the new-business journey needs the same rule (section 15A).
+- Existing property/other cover: increase online subject to rules, decrease/refund -> Guild. A limit increase with no premium difference may remain self-service if backend confirms eligibility; the GBP 5 fee is still charged because the documents are re-issued (Guild, 26 October).
 - Show selected new cover levels and unchanged continuing cover on the revised schedule.
 
 ## 8. Changes that replace rather than endorse a policy
@@ -220,7 +238,7 @@ If these answers change Salon <-> Non-Salon eligibility:
 - The original membership fees are refunded pro-rata, and the GBP 5 adjustment fee is charged.
 - The customer receives a cancellation email for the old policy and a membership acceptance email (full document pack) for the new one.
 
-**[DECISION]** Checkout on this path stays disabled until MTA-D04 (refund rules versus the insurer's GBP 30 minimum premium) is answered and Stripe can collect a net amount after a credit (see build scope, payments work package). If the net amount is a refund, the customer is sent to the office.
+[SOURCE, Guild 26 October] The member can get the quote online. If money is owed, they pay online. If a refund is due, the portal tells them to call the office and saves the request. The pro-rata refund on the old policy uses the same days rule as section 10. **[DECISION]** MTA-D04 (the insurer's General Terms and Terms of Business versus the refund rules) remains until Finance and the insurer confirm; online payment on this path stays switched off until then and until Stripe can collect a net amount after a credit (see build scope, payments work package).
 
 ## 8A. Associate upgrade to Full membership with insurance
 
@@ -235,7 +253,7 @@ If these answers change Salon <-> Non-Salon eligibility:
 
 [DESIGN] Portal V2 currently refuses insurance for an Associate (409 INSURANCE_NEEDS_FULL_MEMBERSHIP), and its membership upgrade path waives the joining fee but gives no credit. This journey therefore needs a new service that combines the Full membership, the insurance quote and an Associate credit. Stripe Checkout cannot take a negative line item, so the credit is applied through the Stripe customer balance or a one-off coupon and recorded in Books as a credit note against the Associate invoice. The Associate membership is itself a yearly or monthly subscription, so the upgrade also ends that subscription and starts the Full one (section 13A).
 
-[DECISION] MTA-D16: confirm how the Associate refund is calculated (pro-rata to the insurance start date, on the same day basis as MTA-D03), and whether the joining fee is charged on upgrade (the portal currently waives it).
+[SOURCE, Guild 26 October] The Associate refund uses the same days rule as section 10. The GBP 10 joining fee is not charged again if the member moves straight onto Full within one month of the Associate membership ending; if there is a gap of more than one month it is charged (section 8C). MTA-D16 is answered.
 
 ## 8B. Cancellations and downgrades (Guild staff only)
 
@@ -251,9 +269,16 @@ None of these are available online. The portal shows the result (status, dates a
 [SOURCE] Rules that apply to the rows above:
 - Within 14 days of inception (cooling off) everything is refunded (membership fees, premium and IPT) and no GBP 10 fee is charged.
 - When the GBP 10 fee exceeds the pro-rata refund, nothing is refunded and Letter D replaces Letter B.
+- [Guild, 26 October] The GBP 30 minimum no longer applies. The GBP 10 cancellation fee still does; where the refund is under GBP 10 the shortfall is written off.
 - On a downgrade, the new Associate membership runs to the date the Full membership would have expired.
 
-[DECISION] MTA-D04: these rules conflict with the policy documents. General Terms and Conditions condition 7 applies a GBP 30 minimum non-refundable premium after 14 days, and the Terms of Business say no membership fees are refunded once a membership is accepted.
+[DECISION] MTA-D04: the GBP 30 minimum premium is removed (Guild, 26 October). Still to confirm with Finance and the insurer: General Terms and Conditions condition 7 and the Terms of Business ("no membership fees are refunded once a membership is accepted"), which still appear to conflict with the pro-rata membership fee refunds in the Cancellations pack.
+
+## 8C. Joining fee after a gap [SOURCE, Guild 26 October]
+
+The GBP 10 joining fee is charged again when there is a gap in cover of more than one month between any membership (Associate, International, Full Non-Salon or Full Salon), on a new purchase and on renewal of any policy. A gap of one month or less does not attract it.
+
+[DESIGN] Portal V2 today waives the joining fee whenever a previous Deal is supplied (renewal or upgrade), whatever the gap, and charges it on any purchase without one. The rule needs the Contact's most recent membership Deal and its expiry date found on the server, not supplied by the browser; the gap is the new start date against that expiry. This changes the new-business and renewal journeys as well as MTAs (section 15A).
 
 ## 9. Contact changes versus risk-address changes
 
@@ -267,11 +292,12 @@ None of these are available online. The portal shows the result (status, dates a
 ### Date validation [SOURCE + DESIGN]
 
 - One effective date for all insurance changes within a revision.
-- Future dates up to 30 days ahead for the amendment types explicitly listed in the workbook.
-- Date cannot precede permitted policy cover or exceed the existing policy end for an endorsement.
+- [SOURCE, Guild 26 October] Start up to 30 days ahead for all cover, from today. Never later than the policy end date. If the change is in the last month of the policy, only allow it up to the date the policy expires.
+- [SOURCE, Guild 26 October] The member cannot back-date in the portal. Staff can back-date in CRM only.
 - A replacement policy starts a new term rather than inheriting the previous end date.
 - Show the date chosen in the quote, confirmations, revised schedule and history.
-- [DECISION] Confirm treatment of same-day cut-off, retrospective dates, weekends and whether a membership branch should share an insurance-effective date in a combined transaction.
+- [DECISION] MTA-D23: renewals are allowed up to 30 days before the policy ends. A change in the last month of a policy that has already been renewed may also be needed on the renewal. The Guild wants a flag to check this; what the portal does (apply to both, refer, or warn) is open.
+- [DECISION] Same-day cut-off and weekends are still unconfirmed.
 
 ### Price breakdown [SOURCE]
 
@@ -284,11 +310,24 @@ The summary must show:
 6. The GBP 5 adjustment fee (including VAT, Books item FEE-MTA), or an explicit exemption (Guild staff may waive it in CRM).
 7. **Amount to pay now**, **Potential credit/refund requiring staff review**, and the revised cumulative insurance position where relevant.
 
-[SOURCE] The sample letters settle the fee direction (section 1A): the GBP 5 fee is added when the customer pays and netted off when a refund is due. It is not charged on branch or item purchases alone. Guild staff can waive it in CRM. Two cases remain open: a cover change with no premium difference (which the workbook allows online), and a swap with no net difference (MTA-D01).
+[SOURCE] The sample letters settle the fee direction (section 1A): the GBP 5 fee is added when the customer pays and netted off when a refund is due. It is not charged on branch or item purchases alone. Guild staff can waive it in CRM. [SOURCE, Guild 26 October] The fee is charged whenever documents have to be re-issued, so it also applies to changes with no price difference (turnover within a band, an address change, an employee swap), and a refund-due change still carries it. One GBP 5 per set of regenerated documents (section 10A).
 
-[DECISION] The endorsement example fits days remaining / 364 (section 1A). Confirm this basis, the rounding (premium rounded to the penny, then IPT at 12% rounded once, as Portal V2 does for new business) and the insurer's GBP 30 minimum premium clause before coding rate outcomes (MTA-D03).
+[SOURCE, Guild 26 October] Pro-rata is the days remaining divided by the days the policy is on cover (365, or 366 in a leap year), counting both the first and last day, used for charges as well as refunds. [DESIGN] The portal uses the policy's actual length from its start to its end date, so a policy that spans 29 February is 366. Premium is rounded to the penny first, then IPT at 12% on the rounded premium, as Portal V2 does at new business. [DECISION] The Guild has not yet confirmed the rounding order (MTA-D03).
 
 [DESIGN] Server price service alone determines line amounts. The portal displays the signed quote and its version/expiry, never submits a payable amount of its own.
+
+## 10A. Revisions, effective dates and the GBP 5 fee [SOURCE + DESIGN]
+
+[SOURCE, Guild 26 October] The fee follows the documents. Changes that start on the same date and can be processed in one regeneration of the documents are one revision with one GBP 5. Changes with different start dates are separate revisions, each with its own GBP 5, even if the member enters them in one sitting (the Guild's example: Microneedling from 01/11/2026 and an employee from 15/12/2026, entered together, is two revisions and two fees). The charge depends on the effective dates, not on when the member submits.
+
+[DESIGN] Proposed handling (MTA-D24, to confirm):
+- The member can build one basket with several dated changes. The portal groups them into revisions by effective date and shows each with its own GBP 5 line.
+- One checkout takes all of them. The money is taken now, and cover and pro-rata start on each effective date.
+- Revisions are ordered by date, and each is priced against the cover as it will be after the earlier ones.
+- Each revision has its own record, effective date and document set, and Creator applies each once. Payment metadata carries the revision references (compact, under the 50 key limit of Stripe, see section 15A).
+- Branches and items add no fee whichever revision they sit in.
+- Retrying a payment must not charge or apply a revision twice.
+
 
 ## 11. Declarations, terms and evidence
 
@@ -306,7 +345,7 @@ No customer-side button should issue a refund, override an underwriting decision
 - Named-person removal, net credit swap or risk cover downgrade -> explain the Guild must calculate/authorise the potential refund.
 - STOP/REFER based on new declaration/risk -> show the relevant approved customer-facing reason and contact route.
 - Product replacement where cancellation rules are not configured -> do not allow automatic checkout.
-- [DESIGN] Optionally persist a **Request sent for review** item with the proposed changes and context, rather than discard customer inputs, if Guild approves this workflow. The workbook itself requires a "call office" prompt, not a confirmed request-submission system.
+- [SOURCE, Guild 26 October] **Save the request.** When a change cannot be done online, the portal saves the member's request, with the complete answers (declarations, dates, people and covers), so staff can pick it up when the member calls and not repeat any part of the journey. MTA-D10 is answered. [DESIGN] This is a CRM record like the Referred insurance records already on main: staff open it in CRM, continue it, and the quote is made again at that time. The member sees the saved request and a message to call the office.
 
 Suggested wording: "This change needs help from our Membership and Insurance team because it may affect a refund or the terms of cover. Your current cover has not changed."
 
@@ -339,6 +378,19 @@ The Creator side is being rebuilt as a new payments app (forms Stripe Webhook Lo
 - A subscription activates on its first paid invoice (`billing_reason=subscription_create`), a one-off on `checkout.session.completed`, and later invoices (`subscription_cycle`) only extend dates and record the payment. A pro-rated charge raised by a subscription change would arrive as a different invoice reason and needs its own rule, so it is not read as a renewal.
 - Events can arrive out of order (`invoice.paid` before `checkout.session.completed`), and Creator fetches the object from Stripe by id rather than trusting the payload. An MTA must carry `policy_revision_id` and its type in metadata that Creator can read for either event.
 - MTA invoices need lines by price list code, credit notes for refunds and credits, and subscription updates. These are new Creator work (MTA-D21), not the V1 handler.
+
+## 13B. Members paying monthly [SOURCE + DESIGN]
+
+[SOURCE, Guild 26 October]
+- A member who pays monthly and makes a change pays a **one-off payment for the rest of the current billing month** (from the change to the end of their own billing month, not the calendar month), and **from the next billing month** their monthly payment goes up. Example: paying GBP 10 a month from January, a change in mid-June to GBP 12 means a one-off in June and GBP 12 a month from July.
+- The GBP 5 fee is part of the one-off for the change month and is **not** in the higher monthly amount, so the monthly payment stays the same on renewal if the cover stays the same.
+- A flat item (badge, certificate, sticker, bundle) bought part way through the year is paid once, not spread over the monthly payments.
+- The same days rule as section 10 applies.
+
+[DESIGN] To confirm with the Guild (MTA-D20, D22):
+- **Future-dated change in a later billing month:** proposal is to take the GBP 5 now (the documents are made now), and the part-month charge and higher payment start at the billing month that contains the effective date.
+- **Items and joining fee at joining (Guild suggestion, A2Z recommends yes):** charge the flat items, and the joining fee, in month 1 so the monthly amount is the same at every renewal. This replaces the rule agreed on 21 October that spreads them over the first 12 payments with a Stripe schedule dropping them at payment 13, and it removes the schedule that a mid-term change would otherwise have to rewrite. It needs Guild and Finance sign-off and changes the first-payment examples in pricing-payments.md (for example the Associate new member GBP 6.92 then GBP 6.09).
+
 
 ## 14. Documents, email and revision history
 
@@ -442,9 +494,13 @@ There is **no MTA code on any branch**. The MTA Management widget is a placehold
 | Salon turnover and wage roll wording with policy dates | Current wording says "for the next 12 months" |
 | Revision history and documents per revision | Not present |
 | Phone and email self-service | My Profile is a placeholder. Contact resolution depends on the verified email matching the CRM Contact, so an email change must update Catalyst and CRM together or the member loses access to their records |
+| Joining fee gap rule | Portal V2 waives the joining fee for any renewal or upgrade and charges it on any purchase without a previous Deal (section 8C). Needs the Contact's previous membership and its expiry date, and applies to new business and renewal |
+| Contents before other property cover | New-business Salon journey offers Money, Buildings, Business Interruption and Property Away without Contents (section 7) |
+| Saved requests for the office | Referred insurance records exist for new business only. A saved MTA request record, resumable by staff, is not built (section 12) |
+| MTA payment metadata | New session type, with revision references. Metadata is generated from `metadataContract.js` into [stripe-metadata.md](../../docs/api-contracts/stripe-metadata.md); a test fails if keys differ, Stripe allows 50 filled keys, and each value is cut at 500 characters. The MTA type must be added to the contract and kept under the limit |
 | Policy wording links | POLICY_WORDING (insuranceInputs.js) and policyDocuments (legal.js) name the documents but have no links. POLICY_WORDING has no entries for General Terms and Conditions or the two Property Definitions documents |
 
-[DECISION] MTA-D19: in the new-business journey Portal V2 offers Money, Buildings, Business Interruption and Property Away to any Salon applicant. The workbook says a member adding Contents for the first time may be offered these "as they wouldn't have had this option in the original customer journey", which implies they depend on Contents. Confirm the intended rule for both journeys.
+[SOURCE, Guild 26 October] Money, Buildings, Business Interruption and Property Away require Contents cover, in new business and MTAs. MTA-D19 is closed. Portal V2 currently offers them to any Salon applicant, so the new-business journey (and its price panel and tests) must change.
 
 ## 16. States and customer messaging (proposed)
 
@@ -468,17 +524,17 @@ These labels are suggested. Map to actual CRM statuses after verifying layouts, 
 | ID | Customer journey and acceptance |
 | --- | --- |
 | CP-MTA-01 | Associate sees no-insurance description, membership dates and four actions. |
-| CP-MTA-02 | Add branch quotes prorated GBP 15 annual amount, no GBP 5 fee, creates certificate/register/letter after fulfilment. |
+| CP-MTA-02 | Add branch quotes the prorated GBP 15 annual amount (including VAT), no GBP 5 fee, creates certificate/register/letter after fulfilment. |
 | CP-MTA-03 | Buy bundle/badge/sticker/certificate at flat non-prorated quantities without MTA fee. |
 | CP-MTA-04 | Customer can add a second eligible change before checkout with one consistent financial summary. |
 | CP-MTA-05 | Insurance summary pre-fills every current cover and can add omitted eligible cover. |
 | CP-MTA-06 | Named people limit of four enforced for customer self-service; all required classification information captured. |
 | CP-MTA-07 | Removal/net refund directs to Guild, preserving existing live cover. |
-| CP-MTA-08 | Named-person swap with payable net difference uses correct delta and one approved adjustment fee. |
+| CP-MTA-08 | Like-for-like named-person swap charges no membership fee and no credit, only the GBP 5 fee and any premium and IPT difference; employee replaced by subcontractor is referred; subcontractor replaced by employee is payable online (section 7A). |
 | CP-MTA-09 | New treatment or teaching selections display applicable qualification rules, wording and pro-rata price. |
 | CP-MTA-10 | Non-Salon equipment and EL upgrades use current tier -> revised tier delta; downgrades refer. |
 | CP-MTA-11 | Salon turnover/wage-roll and property changes recheck underwriting and premises risk. |
-| CP-MTA-12 | Different insurance effective dates cannot be combined in one revision; future date limited as approved. |
+| CP-MTA-12 | Changes with different effective dates become separate revisions, each with its own GBP 5; the start date is from today up to 30 days ahead and never after the policy end; the member cannot back-date. |
 | CP-MTA-13 | Every required insurance declaration is repeated and stored against the revision. |
 | CP-MTA-14 | Quote shows IPT, fees, credits, due-now and cumulative totals distinctly. |
 | CP-MTA-15 | Email change re-verifies login; name/trading/correspondence address remain non-editable. |
@@ -491,7 +547,7 @@ These labels are suggested. Map to actual CRM statuses after verifying layouts, 
 | CP-MTA-22 | Mobile and keyboard navigation work across review, declarations and checkout handoff. |
 | CP-MTA-23 | Associate member sees "Upgrade to Membership with Insurance"; the quote summary shows insurance, Associate refund and net price; Full membership starts on the insurance start date and runs 12 months; no cancellation email. |
 | CP-MTA-24 | Adjustment fee is added to a payable total and netted off a refund, matching the sample letters to the penny. |
-| CP-MTA-25 | Pro-rata amounts reproduce the sample endorsement (GBP 196.15 premium, GBP 23.54 IPT for GBP 20,000 Business Equipment from 07/10/2026 to 29/09/2027) once the basis is confirmed. |
+| CP-MTA-25 | Pro-rata amounts reproduce the Guild's rule on the sample case (GBP 20,000 Business Equipment, GBP 200.00 a year, from 07/10/2026 to 29/09/2027): 358 days of 365, GBP 196.16 premium and GBP 23.54 IPT. The sample letter's GBP 196.15 used the old 364-day basis. |
 | CP-MTA-26 | A cancellation processed by staff shows the correct status, dates and Cancellation Schedule in the portal; Letter D is used when the fee exceeds the refund. |
 | CP-MTA-27 | Every policy wording in the journey and the adjustment emails opens the supplied document for the cover held. |
 | CP-MTA-28 | Changing login email keeps access to all records; name, trading name and correspondence address stay read-only. |
@@ -500,34 +556,47 @@ These labels are suggested. Map to actual CRM statuses after verifying layouts, 
 | CP-MTA-31 | A cancellation, downgrade or Associate upgrade processed by staff stops or replaces the Stripe subscription, ends any monthly schedule, and no further renewal is taken. |
 | CP-MTA-32 | An MTA payment is recorded by Creator as an MTA (not a renewal or a new activation), with invoice lines by price list code, whichever of invoice and checkout events arrives first. |
 | CP-MTA-33 | A new price from price list v2 (a person fee, Advanced Electrolysis, the GBP 5 fee) is read from Stripe by lookup key, and changing the Stripe price changes the quote with no deployment. |
+| CP-MTA-34 | A basket with two effective dates shows two revisions, each with a GBP 5 line, one checkout, and each applied once. Changes on the same date show one GBP 5. |
+| CP-MTA-35 | A change with no price difference (turnover within a band, premises address, swap) charges GBP 5 only. |
+| CP-MTA-36 | A Salon member without Contents cover is not offered Money, Buildings, Business Interruption or Property Away, at new business or in a change. |
+| CP-MTA-37 | A member with a gap of more than one month since their last membership pays the joining fee on a new purchase and on renewal; one month or less does not. |
+| CP-MTA-38 | A request that needs the office is saved with every answer so staff can continue it without re-asking. |
+| CP-MTA-39 | A monthly payer pays a one-off for the rest of their billing month including the GBP 5, the monthly amount rises from the next billing month without the fee, and a badge bought mid-year is paid at once. |
+| CP-MTA-40 | A change in the last month of a policy that has already been renewed raises the renewal check (MTA-D23) and is never dated beyond the policy end. |
+| CP-MTA-41 | A Salon/Non-Salon quote is available online; owing money allows payment online, a refund due directs the member to the office with the request saved. |
 
 ## 18. Decisions blocking a fully build-ready specification
 
-Status as at 24 October 2026 (v0.3). "Evidence" means the sample documents point to an answer that still needs confirming. "Answered" means price list v2, agreed with the Guild on 21 October, settles it.
+Status as at 26 October 2026 (v0.4), including the Guild's replies of that day. "Evidence" means the sample documents point to an answer that still needs confirming. "Answered" means price list v2 or the Guild's replies settle it.
 
 | ID | Required decision | Status | Suggested owner |
 | --- | --- | --- | --- |
-| MTA-D01 | Approve the customer self-service vs Guild staff permission matrix, including neutral-price swaps and cover changes with no premium difference (is the GBP 5 fee charged?). | Open | Guild |
+| MTA-D01 | Approve the customer self-service vs Guild staff permission matrix. | **Largely answered (26 October).** The Guild marked 28 of 31 rows Agree. Rows 30 and 31 (cancel Full, Full to Associate) are CRM only (my column labels were unclear). Neutral swaps, fee-only changes and within-band turnover are online with the GBP 5 fee. Swap with money due is online (D25 confirms the membership fee rule); the sheet row 11 was left blank | Guild |
 | MTA-D02 | Confirm the pricing table used for MTA calculations, IPT-inclusive treatment figures and differences from V1 rates. | Mostly answered by price list v2 (D12, D13, D15 closed). Left: confirm the MTA engine reads the same table and codes | Guild / Insurer / Finance |
-| MTA-D03 | Sign off proration day-count, start/end inclusive treatment and rounding; reconcile the insurer GBP 30 minimum clause. Also: is the GBP 55.00 named employee membership fee pro-rated or charged in full mid-term (section 7)? | Evidence: days remaining / 364 (section 1A). Employee fee question new | Guild / Finance / Insurer |
-| MTA-D04 | Cancellation and replacement refunds: the GBP 30 minimum non-refundable premium (General Terms and Conditions condition 7) and "no refund of membership fees" (Terms of Business) both conflict with the Cancellations pack. | Rules supplied; conflict open | Guild / Insurer |
+| MTA-D03 | Sign off proration day-count, start/end inclusive treatment and rounding (including whether the GBP 55.00 employee fee is pro-rated: yes, per the Guild). | **Answered, except rounding.** Remaining days over days on the policy (365 or 366), both end days counted, for charges and refunds; the GBP 30 minimum is removed. The 364 basis in the sample letters was the old system. Open: rounding order (premium to the penny, then IPT on it, is assumed) | Guild / Finance |
+| MTA-D04 | Cancellation and replacement refunds: the GBP 30 minimum is removed. General Terms condition 7 and the Terms of Business ("no refund of membership fees") may still conflict with the Cancellations pack. | **Partly answered.** Minimum removed; the GBP 10 fee stays and a shortfall under GBP 10 is written off. Membership fee refunds against the Terms of Business still to confirm | Guild / Insurer / Finance |
 | MTA-D05 | Confirm refund authority, credit notes, Books integration, and what to show before a Guild refund decision. | Open | Finance |
-| MTA-D06 | Confirm eligibility/maximum advance dates for all affected categories, same-day and branch-change effective date. | Open | Guild / Insurer |
-| MTA-D07 | Confirm exact approved declarations, treatment requirements, conditional property screening and wording links. | Wordings supplied; declarations open | Guild / Insurer |
+| MTA-D06 | Eligibility/maximum advance dates for all affected categories, same-day and branch-change effective date. | **Mostly answered.** 30 days for all cover, never after the policy end, no back-dating in the portal (CRM only). Branches and items start on purchase. Same-day cut-off and weekends open | Guild / Insurer |
+| MTA-D07 | Exact approved declarations, treatment requirements, conditional property screening and wording links. | **Partly answered.** The four confirmations are repeated, new names are sanctions checked, and the Employers' Liability employer reference number is no longer asked for. Declaration wording and links still open | Guild / Insurer |
 | MTA-D08 | Approve document templates, attachments by cover, register update, email and WorkDrive versioning. | Templates supplied; Letter B membership line to fix | Guild |
 | MTA-D09 | Verify current CRM Policy_Revisions/Extensions relationships, staff approval flow and Creator/Stripe webhook implementation. | Open | CRM/backend |
-| MTA-D10 | Confirm whether Guild wants portal-saved referred requests or only a call-office message. | Open | Guild |
+| MTA-D10 | Whether the Guild wants portal-saved requests or only a call-office message. | **Closed (26 October).** Save the request with the complete answers so staff can continue it (section 12) | Guild |
 | MTA-D11 | Approve Portal V2 component placement, navigation and customer-facing labels before coding. | Open | Product owner |
 | MTA-D12 | Advanced Electrolysis: GBP 30.00 net or GBP 28.00 net? | **Closed.** GBP 30.00 net (GBP 33.60 with IPT), price list v2; built in Portal V2 | Guild / Insurer |
 | MTA-D13 | Salon Medical Malpractice premium for turnover up to GBP 100,000: GBP 75.00 or GBP 100.00? | **Closed.** Bands of GBP 75, GBP 100 and GBP 150 confirmed, price list v2 | Guild / Insurer |
-| MTA-D14 | VAT treatment of the GBP 5 adjustment fee, GBP 10 cancellation fee and GBP 10 duplicate documentation fee, for the Books items. | **Partly answered.** GBP 5 (FEE-MTA) and GBP 10 (FEE-CANCEL) include VAT and exist in Books. The GBP 10 duplicate documents fee is not on the price list, so it is still open | Finance |
+| MTA-D14 | VAT treatment of the GBP 5 adjustment fee, GBP 10 cancellation fee and GBP 10 duplicate documentation fee, for the Books items. | **Partly answered.** GBP 5 and GBP 10 include VAT and exist in Books (FEE-MTA, FEE-CANCEL). Branch (GBP 15), bundle (GBP 10) and items (GBP 4) include VAT (26 October). The GBP 10 duplicate documents fee is not on the price list, so still open | Finance |
 | MTA-D15 | Named employee and subcontractor pricing at new business versus MTA, for both routes (section 7). | **Answered.** Price list v2: non-Salon employee GBP 91.40, Salon employee GBP 55.00 fee only, non-Salon subcontractor GBP 16.80, Salon subcontractor nothing. Whether the GBP 55.00 fee is pro-rated mid-term moves to MTA-D03 | Guild / Insurer |
-| MTA-D16 | Associate upgrade: refund calculation basis and whether the joining fee applies (section 8A). | New | Guild / Finance |
-| MTA-D17 | Rules for members paying monthly: pro-rata charges, refunds and cancellations. | **Partly answered.** The Guild said MTA and cancellation prices are pro-rated by the action date and the policy end date, and the price list says monthly prices are amended going forward. Left: the monthly amount from the change onwards, how the current-term charge is taken, and refunds on a monthly plan (see MTA-D20). The packs themselves still assume annual payment | Guild / Finance |
-| MTA-D18 | Fee when membership items or a branch are bought in the same transaction as an insurance change (proposed: one GBP 5 fee for the insurance revision only). | Open (was in section 6) | Guild |
-| MTA-D19 | Whether Money, Buildings, Business Interruption and Property Away depend on Contents, in new business and MTAs (section 15A). | New | Guild |
-| MTA-D20 | Subscription mechanics for an MTA (section 13A): when the new yearly or monthly amount starts, how a monthly schedule is updated, how the renewal date is kept against the policy anniversary (up to 30 days apart today), and what a cancellation or downgrade does to the subscription and schedule. | New | Guild / Finance / A2Z |
+| MTA-D16 | Associate upgrade: refund calculation basis and whether the joining fee applies (section 8A). | **Answered (26 October).** Same days rule; Full and insurance run 12 months from the new start date; no joining fee within one month of the Associate ending, charged after a longer gap (section 8C) | Guild / Finance |
+| MTA-D17 | Rules for members paying monthly: pro-rata charges, refunds and cancellations. | **Mostly answered (26 October).** One-off for the rest of the member's billing month including the GBP 5, higher monthly payment from the next billing month without the fee, flat items paid at once (section 13B). Open: future-dated changes in a later month, refunds and cancellations on a monthly plan (see D20) | Guild / Finance |
+| MTA-D18 | Fee when membership items or a branch are bought in the same transaction as an insurance change. | **Closed (26 October).** One GBP 5 per set of regenerated documents; branches and items add nothing (sections 6 and 10A) | Guild |
+| MTA-D19 | Whether Money, Buildings, Business Interruption and Property Away depend on Contents, in new business and MTAs. | **Closed (26 October).** They need Contents, in both. Portal V2 new business must change (section 15A) | Guild |
+| MTA-D20 | Subscription mechanics for an MTA (section 13A): how a monthly schedule is updated, how the renewal date is kept against the policy anniversary (up to 30 days apart today), what a cancellation or downgrade does to the subscription, and the future-dated month question (section 13B). | **Partly answered.** The monthly rules are in 13B. The rest is open | Guild / Finance / A2Z |
 | MTA-D21 | Creator payments app scope for MTAs: invoices by price list code, credit notes, subscription updates, and which side (portal function or Creator) changes the Stripe subscription. Creator covers payments first; mid-term changes come afterwards. | New | A2Z / Creator owner |
+| MTA-D22 | Charge flat items and the joining fee in month 1 for monthly payers at joining, instead of spreading over 12 payments (the Guild's suggestion, section 13B). A2Z recommends yes: it removes the schedule and keeps the monthly amount the same at renewal. | New. Needs Guild and Finance sign-off; changes the 21 October rule and the first-payment examples | Guild / Finance |
+| MTA-D23 | A change in the last month of a policy that has already been renewed (renewals open 30 days before the end): flag it, and decide whether to apply to both terms, refer, or warn. | New (Guild request) | Guild |
+| MTA-D24 | One checkout for a basket with several effective dates, each its own revision and GBP 5 (section 10A). | New. A2Z proposal, to confirm | Guild / A2Z |
+| MTA-D25 | Confirm "the membership fee carries over on a like-for-like swap" (section 7A). The Guild's reply answered a different question (employee certificates). | New. One line needed | Guild |
+| MTA-D26 | Are membership certificates made for added employees, and do employees get a portal login? Today the portal charges the GBP 55.00 as a fee on the policy holder's payment, creates no employee membership record or certificate, and employees have no login (the Guild asked; confirm it was requested of A2Z and where it sits). | New (Guild question) | Guild / A2Z |
 
 ## 19. Implementation/release sequencing (proposal only)
 
