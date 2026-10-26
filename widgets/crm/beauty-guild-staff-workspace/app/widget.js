@@ -145,8 +145,29 @@
   function pageItems(key,rows,size){const total=rows.length,pages=Math.max(1,Math.ceil(total/size));const page=Math.max(1,Math.min(pages,state.pages[key]||1));state.pages[key]=page;const start=(page-1)*size;const controls=pages>1?`<nav class="pagination" aria-label="Record pages"><span>${start+1}–${Math.min(total,start+size)} of ${total} loaded</span><button class="page-button" data-action="paginate" data-key="${esc(key)}" data-page="${page-1}" ${page===1?'disabled':''}>Previous</button><span>${page} / ${pages}</span><button class="page-button" data-action="paginate" data-key="${esc(key)}" data-page="${page+1}" ${page===pages?'disabled':''}>Next</button></nav>`:'';return{rows:rows.slice(start,start+size),controls};}
   function listPanel(entity,items,opts={}){const meta=META[entity]||{title:entity,desc:''};const fault=state.errors[entity];const text=fault?`<div class="risk-banner">${esc(fault)}</div>`:items.length?pageItems('related:'+entity,items,SIZES.related).rows.map(r=>recordRow(entity,r)).join('')+pageItems('related:'+entity,items,SIZES.related).controls:empty('No linked records','No records to show.');return panel(meta.title,`${meta.desc} · ${items.length} loaded${state.limited[entity]?' · Further records may exist in CRM':''}`,text,opts.focus?'':'');}
   function stat(label,value,hint){return`<div class="stat-card"><span class="stat-label">${esc(label)}</span><span class="stat-value">${esc(txt(value))}</span><span class="stat-hint">${esc(hint||'')}</span></div>`;}
+  // Accreditation verification: staff can switch Accreditation_Status between Verified and Unverified.
+  // Uses a two-step confirm because native confirm() can be blocked inside the CRM iframe.
+  const ACCRED_ENTITY='Training_Centre_Accred',ACCRED_STATUSES=['Verified','Unverified'];
+  function accreditationStatusControl(entity,id){
+    if(entity!==ACCRED_ENTITY)return'';const r=state.focus&&state.focus.record;if(!r||!idsEqual(r.id,id))return'';
+    const current=r.Accreditation_Status||'',target=current==='Verified'?'Unverified':'Verified',pending=state.accredConfirm&&idsEqual(state.accredConfirm.id,id)?state.accredConfirm.status:'';
+    const warn=target==='Verified'?'Marking as Verified runs the CRM workflow "Push Accreditation details to WP", which publishes this accreditation to the website.':'Marking as Unverified does not remove the accreditation from the website automatically.';
+    const ids=`data-entity="${esc(entity)}" data-id="${esc(id)}"`;
+    const buttons=pending?`<button type="button" class="button primary" data-action="accred-status-save" ${ids} data-status="${esc(pending)}" ${state.accredSaving?'disabled':''}>${icon('shield-check')} ${state.accredSaving?'Saving…':`Confirm: mark as ${esc(pending)}`}</button><button type="button" class="button secondary" data-action="accred-status-cancel" ${ids} ${state.accredSaving?'disabled':''}>Cancel</button>`:`<button type="button" class="button ${target==='Verified'?'primary':'secondary'}" data-action="accred-status" ${ids} data-status="${esc(target)}">${icon(target==='Verified'?'shield-check':'alert-circle')} Mark as ${esc(target)}</button>`;
+    return `<div class="accred-status-control" style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:10px 0;padding:12px 14px;border:1px solid #f1c6dc;border-radius:10px;background:#fff7fb"><div style="flex:1 1 220px"><small style="display:block;color:#6b5a64;font-weight:600;letter-spacing:.04em">ACCREDITATION STATUS</small>${current?badge(current):'<span class="status-missing">Not recorded</span>'}${pending?`<p style="margin:6px 0 0;font-size:13px;color:#6b5a64">${esc(warn)}</p>`:''}</div><div style="display:flex;gap:8px;flex-wrap:wrap">${buttons}</div></div>`;
+  }
+  async function saveAccreditationStatus(entity,id,status){
+    if(entity!==ACCRED_ENTITY||!ACCRED_STATUSES.includes(status)||!/^\d{8,30}$/.test(String(id||''))){setNotice('Select a valid accreditation record first.');return}
+    if(state.accredSaving)return;state.accredSaving=true;render();setNotice('');
+    try{
+      const previous=state.focus&&idsEqual(state.focus.record.id,id)?state.focus.record.Accreditation_Status||'not recorded':'not recorded';
+      const result=await api().updateRecord({Entity:entity,APIData:{id:String(id),Accreditation_Status:status},Trigger:['workflow']});assertSaved(result);
+      try{const who=state.currentUser&&(state.currentUser.full_name||state.currentUser.email)||'staff user';await api().addNotes({Entity:entity,RecordID:id,Title:`Accreditation status changed to ${status}`,Content:`Accreditation status changed from ${previous} to ${status} by ${who} in the Staff Workspace.`});}catch(_){/* The status change is saved; the audit note is best effort. */}
+      state.accredConfirm=null;state.accredSaving=false;await select(entity,id);setNotice(`Accreditation status updated to ${status}.`,'success');
+    }catch(err){state.accredSaving=false;render();setNotice(`Could not update accreditation status: ${err.message||err}`,'error')}
+  }
   function crmActionBar(entity,id){
-    return `<div class="sheet-actions workspace-actions"><button type="button" class="button secondary" data-action="email" data-entity="${esc(entity)}" data-id="${esc(id)}">${icon('link')} Send email in CRM</button><button type="button" class="button secondary" data-action="crm-actions" data-entity="${esc(entity)}" data-id="${esc(id)}">${icon('arrow-up-right')} CRM buttons / actions</button><button type="button" class="button secondary" data-action="note" data-entity="${esc(entity)}" data-id="${esc(id)}">${icon('sticky-note')} Add note</button><button type="button" class="button secondary" data-action="task" data-entity="${esc(entity)}" data-id="${esc(id)}">${icon('list-todo')} Create task</button></div>`;
+    return accreditationStatusControl(entity,id)+`<div class="sheet-actions workspace-actions"><button type="button" class="button secondary" data-action="email" data-entity="${esc(entity)}" data-id="${esc(id)}">${icon('link')} Send email in CRM</button><button type="button" class="button secondary" data-action="crm-actions" data-entity="${esc(entity)}" data-id="${esc(id)}">${icon('arrow-up-right')} CRM buttons / actions</button><button type="button" class="button secondary" data-action="note" data-entity="${esc(entity)}" data-id="${esc(id)}">${icon('sticky-note')} Add note</button><button type="button" class="button secondary" data-action="task" data-entity="${esc(entity)}" data-id="${esc(id)}">${icon('list-todo')} Create task</button></div>`;
   }
   const RELATED_MODULES={Insurance_Extensions:M.EXT,Insurance_Policy:M.POLICY,Accreditation1:M.ACC,Membership:M.PROFILE,Membership_Extension1:M.ADDON,Training_Centre_Course_Offering:M.OFFER,Tutor_Relationship:M.TUTOR};
   function nativeRow(list,row){
@@ -541,6 +562,9 @@
     else if(action==='journey-create-contact'){await createJourneyContact();}
     else if(action==='journey-contact'){if(state.contact){state.journey.contact={...state.contact};render();}else{state.view='overview';state.focus=null;if(!state.directoryLoaded)await loadDirectory();else render();}}
     else if(action==='paginate'){const key=el.dataset.key,n=Number(el.dataset.page);if(/^(related:[A-Za-z_]+|native:[A-Za-z_]+|browse:(insurance|membership|accreditation|customers)|search|customers)$/.test(key||'')&&Number.isInteger(n)&&n>=1){state.pages[key]=n;render();if(key.startsWith('browse:')){const kind=key.slice(7),d=browseData(kind);enrichCustomerRows(kind,d.rows.slice((n-1)*SIZES.queue,n*SIZES.queue)).catch(()=>{});}}}
+    else if(action==='accred-status'){if(ACCRED_STATUSES.includes(el.dataset.status)){state.accredConfirm={id:String(id),status:el.dataset.status};render();}}
+    else if(action==='accred-status-cancel'){state.accredConfirm=null;render();}
+    else if(action==='accred-status-save')await saveAccreditationStatus(entity,id,el.dataset.status);
     else if(action==='refresh-record')await select(entity,id);
     else if(action==='savereview')await saveReview(entity,id);
     else if(action==='go-back'){const last=state.history.pop();if(last?.entity)await select(last.entity,last.id);else if(last){state.view=last.view;render();}}
