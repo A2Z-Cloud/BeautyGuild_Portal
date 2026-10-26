@@ -10,7 +10,7 @@ const { resolveContact, createCrmClient } = require('./records');
 const { createRateLimiter, clientKey } = require('./rateLimit');
 const { ITEMS, SERVICES, pounds, netPounds } = require('./catalogue');
 const plans = require('./plans');
-const { createDiscounts, discountsMetadata, REDEMPTION_FIELDS } = require('./discounts');
+const { createDiscounts, discountsMetadata } = require('./discounts');
 const { fitToStripeLimit, filledCount, MAX_FILLED_KEYS } = require('./metadataContract');
 
 const STRIPE = 'https://api.stripe.com/v1';
@@ -23,7 +23,7 @@ function registerCheckoutRoutes(
   {
     publicQuotesEnabled = false,
     discountsEnabled = false,
-    redemptionModule = 'Discount_Redemptions',
+    discountReferenceField = '',
     enabled,
     getCurrentUser,
     getCrmHeaders,
@@ -39,15 +39,7 @@ function registerCheckoutRoutes(
   const router = express.Router();
   const { call: crm } = createCrmClient({ getCrmHeaders, crmApiDomain, fetchImpl });
   // School referral code and the 30 day joining fee rule: absent unless PORTAL_DISCOUNTS_ENABLED is 'true'.
-  const discounts = discountsEnabled
-    ? createDiscounts({
-        crm,
-        crmCreate: (req, module, record) => crmCreate(req, module, record),
-        crmUpdate: (req, module, id, fields) => crmUpdate(req, module, id, fields),
-        now,
-        redemptionModule,
-      })
-    : null;
+  const discounts = discountsEnabled ? createDiscounts({ crm, referenceField: discountReferenceField, now }) : null;
   const limiter = createRateLimiter({ limit: 20, windowMs: 60 * 1000, now });
   // Each insurance pay attempt writes 5 to 15 CRM records, so it has its own, lower limits.
   const insuranceMinute = createRateLimiter({ limit: 3, windowMs: 60 * 1000, now });
@@ -660,20 +652,7 @@ function registerCheckoutRoutes(
               feesPence: b.fees.grossPence,
             })
           : null;
-        // Record the code as used (Pending) before the session, so its id travels in the one `discounts` metadata entry.
         const quoteReference = 'BGP-' + now().toString(36).toUpperCase();
-        let redemptionId = '';
-        if (b.discount && !b.discount.indicative && b.contact)
-          redemptionId = await discounts.recordRedemption({
-            req,
-            code: b.discount.code,
-            school: b.discount.school,
-            contactId: b.contact.id,
-            application: quoteReference,
-            itemCode: b.discount.itemCode,
-            listPence: b.discount.listPence,
-            amountPence: b.discount.amountPence,
-          });
         const catalogue = b.lines.filter(l => l.item);
         const amounts = {};
         for (const l of catalogue) amounts[l.item] = pounds(l.totalPence);
@@ -691,7 +670,7 @@ function registerCheckoutRoutes(
             fees: b.fees,
             annualPence: b.annualPence,
             quoteReference,
-            discountsEntry: b.discount ? discountsMetadata({ ...b.discount, redemptionId }) : '',
+            discountsEntry: b.discount ? discountsMetadata(b.discount) : '',
           }),
         };
         // Stripe allows 50 filled metadata keys. The plan is also on the subscription, so it is only added here while there is room.
@@ -769,8 +748,6 @@ function registerCheckoutRoutes(
           throw new HttpError(502, 'PAYMENT_UNAVAILABLE', 'Secure checkout is unavailable.');
         if (insuranceIds?.policyId)
           await crmUpdate(req, 'Insurance_Policy', insuranceIds.policyId, { Stripe_Checkout_Session_ID: session.id });
-        if (redemptionId)
-          await crmUpdate(req, redemptionModule, redemptionId, { [REDEMPTION_FIELDS.session]: session.id });
         if (b.prepared.record)
           await crmUpdate(req, b.prepared.record.module, b.prepared.record.id, b.prepared.record.update(session.id));
         return session;

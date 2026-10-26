@@ -87,6 +87,7 @@ function world({ deals = [], acc = {}, unlinked = false, liveStripe = false, sch
         data: unlinked ? [] : [{ id: IDS.me, Email: 'alice@example.test', First_Name: 'Alice', Last_Name: 'Test' }],
       });
     if (url.includes('Insurance_Policy/')) return json({ data: [] });
+    if (url.includes('Training_Centre_Accred/search')) return json({ data: schools });
     if (url.includes('Training_Centre_Accred/' + IDS.acc))
       return json({
         data: [
@@ -101,8 +102,6 @@ function world({ deals = [], acc = {}, unlinked = false, liveStripe = false, sch
       });
     if (url.includes('Accreditation_Centre_Link/search'))
       return json({ data: [{ Training_Centre: { id: IDS.centre } }] });
-    if (url.includes('Accounts/search')) return json({ data: schools });
-    if (url.includes('Discount_Redemptions/search')) return json({ data: [] });
     if (url.includes('Deals/search')) return json({ data: deals });
     if (url.includes('Deals/' + IDS.deal))
       return json({

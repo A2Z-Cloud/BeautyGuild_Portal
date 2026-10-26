@@ -617,7 +617,10 @@ export default function BuyMembership() {
                             }
                           }}
                         />
-                        <small>If your school gave you a code, enter it to have your joining fee waived.</small>
+                        <small>
+                          If your school gave you its Accreditation Reference (for example ACC-0140), enter it to have
+                          your joining fee waived.
+                        </small>
                       </div>
                       <button
                         type="button"

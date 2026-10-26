@@ -1,6 +1,7 @@
 'use strict';
-// The school referral code: the only code a customer enters online. It takes the joining fee off a membership (the fee is
-// left out before a monthly plan is split, so yearly and monthly are both exact). Everything here is behind PORTAL_DISCOUNTS_ENABLED.
+// The school referral code: the only code a customer enters online. The code is the school's Accreditation Reference. It takes the
+// joining fee off a membership (the fee is left out before a monthly plan is split, so yearly and monthly are both exact). Everything
+// here is behind PORTAL_DISCOUNTS_ENABLED. Redemptions are recorded by Creator from the `discounts` metadata, not by the portal.
 // Vouchers and goodwill waivers are staff-only and not part of this module. Plan: docs/delivery/vouchers-review.md, phases 0 and 1.
 const { HttpError } = require('./errors');
 
@@ -12,28 +13,21 @@ const REJOIN_DAYS = 30;
 const WRONG_PER_HOUR = 10;
 const HOUR = 60 * 60 * 1000;
 const FOUND_TTL = 60 * 1000;
-// Letters, digits, space, hyphen and underscore only, so the code can never alter a CRM search.
-const SHAPE = /^[A-Z0-9][A-Z0-9 _-]{1,39}$/;
-// The CRM module and field names for a redemption. The module is created by A2Z (see the hand-over note); names are set in one place.
-const REDEMPTION_FIELDS = Object.freeze({
-  status: 'Status',
-  code: 'Code',
-  school: 'School',
-  contact: 'Contact',
-  application: 'Application_Reference',
-  item: 'Item_Code',
-  list: 'List_Amount',
-  amount: 'Discount_Amount',
-  session: 'Stripe_Checkout_Session_ID',
-});
+// The Accreditation Reference (the Training_Centre_Accred autonumber, shown "ACC - 0140"). "ACC-0140" and "acc 0140" are the same
+// reference. Anything else is refused before the CRM is asked, so a code can never alter a search.
+const SHAPE = /^([A-Z]{1,10})[\s-]*(\d{1,12})$/;
+// A reference that was really issued: the accreditation was granted at some point, so an expired school still gives the £10 (Guild).
+// Drafts and rejected applications also hold a reference, so they do not count.
+const ISSUED = new Set(['verified', 'expired', 'closed', 'suspended', 'revoked']);
 
 const normaliseCode = raw => {
-  const code = String(raw ?? '')
-    .replace(/\s+/g, ' ')
+  const m = String(raw ?? '')
     .trim()
-    .toUpperCase();
-  return SHAPE.test(code) ? code : '';
+    .toUpperCase()
+    .match(SHAPE);
+  return m ? m[1] + '-' + m[2] : '';
 };
+const crmReference = code => code.replace('-', ' - ');
 const dayNumber = iso => Date.parse(String(iso).slice(0, 10) + 'T00:00:00Z') / 864e5;
 // Whole days from the expiry date to today (UTC days, like the rest of the catalogue). Null when the date is missing or unreadable.
 function daysSinceExpiry(expiry, today) {
@@ -50,7 +44,8 @@ function joiningFeeDue({ previous, expiry, today, rule }) {
   return days !== null && days > REJOIN_DAYS;
 }
 
-function createDiscounts({ crm, crmCreate, crmUpdate, now = Date.now, redemptionModule = 'Discount_Redemptions' }) {
+// referenceField is the API name of the Accreditation Reference on Training_Centre_Accred.
+function createDiscounts({ crm, referenceField, now = Date.now }) {
   const found = new Map(), // code -> {at, school}
     wrong = new Map(); // user -> {start, codes:Set}
   const windowOf = user => {
@@ -65,20 +60,38 @@ function createDiscounts({ crm, crmCreate, crmUpdate, now = Date.now, redemption
   };
   const limited = user => windowOf(user).codes.size >= WRONG_PER_HOUR;
 
-  // The school whose Referral_Code this is, or null. Matching ignores case. A school whose accreditation has expired still counts (the Guild
-  // confirmed students get the £10), so Referral_Code_Active is not used to refuse a code. A code held by more than one school is refused.
+  // The school whose Accreditation Reference this is, or null. Matching ignores case and spacing. References are unique, but more than
+  // one match is still refused rather than guessed. Accreditation_Status says whether the reference was issued; an expired school
+  // is not refused (the Guild confirmed students still get the £10).
   async function findSchool(req, code) {
+    if (!referenceField)
+      throw new HttpError(503, 'CODE_UNAVAILABLE', 'Codes cannot be checked right now. Please try again later.');
     const hit = found.get(code);
     if (hit && now() - hit.at < FOUND_TTL) return hit.school;
     const rows = await crm(
       req,
-      'Accounts/search?criteria=' +
-        encodeURIComponent('(Referral_Code:equals:' + code + ')') +
+      'Training_Centre_Accred/search?criteria=' +
+        encodeURIComponent('(' + referenceField + ':equals:' + crmReference(code) + ')') +
         '&fields=' +
-        encodeURIComponent('Account_Name,Referral_Code'),
+        encodeURIComponent(referenceField + ',Account,Accreditation_Status'),
     );
-    const same = rows.filter(r => normaliseCode(r.Referral_Code) === code);
-    const school = same.length === 1 ? { id: String(same[0].id), name: String(same[0].Account_Name || '') } : null;
+    const same = rows.filter(
+      r =>
+        normaliseCode(r[referenceField]) === code &&
+        ISSUED.has(
+          String(r.Accreditation_Status || '')
+            .trim()
+            .toLowerCase(),
+        ),
+    );
+    const school =
+      same.length === 1
+        ? {
+            id: String(same[0].Account?.id || ''),
+            name: String(same[0].Account?.name || ''),
+            accreditationId: String(same[0].id),
+          }
+        : null;
     if (school) {
       if (found.size > 500) found.clear();
       found.set(code, { at: now(), school });
@@ -101,76 +114,21 @@ function createDiscounts({ crm, crmCreate, crmUpdate, now = Date.now, redemption
     return { status: 'ok', code, indicative: false, school };
   }
 
-  // The record that says this code was used, written when the customer goes to pay (status Pending). Creator marks it paid when the
-  // first payment succeeds. One Pending record per Contact and code: a second attempt reuses it, so a retry never adds a second use.
-  async function recordRedemption({ req, code, school, contactId, application, itemCode, listPence, amountPence }) {
-    const F = REDEMPTION_FIELDS;
-    const open = await crm(
-      req,
-      redemptionModule +
-        '/search?criteria=' +
-        encodeURIComponent(
-          '((' +
-            F.contact +
-            ':equals:' +
-            contactId +
-            ')and(' +
-            F.code +
-            ':equals:' +
-            code +
-            ')and(' +
-            F.status +
-            ':equals:Pending))',
-        ) +
-        '&fields=' +
-        encodeURIComponent('id'),
-    ).catch(() => {
-      throw new HttpError(
-        502,
-        'CODE_UNAVAILABLE',
-        'We could not apply your code. Please try again, or pay without it.',
-      );
-    });
-    if (open[0]?.id) {
-      await crmUpdate(req, redemptionModule, open[0].id, { [F.application]: application });
-      return String(open[0].id);
-    }
-    try {
-      return await crmCreate(req, redemptionModule, {
-        Name: code + ' / ' + application,
-        [F.code]: code,
-        [F.school]: school.id,
-        [F.contact]: String(contactId),
-        [F.application]: application,
-        [F.status]: 'Pending',
-        [F.item]: itemCode,
-        [F.list]: Number((listPence / 100).toFixed(2)),
-        [F.amount]: Number((amountPence / 100).toFixed(2)),
-      });
-    } catch {
-      throw new HttpError(
-        502,
-        'CODE_UNAVAILABLE',
-        'We could not apply your code. Please try again, or pay without it.',
-      );
-    }
-  }
-
-  return { check, recordRedemption, findSchool };
+  return { check, findSchool };
 }
 
-// The single `discounts` metadata entry (one key: Stripe allows 50 and a membership with insurance is close). Creator reads list and
-// discount amounts, the school and the redemption record to mark it paid. Kept well under Stripe's 500 character value limit.
-function discountsMetadata({ code, school, itemCode, listPence, amountPence, redemptionId }) {
+// The single `discounts` metadata entry (one key: Stripe allows 50 and a membership with insurance is close). Creator reads the list and
+// discount amounts and the school, and records the redemption itself. Kept well under Stripe's 500 character value limit.
+function discountsMetadata({ code, school, itemCode, listPence, amountPence }) {
   return JSON.stringify([
     {
       type: 'referral_code',
       code,
       school_id: school?.id || '',
+      accreditation_id: school?.accreditationId || '',
       item: itemCode,
       list_amount: (listPence / 100).toFixed(2),
       discount_amount: (amountPence / 100).toFixed(2),
-      redemption_id: redemptionId || '',
     },
   ]);
 }
@@ -181,7 +139,6 @@ module.exports = {
   LIMITED,
   REJOIN_DAYS,
   WRONG_PER_HOUR,
-  REDEMPTION_FIELDS,
   normaliseCode,
   daysSinceExpiry,
   joiningFeeDue,

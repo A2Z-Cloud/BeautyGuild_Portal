@@ -54,8 +54,15 @@ const JOIN_DETAILS = {
   county: 'Yorkshire',
   postcode: 'LS1 1AA',
 };
-const DISCOUNTS = { PORTAL_DISCOUNTS_ENABLED: 'true' };
-const SCHOOL = [{ id: '1011174000000000050', Account_Name: 'Test Academy', Referral_Code: 'TESTCODE' }];
+const DISCOUNTS = { PORTAL_DISCOUNTS_ENABLED: 'true', PORTAL_DISCOUNT_REFERENCE_FIELD: 'Accreditation_Reference' };
+const SCHOOL = [
+  {
+    id: '1011174000000000050',
+    Accreditation_Reference: 'ACC - 0140',
+    Accreditation_Status: 'Verified',
+    Account: { id: '1011174000000000060', name: 'Test Academy' },
+  },
+];
 const SCENARIOS = [
   ['membership: new, yearly', { unlinked: true }, BUY],
   [
@@ -92,7 +99,7 @@ const SCENARIOS = [
   [
     'membership: school referral code, yearly',
     { unlinked: true, env: DISCOUNTS, schools: SCHOOL },
-    { ...BUY, code: 'testcode' },
+    { ...BUY, code: 'acc 0140' },
   ],
   [
     'membership with insurance: referral code, everything at once, monthly',
@@ -106,7 +113,7 @@ const SCENARIOS = [
       addons: { badge: 1, sticker: 1, certificate: 1 },
       insurance: WITH_EMPLOYEE,
       country: 'United Kingdom',
-      code: 'TESTCODE',
+      code: 'ACC-0140',
     },
   ],
   ['insurance on its own', { deals: [FULL] }, INSURE],

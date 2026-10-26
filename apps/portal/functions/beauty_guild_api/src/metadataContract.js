@@ -53,7 +53,7 @@ const DESCRIPTIONS = {
   county: 'Correspondence county. Left out when blank.',
   postcode: 'Correspondence postcode. Left out when blank.',
   discounts:
-    'Only when a school referral code took the joining fee off (PORTAL_DISCOUNTS_ENABLED). JSON array with one entry: `{"type":"referral_code","code":"ABC123","school_id":"...","item":"MEM-JOIN","list_amount":"10.00","discount_amount":"10.00","redemption_id":"..."}`. The joining fee is not a line on the invoice (`joining_fee_amount` is `0.00`), so book `list_amount` and `discount_amount` here. `redemption_id` is the CRM redemption record (status Pending) to mark paid when the first payment succeeds.',
+    'Only when a school referral code took the joining fee off (PORTAL_DISCOUNTS_ENABLED). JSON array with one entry: `{"type":"referral_code","code":"ACC-0140","school_id":"...","accreditation_id":"...","item":"MEM-JOIN","list_amount":"10.00","discount_amount":"10.00"}`. `code` is the school\'s Accreditation Reference. The joining fee is not a line on the invoice (`joining_fee_amount` is `0.00`), so book `list_amount` and `discount_amount` from here. Creator records the redemption from this entry when the first payment succeeds.',
   total_amount: 'What is charged now, gross. The first payment on a monthly plan.',
   total_amount_net: '`total_amount` without VAT. Insurance premiums are VAT exempt, and IPT is not VAT.',
   monthly_plan:
