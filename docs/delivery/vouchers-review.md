@@ -227,6 +227,7 @@ Questions 1 to 5 and 7 to 13 are answered (section 2.1). Insurance, the joining 
 1. **Can a school's code ever be switched off on purpose?** A school whose accreditation has expired still gives students the £10. Is there ever a reason to stop a code working, for example if it is being misused?
 2. **What reasons will staff give when they waive something?** Should the system offer a short list (for example goodwill, complaint, promotion) or free text?
 3. **Do you want a limit on how often staff can waive the joining fee for the same person?** For example once. Any staff member can do it today, with nothing recorded.
+4. **Are there vouchers live in Enki today that must keep working?** Staff will create and end vouchers in the CRM from now on. Please tell us which current vouchers must carry over, with their dates and limits.
 
 ### 4.3 For us to confirm ourselves
 - What `Referral_Code_Active` means in the CRM (school current, or code on or off).
@@ -235,34 +236,87 @@ Questions 1 to 5 and 7 to 13 are answered (section 2.1). Insurance, the joining 
 
 ---
 
-## 5. Build plan
+## 5. Build plan: what is done, and how
 
-Each phase ships on its own and is tested in Stripe test mode first. Merges are the user's decision.
+Each phase ships on its own, behind a switch (an environment flag such as `PORTAL_DISCOUNTS_ENABLED`, in the same way as the existing billing and risk-check switches), and is tested in Stripe test mode first. Merges are the user's decision. "Portal" means the Catalyst function and the Join page. "A2Z" means the CRM set-up and the Creator app. "Guild" means the Guild's own people.
 
-### Phase 0: rules the portal already breaks (no codes needed)
-- Enforce the 30-day rule: a membership expired more than 30 days ago pays the joining fee again (2.2, point 1).
-- **Needs from the Guild:** nothing further. **Creator:** nothing. **Books:** nothing.
+### Phase 0: the 30-day rule on the joining fee
+**What.** A member whose membership expired more than 30 days ago pays the joining fee again, as the Guild confirmed.
+
+**How.**
+- Portal (`catalogue.js`, membership service): today the joining fee is added when there is no `previousId`. The change is to read the previous membership's expiry date from the CRM Deal and add the joining fee when the expiry was more than 30 days ago. Renewals inside 30 days stay free of it.
+- Tests: unit tests for day 30 (no fee) and day 31 (fee), for a renewal and a new application, yearly and monthly.
+- Shown to the customer: the price panel and quote show the joining fee as a line when it applies, with a short line explaining why.
+
+**Needs from others.** Nothing. **Done when:** the quote for a membership expired 31 days ago includes the £10 fee and one expired 30 days ago does not.
 
 ### Phase 1: school referral code online, £10 off the joining fee
-- Portal: a `code` field on the quote and pay endpoints; the check against the school Account (accepting expired schools); the joining fee line is left out before `splitMonthly` runs (yearly and monthly are exact); a "Have a code?" box on the Join page, shown only when a joining fee applies; the discount shown in the price panel and the quote; a rate limit and one neutral error; a CRM redemption record; the code kept in a saved application.
-- Checkout metadata: the discount JSON (3.5) and the list prices.
-- Creator: copy the metadata into the invoice `discounts` array. Books: the line-level discount on `MEM-JOIN`.
-- Done when: a yearly and a monthly purchase with a code both show the joining fee waived in the quote, in Stripe's first payment, in the Creator invoice and in Books.
+**What.** A customer enters a school code on the Join page, and the joining fee is waived.
 
-### Phase 2: staff route for the phone widget and payment link
-- A staff-only endpoint: referral code, bespoke voucher codes, and waivers on the joining fee, the one-off extras and (when it exists) the £5 adjustment fee. A reason is required, and the staff member is recorded.
-- CRM: `Voucher`, `Voucher Redemption` and the waiver log. Creator: the `discounts` shape for vouchers and waivers.
-- Lowered one-off lines as in 3.1. A branch discount is not in this phase.
-- **Needs from the Guild:** the answers in 4.2, and a test voucher. **A2Z:** the CRM set-up and how staff are identified in the widget. **Creator and Books:** as phase 1, plus the waiver reasons in reports.
+**How.**
+1. **Check the code.** A new portal module looks the code up on the school Accounts in the CRM (`Referral_Code`). It accepts the code whether or not the school's accreditation has expired (Guild answer 10). Matching is case-insensitive. A wrong code gets one message, "That code is not valid", and a rate limit stops guessing (about 10 wrong codes an hour per user).
+2. **Price it.** When a joining fee is due and the code is valid, the portal leaves the joining fee line out before the monthly plan is split. Yearly and monthly are both exact, because the first payment on the quote is built from the same lines Stripe is given. Example: an Associate on a monthly plan pays £6.09 from the first payment instead of £6.92. A code is ignored with a clear message when no joining fee is due (for example a renewal).
+3. **Show it.** The quote returns the discount (label, amount, which line), and the price panel and quote summary show the joining fee struck through or marked as waived.
+4. **Record it.** At payment time the portal writes a CRM redemption record (code, school, Contact, application, status Pending), and puts a single `discounts` JSON entry in the Checkout metadata with the list price and the discount. Creator marks the redemption as paid when the first payment succeeds.
+5. **Guests and saved applications.** A guest quote stays indicative: it can show the discount using the code the customer typed, but the code is only checked against the CRM at the account checkpoint. A saved application keeps the code with the other answers.
+6. **Where the box goes.** Join page only (3.7).
 
-### Phase 3: the recurring branch discount, and the Stripe Customer
-- The per-checkout Stripe coupon for a branch discount (`once` yearly, 12 months monthly).
-- Prove in test mode what survives `ensureSchedule`, and pass the coupon into the schedule phases if it does not.
-- Optional: a persistent Stripe Customer per Contact (helps cancellations and the billing portal; not required for discounts).
-- **Creator:** read branch discounts from the Stripe invoice. **Books:** none beyond phase 2.
+**Needs from others.**
+- A2Z (CRM): the redemption module and a test school code. Confirm what `Referral_Code_Active` means and that codes are unique.
+- A2Z (Creator): store the `discounts` entry on the invoice, mark the redemption, push the line discount to Books.
+- Guild: sign-off on the wording and a User Acceptance Test.
+
+**Done when:** a yearly and a monthly purchase with a code both show the joining fee waived in the quote, in Stripe's first payment, in the Creator invoice and in Books, and a repeat of the same application cannot add a second code.
+
+### Phase 2: staff route for the phone widget and the payment link
+**What.** Staff can take a phone application or send a payment link with the referral code, a bespoke voucher, or a goodwill waiver, and every discount is recorded with who and why.
+
+**How.**
+1. **A staff-only endpoint.** A separate route that only a signed-in Guild staff member can call. It builds the same basket and prices it with the same code as the customer route, so a phone payment and an online payment come out the same. The widget and the payment link both call it, and it returns either a payment link or the session the widget needs. This depends on the phone widget calling the portal's pricing and not re-pricing in its own code: to confirm with the widget build.
+2. **What staff can apply.** A referral code; a bespoke voucher code (looked up in the CRM `Voucher` record: dates, usage limit, restrictions such as members only, allowed items); and waivers on the joining fee, any of the one-off extras, and (when it exists) the £5 adjustment fee. A waiver needs a reason. Any staff member can do all of these (Guild answer 12).
+3. **Price it.** Same rule as phase 1 for every one-off line: left out when free, otherwise lowered, and on a monthly plan spread over the first 12 payments (Guild answer 9). A voucher can only discount the items its record allows.
+4. **Record it.** A waiver log record in the CRM (Contact, application, item, amount, code or none, reason, staff member, date) and the same `discounts` entry in the metadata, with `source` `voucher` or `staff_waiver`. Voucher use is counted against the voucher's usage limit when the payment succeeds.
+5. **Not in this phase.** A discount on the additional branch (phase 3).
+
+**Needs from others.**
+- A2Z (CRM): the `Voucher`, `Voucher Redemption` and waiver log modules, a test voucher, and the Voucher screen the Guild uses to create and end vouchers (replacing the separate Enki section).
+- A2Z (widget): how staff sign in to the widget and how the staff identity reaches the portal.
+- A2Z (Creator, Books): as phase 1, plus waiver reasons in the invoice record.
+- Guild: the answers in 4.2, a decision on what to do with vouchers still live in Enki, and a User Acceptance Test.
+
+**Done when:** a staff member can apply a code or waiver in the widget and in the payment link, the customer pays the discounted amount, and the waiver log, the Creator invoice and the Books line all show who applied what and why.
+
+### Phase 3: the additional branch discount, and the Stripe schedule
+**What.** A discount on an additional branch lasts the first year only and does not repeat at renewal.
+
+**How.**
+1. The portal creates a Stripe coupon for that checkout only: a fixed amount equal to the discount (never more than the branch price), `once` on a yearly purchase and `repeating` for 12 months on a monthly plan, with the voucher id in its metadata. It passes the coupon on the Checkout session. The branch line itself stays at full price, so the renewal is full price.
+2. On a monthly plan the discount is spread over 12 payments, rounded to the penny. The quote shows the actual total discount, which can differ from the staff member's figure by a few pence.
+3. The schedule that drops the year-one lines at payment 13 is checked and, if needed, changed so the coupon survives it.
+4. Creator reads the branch discount from the Stripe invoice as well as the metadata.
+5. Optional, separate: a persistent Stripe Customer per Contact. It helps cancellations and the Stripe billing portal, but discounts do not need it.
+
+**Needs from others.** A2Z (Creator): read the coupon from the invoice. Guild: UAT of a yearly and a monthly branch discount.
+
+**Done when:** a yearly branch discount and a monthly one both show the first year discounted and the renewal at full price, in Stripe and in Books.
 
 ### Later: GTi
 Parked in section 6.
+
+### Who does what
+
+| Phase | Portal | CRM | Creator | Books | Guild |
+|---|---|---|---|---|---|
+| 0: 30-day rule | Rule and tests | none | none | none | none |
+| 1: referral code | Code check, pricing, price panel, redemption record, saved applications | Redemption module, test school code | Store the discount, mark the redemption | Line discount | Wording, UAT |
+| 2: staff route | Staff endpoint, voucher check, waivers | Voucher, redemption and waiver modules, test voucher | Waiver and voucher records | Line discount with reason | Answers in 4.2, Enki vouchers, UAT |
+| 3: branch discount | Per-checkout coupon, schedule check | none | Read coupon from invoice | none | UAT |
+
+### How we test and release
+- Every phase is built and tested against the Stripe test account. No live key is used.
+- Each phase has a short test script: a valid code, a wrong code, an expired school, a code with no joining fee due, the 30-day boundary, yearly and monthly, a guest, a saved application and a repeat attempt. Phase 2 adds each waiver type, a usage limit reached and a voucher outside its dates.
+- A switch keeps the feature off until the Guild has tested it. The Guild signs off each phase before the next starts.
+- Money checks for every test: the quote, Stripe's first payment, the Creator invoice and the Books line must agree to the penny.
 
 ### Not in this plan
 - Any discount on insurance premiums or IPT, on the membership fee or on accreditation fees (the Guild confirmed none is wanted).
