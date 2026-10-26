@@ -152,7 +152,7 @@
     if(entity!==ACCRED_ENTITY||key!=='Accreditation_Status'||!record||!record.id)return null;
     const current=record.Accreditation_Status||'',saving=state.accredSaving===String(record.id);
     const options=(ACCRED_STATUSES.includes(current)?[]:[`<option value="" selected disabled>${esc(current||'Not recorded')}</option>`]).concat(ACCRED_STATUSES.map(v=>`<option value="${v}" ${v===current?'selected':''}>${v}</option>`)).join('');
-    return `<select class="accred-status-select" data-accred-status="true" data-entity="${esc(entity)}" data-id="${esc(record.id)}" aria-label="Accreditation status" title="Setting Verified runs the CRM workflow that publishes the accreditation to the website" ${saving?'disabled':''} style="font:inherit;font-weight:600;padding:3px 6px;border:1px solid #d9cfd5;border-radius:6px;background:#fff;color:inherit;cursor:pointer">${options}</select>${saving?' <small>Saving…</small>':''}`;
+    return `<select class="accred-status-select" data-accred-status="true" data-entity="${esc(entity)}" data-id="${esc(record.id)}" aria-label="Accreditation status" title="Setting Verified runs the CRM workflow that publishes the accreditation to the website" ${saving?'disabled':''}>${options}</select>${saving?' <small>Saving…</small>':''}`;
   }
   if(typeof window!=='undefined')window.BGAccredEdit={render:accreditationStatusEditor};
   async function saveAccreditationStatus(entity,id,status,control){
