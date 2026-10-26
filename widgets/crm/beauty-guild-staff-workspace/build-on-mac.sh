@@ -30,7 +30,7 @@ if [ ! -f "$PROJECT_DIR/plugin-manifest.json" ] || [ ! -d "$PROJECT_DIR/app" ]; 
   exit 1
 fi
 cp "$SCRIPT_DIR/app/widget.html" "$SCRIPT_DIR/app/widget.js" \
-   "$SCRIPT_DIR/app/styles.css" "$SCRIPT_DIR/app/brand-processing.css" \
+   "$SCRIPT_DIR/app/styles.css" "$SCRIPT_DIR/app/brand-processing.css" "$SCRIPT_DIR/app/usability.css" \
    "$PROJECT_DIR/app/"
 cd "$PROJECT_DIR"
 printf '\n%s\n' 'Validating against Zoho ZET...'
