@@ -76,6 +76,7 @@
         const mod=f?.lookup?.module?.api_name||f?.lookup?.module||f?.lookup?.module_name;
         if(typeof mod==='string'&&/^[A-Za-z_]+$/.test(mod)){val='<button class="v12-link" data-action="select" data-entity="'+safe(mod)+'" data-id="'+safe(raw.id)+'">'+safe(raw.name)+'</button>';}
       }else if(typeof raw==='string'&&/^https:\/\//.test(raw)){val='<a href="'+safe(raw)+'" target="_blank" rel="noopener noreferrer">Open link</a>';}
+      const editor=global.BGAccredEdit&&global.BGAccredEdit.render(entity,record,key);if(editor)val=editor;
       html.push('<div class="v12-kv"><dt>'+safe(name)+'</dt><dd>'+val+'</dd></div>');
     }
     return html.length?'<dl class="v12-field-grid">'+html.join('')+'</dl>':'<p class="v12-muted">No information recorded in this section.</p>';
@@ -100,7 +101,7 @@
   }
   function statusBar(entity,record){
     const keys=['Application_Status','Stage','Current_Membership_Status','Underwriting_Status','Risk_Status','Payment_Status','Policy_Status','Accreditation_Status','Application_Stage'];
-    return keys.filter(k=>record[k]!==undefined&&record[k]!==null).map(k=>'<span class="v12-status v12-'+iconStatus(record[k])+'"><span>'+safe(pretty(k))+'</span> <strong>'+safe(format(k,record[k]))+'</strong></span>').join('');
+    return keys.filter(k=>record[k]!==undefined&&record[k]!==null).map(k=>{const editor=global.BGAccredEdit&&global.BGAccredEdit.render(entity,record,k);return '<span class="v12-status v12-'+iconStatus(record[k])+'"><span>'+safe(pretty(k))+'</span> <strong>'+(editor||safe(format(k,record[k])))+'</strong></span>';}).join('');
   }
   function relationList(entity){
     const x=metaCache.get(entity)||{};
