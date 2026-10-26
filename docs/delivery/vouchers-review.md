@@ -1,17 +1,21 @@
 # Vouchers and discount codes: review against Portal V2
 
-Written 24 October 2026 for A2Z Cloud and the Guild of Beauty Therapists. **Update:** the Guild is retiring the school referral credit scheme (the £12 credit to schools and the Diary Date deductions), so everything about it has been taken out of this review. The £10 referral discount for new applicants is unchanged unless the Guild says otherwise (question 1). **Scope update:** the Guild is not ready for GTi, so this review now covers **insurance, membership and accreditation** only. Everything GTi (the £25 voucher, GTi courses, GTi Student upgrades) is parked in section 6 so it is not lost. This is a review only. Nothing has been built, and nothing has been changed in Stripe, Books or the CRM.
+Written 24 October 2026 for A2Z Cloud and the Guild of Beauty Therapists, updated 26 October 2026 with the Guild's answers (Qudsiya Talib, with Helen Delaney on VAT). This is a review only. Nothing has been built, and nothing has been changed in Stripe, Books or the CRM.
 
-Sources: the Guild's "Discount Codes and Vouchers" document (the Word version of 24 October; the PDF of 20 October has identical text), [pricing-payments.md](../api-contracts/pricing-payments.md), [creator-payments-app.md](creator-payments-app.md), and `catalogue.js`, `checkout.js` and `plans.js` in `apps/portal/functions/beauty_guild_api/src`.
+**Scope.** Insurance, membership and accreditation only. The Guild is not ready for GTi, so everything GTi (the £25 voucher, GTi courses, GTi Student upgrades) is parked in section 6. The school referral credit scheme (the £12 credit to schools and the Diary Date deductions) is being retired and is not covered.
+
+Sources: the Guild's "Discount Codes and Vouchers" document (the Word version of 24 October; the PDF of 20 October has identical text), the Guild's email answers of 26 October, [pricing-payments.md](../api-contracts/pricing-payments.md), [creator-payments-app.md](creator-payments-app.md), and `catalogue.js`, `checkout.js` and `plans.js` in `apps/portal/functions/beauty_guild_api/src`.
 
 ## Summary
 
-- The document describes **several kinds of discount**, and only **three of them are codes**: the school referral code (£10 off the joining fee), bespoke vouchers, and the £25 GTi voucher (parked for GTi, section 6). The rest are staff goodwill and automatic rules.
-- **Most of what the document calls a "discount" is already how the portal behaves** (no joining fee on renewals, upgrades and accreditation bundles). Two of those rules are only half right, see section 2.
+- **Two code types, used in two places.**
+  - The **school referral code** (£10 off the joining fee) is the only code a **customer** enters online.
+  - **Bespoke vouchers** and goodwill waivers are applied by **Guild staff** on the phone, in the payment widget or on the payment link. Customers do not type vouchers in online (Guild answer, 26 October).
 - **Referral codes already exist in the CRM.** The portal reads `Referral_Code` and `Referral_Code_Active` from the school Account today (`schoolServices.js`). They do not need to be copied into Stripe.
-- **Bespoke vouchers do belong in Stripe**, as a Coupon plus a Promotion Code, created from the CRM. The £25 GTi voucher is parked until GTi is ready (section 6).
-- **Three things in the portal make a plain "turn on Stripe's code box" approach wrong**: monthly plans (a one-off coupon would hit only the first small payment), insurance (the portal calculates IPT before Stripe sees the amounts), the portal does not create a Stripe Customer (so "once per customer" cannot be enforced by Stripe).
-- **Recommendation in one line:** the portal validates the code and shows the discount in the quote, then passes Stripe-native discounts on the Checkout session for what Stripe can express exactly (catalogue products, yearly or one-off), and prices the joining-fee referral discount itself. Details and the reasons are in section 3.
+- **What can be discounted is now settled:** the joining fee, additional branches, badges, window stickers, certificates, bundles, and the £5 adjustment fee. Never the membership fee, accreditation fees or insurance. That removes the hardest tax question (IPT) from this phase.
+- **One discountable item is recurring: the additional branch.** Everything else is a one-off line. A branch discount must last one year only, so it cannot be done by lowering the line (the lower price would repeat at renewal).
+- **Recommendation in one line:** the portal prices discounts itself on the one-off lines (so monthly plans stay exact), uses a Stripe coupon created per checkout only for a branch discount, records every discount (code, amount, who and why) for Creator and Books, and treats the CRM Voucher record as the only list of codes. Details in section 3.
+- **Needed in the portal that is not there yet:** the 30-day rule on the joining fee, a staff route for the phone widget and link (with who and why recorded), and a `discounts` shape for Creator. See section 2.2 and the plan in section 5.
 
 ---
 
@@ -19,13 +23,13 @@ Sources: the Guild's "Discount Codes and Vouchers" document (the Word version of
 
 ### 1.1 Joining a membership or buying insurance (the Join page)
 - **School referral code, £10 off the Joining Fee.** A new applicant for Beauty Guild insurance or membership enters an accredited school's unique code during the online application. Codes can be numeric (`12345`) or branded (`SIENNAX`). One use per user, unlimited users per code. Staff can enter the code for phone applications.
-- **£25 GTi voucher issued.** Anyone who joins as Associate, International or Full, renews, or upgrades from GTi Student gets a unique £25 GTi voucher (parked, section 6).
+- **£25 GTi voucher issued.** Parked, section 6.
 - **No code, automatic or staff-controlled:**
   - Renewing before expiry, or within one month after, has no Joining Fee. After more than one month the fee applies again.
   - Staff can waive the £10 Joining Fee as a goodwill gesture over the phone (back office, not a code).
 
 ### 1.2 Upgrades and policy changes
-- **GTi Student to Associate or Full (the GTi Student part is parked, section 6), while the student membership is active or within one month of expiry:** the Joining Fee is waived. Online, this uses the referral code of the school where the student most recently enrolled on a GTi course. By phone, staff enter that school's code.
+- **GTi Student to Associate or Full:** parked, section 6.
 - **£5 adjustment fee on insurance amendments.** Staff can remove it as a goodwill gesture. No code. (This belongs to the mid-term changes workstream.)
 
 ### 1.3 Membership extras
@@ -34,217 +38,200 @@ Sources: the Guild's "Discount Codes and Vouchers" document (the Word version of
 ### 1.4 Accreditation and tutors
 - A non-member applying for accreditation automatically gets Associate (International outside the UK) membership, with a primary membership of the Guild of Therapy Lecturers, and the £10 Joining Fee is discounted automatically. No code.
 
-### 1.5 Discount vouchers (the GTi items here are parked, section 6)
-- **£25 GTi voucher:** unique to the member, single use, valid until their membership expires. Either £25 off a practical GTi course, or a £25 contribution towards a theory-only GTi course.
-- **GTi pricing:** each course has a member and a non-member price (some member prices are £0). Eligibility is by membership status. No code.
-- **Bespoke vouchers (currently made in Enki):** a generic code (not user-specific), each user may redeem once. Applies to specific products (membership extras) and GTi courses and certificates. Can be restricted to certain people (for example members only). Active for a period, expiring automatically, reusable for later promotions. Fixed amount or percentage off. Can be limited to a set number of uses. Issued to members, schools or anyone else.
-- **School bundle pricing:** a few schools can enrol a student on several GTi courses for a single £25. Staff set this up. No code.
+### 1.5 Discount vouchers
+- **Bespoke vouchers (currently made in Enki):** a generic code (not user-specific), each user may redeem once. Applies to specific products (membership extras). Can be restricted to certain people (for example members only). Active for a period, expiring automatically, reusable for later promotions. Fixed amount or percentage off. Can be limited to a set number of uses. Issued to members, schools or anyone else.
+- The £25 GTi voucher, GTi pricing and school bundle pricing are parked (section 6).
 
 ---
 
 ## 2. What is settled, and what conflicts with the portal as built
 
-### 2.1 Settled (the user has told us, or the portal already matches)
+### 2.1 Settled
+
+**Direction already given**
 
 | Point | Status |
 |---|---|
-| Vouchers are generated from the CRM and synced to Stripe so they work at checkout | Direction given by the user |
-| £25 voucher is generated when an accreditation (or membership) becomes active | Direction given by the user. Parked for GTi (section 6) |
-| Referral codes exist (school referral credits are being retired) | Direction given by the user |
+| Referral codes exist; school referral credits are being retired | Direction given by the user |
+| Vouchers are generated from the CRM | Direction given by the user. See 3.5 for how this changes now that vouchers are staff-only |
 | No Joining Fee on a renewal, an upgrade, or the accreditation + Associate bundle | Already built: the portal adds a `joining_fee` line only when there is no `previousId`, and `ACC-ASSOC` is the bundle price |
-| Staff goodwill waivers, manual extras discounts, GTi member pricing and school bundle pricing are not codes | Settled by the document. Nothing for the portal checkout to do |
 | Prices come from Stripe by lookup key (the price list code and Books SKU) | Built. A voucher must never carry an amount of its own that duplicates a price |
+| The joining fee is charged **per person**, not per product | Direction given by the user, 26 October |
+| Customers do not enter bespoke vouchers online; only staff do | Direction given by the user, 26 October |
+
+**Guild answers, 26 October** (numbers are the question numbers in the email)
+
+| # | Answer | What it means for the build |
+|---|---|---|
+| 1 | The discount is always £10 | One fixed discount on `MEM-JOIN`. Because the joining fee is £10, the code always waives it in full, so the line is left out, as the renewal waiver already does |
+| 2 | The code only works for a completely new member, or someone rejoining more than a month after their membership or insurance last expired | The code only applies where a joining fee is actually charged |
+| 3 | A lapsed member who rejoins can use a code again | **Once per joining fee, not once per lifetime.** (The Guild's document says "once by a user". We follow the email.) |
+| 4 | A referral code and a goodwill waiver (for example a free branch) can both apply, but only on the phone. Online there are no other discounts. The branch comes before the summary page, so the goodwill waiver comes first | They discount different lines, so order does not change the price. Staff-only waivers need a staff route (see 2.2, point 3) |
+| 5 | The £10 applies to International membership too | International membership is not payable online (no fixed price), so it reaches International joiners through the staff route only |
+| 7 | Discountable: the joining fee, additional branches, badges, window stickers, certificates, bundles, and the option to waive the £5 adjustment fee. Never the membership fee or insurance | The code list in 3.2. Accreditation fees are not discountable either |
+| 8 | A membership extras discount lasts only the year it was bought and is not applied at renewal | Branch discount: Stripe coupon `once` (yearly) or `repeating` for 12 months (monthly). Other extras are one-off anyway |
+| 9 | On a monthly plan the discount is spread over the first 12 payments | Matches how one-off lines are already spread (3.1) |
+| 10 | A wrong or out-of-date code shows "That code is not valid". A school code whose school has expired still gives the student the £10 | **Do not reject a code because the school's accreditation has expired.** The portal must not rely on `Referral_Code_Active` meaning "school is current" (to confirm in the CRM) |
+| 11 | Follow the same split as the fee (£38 zero-rated, £17 standard-rated) | Settled. Largely moot, because the membership fee is never discounted. It decides how a discount on a mixed-rate line is split if one is ever allowed |
+| 12 | Any staff member may enter a code in the widget and on the link | No permission tiers. Every use is still recorded (13) |
+| 13 | Yes, record every waiver: who, what and why | A discount record on every staff-applied waiver (3.5) |
+| 30 days | The 30-day rule always applies | Implement as 30 days after the expiry date |
 
 ### 2.2 Conflicts with the portal as built
 
-1. **The one-month renewal rule is not enforced.** The document says a renewal more than one month after expiry pays a new Joining Fee. The portal waives the fee for any owned `previousId`, however long ago the membership expired. The same applies to the GTi Student upgrade (the student-specific checks are parked, section 6): the portal does not check that the previous membership was a Student membership, or that it was active or within one month of expiry. *Needs a rule in `catalogue.js`, driven by the expiry date, with no code involved.*
-2. **Insurance has no Joining Fee line.** The document says an applicant for "Beauty Guild insurance or membership" gets £10 off the Joining Fee. In the portal, standalone insurance needs a current Full membership and never charges a Joining Fee. The fee only appears on a new membership, which may be bought with insurance. So a referral code on a standalone insurance purchase has nothing to discount. *Question for the Guild (question 2).*
-3. **Monthly plans spread the Joining Fee and extras over 12 payments** as inline monthly lines. A document-style "£10 off the Joining Fee" has to work with that. *See 3.1.*
-4. **No Stripe Customer is created.** Checkout is opened with `customer_email`, so Stripe makes a new Customer per payment. Stripe rules such as "first-time customer" and "this code is for one customer" depend on a Customer that persists. *See 3.4.*
-5. **The £25 voucher spends on GTi courses, which the portal cannot yet sell.** Parked, see section 6.
-6. **A code that discounts a recurring line would renew at the discounted price.** Renewals charge the same amounts as year one (open decision in creator-payments-app.md). If the portal simply lowered a recurring line's amount, the lower price would repeat every year. *See 3.1.*
-7. **Creator's invoice JSON has an empty `discounts` array.** It needs defining before any code goes live (see 3.5).
-8. **Phone applications.** The document says staff enter codes for phone applications. The portal needs a signed-in customer, so how staff take phone applications in V2 is not defined. *Question for the Guild (question 11).*
+1. **The 30-day rule is not enforced.** The portal waives the joining fee for any owned `previousId`, however long ago the membership expired. After the Guild's rule, a membership expired more than 30 days ago must pay the fee again (and may then use a referral code). *Needs a rule in `catalogue.js`, driven by the expiry date.*
+2. **Monthly plans spread the joining fee and extras over 12 payments** as inline monthly lines. A "£10 off the joining fee" has to work with that. *See 3.1.*
+3. **There is no staff route.** The portal needs a signed-in customer. The phone widget and payment link are being built, and they need an endpoint that only staff can call, that applies waivers and voucher codes, and that records who and why. *Design in 3.6.*
+4. **The additional branch is a recurring line.** A branch discount must last one year only. Lowering the line would repeat the discount at every renewal (renewals charge the same amounts as year one). *See 3.1.*
+5. **The £5 adjustment fee is not in the catalogue.** It belongs to the mid-term changes workstream. A waiver option for it needs the item to exist first. *See 3.8.*
+6. **Creator's invoice JSON has an empty `discounts` array.** It needs defining before any discount goes live (3.5).
+7. **Creator's per-item amounts (`joining_fee_amount`, `branch_addon_amount`, and so on) are the charged amounts.** With a discount they need the list price and the discount separately, or Books cannot show the discount.
 
 ---
 
 ## 3. Technical questions, with a recommendation each
 
-Stripe behaviour below is from Stripe's documented model. Where it matters I have marked **(verify)**, meaning it must be checked in Stripe test mode before it is relied on. Section 5 lists those checks.
+Stripe behaviour below is from Stripe's documented model. Where it matters I have marked **(verify)**, meaning it must be checked in Stripe test mode before it is relied on. The appendix lists the checks.
 
 ### 3.1 How a Stripe discount behaves on a subscription, and on a monthly plan
 
-**The model.** A Coupon is either a percentage or a fixed amount (GBP), with a duration:
-- `once`: the first invoice only.
-- `repeating`: the first N months.
-- `forever`.
+**The model.** A Stripe Coupon is a percentage or a fixed amount (GBP) with a duration: `once` (the first invoice only), `repeating` (the first N months) or `forever`. It can be limited to named Stripe Products (`applies_to`).
 
-It can be limited to named Stripe Products (`applies_to`). A Promotion Code is the customer-facing string that points at a Coupon, with its own expiry, redemption limit, and restrictions (see 3.4).
+**On a yearly purchase** the first invoice carries the first year's lines and any one-off lines. A `once` coupon covers that invoice, and the renewal pays full price. `forever` would discount every renewal and must never be used here.
 
-**On a yearly purchase** (subscription mode, one invoice a year):
-- Duration `once` discounts the first invoice and the renewals pay full price. This is almost always what the Guild means.
-- `forever` would discount every renewal. Do not use it unless the Guild asks for that.
-- A fixed amount scoped by `applies_to` to a product cannot take off more than that product's lines on the invoice.
-- One-off lines (the Joining Fee and extras on a yearly purchase) are added to the first invoice, so `once` covers them.
-
-**On a monthly plan** the portal builds every line as an **inline monthly price** with its own new Product each time, and a Stripe schedule drops the year-one lines at payment 13 (`ensureSchedule`). This breaks the obvious approach in three ways:
-1. **The Joining Fee is not on the invoice as £10.** It is about 84p a month for 12 months (£6.92 first payment for an Associate, £6.09 after). A `once` coupon of £10 would cap at the first invoice and the rest of the discount would be lost (Stripe does not carry unused coupon value forward).
+**On a monthly plan** the portal builds every line as an inline monthly price with a new Product each time, and a Stripe schedule drops the year-one lines at payment 13 (`ensureSchedule`). Three problems follow for a Stripe coupon:
+1. **The joining fee is not on the invoice as £10.** It is about 84p a month for 12 months. A `once` coupon of £10 would cap at the first invoice and the rest of the discount would be lost.
 2. **Inline lines have no stable Product ID**, so `applies_to` cannot name them. A fixed coupon would take money off the membership and the admin fee as well.
-3. **The schedule may drop the discount.** `ensureSchedule` rebuilds the phases from items only. A discount on the subscription may not survive onto the schedule's phases unless it is passed through **(verify)**.
+3. **The schedule may drop the discount.** `ensureSchedule` rebuilds the phases from items only **(verify)**.
 
-A third consequence of the monthly arithmetic: if a coupon is applied on top of the plan's own rounding (each payment rounded up to the next penny, pence shared out by `allocate`), the discount and the rounding no longer reconcile to a number the Guild can state.
+**What can be discounted, and how** (the Guild's list, answer 7):
 
-**Recommendation.** Use one rule, based on what the line is:
+| Line | Kind | How the discount is applied |
+|---|---|---|
+| Joining fee (`MEM-JOIN`) | One-off (`year_one`) | **The portal leaves the line out** (the £10 code and a staff waiver both clear it in full). On a monthly plan this happens before `splitMonthly` runs, so the first payment on the quote is exactly what Stripe takes |
+| Badge, sticker, certificate, bundle | One-off (`year_one`) | **The portal lowers the line's amount** before the plan is split. On a monthly plan, the discount is spread over the first 12 payments, as the Guild wants (answer 9). Nothing carries into renewal because the line does not recur |
+| Additional branch (`MEM-BRANCH`) | **Recurring** (`ongoing`) | **A Stripe coupon the portal creates for that checkout**: a fixed amount equal to the discount, `once` on a yearly purchase, `repeating` for 12 months on a monthly plan (the monthly share). **Never** lower the branch line itself, because the lower price would repeat every year |
+| £5 adjustment fee | One-off, mid-term | Part of the mid-term changes workstream: the portal (or the change flow) leaves the fee out, with the waiver recorded |
 
-| Line | How the discount is applied |
-|---|---|
-| One-off line on a yearly or one-off purchase (Joining Fee, extras, additional venue) | Stripe-native coupon, `once`, scoped with `applies_to` to the catalogue Product; or the portal lowers the line (either is exact) |
-| Joining Fee and extras on a **monthly** plan | **The portal lowers the year-one line before `splitMonthly` runs**, so the 12 shares are rounded once, correctly, and the first payment shown on the quote is the payment Stripe takes |
-| A **recurring** line (membership, branch, accreditation, insurance) | Stripe-native coupon with duration `once` (yearly) or `repeating` for 12 months (monthly). **Never** lower the recurring line itself, because the lower amount would repeat at every renewal |
-
-In phase 1 no code touches a recurring line, because the document asks for none on the membership fee itself. Bespoke vouchers might (the Guild to say, question 5). That is why recurring-line discounts are phase 3, not phase 1.
-
-If monthly bespoke vouchers on extras matter, the cleanest later change is to send extras as price data against **one stable Stripe Product per SKU** (`price_data.product`), so `applies_to` can name them. The SKU would then also sit on the Product permanently. That is a change to `checkout.js`, noted here rather than assumed.
+Why a per-checkout coupon for the branch and not a synced code: the branch line has no stable Product, so a shared coupon could not be limited to it. A fixed amount equal to the discount (never more than the branch price) discounts only what it should, whatever else is on the invoice. It is created by the portal at checkout, carries the voucher id in its metadata, and is used once.
 
 ### 3.2 Which lines a code may discount, and the VAT and IPT effect
 
-**Which lines.** A code should list the price list codes it may discount, never "everything". Suggested defaults:
+**Which lines.** Each code lists the price list codes it may discount.
 
 | Code type | May discount | Never |
 |---|---|---|
 | School referral | `MEM-JOIN` only | everything else |
-| Bespoke voucher | A list chosen in the CRM from: `MEM-BRANCH`, `MEM-BUNDLE`, `MEM-CERT`, `MEM-BADGE`, `MEM-STICKER`, `MEM-JOIN`, membership levels, accreditation, `ACC-VENUE` | `MEM-ADMIN`, `INS-*`, `CALC-*`, `INS-IPT`, named employee fees |
+| Bespoke voucher or staff waiver | From `MEM-JOIN`, `MEM-BRANCH`, `MEM-BUNDLE`, `MEM-CERT`, `MEM-BADGE`, `MEM-STICKER` (and the £5 adjustment fee once it is in the catalogue) | Membership fees, accreditation (`ACC-*`), `MEM-ADMIN`, `INS-*`, `CALC-*`, `INS-IPT`, named employee fees |
 
-The admin fee is excluded because it is a charge for paying monthly. The employee fee is excluded because it is a membership fee that sits outside the premium; the Guild can reverse this.
+**IPT.** Because no code can touch an insurance premium, the portal's IPT calculation (12% of the net premium total, rounded once, sent as `INS-IPT`) is unaffected. A membership bought with insurance can still use a code on the joining fee or extras. If the Guild ever wants an insurance discount, the portal would have to discount the premium **before** it rates IPT, and the CRM policy would need both the list premium and the discounted premium. That is separate work, not planned.
 
-**VAT.** Portal prices are gross (VAT included). A discount is therefore a gross amount:
-- On the Joining Fee (standard-rated), the VAT comes down by one sixth of the discount: a £10 discount is £8.33 net and £1.67 VAT.
-- On a membership fee (£38.00 zero-rated, £17.00 standard-rated), the existing Creator rule is 38/55 zero-rated and the rest standard-rated, with rounding on the standard line. A discount on that line would follow the same split by default. **Finance must confirm** this, because a Guild may prefer to treat the discount as coming off the standard-rated part only (question 10).
-- The invoice must end up equal to Stripe's total. This is the same rounding rule Creator already uses.
-
-**IPT.** A discount on an insurance premium changes the IPT, and the portal has already calculated the IPT before Stripe sees it (IPT is 12% of the net premium total, rounded once, sent as the inline line `INS-IPT`). A Stripe coupon cannot fix this: it would discount the premiums and leave IPT calculated on the old figure, or discount IPT too, neither of which is correct tax.
-
-**Recommendation.** The document does **not** ask for any discount on an insurance premium. So:
-- No code may discount insurance premiums, IPT, or the named employee premium. This is a hard rule in the code list above, and a code with an insurance SKU is refused when it is created.
-- If the Guild later asks for it, the **portal** must apply the discount **before** it rates IPT (discounted premium first, then IPT at 12% of that, rounded once), and then send both to Stripe as ordinary inline lines. The CRM policy would then also need both the list premium and the discounted premium, because underwriting needs the true premium. Treat that as a separate piece of work.
-
-A discount on a **membership with insurance** bought together is fine as long as it targets non-insurance lines. The IPT stays untouched.
+**VAT.** Portal prices are gross (VAT included), so a discount is a gross amount:
+- On the joining fee and the extras (standard-rated), VAT comes down by one sixth of the discount: £10 off is £8.33 net and £1.67 VAT.
+- On a membership fee the Guild's rule is the same split as the fee (£38 zero-rated, £17 standard-rated, Helen Delaney, 26 October). No code touches the membership fee today, so this only matters if that changes.
+- The invoice must end up equal to Stripe's total (the rounding rule Creator already uses).
 
 ### 3.3 Duration on renewals
 
-Renewals use the same inline amounts as year one (no re-rating). A code must therefore never be `forever` by accident:
-- Referral and one-off extras are one-off lines anyway, so nothing carries into renewal.
-- If a bespoke voucher is ever allowed on a recurring line, it must say "first year only" or "for as long as" in the CRM, and the CRM form must map that to `once` or `repeating` or `forever`. Default `once`.
+Renewals use the same inline amounts as year one (no re-rating). So:
+- Every discountable line is a one-off except the branch, so a discount on those lines never carries into renewal.
+- The branch discount is a `once` coupon (yearly) or a 12-month coupon (monthly). The Guild confirmed it must last that year only (answer 8).
+- `forever` is never used.
 
 ### 3.4 Once per user, and first-time-customer rules
 
-What Stripe can do on a Promotion Code:
-- `max_redemptions`: a total count across everyone.
-- `expires_at`.
-- `restrictions.first_time_transaction`: only customers with no earlier successful payment.
-- `restrictions.minimum_amount` (with currency).
-- `customer`: only that Stripe Customer can use the code.
-- The Coupon has its own `max_redemptions` and `redeem_by`.
+**The rule the Guild gave:** a code is used **once per joining fee**, not once per lifetime. A lapsed member who rejoins pays a new joining fee and can use a code again (answer 3). A code can be used by any number of people.
 
-What Stripe does **not** do: "each customer may use this shared code once". Stripe cannot express "unlimited uses overall, once per customer" for an ordinary shared code. That is exactly the school referral rule and the bespoke voucher rule.
+**How to enforce it.**
+1. The code can only matter where the portal is about to charge a joining fee (a new person, or a membership expired more than 30 days). That already limits it, with no extra rule.
+2. The portal records each redemption in the CRM against the Contact and the application (code, date, session, payment status, who applied it), so a second code cannot be added to the same application, and the Guild can report on it.
+3. Stripe's own limits are not used for this. Stripe cannot say "unlimited uses overall, once per customer" for a shared code, and the portal opens Checkout with `customer_email`, which makes a new Stripe Customer for each payment. Customer-based rules in Stripe therefore have nothing to hold on to.
+4. **Guard against guessing.** Referral codes can be five-digit numbers. The code check needs a rate limit per user (for example 10 wrong codes an hour) and one message for every failure: "That code is not valid" (answer 10). The message does not say whether the code exists, has expired or is used up.
+5. **School expiry.** A code whose school has expired is still valid for the student (answer 10). The portal accepts any referral code found on a school Account. Whether a code can be withdrawn on purpose, for example after misuse, is a question for the Guild (section 4).
 
-Why this matters here:
-- The portal passes `customer_email` and so creates a new Stripe Customer per payment. A returning member looks like a first-time customer to Stripe, and a `customer`-restricted code cannot be used, because there is no Customer to restrict it to. **(verify)** whether Checkout recognises an earlier Customer by email; do not rely on it.
+A persistent Stripe Customer per Contact would still help cancellations and the Stripe billing portal, but it is not needed for discounts. Recorded as optional work in phase 3.
 
-**Recommendation.**
-1. **The portal enforces once-per-user itself.** It records every redemption in the CRM against the Contact (code, date, session, payment status) and refuses a second use. "User" means the CRM Contact, not the browser and not a Stripe Customer.
-2. For the referral code, the rule is nearly free: a Joining Fee is only charged to a new member, so a code can only matter once. Still record it, because a member who lapses for over a month pays a Joining Fee again (question 3).
-3. **Personal vouchers (for example the £25 voucher, once GTi is ready) are unique codes**, one per member, with `max_redemptions = 1` and `expires_at` set to the membership expiry. Stripe then enforces single use atomically, and no Customer is needed. Binding to a Customer is optional later.
-4. **Introduce a persistent Stripe Customer per Contact** (store `Stripe_Customer_ID` on the Contact and pass `customer` instead of `customer_email`). It is a change to checkout, but it also helps the cancellations work, the Stripe billing portal, and `first_time_transaction`. It is **not** required for phase 1.
-5. **Limits at the moment of use.** Two checkouts opened at once can both pass a portal check. For referral codes this does not matter (no cap). For capped bespoke vouchers, rely on Stripe's `max_redemptions`, which Stripe applies atomically.
-6. **Guard against guessing.** Referral codes can be five-digit numbers, which are easy to try. The code check needs a rate limit per user (for example 10 wrong codes an hour) and one neutral message for every failure ("That code is not valid"), without saying whether it exists, has expired, or is used up.
+### 3.5 Who creates codes, and how Books records the discount
 
-### 3.5 Who creates the Coupon and Promotion Code, and how Books records the discount
+**The CRM is the only list of codes.** The Guild already manages vouchers in a separate section of the CRM (Enki). So:
+- School referral codes stay on the school Account (`Referral_Code`).
+- Bespoke vouchers are a CRM `Voucher` record (code, discount, allowed SKUs, start and end date, usage limit, restrictions such as members only). A CRM `Voucher Redemption` record is written for each use.
+- Because vouchers are staff-only, **no Stripe Promotion Codes are synced**. This differs from the earlier direction ("generated from the CRM and synced to Stripe so they can be used at checkout"), which assumed customers would type them at Stripe Checkout. If the Guild later opens vouchers to customers online, a Promotion Code sync from Creator is the way to add it; section 3.6 says what would change.
+- The portal reads the Voucher record, checks it (dates, limit, restrictions, allowed SKUs), and prices the discount. It creates a Stripe coupon only for a branch discount (3.1).
+- Voucher codes and referral codes must not share a namespace: the CRM refuses a voucher code equal to a referral code.
 
-| Option | For | Against |
-|---|---|---|
-| **Creator (Deluge)** | Creator already owns the CRM-to-Stripe-to-Books chain, and runs on a CRM trigger (a Voucher record, or an accreditation becoming Active).  | Another Stripe key and API surface in Deluge. Needs the same idempotency care as V1 (do not create twice) |
-| **Portal function** | Already holds the Stripe key | The portal function is a customer-facing request path. It should not mint codes on its own, and it does not know when an accreditation turned Active |
-| **CRM Deluge directly** | Short | Hides business logic in CRM scripts, duplicates what Creator does |
-
-**Recommendation: Creator creates the Coupon and Promotion Code**, from a CRM `Voucher` record, and writes `Stripe_Coupon_ID`, `Stripe_Promotion_Code_ID` and `Sync_Status` back to it. Rules:
-- Idempotent: one Voucher record maps to one Promotion Code. A retry finds the existing one by code, never creates a second.
-- The CRM record is the source of truth (the document's "separate section" that controls vouchers). The CRM, not Stripe, holds who a code was issued to.
-- Metadata on the Coupon: `voucher_id`, `sku_list` (the price list codes it may discount), `issued_to_contact_id` when personal.
-- Stripe codes are case-insensitive and must be unique among **active** codes. School referral codes are not synced, so they cannot collide. Bespoke codes need a uniqueness check in the CRM.
-- The portal never creates Stripe codes. It only reads them.
-
-**How Books records it.** Creator's invoice JSON already reserves a `discounts` array. Define it as one object per discount:
+**How Books records it.** Creator's invoice JSON already reserves a `discounts` array. Define one object per discount:
 
 ```json
-{"code": "SPRING10", "promotion_code_id": "promo_...", "coupon_id": "...", "amount": "10.00", "applies_to_sku": ["MEM-JOIN"], "source": "stripe | portal_referral"}
+{"source": "referral | voucher | staff_waiver", "code": "SIENNAX", "reason": "text for staff waivers", "applied_by": "staff user or customer", "amount": "10.00", "sku": "MEM-JOIN", "stripe_coupon_id": "only for a branch discount"}
 ```
 
-- For Stripe-native discounts, read it from the Stripe invoice: `lines[].discount_amounts` and `total_discount_amounts`, alongside the expanded fetch Creator already does.
-- For a portal-priced discount (the referral), Stripe never sees a discount, so the portal puts it in the Checkout metadata (`discount_code`, `discount_amount`, `discount_sku`, `referral_school_id`) and Creator copies it into `discounts`.
-- In Books, push the **list price on the line plus a line-level discount**, so the VAT split follows the line and the invoice total equals Stripe's. Use the existing get-only item lookup. The discount must not create an item.
-- The Books report then shows list price, discount and net income per code.
+- The portal passes it in the Checkout metadata (a single JSON key, as the metadata limit is 50 keys) alongside the list price and the discount for each line. Creator copies it into `discounts`.
+- For a branch discount done with a Stripe coupon, Creator can also read it from the Stripe invoice (`lines[].discount_amounts`, `total_discount_amounts`).
+- In Books, push the **list price on the line plus a line-level discount**, so the VAT split follows the line and the invoice total equals Stripe's. Use the existing get-only item lookup. A discount must not create an item.
+- The Books report then shows list price, discount and net income per code or per reason.
+- **Waivers are recorded the same way**, so "who waived what and why" (answer 13) is the same record as a voucher, with `source: staff_waiver`, the staff member and a reason.
 
-### 3.6 Should the portal validate the code itself and pass it on the session, or turn on Stripe's own code box?
+### 3.6 Should the portal validate the code itself, and where does it go?
 
-**Recommendation: the portal validates, shows the discount in the quote, and sends it on the session. Do not enable `allow_promotion_codes`.**
+**Recommendation: the portal validates every code, shows the discount in the quote, and prices it. Do not use Stripe's own code box (`allow_promotion_codes`).**
 
 Reasons:
-1. **The quote and price panel need the figure before the customer leaves for Stripe.** `GET/POST /portal/checkout/quote` is a server-built summary. With Stripe's own box, the customer sees the true price only on Stripe's page.
+1. **The quote and price panel need the figure before the customer leaves for Stripe.** With Stripe's box the customer sees the true price only on Stripe's page.
 2. **Referral codes are not Stripe objects.** They would not work in Stripe's box at all.
-3. **Monthly plans and the Joining Fee** need the portal to price the discount (3.1). Stripe's box cannot do that.
-4. **Stripe accepts one coupon or promotion code per session** (verify against the pinned API version `2026-06-24.dahlia`), and `allow_promotion_codes` cannot be combined with a coupon passed in `discounts`. A portal-owned box lets the portal decide the stacking rules.
-5. **Eligibility by service.** The portal knows what is in the basket and whether the customer is new. Stripe's box does not, so it would accept a code on lines it should not touch.
-6. **One neutral error message and a rate limit** (3.4) are only possible if the portal owns the box.
+3. **Monthly plans and the one-off lines** need the portal to price the discount (3.1). Stripe's box cannot do that.
+4. **Eligibility.** The portal knows what is in the basket and whether a joining fee is being charged. Stripe's box does not.
+5. **One message and a rate limit** (3.4) are only possible if the portal owns the box.
 
-Design in outline:
+**Two entry points.**
+
+| Entry point | Who | What it accepts |
+|---|---|---|
+| **Customer code box** on the Join page | The customer, signed in or as a guest | School referral code only |
+| **Staff route** for the phone payment widget and the payment link | Any Guild staff member | Referral code, bespoke voucher code, and waivers (joining fee, free or discounted extras, the £5 adjustment fee). A reason is required for a waiver, and the staff member is recorded |
+
+Outline:
 - The quote and pay endpoints accept an optional `code`. The portal normalises it (trim, case-insensitive).
-- Order of lookup: (a) a school referral code in the CRM Accounts (`Referral_Code`, `Referral_Code_Active`), then (b) a Stripe Promotion Code (`GET /v1/promotion_codes?code=...&active=true`). Referral codes and vouchers must not share a namespace; the CRM must refuse a voucher code equal to an existing referral code.
-- The quote returns `discount: {code, label, amountPence, lines}` plus a customer-readable reason when a code is refused.
-- The Checkout session carries the Stripe promotion code in `discounts[0][promotion_code]` for Stripe-native discounts, or has the lowered line for a portal-priced one, and the discount in the metadata either way.
-- **A session that carries a code should expire sooner than 24 hours** (for example 30 minutes), so a capped voucher is not held up by an abandoned checkout.
-- The portal must still re-check the code when the session is created, not trust the quote.
+- Lookup for a customer: a school referral code on the CRM Accounts. A staff request may also match a CRM Voucher.
+- The quote returns `discount: {code, label, amountPence, lines}` plus "That code is not valid" when refused.
+- The Checkout session carries the discount in the lowered lines (or the branch coupon) and in the metadata.
+- The portal re-checks the code when the session is created, not only at the quote.
+- The staff route must be a separate endpoint that only a staff identity can call. How staff are identified in the widget is part of the widget build and must be settled before phase 2.
 
 ### 3.7 Where the code box goes
 
 | Page | Where | Notes |
 |---|---|---|
-| **Join (`/membership/buy`)** | A "Have a code?" link in the price panel, above the Pay step, after the add-ons | Shows the discount as its own line in the panel and in the quote summary. School referral code goes here. A guest's code is kept in the browser tab like their other answers, and applied at the account checkpoint (a guest quote is indicative only: it can show the discount, never record a redemption) |
-| **Accreditation pay page (`/pay/accreditation/:recordId`)** | Same link beside the Annual or Monthly choice | Referral codes do not apply (no Joining Fee in the bundle). Bespoke vouchers might. |
-| **Insurance (`/insurance/buy`, and "Add insurance" on Join)** | Do not show a code box in phase 1 | The document gives no code that discounts insurance, and the IPT effect (3.2) makes it risky. On the Join page, a referral code covers the Joining Fee whether or not insurance is added |
-| **Add-ons (`membership_addon`)** | Phase 2, when bespoke vouchers on extras are live | |
-| **Renewal** | Nothing in phase 1 | The Joining Fee is already waived. A bespoke voucher may be wanted here (question 5) |
+| **Join (`/membership/buy`)** | A "Have a code?" link in the price panel, above the Pay step, after the add-ons | School referral code only. The discount shows as its own line in the panel and the quote. Shown only when a joining fee applies (a new person, or one lapsed more than 30 days). A guest's code is kept in the browser tab like their other answers and applied at the account checkpoint (a guest quote is indicative: it can show the discount, never record a redemption). A saved application must keep the code with the other answers |
+| **Accreditation pay page (`/pay/accreditation/:recordId`)** | No code box | The Guild gave no code for accreditation, and the bundle has no joining fee |
+| **Insurance (`/insurance/buy`, and "Add insurance" on Join)** | No code box | The Guild confirmed there are no online discounts on insurance. On the Join page, a referral code covers the joining fee whether or not insurance is added |
+| **Add-ons (`membership_addon`) and renewal** | No code box | Online vouchers are not offered. Staff handle goodwill discounts on the phone |
+| **Staff phone widget and payment link** | Code field and waiver controls, in the staff route | See 3.6 |
 
 ### 3.8 Smaller points
-- **A refund or cancellation** must reverse or void any voucher issued.
-- **Test mode.** Everything in the plan is first built against the Stripe test account and a test CRM record. A test code is needed (open item from the user).
-- **Records.** A `Voucher` module (code, type, discount, SKUs, validity, limit, issued to) and a `Voucher Redemption` module (Contact, code, session, invoice, amount, status) are needed in the CRM. Field design is not part of this review.
+- **A refund or cancellation** must reverse a redemption, so a released code can be counted correctly. This belongs to the cancellations workstream.
+- **The £5 adjustment fee** is not a catalogue item yet. A waiver option for it can only be built once the mid-term changes work defines it.
+- **Test mode.** Everything is first built against the Stripe test account, with a test school code and a test voucher created in the CRM by A2Z.
+- **Records.** A `Voucher` module and a `Voucher Redemption` module are needed in the CRM, and a waiver log (see 3.5). Field design is not part of this review. A2Z controls the CRM set-up.
 
 ---
 
-## 4. Questions the Guild must answer
+## 4. Questions for the Guild
 
-Written plainly, so they can go to the Guild as they are.
+### 4.1 Answered on 26 October
+Questions 1 to 5 and 7 to 13 are answered (section 2.1). Insurance, the joining fee and the online or phone split are settled by the Guild and by the user:
+- The joining fee is charged per person.
+- Customers do not enter bespoke vouchers online.
 
-**Referral codes and the Joining Fee**
-1. **Is the £10 off a fixed £10, always?** Or could a school's code ever be worth a different amount?
-2. **Where does the £10 come off when someone only buys insurance?** In the new portal, insurance is sold to people who already have Full membership, and they are not charged a Joining Fee. So a student buying insurance has no Joining Fee to take £10 off. Do you want the code to work only when someone is joining, or is something else meant?
-3. **What happens if a member lapses and comes back after more than a month?** They pay a new Joining Fee. Can they use a school code again, or only the first time they ever joined?
-4. **Can a student use a school code and a voucher on the same purchase?** If yes, which comes first?
+### 4.2 Still open, plain wording for the Guild
+1. **Can a school's code ever be switched off on purpose?** A school whose accreditation has expired still gives students the £10. Is there ever a reason to stop a code working, for example if it is being misused?
+2. **What reasons will staff give when they waive something?** Should the system offer a short list (for example goodwill, complaint, promotion) or free text?
+3. **Do you want a limit on how often staff can waive the joining fee for the same person?** For example once. Any staff member can do it today, with nothing recorded.
 
-**Vouchers**
-5. **Bespoke vouchers: which products can they ever discount?** The document names membership extras (branches, badges, window stickers, certificates, bundles). Is that the full list? Should a voucher ever reduce the membership fee, accreditation fees, the Joining Fee, or insurance? (We recommend never insurance.)
-6. **How long does a bespoke discount last?** Just the first payment, the first year, or every year? We assume the first year only, unless you say otherwise.
-7. **Can a monthly payer use a voucher?** If the voucher is £10 off a £30 badge and they pay monthly, do they get £10 off over the 12 months?
-8. **What should a customer see when a code is wrong, used up or out of date?** We suggest one message, "That code is not valid", for all cases, to stop people guessing codes. Is that acceptable, or do your staff need to tell the customer why?
-9. **Do you want a test code?** We need one referral code and one voucher code made in the CRM so we can test with real-looking data (we will test only in Stripe's test mode).
-
-**Finance**
-10. **How should a discount be split between the VAT rates?** The £10 off the Joining Fee is standard-rated, so VAT falls by £1.67. For a discount on a membership fee (part zero-rated, part standard-rated), should it follow the 38/55 split or come off the standard-rated part only?
-
-**Staff and phone applications**
-11. **How will staff take phone applications in the new portal?** The code box needs a signed-in customer. Will staff enter the application for the customer in the back office, or send the customer a link?
-12. **Which of the staff goodwill waivers need to be recorded?** (Joining Fee, the £5 adjustment fee, manual extras.) Staff apply these by hand today, with nothing recorded against a voucher. Do you want a record of who waived what and why, for audit?
+### 4.3 For us to confirm ourselves
+- What `Referral_Code_Active` means in the CRM (school current, or code on or off).
+- That a referral code is unique across all school Accounts.
+- How staff are identified in the phone payment widget.
 
 ---
 
@@ -253,36 +240,35 @@ Written plainly, so they can go to the Guild as they are.
 Each phase ships on its own and is tested in Stripe test mode first. Merges are the user's decision.
 
 ### Phase 0: rules the portal already breaks (no codes needed)
-- Enforce the one-month rule for renewals (2.2, point 1). The GTi Student upgrade check waits for GTi.
-- Decide how phone applications work (question 11).
-- **Needs from the Guild:** answers to 3 and 11. **Creator:** nothing. **Books:** nothing.
+- Enforce the 30-day rule: a membership expired more than 30 days ago pays the joining fee again (2.2, point 1).
+- **Needs from the Guild:** nothing further. **Creator:** nothing. **Books:** nothing.
 
-### Phase 1: school referral code, £10 off the Joining Fee
-- Portal: a `code` field on the quote and pay endpoints; the check against the school Account (`Referral_Code`, `Referral_Code_Active`); the discount lowers the `year_one` Joining Fee line before `splitMonthly` (so a monthly plan is exact); a "Have a code?" box on the Join page; the discount shown in the price panel and the quote; a rate limit and one neutral error; a CRM redemption record.
-- Checkout metadata: `discount_code`, `discount_amount`, `discount_sku`, `referral_school_id`.
-- Creator: copy the metadata into the invoice `discounts` array; the Books line discount.
-- **Guild:** answers to 1 to 4. **Creator:** the `discounts` shape (3.5) and the redemption record. **Books:** line-level discount for `MEM-JOIN`, with the VAT split checked by finance (question 10).
-- Done when: a yearly and a monthly purchase with a code both show the discounted Joining Fee in the quote, in Stripe's first payment, in the Creator invoice and in Books.
+### Phase 1: school referral code online, £10 off the joining fee
+- Portal: a `code` field on the quote and pay endpoints; the check against the school Account (accepting expired schools); the joining fee line is left out before `splitMonthly` runs (yearly and monthly are exact); a "Have a code?" box on the Join page, shown only when a joining fee applies; the discount shown in the price panel and the quote; a rate limit and one neutral error; a CRM redemption record; the code kept in a saved application.
+- Checkout metadata: the discount JSON (3.5) and the list prices.
+- Creator: copy the metadata into the invoice `discounts` array. Books: the line-level discount on `MEM-JOIN`.
+- Done when: a yearly and a monthly purchase with a code both show the joining fee waived in the quote, in Stripe's first payment, in the Creator invoice and in Books.
 
-### Phase 2: vouchers from the CRM (Stripe Coupons and Promotion Codes)
-- CRM: `Voucher` and `Voucher Redemption` modules.
-- Creator: create the Coupon and Promotion Code from a Voucher record, idempotently, and write the IDs and sync status back (3.5).
-- Portal: look up the Promotion Code, check eligibility (service, SKUs, member status), pass it as `discounts[0][promotion_code]` for yearly and one-off lines scoped by `applies_to`, and show it in the quote.
-- Scope: yearly and one-off extras only. Monthly plans refuse a voucher with a clear message until phase 3.
-- **Guild:** answers 5 to 9, and a test code. **Creator:** the sync function, `discounts` read from Stripe. **Books:** discount lines from Stripe invoices.
+### Phase 2: staff route for the phone widget and payment link
+- A staff-only endpoint: referral code, bespoke voucher codes, and waivers on the joining fee, the one-off extras and (when it exists) the £5 adjustment fee. A reason is required, and the staff member is recorded.
+- CRM: `Voucher`, `Voucher Redemption` and the waiver log. Creator: the `discounts` shape for vouchers and waivers.
+- Lowered one-off lines as in 3.1. A branch discount is not in this phase.
+- **Needs from the Guild:** the answers in 4.2, and a test voucher. **A2Z:** the CRM set-up and how staff are identified in the widget. **Creator and Books:** as phase 1, plus the waiver reasons in reports.
 
-### Phase 3: monthly plans, recurring lines, and the Stripe Customer
-- Prove in test mode what survives `ensureSchedule` (3.1); use stable Stripe Products for extras so `applies_to` works on monthly lines; coupon duration `repeating` for 12 months on monthly.
-- Add the persistent Stripe Customer per Contact (3.4, item 4).
-- **Guild:** questions 6 and 7 settled. **Creator:** store the Customer ID. **Books:** none beyond phase 2.
+### Phase 3: the recurring branch discount, and the Stripe Customer
+- The per-checkout Stripe coupon for a branch discount (`once` yearly, 12 months monthly).
+- Prove in test mode what survives `ensureSchedule`, and pass the coupon into the schedule phases if it does not.
+- Optional: a persistent Stripe Customer per Contact (helps cancellations and the billing portal; not required for discounts).
+- **Creator:** read branch discounts from the Stripe invoice. **Books:** none beyond phase 2.
 
 ### Later: GTi
 Parked in section 6.
 
 ### Not in this plan
-- Staff goodwill waivers, manual extras discounts and the £5 adjustment fee (mid-term changes workstream). None is a code.
+- Any discount on insurance premiums or IPT, on the membership fee or on accreditation fees (the Guild confirmed none is wanted).
+- Customer-entered bespoke vouchers online (staff-only by the Guild's answer).
 - Everything GTi (section 6).
-- Any discount on insurance premiums or IPT.
+- The £5 adjustment fee waiver until the mid-term changes workstream defines the fee.
 
 ---
 
@@ -290,10 +276,10 @@ Parked in section 6.
 
 The Guild is not ready for GTi, so none of this is in the build plan. It is kept here so it is picked up when GTi course booking is planned.
 
-- **£25 GTi voucher.** Unique to the member, single use, valid until their membership expires, spent as £25 off a practical GTi course or a £25 contribution to a theory-only one. Recommended design: Creator issues it as a unique Stripe Promotion Code (`max_redemptions = 1`, `expires_at` set to the membership expiry) from a CRM Voucher record. Issue trigger: "When an accreditation becomes active" is a Creator or CRM event. The document also says it is issued to anyone joining, renewing or upgrading. So the trigger set is: first paid invoice of a membership (new, renewal, upgrade) and an accreditation activation. Idempotent per Contact and per membership term.
-- **GTi Student upgrade.** The Joining Fee waiver applies if the student membership is active or within one month of expiry. Online it uses the referral code of the school of the most recent GTi enrolment, which needs GTi enrolment data the portal does not have. The portal also does not yet check that the previous membership was a Student membership.
+- **£25 GTi voucher.** Unique to the member, single use, valid until their membership expires, spent as £25 off a practical GTi course or a £25 contribution to a theory-only one. It is issued when someone joins as Associate, International or Full, renews, or upgrades from GTi Student, and when an accreditation becomes active. If customers are to type it in at checkout, the design is a unique Stripe Promotion Code (`max_redemptions = 1`, `expires_at` set to the membership expiry) created by Creator from a CRM Voucher record. The trigger set would be the first paid invoice of a membership (new, renewal, upgrade) and an accreditation activation, once per Contact per membership term.
+- **GTi Student upgrade.** The joining fee waiver applies if the student membership is active or within one month of expiry. Online it uses the referral code of the school of the most recent GTi enrolment, which needs GTi enrolment data the portal does not have. The portal also does not check that the previous membership was a Student membership.
 - **GTi pricing and bundles.** Member and non-member course prices, and the £25 school bundle, are catalogue and staff-set pricing, not codes.
-- **Bespoke vouchers on GTi courses and certificates.** Bespoke vouchers could later list GTi SKUs in their allowed list (3.2).
+- **Course vouchers.** The Guild said a course voucher lasts while it is available, generally a month, and members or the public can use it. This is a different life from a membership extras discount.
 - **Questions to ask the Guild when GTi starts:**
   - Where are the £25 vouchers held in the CRM today, and what is the module called?
   - Is the £25 voucher a code the member types in, or a credit applied for them? Should it also work on membership or insurance pages (we assume not)?
@@ -302,13 +288,10 @@ The Guild is not ready for GTi, so none of this is in the build plan. It is kept
 
 ## Appendix: checks to make in Stripe test mode before building
 
-Nothing below has been run. These are the assumptions that the recommendations above depend on:
+Nothing below has been run. These are the assumptions that the recommendations depend on:
 
-1. A coupon on a subscription Checkout session: does the pinned API version accept a single `discounts` entry with `promotion_code`, and refuse more than one?
-2. A `once` fixed-amount coupon that exceeds the first monthly invoice: confirm the unused value is lost.
-3. Does a subscription discount survive `ensureSchedule` (from-subscription schedule, then the phases update)? If not, pass `discounts` in each phase.
-4. Does `first_time_transaction` treat a returning email as a new customer when Checkout is opened with `customer_email`?
-5. `applies_to.products` against a stable Product, with `price_data.product` on a monthly line.
-6. A `customer`-restricted Promotion Code against a Customer created by the portal.
-7. Case-insensitivity and uniqueness of numeric and branded codes among active Promotion Codes.
-8. Invoice `lines[].discount_amounts` and `total_discount_amounts` as returned by the Creator fetch (with `expand`) on API version `2026-06-24.dahlia`.
+1. A subscription Checkout session where the joining fee line is left out, and where a line's amount is lowered (inline price data): does Checkout accept both in subscription mode?
+2. A per-checkout fixed-amount coupon (`once` on a yearly purchase, `repeating` for 12 months on a monthly plan) passed in `discounts` on the session: does Stripe accept it, and apply it to the first invoice or the first 12 invoices only?
+3. Does that subscription discount survive `ensureSchedule` (from-subscription schedule, then the phases update)? If not, pass `discounts` in each phase.
+4. Invoice `lines[].discount_amounts` and `total_discount_amounts` as returned by Creator's fetch (with `expand`) on API version `2026-06-24.dahlia`.
+5. If vouchers are ever opened to customers: whether Checkout accepts more than one coupon or promotion code, and whether a customer-restricted Promotion Code works with a Customer the portal creates.
