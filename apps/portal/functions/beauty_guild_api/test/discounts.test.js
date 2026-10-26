@@ -7,14 +7,14 @@ const { loadConfig } = require('../src/config');
 const { world, IDS } = require('./helpers/world');
 const { joiningFeeDue, daysSinceExpiry, normaliseCode, NOT_VALID, NOT_DUE } = require('../src/discounts');
 
-const ON = { PORTAL_DISCOUNTS_ENABLED: 'true', PORTAL_DISCOUNT_REFERENCE_FIELD: 'Accreditation_Reference' };
+const ON = { PORTAL_DISCOUNTS_ENABLED: 'true' };
 // The school's Accreditation Reference is the code. Account is the school.
 const SCHOOL = [
   {
-    id: '1011174000000000050',
-    Accreditation_Reference: 'ACC - 0140',
+    id: '1011174000003726033',
+    Name: 'ACC - 0155',
     Accreditation_Status: 'Verified',
-    Account: { id: '1011174000000000060', name: 'Test Academy' },
+    Account: { id: '1011174000003698036', name: 'Test Academy' },
   },
 ];
 // The school's accreditation has expired: the code must still work.
@@ -79,7 +79,7 @@ test('the 30 day rule: day 30 pays no joining fee, day 31 pays it', () => {
   assert.equal(daysSinceExpiry('garbage', today), null);
 });
 test('codes are the Accreditation Reference, in any spacing or case, and cannot carry search syntax', () => {
-  for (const same of ['ACC-0140', 'acc 0140', ' ACC - 0140 ', 'acc0140']) assert.equal(normaliseCode(same), 'ACC-0140');
+  for (const same of ['ACC-0155', 'acc 0155', ' ACC - 0155 ', 'acc0155']) assert.equal(normaliseCode(same), 'ACC-0155');
   for (const bad of [
     '',
     'a',
@@ -87,7 +87,7 @@ test('codes are the Accreditation Reference, in any spacing or case, and cannot 
     'x)or(y',
     'a,b',
     'ACC-',
-    '0140',
+    '0155',
     'x'.repeat(50),
     '(Referral_Code:starts_with:A)',
     'TESTCODE',
@@ -141,20 +141,20 @@ test('a valid school code waives the joining fee: yearly, and monthly to the pen
     world({ schools: EXPIRED_SCHOOL }),
     async ({ quote }) => {
       const plain = await quote({ ...BUY }),
-        yearly = await quote({ ...BUY, code: 'acc 0140' });
+        yearly = await quote({ ...BUY, code: 'acc 0155' });
       assert.equal(plain.totalPence, 6500);
       assert.equal(yearly.totalPence, 5500, 'code is case-insensitive and the expired school still gives the £10');
       assert.equal(joiningLine(yearly), undefined);
       assert.deepEqual(yearly.discount, {
-        code: 'ACC-0140',
-        label: 'Joining fee waived (code ACC-0140)',
+        code: 'ACC-0155',
+        label: 'Joining fee waived (code ACC-0155)',
         amountPence: 1000,
         line: 'joining_fee',
         lineName: 'Membership joining fee',
         indicative: false,
       });
       const monthlyPlain = await quote({ ...BUY, billing: 'monthly' }),
-        monthly = await quote({ ...BUY, billing: 'monthly', code: 'ACC-0140' });
+        monthly = await quote({ ...BUY, billing: 'monthly', code: 'ACC-0155' });
       assert.equal(monthlyPlain.totalPence, 692);
       assert.equal(monthly.totalPence, 609, 'built from the lines Stripe gets, so the first payment is exact');
       assert.equal(monthly.plan.firstPaymentPence, 609);
@@ -188,10 +188,10 @@ test('a code held by two schools is refused, never guessed', async () => {
     world({
       schools: [
         ...SCHOOL,
-        { ...SCHOOL[0], id: '1011174000000000051', Account: { id: '1011174000000000061', name: 'Other' } },
+        { ...SCHOOL[0], id: '1011174000000000051', Account: { id: '1011174000003698037', name: 'Other' } },
       ],
     }),
-    async ({ quote }) => assert.equal((await quote({ ...BUY, code: 'ACC-0140' })).codeResult.status, 'invalid'),
+    async ({ quote }) => assert.equal((await quote({ ...BUY, code: 'ACC-0155' })).codeResult.status, 'invalid'),
     ON,
   );
 });
@@ -203,10 +203,10 @@ test('about 10 wrong codes an hour per person, then a rate limit; the same wrong
       for (let i = 1; i < 10; i++)
         assert.equal((await quote({ ...BUY, code: 'ACC-100' + i })).codeResult.status, 'invalid');
       // That was 10 distinct wrong codes (WRONGA and WRONG1 to WRONG9). The next try is stopped, even a right one.
-      const stopped = await quote({ ...BUY, code: 'ACC-0140' });
+      const stopped = await quote({ ...BUY, code: 'ACC-0155' });
       assert.equal(stopped.codeResult.status, 'limited');
       assert.equal(stopped.totalPence, 6500);
-      assert.equal((await pay({ code: 'ACC-0140' })).status, 429);
+      assert.equal((await pay({ code: 'ACC-0155' })).status, 429);
     },
     ON,
   );
@@ -215,7 +215,7 @@ test('a code is ignored with a clear message when no joining fee is due', async 
   await withApp(
     world({ schools: SCHOOL, previousDeal: { Expiry_Date: day(-10) } }),
     async ({ quote }) => {
-      const q = await quote({ ...BUY, previousId: IDS.deal, code: 'ACC-0140' });
+      const q = await quote({ ...BUY, previousId: IDS.deal, code: 'ACC-0155' });
       assert.deepEqual(q.codeResult, { status: 'not_due', message: NOT_DUE });
       assert.equal(q.discount, undefined);
       assert.equal(q.joiningFee.due, false);
@@ -227,7 +227,7 @@ test('a lapsed member (31 days) can use a code on the joining fee they now pay',
   await withApp(
     world({ schools: SCHOOL, previousDeal: { Expiry_Date: day(-31) } }),
     async ({ quote }) => {
-      const q = await quote({ ...BUY, previousId: IDS.deal, code: 'ACC-0140' });
+      const q = await quote({ ...BUY, previousId: IDS.deal, code: 'ACC-0155' });
       assert.equal(q.discount.amountPence, 1000);
       assert.equal(q.totalPence, 5500);
     },
@@ -236,7 +236,7 @@ test('a lapsed member (31 days) can use a code on the joining fee they now pay',
 });
 test('with the switch off the code does nothing and no code box is offered', async () => {
   await withApp(world({ schools: SCHOOL }), async ({ quote }) => {
-    const q = await quote({ ...BUY, code: 'ACC-0140' });
+    const q = await quote({ ...BUY, code: 'ACC-0155' });
     assert.equal(q.totalPence, 6500);
     assert.equal(q.discount, undefined);
     assert.equal(q.codeResult, undefined);
@@ -247,7 +247,7 @@ test('no discount on accreditation, whatever code is sent', async () => {
   await withApp(
     world({ schools: SCHOOL }),
     async ({ quote }) => {
-      const q = await quote({ service: 'accreditation', recordId: IDS.acc, code: 'ACC-0140' });
+      const q = await quote({ service: 'accreditation', recordId: IDS.acc, code: 'ACC-0155' });
       assert.equal(q.discount, undefined);
       assert.equal(q.joiningFee, undefined);
       assert.equal(q.totalPence, 40900);
@@ -261,7 +261,7 @@ test('paying with a code puts one `discounts` metadata entry on the session and 
   await withApp(
     state,
     async ({ pay }) => {
-      const r = await pay({ code: 'acc 0140', billing: 'monthly' });
+      const r = await pay({ code: 'acc 0155', billing: 'monthly' });
       assert.equal(r.status, 201, JSON.stringify(r.body));
     },
     ON,
@@ -275,8 +275,8 @@ test('paying with a code puts one `discounts` metadata entry on the session and 
   assert.deepEqual(JSON.parse(meta.get('metadata[discounts]')), [
     {
       type: 'referral_code',
-      code: 'ACC-0140',
-      school_id: '1011174000000000060',
+      code: 'ACC-0155',
+      school_id: '1011174000003698036',
       accreditation_id: SCHOOL[0].id,
       item: 'MEM-JOIN',
       list_amount: '10.00',
@@ -291,22 +291,22 @@ test('a reference that was never issued (a draft or a rejected application) is n
   for (const Accreditation_Status of ['Draft', 'Rejected', '']) {
     await withApp(
       world({ schools: [{ ...SCHOOL[0], Accreditation_Status }] }),
-      async ({ quote }) => assert.equal((await quote({ ...BUY, code: 'ACC-0140' })).codeResult.status, 'invalid'),
+      async ({ quote }) => assert.equal((await quote({ ...BUY, code: 'ACC-0155' })).codeResult.status, 'invalid'),
       ON,
     );
   }
 });
-test('without the reference field set, codes cannot be checked and nothing is discounted', async () => {
+test('with the reference field switched off, codes cannot be checked and nothing is discounted', async () => {
   await withApp(
     world({ schools: SCHOOL }),
-    async ({ pay }) => assert.equal((await pay({ code: 'ACC-0140' })).status, 503),
-    { PORTAL_DISCOUNTS_ENABLED: 'true' },
+    async ({ pay }) => assert.equal((await pay({ code: 'ACC-0155' })).status, 503),
+    { PORTAL_DISCOUNTS_ENABLED: 'true', PORTAL_DISCOUNT_REFERENCE_FIELD: '' },
   );
 });
 test('paying without a code, or with the switch off, writes no redemption and no `discounts` key', async () => {
   for (const [env, body] of [
     [ON, {}],
-    [{}, { code: 'ACC-0140' }],
+    [{}, { code: 'ACC-0155' }],
   ]) {
     const state = world({ schools: SCHOOL });
     await withApp(state, async ({ pay }) => assert.equal((await pay(body)).status, 201), env);

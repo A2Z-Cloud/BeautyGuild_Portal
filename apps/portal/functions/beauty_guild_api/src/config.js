@@ -73,14 +73,9 @@ function loadConfig(env = process.env) {
     documentsEnabled: env.PORTAL_DOCUMENTS_ENABLED === 'true',
     // School referral code online (£10 off the joining fee) and the 30 day joining fee rule. Off unless 'true'. Needs billing on as well.
     discountsEnabled: env.PORTAL_DISCOUNTS_ENABLED === 'true',
-    // API name of the Accreditation Reference on Training_Centre_Accred, which is the school code. Falls back to the public verification
-    // field when that reads the same module. Unset: codes cannot be checked.
-    discountReferenceField: String(
-      env.PORTAL_DISCOUNT_REFERENCE_FIELD ||
-        (String(env.PUBLIC_SCHOOL_REGISTRATION_MODULE || '').trim() === 'Training_Centre_Accred'
-          ? env.PUBLIC_SCHOOL_REGISTRATION_FIELD
-          : ''),
-    ).trim(),
+    // API name of the Accreditation Reference on Training_Centre_Accred, which is the school code: `Name` (the autonumber). Set it to an
+    // empty value to stop codes being checked.
+    discountReferenceField: String(env.PORTAL_DISCOUNT_REFERENCE_FIELD ?? 'Name').trim(),
     workdriveApiDomain: httpsUrl(env.WORKDRIVE_API_DOMAIN, 'https://www.zohoapis.eu', 'WORKDRIVE_API_DOMAIN'),
     workdriveConnectionName: String(env.WORKDRIVE_CONNECTION_NAME || 'zohoworkdrive'),
     stripeSecretKey: String(env.STRIPE_SECRET_KEY || ''),
