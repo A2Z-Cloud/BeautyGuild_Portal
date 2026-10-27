@@ -143,6 +143,9 @@ function clean(raw) {
   for (const k of MONEY_KEYS) ins[k] = num(r[k]);
   for (const k of YES_NO_KEYS) ins[k] = yesNo(r[k]);
   ins.insRoute = ins.insSalon ? 'salon' : 'non_salon';
+  // Money, Buildings, Business Interruption and Property Away are only offered with Contents cover (Guild, 26 October 2026).
+  // The browser never sends them without it, and an answer that does is dropped rather than rated.
+  if (!ins.insContents) ins.insMoneyCover = ins.insBuildingsCover = ins.insBiCover = ins.insPropertyAwayCover = false;
   ins.insSalonCount = ins.insSalon ? Math.max(1, Math.floor(ins.insSalonCount) || 1) : 0;
   ins.insTeachingCover =
     r.insTeachingCover === 'standard' || r.insTeachingCover === 'additional' ? r.insTeachingCover : '';
