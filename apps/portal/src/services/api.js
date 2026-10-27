@@ -145,8 +145,6 @@ export const portalApi = Object.freeze({
     publicHttp ? (await publicHttp('/public/quote', { method: 'POST', body })).quote : unavailable('Pricing'),
   submit: async () => unavailable('CRM submission'),
   startCheckout: async body => billingReq('/', { method: 'POST', body }),
-  // After a monthly plan is paid for, asks the server to put it on its 12 month schedule. Safe to repeat.
-  finishCheckout: async sessionId => billingReq('/finish', { method: 'POST', body: { sessionId } }),
   resumePayment: async policyId => billingReq('/resume', { method: 'POST', body: { policyId } }),
   getDocuments: async (kind, id, path = '') =>
     documentHttp
