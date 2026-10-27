@@ -247,8 +247,12 @@ All four are answered (section 2.1, follow-up 1 to 4). A2Z proposes the waiver r
 
 **Proposed waiver reasons** (a CRM picklist the Guild can extend without a release, with an optional free-text note, required when the reason is Other): Goodwill Gesture, Complaint, Upgrade, Promotion, Payment Problem, Other. They are chosen in the CRM phone payment widget and on the payment link, and stored in the waiver log with the staff member.
 
-### 4.2a Open, arising from the follow-up
-1. **The £25 GTi voucher today.** New joins, renewals and upgrades through the new portal need to keep issuing it. The codes sit in the CRM `Discount_Voucher` module (27 October). Still to confirm from the examples Qudsiya offered: how a code is generated and its format, how the member is told, whether Enki also holds or reads the code, and what happens to a member's code when their membership is cancelled.
+### 4.2a £25 voucher: answered, and what is open
+Qudsiya's answers of 27 October are in phase 4 (section 5). Open:
+1. **Should the new system decide, or should staff approve each voucher?** Today a pop-up lets staff decline a new voucher when the member already has one. We propose it is automatic, and skipped when the member already has an active, unused voucher that overlaps the new term. Is that acceptable, and do staff still need to be able to issue or cancel one by hand?
+2. **How does Enki read vouchers, and who owns changing it?** Redemption stays in Enki until GTi is rebuilt, so Enki must be able to see a voucher created in the CRM (or the new system must write it into Enki). A2Z needs the Enki owner to say which.
+3. **When does the voucher end if a member cancels?** We understand it ends on the date the membership is due to cancel, not the date they ask. Please confirm.
+4. **Do vouchers for members who joined or renewed before the switch-over carry over?** They already exist in Enki and keep working there.
 
 ### 4.3 For us to confirm ourselves
 - What `Referral_Code_Active` means in the CRM (school current, or code on or off).
@@ -330,6 +334,25 @@ Built on the engine from 2a, and independent of the staff route.
 
 ### Phase 4: issue the £25 GTi voucher on verification
 Independent of the staff route. Mostly Creator and the CRM, so it can run in parallel with 2a and 3.
+
+**What the Guild told us about today's voucher (Qudsiya Talib, 27 October, with Enki screenshot).**
+- **Code:** 8 random upper-case hexadecimal characters, for example `7F15B4AE`. Staff can press Generate in Enki to replace a member's code with a new one (the old code stops working).
+- **Dates:** the voucher runs from the membership's **start** to its **end** (for example 03 Jul 2026 to 02 Jul 2027). Today an early renewal starts the voucher on the day it was processed, which leaves the member with two vouchers. The Guild wants the new voucher to start on the **renewal date** (the start of the new term), not the processing date.
+- **Settings in Enki:** title "£25 Off GTi Course Voucher", explanation "Get £25 off your next GTi Course by using the discount code.", reduction £25.00, usage Overall, max uses 1, shown in the member's portal.
+- **Approval:** when staff verify a membership Enki shows a pop-up to approve the voucher. Staff can decline when the member already has one (for example an Associate upgrading to Full).
+- **How the member learns of it:** no email today. Staff tell them on the phone, and the code appears under Discounts & Vouchers on the member's Dashboard. An email is wanted in future.
+- **Expiry and cancellation:** if a membership or insurance is not renewed the voucher is removed. Enki does not cancel it when a membership is cancelled; the new system must cancel it from the date the membership is due to cancel.
+
+**What this changes in the design.**
+1. **Code generator:** 8 upper-case hex characters, random, checked for clashes (case-insensitively) before saving.
+2. **Dates:** `Valid_From` is the start of the new term (the renewal date, not the payment date) and `Valid_To` is the end of the term (end of the expiry day, UK time). An early renewal therefore gives a second voucher only from the day the new term starts.
+3. **No second voucher while one is active:** skip issuing when the member already has an active, unused personal voucher that overlaps the new term. This covers an Associate upgrading to Full mid-term. It replaces Enki's manual pop-up (see question 1 below).
+4. **Cancellation:** the voucher is voided from the date the membership is due to cancel (set `Valid_To` to that date), not from the day the cancellation is requested.
+5. **Telling the member:** the member sees the voucher under Discounts & Vouchers on the portal Dashboard (the read-only route). The email is switched off by default until the Guild asks for it.
+6. **Display text:** the title and explanation are fixed text for this voucher type, because `Discount_Voucher` has no title field.
+7. **Staff regenerate:** a way to replace a member's code, as Generate does in Enki, is a later addition.
+
+**The big integration point.** Today the £25 vouchers live in Enki and are redeemed in Enki at GTi course checkout. GTi stays in Enki until it is rebuilt. So a voucher that exists only in the CRM `Discount_Voucher` module cannot be redeemed there. Either the new system also writes the voucher into Enki, or Enki is changed to read the CRM, until GTi moves. This must be settled before phase 4 can go live (question 2 below).
 **What.** Every member who joins, renews or upgrades from GTi Student keeps getting their individual £25 GTi voucher, now generated by the new system.
 
 **How.**
