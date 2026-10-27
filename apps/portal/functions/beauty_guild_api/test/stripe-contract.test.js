@@ -9,6 +9,7 @@
 //   STRIPE_TEST_KEY=sk_test_... npm run test:stripe        (in apps/portal)
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const plans = require('../src/plans');
 const { world, withApp, PRICE_TABLE } = require('./helpers/world');
 const { SCENARIOS } = require('./helpers/scenarios');
 
@@ -32,6 +33,11 @@ async function stripe(method, path, params) {
   if (!r.ok) throw new Error('Stripe ' + method + ' ' + path.split('?')[0] + ': ' + (body.error?.message || r.status));
   return body;
 }
+const post = (path, obj) =>
+  stripe('POST', path, {
+    body: plans.form(obj),
+    key: 'contract-' + Date.now() + '-' + Math.random().toString(36).slice(2),
+  });
 test('every price list code has one active Stripe price with the expected amount and interval', { skip }, async () => {
   assert.equal(Object.keys(PRICE_TABLE).length, 16);
   for (const [code, [pence, interval]] of Object.entries(PRICE_TABLE)) {
@@ -89,6 +95,94 @@ test(
       // Never leave a payable session open, even when an assertion fails.
       for (const id of made)
         await stripe('POST', '/checkout/sessions/' + id + '/expire', { body: '', key: 'expire-' + id }).catch(() => {});
+    }
+  },
+);
+
+// Phase 3 (docs/delivery/vouchers-review.md): the additional branch discount is a per-checkout fixed amount coupon.
+test(
+  'a branch coupon is accepted on a subscription Checkout Session and takes its amount off the first invoice only',
+  { skip, timeout: 120000 },
+  async () => {
+    const coupons = [];
+    let session;
+    try {
+      const coupon = await post('/coupons', {
+        amount_off: 500,
+        currency: 'gbp',
+        duration: 'once',
+        max_redemptions: 1,
+        name: 'ZZ contract test (safe to delete)',
+        metadata: { voucher_id: 'v-test', sku: 'MEM-BRANCH' },
+      });
+      coupons.push(coupon.id);
+      session = await post('/checkout/sessions', {
+        mode: 'subscription',
+        success_url: 'https://portal.example.test/ok',
+        cancel_url: 'https://portal.example.test/no',
+        line_items: [
+          {
+            quantity: 1,
+            price_data: {
+              currency: 'gbp',
+              unit_amount: 1500,
+              recurring: { interval: 'year' },
+              product_data: { name: 'ZZ test branch', metadata: { sku: 'MEM-BRANCH' } },
+            },
+          },
+        ],
+        discounts: [{ coupon: coupon.id }],
+      });
+      assert.equal(session.total_details.amount_discount, 500);
+      assert.equal(session.amount_total, 1000);
+    } finally {
+      if (session?.id) await post('/checkout/sessions/' + session.id + '/expire', {}).catch(() => {});
+      for (const id of coupons) await stripe('DELETE', '/coupons/' + id).catch(() => {});
+    }
+  },
+);
+
+test(
+  'a repeating 12 month branch coupon is on the subscription and takes its amount off the first invoice',
+  { skip, timeout: 120000 },
+  async () => {
+    let customer, subscription, coupon;
+    const products = [];
+    try {
+      coupon = await post('/coupons', {
+        amount_off: 83,
+        currency: 'gbp',
+        duration: 'repeating',
+        duration_in_months: 12,
+        max_redemptions: 1,
+        name: 'ZZ contract test (safe to delete)',
+        metadata: { voucher_id: 'v-test', sku: 'MEM-BRANCH' },
+      });
+      customer = await post('/customers', { name: 'ZZ contract test (safe to delete)' });
+      const pm = await post('/payment_methods/pm_card_visa/attach', { customer: customer.id });
+      await post('/customers/' + customer.id, { invoice_settings: { default_payment_method: pm.id } });
+      const product = await post('/products', { name: 'ZZ test branch', metadata: { sku: 'MEM-BRANCH' } });
+      products.push(product.id);
+      subscription = await post('/subscriptions', {
+        customer: customer.id,
+        items: [
+          {
+            quantity: 1,
+            price_data: { currency: 'gbp', unit_amount: 125, recurring: { interval: 'month' }, product: product.id },
+          },
+        ],
+        discounts: [{ coupon: coupon.id }],
+        expand: ['latest_invoice', 'discounts'],
+      });
+      assert.equal(subscription.status, 'active');
+      assert.equal(subscription.latest_invoice.total_discount_amounts[0].amount, 83, 'first payment');
+      const onSub = (subscription.discounts || []).map(d => d.source?.coupon?.id || d.source?.coupon || d.coupon?.id);
+      assert.deepEqual(onSub, [coupon.id], 'the subscription carries the coupon, which Stripe ends after 12 months');
+    } finally {
+      if (subscription?.id) await stripe('DELETE', '/subscriptions/' + subscription.id).catch(() => {});
+      if (customer?.id) await stripe('DELETE', '/customers/' + customer.id).catch(() => {});
+      if (coupon?.id) await stripe('DELETE', '/coupons/' + coupon.id).catch(() => {});
+      for (const id of products) await post('/products/' + id, { active: false }).catch(() => {});
     }
   },
 );

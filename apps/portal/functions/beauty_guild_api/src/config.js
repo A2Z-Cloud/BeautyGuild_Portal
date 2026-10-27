@@ -87,6 +87,8 @@ function loadConfig(env = process.env) {
     documentsEnabled: env.PORTAL_DOCUMENTS_ENABLED === 'true',
     // School referral code online (£10 off the joining fee) and the 30 day joining fee rule. Off unless 'true'. Needs billing on as well.
     discountsEnabled: env.PORTAL_DISCOUNTS_ENABLED === 'true',
+    // Redeeming a bespoke voucher (reserving a use of it) has its own switch, off until the field checks and end-to-end tests pass.
+    voucherRedemptionEnabled: env.PORTAL_VOUCHER_REDEMPTION_ENABLED === 'true',
     // API name of the Accreditation Reference on Training_Centre_Accred, which is the school code: `Name` (the autonumber). Set it to an
     // empty value to stop codes being checked.
     discountReferenceField: String(env.PORTAL_DISCOUNT_REFERENCE_FIELD ?? 'Name').trim(),

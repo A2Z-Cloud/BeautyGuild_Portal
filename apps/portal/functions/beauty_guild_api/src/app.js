@@ -39,6 +39,7 @@ function createApp({
   getCreatorHeaders,
   getAnalyticsHeaders,
   accreditationSleep,
+  discountRequestFor = null,
 }) {
   const loqate = createLoqate({ config, fetchImpl, log });
   const courses = createCourses({ config, getCrmHeaders, fetchImpl, now, log });
@@ -158,7 +159,9 @@ function createApp({
   registerCheckoutRoutes(app, {
     publicQuotesEnabled: config.publicQuotesEnabled,
     discountsEnabled: config.discountsEnabled,
+    voucherRedemptionEnabled: config.voucherRedemptionEnabled,
     discountReferenceField: config.discountReferenceField,
+    discountRequestFor,
     membershipChangesEnabled: config.membershipChangesEnabled,
     insuranceChangesEnabled: config.insuranceChangesEnabled,
     insuranceChangesWritesEnabled: config.insuranceChangesWritesEnabled,

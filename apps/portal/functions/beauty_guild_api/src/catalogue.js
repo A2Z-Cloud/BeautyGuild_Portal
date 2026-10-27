@@ -11,6 +11,7 @@ const insChange = require('./insuranceChange');
 const { saveRevision, markAwaitingPayment } = require('./insuranceRevisions');
 const insurance = require('./insurance');
 const { NOT_DUE } = require('./discounts');
+const { memberTypeOf } = require('./voucherAdapter');
 
 const ID = /^\d{10,25}$/;
 // How far ahead a start date may be, per service (UAT AL-INS-001). The same limit is used by the date pickers.
@@ -312,8 +313,10 @@ function oneMonthOn(day) {
 // of the member's last membership of any kind (Associate, International, Full Non-Salon or Full Salon): a gap of more than a month
 // pays it again (Guild, 26 October 2026). A membership still running has no gap. With no Contact, or no earlier membership, it is due.
 // Only Active Deals count as cover: a saved draft is not one.
-async function joiningFeeDue(req, crm, contactId, start) {
-  if (!contactId) return true;
+// since is the first day a new joining fee applies (a month after the last membership ended), or '' when there is no earlier membership. The
+// discount engine uses it to start the once-per-person waiver limit again for a new joining fee.
+async function joiningFeeInfo(req, crm, contactId, start) {
+  if (!contactId) return { due: true, since: '' };
   const deals = await crm(
     req,
     'Deals/search?criteria=' +
@@ -332,9 +335,8 @@ async function joiningFeeDue(req, crm, contactId, start) {
     .map(d => d.Expiry_Date)
     .sort();
   const last = ends[ends.length - 1];
-  return !last || start > oneMonthOn(last);
+  return { due: !last || start > oneMonthOn(last), since: last ? oneMonthOn(last) : '' };
 }
-
 // Insurance is rated here, not read from Stripe: each cover row and the IPT become inline price_data lines.
 // Nothing is created in the CRM until the member pays (beforePay runs on checkout only, never on a quote),
 // and a quote that needs the Insurance team (REFER) or cannot be offered online (STOP) is never payable.
@@ -574,9 +576,9 @@ SERVICES.membership = {
     // On a monthly plan the yearly price is divided by 12. The joining fee and the add-ons are spread over the first 12 payments only
     // (term year_one); the membership and any extra branches carry on (see plans.js).
     const lines = [{ item: 'membership_' + level + '_annual', quantity: 1, term: 'ongoing' }];
-    // Whether a joining fee is due is decided by joiningFeeDue (a gap of more than a month since the last membership ended).
-    const feeDue = await joiningFeeDue(req, crm, contact?.id, start);
-    // A school referral code takes the joining fee off. The line is left out here, before plans.splitMonthly runs, so yearly and monthly are exact.
+    // Whether a joining fee is due is decided by joiningFeeInfo (a gap of more than a month since the last membership ended).
+    const { due: feeDue, since: feeSince } = await joiningFeeInfo(req, crm, contact?.id, start);
+    // A school referral code takes the joining fee off. The line is added here and left out by the discount engine (discountEngine.js).
     let discount = null,
       codeResult = null;
     if (discounts && feeDue && input.code) {
@@ -586,7 +588,7 @@ SERVICES.membership = {
         codeResult = { status: 'applied', code: checked.code, indicative: checked.indicative };
       } else codeResult = { status: checked.status, message: checked.message };
     } else if (discounts && !feeDue && input.code) codeResult = { status: 'not_due', message: NOT_DUE };
-    if (feeDue && !discount) lines.push({ item: 'joining_fee', quantity: 1, term: 'year_one' });
+    if (feeDue) lines.push({ item: 'joining_fee', quantity: 1, term: 'year_one' });
     if (secondary.length) lines.push({ item: 'membership_branch', quantity: secondary.length, term: 'ongoing' });
     for (const [key, quantity] of Object.entries(addons)) lines.push({ item: ADDONS[key], quantity, term: 'year_one' });
     if (input.insurance && level === 'associate') throw NEEDS_FULL();
@@ -606,6 +608,9 @@ SERVICES.membership = {
       fingerprint: ins?.fingerprint,
       // What the checkout needs to price, show and record the code (see checkout.js).
       joiningFee: discounts ? { due: feeDue } : null,
+      // For the discount engine: the day this joining fee began to apply (for the once-per-person waiver) and the membership type being bought.
+      joiningFeeSince: feeSince,
+      memberType: memberTypeOf(level),
       discount,
       codeResult,
       metadata: ({ lines: priced, total, insuranceIds, fees, discountsEntry, quoteReference }) => {
