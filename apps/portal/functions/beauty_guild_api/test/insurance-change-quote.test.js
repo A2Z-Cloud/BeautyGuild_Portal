@@ -313,7 +313,7 @@ test('a payable change is saved as a Quoted revision with draft rows, dated from
       assert.equal(rev.Revision_Status, 'Quoted');
       assert.equal(rev.Requested_Effective_Date, iso(0));
       assert.match(rev.After_Quote_ID, /^QC-[0-9A-F]{16}$/);
-      assert.equal(rev.Name, undefined, 'no name unless a prefix is set');
+      assert.match(rev.Name, /^MTA QC-[0-9A-F]{16}$/, 'the mandatory name: the prefix and the quote id');
       // 15.00 + 179.25 premium, IPT on the net, the GBP 5 fee (VAT 0.83), not waived
       assert.equal(rev.Premium_Delta_Net, 194.25);
       assert.equal(rev.IPT_Delta, 23.31);
@@ -467,13 +467,13 @@ test('if a draft row cannot be written the revision is withdrawn, not left looki
     WRITES,
   );
 });
-test("a name prefix is used only when one is set, and a member cannot save against someone else's policy", async () => {
+test("a configured name prefix replaces the default, and a member cannot save against someone else's policy", async () => {
   const w = fixture();
   await withApp(w, async ({ save }) => assert.equal((await save(ASK({ addPeople: [SUB], ...ANSWERS }))).status, 201), {
     ...WRITES,
-    PORTAL_REVISION_NAME_PREFIX: 'MTA',
+    PORTAL_REVISION_NAME_PREFIX: 'CHG',
   });
-  assert.match(posts(w, 'Policy_Revisions')[0].Name, /^MTA QC-/);
+  assert.match(posts(w, 'Policy_Revisions')[0].Name, /^CHG QC-/);
   const other = fixture({
     deal: {
       id: DEAL,
@@ -492,4 +492,51 @@ test("a name prefix is used only when one is set, and a member cannot save again
     },
     WRITES,
   );
+});
+
+test('a referred request has a name too, and an increase records which row Creator ends and when', async () => {
+  const w = fixture();
+  await withApp(
+    w,
+    async ({ save }) => {
+      assert.equal((await save(ASK({ removePeople: ['p1'] }))).status, 201);
+      const [rev] = posts(w, 'Policy_Revisions');
+      assert.match(rev.Name, /^MTA QC-[0-9A-F]{16}$/, 'the name works before anything is priced');
+      assert.ok(rev.Name.length <= 120);
+    },
+    WRITES,
+  );
+  const inc = fixture({
+    covers: [
+      { id: 'c1', Cover_Code: 'MEDMAL', Premium_Net: 32.5, Status: 'Active' },
+      { id: 'c3', Cover_Code: 'BUSINESS_EQUIPMENT', Premium_Net: 65, Sum_Insured: 5000, Status: 'Active' },
+    ],
+  });
+  await withApp(
+    inc,
+    async ({ save }) => {
+      assert.equal((await save(ASK({ effectiveDate: iso(3), equipmentTier: 10000, ...ANSWERS }))).status, 201);
+      const details = JSON.parse(posts(inc, 'Policy_Revisions')[0].Request_Details);
+      assert.deepEqual(
+        details.endings,
+        [{ module: 'Insurance_Extension', id: 'c3', effectiveTo: iso(2) }],
+        'covered up to the day before',
+      );
+      const [row] = posts(inc, 'Insurance_Extension');
+      assert.equal(row.Effective_From, iso(3));
+      assert.equal(inc.puts.length, 0, 'the old row is left for Creator to end');
+    },
+    WRITES,
+  );
+});
+
+test('a revision name is always set, unique when there is no quote id, and never over 120 characters', () => {
+  const { revisionName } = require('../src/insuranceRevisions');
+  assert.equal(revisionName('MTA', 'QC-ABC'), 'MTA QC-ABC');
+  assert.equal(revisionName('', 'QC-ABC'), 'MTA QC-ABC', 'the default prefix');
+  const a = revisionName('MTA', null),
+    b = revisionName('MTA', null);
+  assert.match(a, /^MTA REQ-[0-9A-F]{10}$/);
+  assert.notEqual(a, b);
+  assert.equal(revisionName('X'.repeat(200), 'QC-ABC').length, 120);
 });

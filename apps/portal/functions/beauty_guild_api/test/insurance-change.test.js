@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { cleanChange, quoteChange, afterIns, quoteId } = require('../src/insuranceChange');
+const { cleanChange, quoteChange, afterIns, quoteId, dayBefore } = require('../src/insuranceChange');
 const { prorate } = require('../src/prorata');
 const { evaluateRules } = require('../src/insurance');
 
@@ -119,16 +119,26 @@ test('equipment: only a verified increase goes online, priced as the new level l
     'non-standard construction rates',
   );
 });
-test("Employers' Liability: added when not held; a held level that cannot be verified goes to the office", () => {
+test("Employers' Liability: added when not held; a held level is never verified online, whatever Cover_Option says", () => {
   const add = q({ elTier: 1 });
   assert.equal(add.outcome, 'PASS');
   assert.equal(add.premiumNetPence, pro(7500));
-  const held = cover({ covers: [{ id: 'c6', code: 'EMPLOYERS_LIABILITY', netPence: 7500, option: null }] });
-  assert.deepEqual(codes(q({ elTier: 3 }, held)), ['UNVERIFIED_COVER']);
-  const known = cover({ covers: [{ id: 'c6', code: 'EMPLOYERS_LIABILITY', netPence: 7500, option: 'Up to 1' }] });
-  const up = q({ elTier: 3 }, known);
-  assert.equal(up.outcome, 'PASS');
-  assert.equal(up.premiumNetPence, pro(12000) - pro(7500));
+  for (const option of [null, 'Up to 1', '1', 'Equipment band or EL band']) {
+    const held = cover({ covers: [{ id: 'c6', code: 'EMPLOYERS_LIABILITY', netPence: 7500, option }] });
+    assert.deepEqual(codes(q({ elTier: 3 }, held)), ['EL_OFFICE'], String(option));
+  }
+});
+test('what Creator ends is recorded: a replaced row and a removed person, each up to the day before the new cover starts', () => {
+  const swap = q({ removePeople: ['p1'], addPeople: [{ type: 'employee', firstName: 'Cy', lastName: 'Day' }] });
+  assert.deepEqual(swap.endings, [
+    { module: 'Insurance_Extension', id: 'c2', effectiveTo: '2026-10-06' },
+    { module: 'Insured_People', id: 'p1', effectiveTo: '2026-10-06' },
+  ]);
+  const up = q({ equipmentTier: 10000 });
+  assert.deepEqual(up.endings, [{ module: 'Insurance_Extension', id: 'c3', effectiveTo: '2026-10-06' }]);
+  assert.deepEqual(q({ treatments: ['spmu'] }).endings, [], 'an addition ends nothing');
+  assert.equal(dayBefore('2026-03-01'), '2026-02-28');
+  assert.equal(dayBefore('2028-03-01'), '2028-02-29');
 });
 test('a Salon policy, a monthly or unknown payment plan, no policy, no choice and missing names are not paid online', () => {
   assert.ok(codes(q({ treatments: ['spmu'] }, cover({ route: 'salon' }))).includes('SALON_NOT_ONLINE'));

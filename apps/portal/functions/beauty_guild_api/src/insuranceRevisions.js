@@ -10,6 +10,7 @@
 //     Payment comes with the checkout (R3-3). Approved, Scheduled and Applied are Creator's.
 //   - The same quote is saved once: a repeat returns the open revision. A change already in flight (Awaiting Payment, Approved,
 //     Scheduled) blocks a new one.
+const crypto = require('node:crypto');
 const { HttpError } = require('./errors');
 const { COVER_TYPE_BY_CODE, IPT_RATE } = require('./insurance');
 
@@ -35,6 +36,15 @@ function vatPence(lines, term) {
   }
   return vat;
 }
+
+// A readable, unique name. The quote id is the reference once a policy is known; a request that has none (nothing to quote yet) gets a
+// random request reference so the name is still unique.
+const revisionName = (prefix, quoteId) =>
+  (
+    String(prefix || 'MTA').trim() +
+    ' ' +
+    (quoteId || 'REQ-' + crypto.randomBytes(5).toString('hex').toUpperCase())
+  ).slice(0, 120);
 
 // read(path) -> rows, create(module, record) -> id, update(module, id, fields), all against the CRM.
 async function saveRevision({
@@ -93,9 +103,12 @@ async function saveRevision({
       netPence: i.netPence,
     })),
     removePeople: asked.removePeople,
+    // Rows Creator ends when it applies the revision, each covered up to and including effectiveTo (the day before the new cover starts).
+    endings: quote.endings || [],
   };
   const header = {
-    ...(namePrefix ? { Name: namePrefix + ' ' + details.quoteId } : {}),
+    // Policy_Revisions.Name is mandatory text of up to 120 characters and not auto-numbered.
+    Name: revisionName(namePrefix, details.quoteId),
     Policy: policy.id,
     Membership: dealId,
     Change_Type: 'MTA',
@@ -166,4 +179,4 @@ async function saveRevision({
   return { id: String(revisionId), status, quoteId: details.quoteId, reused: false, rows };
 }
 
-module.exports = { saveRevision, vatPence, IN_FLIGHT, REUSABLE };
+module.exports = { saveRevision, revisionName, vatPence, IN_FLIGHT, REUSABLE };
