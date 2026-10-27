@@ -370,7 +370,7 @@ Do not store API keys, tokens, Stripe secrets or unrestricted service credential
 - A new competing CRM workflow/approval engine.
 - Direct raw card capture in the widget.
 - Recreating Stripe, Creator webhooks, sanctions algorithms or rating tables in widget JavaScript.
-- Staff-created or staff-edited insurance MTAs, applying a revision, ending cover rows, renewals and policy issuance beyond existing verified CRM processes. The widget only **shows** portal-originated revisions and deep-links to the native record (section 5.8); applying them belongs to the Creator payments app.
+- Staff-created or staff-edited insurance MTAs, applying a revision, ending cover rows, renewals and policy issuance beyond existing verified CRM processes. The widget only **shows** portal-originated revisions and deep-links to the native record (section 5.8); applying them belongs to the Creator payments app. Build notes for a later staff-assisted MTA journey and staff API are in [STAFF-ASSISTED-MTA.md](STAFF-ASSISTED-MTA.md).
 - Replacing Portal V2 or changing its customer authentication architecture as a side effect.
 - Assumed deployment to Catalyst merely because widget files live in the same repository.
 
