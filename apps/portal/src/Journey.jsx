@@ -502,7 +502,11 @@ export function Journey({ kind }) {
               <div style={{ width: Math.round(((index + 1) / visible.length) * 100) + '%' }} />
             </div>
             <strong>{Math.round(((index + 1) / visible.length) * 100)}% through this journey</strong>
-            <p>Your answers stay in this browser tab only. They are not saved or submitted.</p>
+            <p>
+              {live
+                ? 'Your answers are kept in this browser while you work. Sign in and choose "Save my application" to keep them for later.'
+                : 'Your answers stay in this browser tab only. They are not saved or submitted.'}
+            </p>
           </div>
           <div className="aside-card muted-card">
             <LockKeyhole size={22} />
@@ -521,7 +525,11 @@ export function Journey({ kind }) {
           <div className="aside-card">
             <CreditCard size={21} />
             <h3>Payment information</h3>
-            <p>Prices and payment are not available yet. You will not be charged.</p>
+            <p>
+              {INTEGRATIONS.stripeCheckout
+                ? 'Your price is shown on the payment page, after you have signed in. You are not charged until you pay.'
+                : 'Prices and payment are not available yet. You will not be charged.'}
+            </p>
           </div>
           <button
             type="button"

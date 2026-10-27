@@ -123,26 +123,6 @@ export function PaymentReturn() {
   useEffect(() => {
     if (params.get('result') === 'success') finishPaidDraft(portalApi, params.get('service'));
   }, [params]);
-  // A monthly plan has to be put on its 12 month schedule once it is paid for. This is the quick route; Stripe also tells the server directly.
-  useEffect(() => {
-    const id = params.get('session_id');
-    if (params.get('result') !== 'success' || !id || !portalApi.finishCheckout) return undefined;
-    let stop = false;
-    (async () => {
-      for (let i = 0; i < 4 && !stop; i++) {
-        try {
-          const r = await portalApi.finishCheckout(id);
-          if (r?.status !== 'pending') return;
-        } catch {
-          return;
-        }
-        await new Promise(done => setTimeout(done, 2500));
-      }
-    })();
-    return () => {
-      stop = true;
-    };
-  }, [params]);
   return (
     <div className="page narrow-page">
       <PageHeading eyebrow="PAYMENT STATUS" title={cancelled ? 'Payment cancelled' : 'Thank you'} />
