@@ -455,25 +455,25 @@ export const INSURANCE_STEPS = [
     id: 'money',
     title: 'Money',
     description: '',
-    when: isSalon,
+    when: salonAnd('insContents'),
     intro: [
       'This covers all forms of money such as cash, cheques, current postage stamps etc. stolen from your premises, in transit, from a safe, or in the personal possession of you or anyone working for the business. It also covers compensation costs for injury to you or anyone working for the business as a result of money being stolen or someone attempting to steal money. You will be covered for up to £5,000 for each and every incident of loss.',
       doc('SALON_MONEY'),
     ],
-    fields: [yn('insMoneyCover', 'Do you need Money cover?', { when: isSalon })],
+    fields: [yn('insMoneyCover', 'Do you need Money cover?', { when: salonAnd('insContents') })],
   },
   {
     id: 'buildings',
     title: 'Buildings',
     description: '',
-    when: isSalon,
+    when: salonAnd('insContents'),
     intro: [
       'Covers damage to your building, including rebuilding it if it was damaged beyond repair.',
       doc('SALON_BUILDINGS'),
     ],
     fields: [
       yn('insBuildingsCover', 'Do you need Buildings cover?', {
-        when: isSalon,
+        when: salonAnd('insContents'),
         yesNote: [
           signedOff('of the value of your buildings') + ' We can only provide buildings cover for up to £500,000.',
         ],
@@ -507,14 +507,14 @@ export const INSURANCE_STEPS = [
     id: 'bi',
     title: 'Business Interruption',
     description: '',
-    when: isSalon,
+    when: salonAnd('insContents'),
     intro: [
       "This covers the reduction in turnover if you can't trade because of an insured event such as damage to premises you use (e.g. a fire).",
       doc('SALON_BI'),
     ],
     fields: [
       yn('insBiCover', 'Do you need Business Interruption cover?', {
-        when: isSalon,
+        when: salonAnd('insContents'),
         yesNote: [
           'Select the level of business interruption you require',
           signedOff('your business') + ' We can only provide cover up to a maximum of £300,000.',
@@ -538,7 +538,7 @@ export const INSURANCE_STEPS = [
     id: 'propertyAway',
     title: 'Property Away in Transit',
     description: '',
-    when: isSalon,
+    when: salonAnd('insContents'),
     intro: [
       'Property away and in transit insurance protects you when your business equipment is damaged while away from the insured premises.',
       doc('SALON_PROPERTY_AWAY'),
@@ -547,7 +547,7 @@ export const INSURANCE_STEPS = [
       yn(
         'insPropertyAwayCover',
         'Do You Require Property Away in Transit cover? Anywhere in UK, Northern Ireland, Channel Islands and Isle of Man.',
-        { when: isSalon, yesNote: [signedOff('of the value of your property')] },
+        { when: salonAnd('insContents'), yesNote: [signedOff('of the value of your property')] },
       ),
       sum('insPropertyAwaySI', 'What is the total value you require for all property away in transit? (£)', {
         when: salonAnd('insPropertyAwayCover'),
@@ -721,6 +721,13 @@ export function toRequest(raw) {
 const personRow = (v, name) =>
   (v.insNamedPeople || []).findIndex(p => ((p.firstName || '') + ' ' + (p.lastName || '')).trim() === name);
 const flagOff = (key, section) => ({ section, remove: () => ({ [key]: 'no' }) });
+// Money, Buildings, Business Interruption and Property Away are only offered with Contents cover (Guild, 26 October 2026),
+// so taking Contents off the quote takes them off too.
+const NEEDS_CONTENTS = ['insMoneyCover', 'insBuildingsCover', 'insBiCover', 'insPropertyAwayCover'];
+const contentsOff = () => ({
+  section: 'contents',
+  remove: () => ({ insContents: 'no', ...Object.fromEntries(NEEDS_CONTENTS.map(k => [k, 'no'])) }),
+});
 export function coverAction(lineName, v) {
   const name = String(lineName).replace(/^Insurance - /, '');
   if (name === 'Medical Malpractice') return { section: 'business' };
@@ -743,11 +750,11 @@ export function coverAction(lineName, v) {
   if (name.startsWith('Business Equipment')) return { section: 'equipment', remove: () => ({ insEquipmentTier: '0' }) };
   if (name === "Employers' Liability") return isSalon(v) ? flagOff('insSalonEL', 'el') : flagOff('insNonSalonEL', 'el');
   const flag = {
-    Contents: ['insContents', 'contents'],
     Money: ['insMoneyCover', 'money'],
     Buildings: ['insBuildingsCover', 'buildings'],
     'Business Interruption': ['insBiCover', 'bi'],
     'Property Away': ['insPropertyAwayCover', 'propertyAway'],
   }[name];
+  if (name === 'Contents') return contentsOff();
   return flag ? flagOff(...flag) : null;
 }
