@@ -3793,3 +3793,23 @@ iframe {
   display: block;
   margin-top: 4px;
 }
+
+/* Changing an insurance policy part way through the term (R3-4) */
+.ins-change {
+  margin: 0 0 16px;
+}
+.ins-change legend {
+  font-weight: 600;
+  padding: 0 6px;
+}
+.ins-person-row {
+  display: grid;
+  grid-template-columns: minmax(0, 10rem) minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 8px;
+  margin: 8px 0;
+}
+@media (max-width: 640px) {
+  .ins-person-row {
+    grid-template-columns: 1fr;
+  }
+}

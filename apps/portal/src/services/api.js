@@ -66,6 +66,8 @@ export const INTEGRATIONS = Object.freeze({
   stripeCheckout: billingOn,
   // Pro-rated extra branch and flat items on a current membership. Off until Creator handles the membership_change payment.
   membershipChanges: billingOn && import.meta.env.VITE_PORTAL_MEMBERSHIP_CHANGES === 'true',
+  // Changing an insurance policy part way through the term (R3-4). Off until the function's switches and Creator are ready.
+  insuranceChanges: billingOn && recordsOn && import.meta.env.VITE_PORTAL_INSURANCE_CHANGES === 'true',
   publicQuotes: publicQuotesOn,
   policyIssuance: false,
   workdrive: documentsOn,
@@ -151,6 +153,8 @@ export const portalApi = Object.freeze({
     publicHttp ? (await publicHttp('/public/quote', { method: 'POST', body })).quote : unavailable('Pricing'),
   submit: async () => unavailable('CRM submission'),
   startCheckout: async body => billingReq('/', { method: 'POST', body }),
+  // Saves a change as a request for the office (a referral) or as a quoted revision, without paying.
+  saveInsuranceChange: async body => billingReq('/insurance-change/revision', { method: 'POST', body }),
   getMembershipChangeOptions: async id =>
     (await billingReq('/membership-options?recordId=' + encodeURIComponent(id))).options,
   // After a monthly plan is paid for, asks the server to put it on its 12 month schedule. Safe to repeat.
