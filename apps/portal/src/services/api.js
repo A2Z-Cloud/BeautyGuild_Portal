@@ -84,6 +84,10 @@ export const portalApi = Object.freeze({
       : DATA_MODE === 'demo'
         ? clone(DEMO_RECORDS.find(r => r.kind === kind && r.id === id) || null)
         : unavailable('Authenticated CRM record retrieval'),
+  getMembershipCover: async id =>
+    recordsOn
+      ? (await recordReq('/membership/' + encodeURIComponent(id) + '/cover')).cover
+      : unavailable('Your membership cover'),
   getDashboard: async () => await recordReq('/summary'),
   listSchools: async () => (await schoolReq('/schools')).schools,
   getSchoolSection: async (id, section) =>
