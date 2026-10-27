@@ -455,6 +455,37 @@ function summarise(results) {
 const yn = v => (v === 'yes' ? 'Yes' : v === 'no' ? 'No' : undefined);
 const money2 = pence => Math.round(pence) / 100;
 
+// The cover level the member chose, saved on the cover row as Sum_Insured so a later change can see what they have and only offer a
+// real increase (MTA R3). Only what the member entered is saved: a Non-Salon equipment tier, and for a Salon the total of the headings
+// under each property cover. Rows with no sum insured (liability, treatments, people, Money) have none. A Non-Salon Employers' Liability
+// tier has no field yet (Cover_Option's type and values are still to be confirmed), so it is not saved.
+function sumInsured(code, ins) {
+  const sum = keys => keys.reduce((t, k) => t + Number(ins[k] || 0), 0);
+  switch (code) {
+    case 'BUSINESS_EQUIPMENT':
+      return ins.insEquipmentTier || undefined;
+    case 'CONTENTS':
+      return (
+        sum([
+          'insComputers',
+          'insEquipment',
+          'insStock',
+          'insGeneralContents',
+          'insTenantImprovements',
+          'insRentPayable',
+        ]) || undefined
+      );
+    case 'BUILDINGS':
+      return sum(['insBuildingsSI', 'insFixturesSI', 'insRentReceivableSI']) || undefined;
+    case 'BUSINESS_INTERRUPTION':
+      return sum(['insBiIncome', 'insBiDebts']) || undefined;
+    case 'PROPERTY_AWAY':
+      return sum(['insPropertyAwaySI']) || undefined;
+    default:
+      return undefined;
+  }
+}
+
 // Creates the Insurance_Policy, Insured_Premises, Insured_People, Insurance_Extension and Declarations
 // records before payment (as V1 does) and returns their ids for the Stripe metadata, which Creator's
 // webhook reads. Sequential, because later records link to the ids made earlier. create(module, record) -> id.
@@ -477,6 +508,7 @@ async function createRecords(
     audits = [],
     expiresAt = null,
     feesPence = 0,
+    frequency = 'Annual',
   },
 ) {
   const description = Object.entries(BUSINESS_DESCRIPTION_BY_FLAG)
@@ -488,6 +520,9 @@ async function createRecords(
     Policy_Type: ins.insRoute === 'salon' ? 'Salon' : 'Non Salon',
     Business_Description: description.length ? description : undefined,
     Annual_Turnover: ins.insRoute === 'salon' ? ins.insTurnover : undefined,
+    // The wage roll is only asked for with Employers' Liability. Payment_Frequency tells a later change whether the member pays yearly or monthly.
+    Annual_Wage_Roll: ins.insRoute === 'salon' && ins.insSalonEL && ins.insWageRoll ? ins.insWageRoll : undefined,
+    Payment_Frequency: frequency === 'Monthly' ? 'Monthly' : 'Annual',
     Policy_Start_Date: start || undefined,
     Policy_End_Date: end || undefined,
     Application_Status: referral ? 'Referred' : 'Ready for Payment',
@@ -547,6 +582,7 @@ async function createRecords(
       Cover_Type:
         COVER_TYPE_BY_CODE[row.code] || (row.code.startsWith('TREATMENT_') ? 'Treatment' : 'Ad Hoc Adjustment'),
       Cover_Code: row.code,
+      Sum_Insured: sumInsured(row.code, ins),
       Premium_Net: money2(row.premiumPence),
       IPT_Rate: IPT_RATE,
       IPT_Amount: money2(ipt),
@@ -614,6 +650,7 @@ async function createRecords(
 }
 
 module.exports = {
+  sumInsured,
   IPT_RATE,
   IPT_SKU,
   TREATMENT_EXTENSIONS,
