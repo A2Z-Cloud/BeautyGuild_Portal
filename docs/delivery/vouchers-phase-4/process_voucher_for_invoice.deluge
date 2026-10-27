@@ -2,7 +2,7 @@ map Vouchers.process_voucher_for_invoice(string billing_reason, string change_ty
 {
 	// NOTE: The trigger. The Creator processor calls this AFTER it has marked the membership Active in the CRM
 	// and set the new expiry, for a paid invoice (invoice.paid, or the first paid invoice of a subscription).
-	// It decides whether the invoice earns a voucher and, if so, issues it and tells the member.
+	// It decides whether the invoice earns a voucher and, if so, issues it (and emails the member if that switch is on).
 	// It never raises: the result is returned so the processor can store it on the invoice (suggested field
 	// Invoice_Records.Voucher_Result) and a failure never blocks Books or the membership.
 	//
@@ -15,9 +15,11 @@ map Vouchers.process_voucher_for_invoice(string billing_reason, string change_ty
 	// or no new expiry, so it earns nothing.
 	// SKU to the CRM Eligible_Member_Types value. Full covers Non-Salon and Salon.
 	type_by_sku = {"MEM-ASSOC-Y":"Associate","ACC-ASSOC":"Associate","MEM-INTL-Y":"International","ACC-INTL-MEM":"International","MEM-FULLNS-Y":"Full","MEM-FULLS-Y":"Full"};
-	// SWITCHES. The Guild sends no email today (an email is wanted in future), so it is OFF. The Enki write is a
-	// separate stub that is also OFF (see write_voucher_to_enki.deluge). Keep these two in step with your settings.
+	// SWITCHES. The Guild sends no email today (one is wanted in future), so the email is OFF. Issuing is automatic when
+	// the membership is verified in the CRM; approval_required is an OPTIONAL step, OFF by default. When it is on, the
+	// voucher is created not yet active (Active = false) and a CRM approval step activates it.
 	send_member_email = false;
+	approval_required = false;
 	result = Map();
 	try 
 	{
@@ -46,7 +48,7 @@ map Vouchers.process_voucher_for_invoice(string billing_reason, string change_ty
 		{
 			reason = "upgrade";
 		}
-		result = thisapp.Vouchers.issue_gti_voucher(contact_id,membership_profile_id,member_type,term_start,term_end,stripe_invoice_id,reason);
+		result = thisapp.Vouchers.issue_gti_voucher(contact_id,membership_profile_id,member_type,term_start,term_end,stripe_invoice_id,reason,approval_required);
 		// Tell the member only when this call created the voucher, so a retry never sends a second email.
 		if(result.get("status") == "created")
 		{
@@ -58,7 +60,6 @@ map Vouchers.process_voucher_for_invoice(string billing_reason, string change_ty
 			{
 				result.put("notified","off");
 			}
-			result.put("enki",thisapp.Vouchers.write_voucher_to_enki(result.get("voucher_id"),result.get("code"),contact_id,term_start,term_end));
 		}
 		info "Voucher result for invoice " + stripe_invoice_id + ": " + result.toString();
 	}

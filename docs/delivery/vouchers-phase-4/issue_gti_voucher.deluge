@@ -1,4 +1,4 @@
-map Vouchers.issue_gti_voucher(string contact_id, string membership_profile_id, string member_type, string term_start, string term_end, string source_invoice_id, string reason)
+map Vouchers.issue_gti_voucher(string contact_id, string membership_profile_id, string member_type, string term_start, string term_end, string source_invoice_id, string reason, bool pending_approval)
 {
 	// NOTE: Creates the member's personal £25 GTi voucher in the CRM module Discount_Voucher, once per
 	// Contact per membership term. Safe to call again for the same term: it finds the existing voucher
@@ -11,6 +11,10 @@ map Vouchers.issue_gti_voucher(string contact_id, string membership_profile_id, 
 	//   term_end               membership expiry AFTER this payment, as yyyy-MM-dd. The term is identified by it.
 	//   source_invoice_id      Stripe invoice id, stored on the voucher so staff can trace it
 	//   reason                 "new", "renewal" or "upgrade" (for the log only)
+	//   pending_approval       false (the default setting): the voucher is created Active. true: it is created with
+	//                          Active = false and a CRM approval step activates it
+	//   Valid_To is always the membership's end date (end of that day, UK time) and Expires_With_Membership is true: the
+	//   voucher ends with the membership. sync_voucher_end_date.deluge moves Valid_To if that date later changes.
 	// Returns {"status": "created" | "exists" | "skipped" | "error", "voucher_id", "code", "message"}.
 	//
 	// CRM names are the real Discount_Voucher API names. Voucher_Code already exists (text, 255) but the CRM does NOT
@@ -52,7 +56,7 @@ map Vouchers.issue_gti_voucher(string contact_id, string membership_profile_id, 
 		// Skip when the Contact already holds an active, unused personal voucher that is valid on the new term's start
 		// (for example an Associate upgrading to Full mid-term). An early renewal does NOT skip: the old voucher ends
 		// the day before the new term starts, so the new voucher is still issued, starting on the renewal date.
-		// This replaces the manual approve or decline pop-up in Enki.
+		// This replaces the manual decline in Enki today.
 		start_number = term_start.trim().replaceAll("-","").toLong();
 		held = zoho.crm.searchRecords(module_name,"((Assigned_Contact:equals:" + contact_id.trim() + ")and(Voucher_Type:equals:Personal £25 GTI)and(Active:equals:true))",1,50,crm_connection);
 		for each  held_voucher in held
@@ -100,7 +104,7 @@ map Vouchers.issue_gti_voucher(string contact_id, string membership_profile_id, 
 				// DateTime fields, UK time: the term's first moment to the end of its last day (the Guild's rule).
 				record.put("Valid_From",term_start.trim() + "T00:00:00" + thisapp.Vouchers.uk_offset(term_start,"start"));
 				record.put("Valid_To",term_end.trim() + "T23:59:59" + thisapp.Vouchers.uk_offset(term_end,"end"));
-				record.put("Active",true);
+				record.put("Active",(pending_approval == false));
 				record.put("Voucher_Key",voucher_key);
 				record.put(source_invoice_field,ifnull(source_invoice_id,""));
 				// Current_Usage_Count is left alone: GTi redemption increments it, not this process.
@@ -120,7 +124,7 @@ map Vouchers.issue_gti_voucher(string contact_id, string membership_profile_id, 
 						continue;
 					}
 					info "Issued " + reason + " voucher " + code + " for Contact " + contact_id + " until " + term_end + " (invoice " + source_invoice_id + ")";
-					return {"status":"created","voucher_id":created.get("id"),"code":code,"message":"Issued (" + reason + ")."};
+					return {"status":"created","voucher_id":created.get("id"),"code":code,"message":"Issued (" + reason + ")" + if(pending_approval,", pending CRM approval","") + "."};
 				}
 				// Not created. If the key now exists, another call won the race: return that one.
 				raced = zoho.crm.searchRecords(module_name,"(Voucher_Key:equals:" + voucher_key + ")",1,5,crm_connection);
