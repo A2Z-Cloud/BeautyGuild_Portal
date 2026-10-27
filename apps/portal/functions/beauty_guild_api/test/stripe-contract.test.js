@@ -156,3 +156,106 @@ test(
     }
   },
 );
+
+// Phase 3 (docs/delivery/vouchers-review.md): the additional branch discount is a per-checkout fixed amount coupon.
+test(
+  'a branch coupon is accepted on a subscription Checkout Session and takes its amount off the first invoice only',
+  { skip, timeout: 120000 },
+  async () => {
+    const coupons = [];
+    let session;
+    try {
+      const coupon = await post('/coupons', {
+        amount_off: 500,
+        currency: 'gbp',
+        duration: 'once',
+        max_redemptions: 1,
+        name: 'ZZ contract test (safe to delete)',
+        metadata: { voucher_id: 'v-test', sku: 'MEM-BRANCH' },
+      });
+      coupons.push(coupon.id);
+      session = await post('/checkout/sessions', {
+        mode: 'subscription',
+        success_url: 'https://portal.example.test/ok',
+        cancel_url: 'https://portal.example.test/no',
+        line_items: [
+          {
+            quantity: 1,
+            price_data: {
+              currency: 'gbp',
+              unit_amount: 1500,
+              recurring: { interval: 'year' },
+              product_data: { name: 'ZZ test branch', metadata: { sku: 'MEM-BRANCH' } },
+            },
+          },
+        ],
+        discounts: [{ coupon: coupon.id }],
+      });
+      assert.equal(session.total_details.amount_discount, 500);
+      assert.equal(session.amount_total, 1000);
+    } finally {
+      if (session?.id) await post('/checkout/sessions/' + session.id + '/expire', {}).catch(() => {});
+      for (const id of coupons) await stripe('DELETE', '/coupons/' + id).catch(() => {});
+    }
+  },
+);
+
+test(
+  'a repeating 12 month branch coupon survives plans.ensureSchedule: it is in phase one of the schedule and on the first invoice',
+  { skip, timeout: 120000 },
+  async () => {
+    let customer, subscription, schedule, coupon;
+    const products = [];
+    try {
+      coupon = await post('/coupons', {
+        amount_off: 83,
+        currency: 'gbp',
+        duration: 'repeating',
+        duration_in_months: 12,
+        max_redemptions: 1,
+        name: 'ZZ contract test (safe to delete)',
+        metadata: { voucher_id: 'v-test', sku: 'MEM-BRANCH' },
+      });
+      customer = await post('/customers', { name: 'ZZ contract test (safe to delete)' });
+      const pm = await post('/payment_methods/pm_card_visa/attach', { customer: customer.id });
+      await post('/customers/' + customer.id, { invoice_settings: { default_payment_method: pm.id } });
+      const item = async (name, pence, phase) => {
+        const product = await post('/products', { name, metadata: { sku: 'MEM-BRANCH', phase } });
+        products.push(product.id);
+        return {
+          quantity: 1,
+          price_data: { currency: 'gbp', unit_amount: pence, recurring: { interval: 'month' }, product: product.id },
+        };
+      };
+      subscription = await post('/subscriptions', {
+        customer: customer.id,
+        items: [await item('ZZ test branch', 125, 'ongoing'), await item('ZZ test year one line', 100, 'year_one')],
+        discounts: [{ coupon: coupon.id }],
+        metadata: { plan: 'monthly', phased: 'true' },
+        expand: ['latest_invoice'],
+      });
+      assert.equal(subscription.status, 'active');
+      assert.equal(subscription.latest_invoice.total_discount_amounts[0].amount, 83, 'first payment');
+
+      assert.deepEqual(await plans.ensureSchedule(stripe, subscription.id), { status: 'scheduled', dropped: 1 });
+      const sub = await stripe('GET', '/subscriptions/' + subscription.id + '?expand[]=discounts');
+      const onSub = (sub.discounts || []).map(d => d.source?.coupon?.id || d.source?.coupon || d.coupon?.id);
+      assert.deepEqual(onSub, [coupon.id], 'the subscription still has the coupon after the schedule is applied');
+      schedule = await stripe('GET', '/subscription_schedules/' + sub.schedule);
+      const phaseCoupons = d =>
+        (d || []).map(x => x.coupon?.id || x.coupon || x.source?.coupon?.id || x.source?.coupon);
+      assert.deepEqual(phaseCoupons(schedule.phases[0].discounts), [coupon.id], 'phase one carries the coupon');
+      assert.deepEqual(phaseCoupons(schedule.phases[1].discounts), [], 'phase two (payment 13 onward) has none');
+    } finally {
+      if (schedule?.id)
+        await stripe('POST', '/subscription_schedules/' + schedule.id + '/cancel', {
+          body: '',
+          key: 'c-' + schedule.id,
+        }).catch(() => {});
+      if (subscription?.id) await stripe('DELETE', '/subscriptions/' + subscription.id).catch(() => {});
+      if (customer?.id) await stripe('DELETE', '/customers/' + customer.id).catch(() => {});
+      if (coupon?.id) await stripe('DELETE', '/coupons/' + coupon.id).catch(() => {});
+      for (const id of products) await post('/products/' + id, { active: false }).catch(() => {});
+    }
+  },
+);

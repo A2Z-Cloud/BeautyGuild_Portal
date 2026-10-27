@@ -88,6 +88,33 @@ test('a monthly plan is put on a schedule: every line for 12 months, then the on
   assert.equal(set.get('phases[0][duration][interval_count]'), '12');
   assert.equal(set.get('phases[1][proration_behavior]'), 'none');
 });
+test('a branch coupon on the subscription is passed into phase one of the schedule, and phase two carries none', async () => {
+  const { stripe, calls } = fakeStripe({
+    id: 'sub_abc123',
+    status: 'active',
+    schedule: null,
+    discounts: [{ id: 'di_1', source: { type: 'coupon', coupon: { id: 'co_test_1' } } }],
+    items: { data: [item('price_member', 'ongoing'), item('price_join', 'year_one')] },
+  });
+  assert.equal((await ensureSchedule(stripe, 'sub_abc123')).status, 'scheduled');
+  assert.match(calls[0].path, /expand\[\]=discounts/);
+  const set = calls.find(c => c.path === '/subscription_schedules/sub_sched_1').body;
+  assert.equal(set.get('phases[0][discounts][0][coupon]'), 'co_test_1');
+  assert.equal(set.get('phases[1][discounts][0][coupon]'), null);
+  // No coupon: the request is exactly as before.
+  const plain = fakeStripe({
+    id: 'sub_abc123',
+    status: 'active',
+    schedule: null,
+    discounts: [],
+    items: { data: [item('price_member', 'ongoing'), item('price_join', 'year_one')] },
+  });
+  await ensureSchedule(plain.stripe, 'sub_abc123');
+  assert.equal(
+    plain.calls.find(c => c.path === '/subscription_schedules/sub_sched_1').body.get('phases[0][discounts][0][coupon]'),
+    null,
+  );
+});
 test('ensureSchedule leaves alone a subscription with a schedule, nothing to drop, or no longer active, and is safe to repeat', async () => {
   const none = fakeStripe({
     id: 'sub_abc123',

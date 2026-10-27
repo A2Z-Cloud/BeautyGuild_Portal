@@ -10,7 +10,9 @@ const { resolveContact, createCrmClient } = require('./records');
 const { createRateLimiter, clientKey } = require('./rateLimit');
 const { ITEMS, SERVICES, pounds, netPounds } = require('./catalogue');
 const plans = require('./plans');
-const { createDiscounts, discountsMetadata } = require('./discounts');
+const { createDiscounts } = require('./discounts');
+const { applyDiscounts, discountsMetadata, DiscountError, BRANCH } = require('./discountEngine');
+const { branchCouponPlan, createBranchCoupon } = require('./branchCoupon');
 const { fitToStripeLimit, filledCount, MAX_FILLED_KEYS } = require('./metadataContract');
 
 const STRIPE = 'https://api.stripe.com/v1';
@@ -24,6 +26,9 @@ function registerCheckoutRoutes(
     publicQuotesEnabled = false,
     discountsEnabled = false,
     discountReferenceField = '',
+    // Who is applying a voucher or waivers, for the future staff route: async (req, input) => ({code, waivers, actor, store}) or null.
+    // Nothing is wired to it yet; customers never reach it (their requests carry only the referral code).
+    discountRequestFor = null,
     enabled,
     getCurrentUser,
     getCrmHeaders,
@@ -185,7 +190,7 @@ function registerCheckoutRoutes(
       discounts,
     });
     if (prepared.alreadyPaid) return { service, contact, alreadyPaid: true };
-    const lines = [];
+    let lines = [];
     for (const l of prepared.lines) {
       const price = await priceFor(l.item);
       lines.push({
@@ -217,21 +222,51 @@ function registerCheckoutRoutes(
         term: 'ongoing',
       });
     }
-    // A referral code that took the joining fee off: the amount is the fee's live price, so a price change is never out of step.
+    // Discounts: the school referral code (customer) and, for the staff route, a voucher and waivers. The engine prices the discount on the
+    // lines HERE, before a monthly plan is split, so a monthly plan spreads it over the first 12 payments exactly (see discountEngine.js).
     const joiningFeePence = prepared.joiningFee?.due ? (await priceFor('joining_fee')).unit : 0;
-    const discount = prepared.discount
-      ? {
-          code: prepared.discount.code,
-          school: prepared.discount.school,
-          indicative: prepared.discount.indicative,
-          item: 'joining_fee',
-          itemCode: ITEMS.joining_fee.code,
-          listPence: joiningFeePence,
-          amountPence: joiningFeePence,
-          label: 'Joining fee waived (code ' + prepared.discount.code + ')',
-          lineName: ITEMS.joining_fee.name,
-        }
-      : null;
+    const request = discountsEnabled && discountRequestFor ? await discountRequestFor(req, input) : null;
+    let engine = null;
+    if (discountsEnabled && (prepared.discount || request)) {
+      try {
+        engine = await applyDiscounts(
+          {
+            lines,
+            contactId: contact?.id ? String(contact.id) : '',
+            member: Boolean(prepared.member),
+            joiningFeeSince: prepared.joiningFeeSince || '',
+          },
+          {
+            referral: prepared.discount || null,
+            code: request?.code,
+            waivers: request?.waivers,
+            actor: request?.actor || { type: 'customer', id: guest ? 'guest' : req.portalUser?.id },
+            store: request?.store,
+            now,
+          },
+        );
+      } catch (e) {
+        if (e instanceof DiscountError)
+          throw new HttpError(e.status, e.code === 'NOT_VALID' ? 'CODE_INVALID' : e.code, e.message);
+        throw e;
+      }
+      lines = engine.lines;
+    }
+    const joinOff = engine?.breakdown.find(r => r.sku === ITEMS.joining_fee.code)?.discountPence || 0;
+    const discount =
+      prepared.discount && joinOff
+        ? {
+            code: prepared.discount.code,
+            school: prepared.discount.school,
+            indicative: prepared.discount.indicative,
+            item: 'joining_fee',
+            itemCode: ITEMS.joining_fee.code,
+            listPence: joiningFeePence,
+            amountPence: joinOff,
+            label: 'Joining fee waived (code ' + prepared.discount.code + ')',
+            lineName: ITEMS.joining_fee.name,
+          }
+        : null;
     if (!lines.length && !prepared.blocked) throw new HttpError(422, 'INVALID_REQUEST', 'Choose something to pay for.');
     // What the yearly price is, before a monthly plan turns it into shares.
     const annualPence = lines.reduce((t, l) => t + l.totalPence, 0);
@@ -249,10 +284,41 @@ function registerCheckoutRoutes(
           l.interval = 'year';
           l.priceId = null;
         }
+    // The additional branch discount is a one-year Stripe coupon, never a lower branch line (see branchCoupon.js). entries (the metadata and the
+    // quote) are corrected to the amount the customer really gets once the coupon is rounded.
+    const couponFor = plan => {
+      const d = engine?.branchDiscount;
+      if (!d) return { coupon: null, entries: engine?.entries || [] };
+      const monthlyBranch = plan?.lines.find(l => l.sku === BRANCH)?.monthlyPence || 0;
+      const coupon = branchCouponPlan({
+        discountPence: d.discountPence,
+        listPence: d.listPence,
+        monthly: Boolean(plan),
+        branchMonthlyPence: monthlyBranch,
+      });
+      const entries = engine.entries
+        .filter(e => e.sku !== BRANCH || coupon)
+        .map(e => (e.sku === BRANCH ? { ...e, amount: (coupon.totalPence / 100).toFixed(2) } : e));
+      return { coupon, entries };
+    };
+    const discountLines = entries =>
+      entries.map(e => ({
+        source: e.source,
+        code: e.code || '',
+        reason: e.reason || '',
+        sku: e.sku,
+        amountPence: Math.round(Number(e.amount) * 100),
+      }));
     if (prepared.monthly) {
       // A monthly plan is charged as 12 payments of the yearly price divided by 12, plus the admin fee. See plans.js.
       const admin = await priceFor('admin_fee_monthly');
       const plan = plans.splitMonthly(lines, admin.unit);
+      const { coupon, entries } = couponFor(plan);
+      if (coupon) {
+        // The coupon takes the same amount off each of the first 12 payments.
+        plan.firstPaymentPence -= coupon.amountOffPence;
+        plan.yearOneTotalPence -= coupon.totalPence;
+      }
       const monthly = plan.lines
         .filter(l => l.monthlyPence > 0)
         .map(l => ({
@@ -285,6 +351,10 @@ function registerCheckoutRoutes(
         contact,
         prepared,
         discount,
+        engine,
+        entries,
+        discountLines: discountLines(entries),
+        branchCoupon: coupon,
         joiningFeePence,
         lines: monthly,
         fees,
@@ -294,16 +364,21 @@ function registerCheckoutRoutes(
         mode: 'subscription',
       };
     }
+    const { coupon, entries } = couponFor(null);
     return {
       service,
       contact,
       prepared,
       discount,
+      engine,
+      entries,
+      discountLines: discountLines(entries),
+      branchCoupon: coupon,
       joiningFeePence,
       lines,
       fees,
       annualPence,
-      totalPence: lines.reduce((t, l) => t + l.totalPence, 0),
+      totalPence: lines.reduce((t, l) => t + l.totalPence, 0) - (coupon?.totalPence || 0),
       mode: lines.some(l => l.interval) ? 'subscription' : 'payment',
     };
   }
@@ -335,6 +410,8 @@ function registerCheckoutRoutes(
                 },
               }
             : {}),
+          // Every discount on the basket (referral, voucher, waiver), by item. A branch discount shows the amount the coupon really gives.
+          ...(b.discountLines?.length ? { discounts: b.discountLines } : {}),
           ...(b.prepared.codeResult && b.prepared.codeResult.status !== 'applied'
             ? { codeResult: { status: b.prepared.codeResult.status, message: b.prepared.codeResult.message } }
             : {}),
@@ -652,6 +729,30 @@ function registerCheckoutRoutes(
               feesPence: b.fees.grossPence,
             })
           : null;
+        // The branch discount's coupon is made first so its id goes into the `discounts` metadata with the other entries.
+        let couponId = '';
+        if (b.branchCoupon) {
+          const couponKey = crypto
+            .createHash('sha256')
+            .update(
+              [
+                b.contact?.id || req.portalUser.id,
+                input.service,
+                JSON.stringify(b.branchCoupon),
+                Math.floor(now() / 120000),
+              ].join('|'),
+            )
+            .digest('hex')
+            .slice(0, 40);
+          couponId = await createBranchCoupon(stripe, b.branchCoupon, {
+            entries: b.entries.filter(e => e.sku === BRANCH),
+            key: 'portal-v2-coupon-' + couponKey,
+          });
+        }
+        const discountsEntry = () =>
+          discountsMetadata(
+            b.entries.map(e => (couponId && e.sku === BRANCH ? { ...e, stripe_coupon_id: couponId } : e)),
+          );
         const quoteReference = 'BGP-' + now().toString(36).toUpperCase();
         const catalogue = b.lines.filter(l => l.item);
         const amounts = {};
@@ -670,7 +771,7 @@ function registerCheckoutRoutes(
             fees: b.fees,
             annualPence: b.annualPence,
             quoteReference,
-            discountsEntry: b.discount ? discountsMetadata(b.discount) : '',
+            discountsEntry: discountsEntry(),
           }),
         };
         // Stripe allows 50 filled metadata keys. The plan is also on the subscription, so it is only added here while there is room.
@@ -724,6 +825,7 @@ function registerCheckoutRoutes(
           );
           params.set('subscription_data[metadata][contact_id]', String(b.contact?.id || ''));
         }
+        if (couponId) params.set('discounts[0][coupon]', couponId);
         for (const [k, v] of Object.entries(meta)) params.set('metadata[' + k + ']', String(v).slice(0, 500));
         const key = crypto
           .createHash('sha256')

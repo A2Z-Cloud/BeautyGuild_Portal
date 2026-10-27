@@ -274,13 +274,14 @@ test('paying with a code puts one `discounts` metadata entry on the session and 
   const meta = state.stripePosts[0].params;
   assert.deepEqual(JSON.parse(meta.get('metadata[discounts]')), [
     {
-      type: 'referral_code',
+      source: 'referral',
       code: 'ACC-0155',
       school_id: '1011174000003698036',
       accreditation_id: SCHOOL[0].id,
-      item: 'MEM-JOIN',
+      applied_by: 'customer',
+      sku: 'MEM-JOIN',
       list_amount: '10.00',
-      discount_amount: '10.00',
+      amount: '10.00',
     },
   ]);
   assert.equal(meta.get('metadata[joining_fee_amount]'), '0.00');

@@ -6,7 +6,7 @@
 // may pay (ownership), which items to charge, and the metadata Creator expects after payment.
 const { HttpError } = require('./errors');
 const insurance = require('./insurance');
-const { joiningFeeDue, discountsMetadata, NOT_DUE } = require('./discounts');
+const { joiningFeeDue, NOT_DUE, REJOIN_DAYS } = require('./discounts');
 
 const ID = /^\d{10,25}$/;
 // How far ahead a start date may be, per service (UAT AL-INS-001). The same limit is used by the date pickers.
@@ -245,6 +245,7 @@ function netPounds(item, totalPence, quantity = 1, scale = 1) {
   return ((zr + (totalPence - zr) / 1.2) / 100).toFixed(2);
 }
 const isoDay = d => d.toISOString().slice(0, 10);
+const addDays = (iso, n) => isoDay(new Date(Date.parse(String(iso).slice(0, 10) + 'T00:00:00Z') + n * 864e5));
 function annualPeriodEnd(start) {
   const d = new Date(start + 'T00:00:00Z');
   d.setUTCFullYear(d.getUTCFullYear() + 1);
@@ -536,7 +537,8 @@ SERVICES.membership = {
     const lines = [{ item: 'membership_' + level + '_annual', quantity: 1, term: 'ongoing' }];
     // The joining fee is charged to a new person, and (with discounts on) to someone whose last membership expired more than 30 days ago.
     const feeDue = joiningFeeDue({ previous, expiry: previousExpiry, today, rule: Boolean(discounts) });
-    // A school referral code takes the joining fee off. The line is left out here, before plans.splitMonthly runs, so yearly and monthly are exact.
+    // A school referral code takes the joining fee off. The line is added here and left out by the discount engine (discountEngine.js) before
+    // plans.splitMonthly runs, so yearly and monthly are exact.
     let discount = null,
       codeResult = null;
     if (discounts && feeDue && input.code) {
@@ -546,7 +548,7 @@ SERVICES.membership = {
         codeResult = { status: 'applied', code: checked.code, indicative: checked.indicative };
       } else codeResult = { status: checked.status, message: checked.message };
     } else if (discounts && !feeDue && input.code) codeResult = { status: 'not_due', message: NOT_DUE };
-    if (feeDue && !discount) lines.push({ item: 'joining_fee', quantity: 1, term: 'year_one' });
+    if (feeDue) lines.push({ item: 'joining_fee', quantity: 1, term: 'year_one' });
     if (secondary.length) lines.push({ item: 'membership_branch', quantity: secondary.length, term: 'ongoing' });
     for (const [key, quantity] of Object.entries(addons)) lines.push({ item: ADDONS[key], quantity, term: 'year_one' });
     if (input.insurance && level === 'associate') throw NEEDS_FULL();
@@ -566,6 +568,9 @@ SERVICES.membership = {
       fingerprint: ins?.fingerprint,
       // What the checkout needs to price, show and record the code (see checkout.js).
       joiningFee: discounts ? { due: feeDue } : null,
+      // For the discount engine: the day this joining fee began to apply (for the once-per-person waiver) and whether the person is a member.
+      joiningFeeSince: previous && previousExpiry ? addDays(previousExpiry, REJOIN_DAYS) : '',
+      member: Boolean(member || previous),
       discount,
       codeResult,
       metadata: ({ lines: priced, total, insuranceIds, fees, discountsEntry, quoteReference }) => {

@@ -117,22 +117,6 @@ function createDiscounts({ crm, referenceField, now = Date.now }) {
   return { check, findSchool };
 }
 
-// The single `discounts` metadata entry (one key: Stripe allows 50 and a membership with insurance is close). Creator reads the list and
-// discount amounts and the school, and records the redemption itself. Kept well under Stripe's 500 character value limit.
-function discountsMetadata({ code, school, itemCode, listPence, amountPence }) {
-  return JSON.stringify([
-    {
-      type: 'referral_code',
-      code,
-      school_id: school?.id || '',
-      accreditation_id: school?.accreditationId || '',
-      item: itemCode,
-      list_amount: (listPence / 100).toFixed(2),
-      discount_amount: (amountPence / 100).toFixed(2),
-    },
-  ]);
-}
-
 module.exports = {
   NOT_VALID,
   NOT_DUE,
@@ -143,5 +127,4 @@ module.exports = {
   daysSinceExpiry,
   joiningFeeDue,
   createDiscounts,
-  discountsMetadata,
 };

@@ -64,7 +64,7 @@ function form(obj, prefix = '') {
 async function ensureSchedule(stripe, subscriptionId) {
   const id = String(subscriptionId || '');
   if (!/^sub_[A-Za-z0-9]+$/.test(id)) return { status: 'invalid' };
-  const sub = await stripe('GET', '/subscriptions/' + id + '?expand[]=items.data.price.product');
+  const sub = await stripe('GET', '/subscriptions/' + id + '?expand[]=items.data.price.product&expand[]=discounts');
   if (!['active', 'trialing', 'past_due'].includes(sub.status)) return { status: 'inactive' };
   if (sub.schedule) return { status: 'already' };
   const items = (sub.items?.data || []).map(i => ({
@@ -72,6 +72,12 @@ async function ensureSchedule(stripe, subscriptionId) {
     quantity: i.quantity || 1,
     phase: i.price.product?.metadata?.phase || 'ongoing',
   }));
+  // A coupon on the subscription (the additional branch discount, branchCoupon.js) is passed into phase one explicitly: the phases are
+  // rebuilt from the items only, and a phase that names no discount may not carry the subscription's. Its own duration (once, or 12
+  // months) still ends it, so phase two needs no discount.
+  const coupons = (sub.discounts || [])
+    .map(d => (typeof d === 'string' ? '' : d.source?.coupon?.id || d.source?.coupon || d.coupon?.id || ''))
+    .filter(c => typeof c === 'string' && /^[A-Za-z0-9_-]+$/.test(c));
   const keep = items.filter(i => i.phase !== 'year_one');
   if (keep.length === items.length || !keep.length) return { status: 'none' };
   let schedule;
@@ -95,6 +101,7 @@ async function ensureSchedule(stripe, subscriptionId) {
         {
           start_date: start,
           items: phase(items),
+          ...(coupons.length ? { discounts: coupons.map(coupon => ({ coupon })) } : {}),
           duration: { interval: 'month', interval_count: PAYMENTS },
           proration_behavior: 'none',
         },
