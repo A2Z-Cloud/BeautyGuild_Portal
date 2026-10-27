@@ -63,6 +63,7 @@ const POLICY_FIELDS = [
   'Modified_Time',
 ];
 const REVISION_FIELDS = [
+  'Revision_Status',
   'Policy',
   'Membership',
   'Change_Type',
@@ -227,6 +228,7 @@ async function loadCover({ call, req, contactId, dealId, isDraft }) {
           type: text(r.Change_Type) || null,
           scope: text(r.Change_Scope) || null,
           effectiveDate: r.Requested_Effective_Date || null,
+          status: text(r.Revision_Status) || null,
           requested: r.Created_Time || null,
         }))
         .sort((a, b) => text(b.requested).localeCompare(text(a.requested))),

@@ -149,6 +149,8 @@ function createApp({
     publicQuotesEnabled: config.publicQuotesEnabled,
     membershipChangesEnabled: config.membershipChangesEnabled,
     insuranceChangesEnabled: config.insuranceChangesEnabled,
+    insuranceChangesWritesEnabled: config.insuranceChangesWritesEnabled,
+    revisionNamePrefix: config.revisionNamePrefix,
     enabled: config.billingEnabled,
     getCurrentUser,
     getCrmHeaders,

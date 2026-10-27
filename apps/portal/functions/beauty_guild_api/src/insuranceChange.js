@@ -131,8 +131,9 @@ function quoteChange({ cover, change, today }) {
   const byCode = code => covers.find(c => c.code === code);
   const people = insuranceCover.people || [];
   const items = [];
-  const add = (code, label, priced, creditPence = 0) => {
+  const add = (code, label, priced, creditPence = 0, extra = {}) => {
     items.push({
+      ...extra,
       code,
       label,
       sku: priced.sku,
@@ -189,6 +190,7 @@ function quoteChange({ cover, change, today }) {
       'Replace ' + out.name + ' with ' + [inn.firstName, inn.lastName].filter(Boolean).join(' '),
       now,
       old.netPence,
+      { kind: 'swap', replacesId: old.id, person: inn, removePersonId: out.id },
     );
     // The membership fee carries over when an employee replaces an employee: nothing is charged or credited.
   }
@@ -207,6 +209,7 @@ function quoteChange({ cover, change, today }) {
       'Replace ' + out.name + ' with ' + [inn.firstName, inn.lastName].filter(Boolean).join(' '),
       now,
       old.netPence,
+      { kind: 'swap', replacesId: old.id, person: inn, removePersonId: out.id },
     );
     employeesCharged += inn.type === 'employee' ? 1 : 0;
   }
@@ -215,6 +218,8 @@ function quoteChange({ cover, change, today }) {
       NAMED[inn.type],
       'Add ' + inn.type + ' ' + [inn.firstName, inn.lastName].filter(Boolean).join(' '),
       price({ people: [inn] }, NAMED[inn.type]),
+      0,
+      { kind: 'add', person: inn },
     );
     employeesCharged += inn.type === 'employee' ? 1 : 0;
   }
@@ -228,11 +233,13 @@ function quoteChange({ cover, change, today }) {
     .map(c => c.code.slice('TREATMENT_'.length).toLowerCase());
   for (const id of change.treatments) {
     const key = 'TREATMENT_' + id.toUpperCase();
-    add(key, insurance.TREATMENT_EXTENSIONS.find(t => t.id === id).name, price({ treatments: [id] }, key));
+    add(key, insurance.TREATMENT_EXTENSIONS.find(t => t.id === id).name, price({ treatments: [id] }, key), 0, {
+      kind: 'add',
+    });
   }
   const treatmentsAfter = new Set([...heldTreatments, ...change.treatments]);
   if (change.teaching === 'standard' && !byCode('TEACHING') && !byCode('TEACHING_PLUS'))
-    add('TEACHING', 'Teaching + Student Cover', price({ teaching: 'standard' }, 'TEACHING'));
+    add('TEACHING', 'Teaching + Student Cover', price({ teaching: 'standard' }, 'TEACHING'), 0, { kind: 'add' });
   if (change.teaching === 'additional' && !byCode('TEACHING_PLUS')) {
     const old = byCode('TEACHING');
     if (old && old.netPence == null)
@@ -246,6 +253,7 @@ function quoteChange({ cover, change, today }) {
         'Teaching + Student Cover + Additional Treatments' + (old ? ' (replacing standard teaching)' : ''),
         price({ teaching: 'additional' }, 'TEACHING_PLUS'),
         old ? old.netPence : 0,
+        { kind: old ? 'increase' : 'add', replacesId: old ? old.id : undefined },
       );
   }
 
@@ -264,6 +272,7 @@ function quoteChange({ cover, change, today }) {
         'Business Equipment increased to £' + change.equipmentTier.toLocaleString('en-GB'),
         price({ equipmentTier: change.equipmentTier, nonStandard }, 'BUSINESS_EQUIPMENT'),
         held.netPence,
+        { kind: 'increase', replacesId: held.id, sumInsured: change.equipmentTier },
       );
   }
   // ---- Employers' Liability
@@ -274,6 +283,8 @@ function quoteChange({ cover, change, today }) {
         'EMPLOYERS_LIABILITY',
         "Employers' Liability up to " + change.elTier,
         price({ elTier: change.elTier }, 'EMPLOYERS_LIABILITY'),
+        0,
+        { kind: 'add', elTier: change.elTier },
       );
     else if (!elTierOf(held.option) || held.netPence == null)
       refer(
@@ -288,6 +299,7 @@ function quoteChange({ cover, change, today }) {
         "Employers' Liability increased to up to " + change.elTier,
         price({ elTier: change.elTier }, 'EMPLOYERS_LIABILITY'),
         held.netPence,
+        { kind: 'increase', replacesId: held.id, elTier: change.elTier },
       );
   }
   // A choice that changes nothing (the same level, or cover already held) is not a change.

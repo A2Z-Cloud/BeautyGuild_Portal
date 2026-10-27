@@ -10,6 +10,7 @@ const { resolveContact, createCrmClient } = require('./records');
 const { createRateLimiter, clientKey } = require('./rateLimit');
 const { ITEMS, SERVICES, pounds, netPounds, membershipChangeOptions } = require('./catalogue');
 const { prorate } = require('./prorata');
+const { saveRevision } = require('./insuranceRevisions');
 const plans = require('./plans');
 const { fitToStripeLimit, filledCount, MAX_FILLED_KEYS } = require('./metadataContract');
 
@@ -26,6 +27,8 @@ function registerCheckoutRoutes(
     publicQuotesEnabled = false,
     membershipChangesEnabled = false,
     insuranceChangesEnabled = false,
+    insuranceChangesWritesEnabled = false,
+    revisionNamePrefix = '',
     enabled,
     getCurrentUser,
     getCrmHeaders,
@@ -386,7 +389,12 @@ function registerCheckoutRoutes(
   }
 
   // Creates a CRM record and returns its id. Used for the insurance records, which exist before payment.
-  async function crmCreate(req, module, record) {
+  async function crmCreate(
+    req,
+    module,
+    record,
+    failure = 'We could not prepare your insurance application. Please try again.',
+  ) {
     let r, body;
     try {
       r = await fetchImpl(crmApiDomain + '/crm/v3/' + module, {
@@ -397,11 +405,11 @@ function registerCheckoutRoutes(
       });
       body = await r.json();
     } catch {
-      throw new HttpError(502, 'CRM_UNAVAILABLE', 'We could not prepare your insurance application. Please try again.');
+      throw new HttpError(502, 'CRM_UNAVAILABLE', failure);
     }
     const result = body?.data?.[0];
     if (!r.ok || result?.status !== 'success' || !result.details?.id)
-      throw new HttpError(502, 'CRM_UNAVAILABLE', 'We could not prepare your insurance application. Please try again.');
+      throw new HttpError(502, 'CRM_UNAVAILABLE', failure);
     return String(result.details.id);
   }
 
@@ -486,6 +494,35 @@ function registerCheckoutRoutes(
       if (input.previousId)
         throw new HttpError(422, 'SIGN_IN_FOR_PRICE', 'Sign in to renew or upgrade your membership.');
       res.json({ quote: { ...view(await build(req, input, { guest: true })), indicative: true } });
+    }),
+  );
+  // Saves a quoted insurance change as a revision in the CRM: a payable change as Quoted with draft rows, a referred one as Under Review
+  // with the full request for the office. Nothing is charged and no live cover row is touched. Off until the writes switch is on.
+  router.post(
+    '/insurance-change/revision',
+    send(async (req, res) => {
+      if (!insuranceChangesEnabled || !insuranceChangesWritesEnabled)
+        throw new HttpError(503, 'NOT_AVAILABLE', 'Insurance changes are not available online yet.');
+      if (!limiter(req.portalUser.id))
+        throw new HttpError(429, 'RATE_LIMIT', 'Too many requests. Please wait a moment and try again.');
+      const b = await build(req, { ...inputFrom(req.body || {}), service: 'insurance_change', quote: true });
+      const r = b.prepared.revision;
+      if (!r) throw new HttpError(422, 'INVALID_REQUEST', 'Choose a change to save.');
+      // A change the member can pay for is only saved once every declaration and confirmation is answered.
+      if (r.outcome === 'PASS' && r.details.incomplete.length)
+        throw new HttpError(422, 'INCOMPLETE', [...new Set(r.details.incomplete)].join(' '));
+      const failure = 'We could not save your change. Please try again.';
+      const saved = await saveRevision({
+        read: path => crm(req, path),
+        create: (module, record) => crmCreate(req, module, record, failure),
+        update: (module, id, fields) => crmUpdate(req, module, id, fields),
+        contactId: b.contact.id,
+        dealId: String(req.body?.recordId || ''),
+        ...r,
+        lines: b.lines,
+        namePrefix: revisionNamePrefix,
+      });
+      res.status(saved.reused ? 200 : 201).json({ revision: saved });
     }),
   );
   // What a member can choose when changing a membership: each branch and whether they already hold it.

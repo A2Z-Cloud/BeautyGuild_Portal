@@ -47,6 +47,12 @@ function loadConfig(env = process.env) {
       .filter(d => /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(d)),
     // MTA R2: pro-rated extra branch and flat items on a current membership. Off until Creator handles the membership_change payment.
     // MTA R3: insurance change quotes (no writes, no payment yet). Off until the verification gate in docs/delivery/mta-r3-plan.md is cleared.
+    // MTA R3-2: saving a quoted change as a revision and draft rows in the CRM. Needs the new CRM fields (docs/api-contracts/pricing-payments.md).
+    insuranceChangesWritesEnabled: env.PORTAL_INSURANCE_CHANGES_WRITES === 'true',
+    // Set only if the Policy_Revisions Name field is mandatory and not auto-numbered: the revision is named this prefix, a space and its quote id.
+    revisionNamePrefix: String(env.PORTAL_REVISION_NAME_PREFIX || '')
+      .trim()
+      .slice(0, 40),
     insuranceChangesEnabled: env.PORTAL_INSURANCE_CHANGES_ENABLED === 'true',
     membershipChangesEnabled: env.PORTAL_MEMBERSHIP_CHANGES_ENABLED === 'true',
     crmDraftsEnabled: env.PORTAL_CRM_DRAFTS_ENABLED === 'true',
