@@ -201,8 +201,8 @@ test('the waiver log and the metadata say who, what and why', async () => {
     Staff_Member: 'staff:sam@guild.example',
     Date: TODAY,
     Stripe_Checkout_Session: 'cs_test_1',
-    Status: 'Pending',
   });
+  assert.equal(toCrmWaiverLog(r.waiverLogs[0], { status: 'Pending' }).Status, 'Pending', 'status only when asked for');
 });
 
 test('once per person: a second waiver of the joining fee is refused and says who waived it before', async () => {

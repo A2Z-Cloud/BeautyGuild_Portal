@@ -118,7 +118,8 @@ function toVoucher(row, fields = FIELDS) {
 }
 
 // The Waive_Logs module (CRM, created 28 October). Real API names from the field list. Status values are expected to be Pending, Paid and
-// Void; a Void waiver (the checkout was abandoned) does not count against the once-per-person limit.
+// Void. The Status field is OPTIONAL: nothing writes it unless the caller passes {status}, and a row with no status (or any status other
+// than Void) counts. A Void waiver (the checkout was abandoned) does not count against the once-per-person limit.
 const WAIVER_MODULE = 'Waive_Logs';
 const WAIVER_FIELDS = Object.freeze({
   contact: 'Contact', // lookup
@@ -150,7 +151,7 @@ const REDEMPTION_PAGE = 200; // Creator returns at most this many rows; a full p
 const CRM_ID = /^\d{10,25}$/;
 
 // The plain waiver record -> the CRM row. Nothing writes it from here: the caller does, once the Stripe session exists (sessionId).
-function toCrmWaiverLog(r, { sessionId = '' } = {}, f = WAIVER_FIELDS) {
+function toCrmWaiverLog(r, { sessionId = '', status = '' } = {}, f = WAIVER_FIELDS) {
   return {
     [f.contact]: r.contactId || null,
     [f.application]: r.applicationId || null,
@@ -162,7 +163,7 @@ function toCrmWaiverLog(r, { sessionId = '' } = {}, f = WAIVER_FIELDS) {
     [f.staffMember]: r.appliedBy,
     [f.date]: r.date,
     [f.session]: sessionId || null,
-    [f.status]: 'Pending',
+    ...(status ? { [f.status]: status } : {}),
   };
 }
 // A CRM waiver row -> the plain shape the engine compares (date, reason, who, application). Void ones are not returned.
