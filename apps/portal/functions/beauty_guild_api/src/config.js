@@ -78,8 +78,6 @@ function loadConfig(env = process.env) {
     workdriveApiDomain: httpsUrl(env.WORKDRIVE_API_DOMAIN, 'https://www.zohoapis.eu', 'WORKDRIVE_API_DOMAIN'),
     workdriveConnectionName: String(env.WORKDRIVE_CONNECTION_NAME || 'zohoworkdrive'),
     stripeSecretKey: String(env.STRIPE_SECRET_KEY || ''),
-    // Signing secret of the function's own Stripe webhook endpoint (monthly plan schedules). Not Creator's webhook secret.
-    stripeScheduleWebhookSecret: String(env.STRIPE_SCHEDULE_WEBHOOK_SECRET || '').trim(),
     portalPublicOrigin: String(env.PORTAL_PUBLIC_ORIGIN || ''),
     analyticsConnectionName: String(env.ANALYTICS_CONNECTION_NAME || 'analytics'),
     // Insurance risk checks (riskChecks.js). Each is off unless its switch is 'true', and a check that is on fails closed.

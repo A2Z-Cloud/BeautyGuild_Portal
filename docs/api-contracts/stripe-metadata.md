@@ -27,9 +27,9 @@ Every session has: `email`, `name`, `currency`, `status`, `source`, `type`, `con
 | `subscription_type` | always | `annual` or `monthly`. |
 | `membership_start` | always | The start of the membership term (yyyy-mm-dd). |
 | `membership_expiry` | always | The end of the membership term (yyyy-mm-dd). |
-| `base_membership_amount` | always | Gross amount of the membership line on this payment. On a monthly plan, its monthly share. |
+| `base_membership_amount` | always | Gross amount of the membership line on this payment. On a monthly plan, its monthly share (the joining fee, add-ons and extra branches below follow the same rule: only what renews is a monthly share). |
 | `base_membership_amount_net` | always | The same without VAT. The zero-rated part of a membership is £38.00 a year (divided by 12 on a monthly plan). |
-| `joining_fee_amount` | always | Gross joining fee on this payment (`0.00` for a renewal). |
+| `joining_fee_amount` | always | Gross joining fee on this payment (`0.00` where it is not charged: a renewal, or a membership starting within a month of the last one ending). On a monthly plan it is the full fee, charged once with the first payment. |
 | `joining_fee_amount_net` | always | Joining fee without VAT. |
 | `branch_addon_amount` | always | Gross amount for extra branches on this payment (`0.00` if none). |
 | `branch_addon_amount_net` | always | Extra branches without VAT. |
@@ -50,7 +50,7 @@ Every session has: `email`, `name`, `currency`, `status`, `source`, `type`, `con
 | `insured_people_ids` | always | Comma separated Insured_People ids. Empty if none. |
 | `insurance_extension_ids` | always | Comma separated Insurance_Extension ids, one per cover row. |
 | `insurance_declarations_id` | always | The Declarations record. |
-| `total_amount` | always | What is charged now, gross. The first payment on a monthly plan. |
+| `total_amount` | always | What is charged now, gross. The first payment on a monthly plan: the ongoing monthly payment plus the joining fee and any add-ons in full. |
 | `total_amount_net` | always | `total_amount` without VAT. Insurance premiums are VAT exempt, and IPT is not VAT. |
 | `business_name` | sometimes | The trading name typed on the Join page. Left out when blank. |
 | `address_line_1` | sometimes | Correspondence address typed on the Join page. Left out when blank. |
@@ -58,7 +58,7 @@ Every session has: `email`, `name`, `currency`, `status`, `source`, `type`, `con
 | `town` | sometimes | Correspondence town. Left out when blank. |
 | `county` | sometimes | Correspondence county. Left out when blank. |
 | `postcode` | sometimes | Correspondence postcode. Left out when blank. |
-| `monthly_plan` | sometimes | Monthly plans only, and only while there is room under Stripe's 50 key limit (it is also on the subscription): JSON of `payments`, `first_payment`, `later_payment`, `year_one_total`, `admin_fee` and `admin_fee_net`. |
+| `monthly_plan` | sometimes | Monthly plans only, and only while there is room under Stripe's 50 key limit (it is also on the subscription): JSON of `payments`, `first_payment`, `later_payment`, `one_off_total` (the joining fee and add-ons charged in full with the first payment), `year_one_total` (what is paid over the first twelve months), `admin_fee` and `admin_fee_net`. |
 
 ### `membership_insurance`
 
@@ -78,9 +78,9 @@ Every session has: `email`, `name`, `currency`, `status`, `source`, `type`, `con
 | `subscription_type` | always | `annual` or `monthly`. |
 | `membership_start` | always | The start of the membership term (yyyy-mm-dd). |
 | `membership_expiry` | always | The end of the membership term (yyyy-mm-dd). |
-| `base_membership_amount` | always | Gross amount of the membership line on this payment. On a monthly plan, its monthly share. |
+| `base_membership_amount` | always | Gross amount of the membership line on this payment. On a monthly plan, its monthly share (the joining fee, add-ons and extra branches below follow the same rule: only what renews is a monthly share). |
 | `base_membership_amount_net` | always | The same without VAT. The zero-rated part of a membership is £38.00 a year (divided by 12 on a monthly plan). |
-| `joining_fee_amount` | always | Gross joining fee on this payment (`0.00` for a renewal). |
+| `joining_fee_amount` | always | Gross joining fee on this payment (`0.00` where it is not charged: a renewal, or a membership starting within a month of the last one ending). On a monthly plan it is the full fee, charged once with the first payment. |
 | `joining_fee_amount_net` | always | Joining fee without VAT. |
 | `branch_addon_amount` | always | Gross amount for extra branches on this payment (`0.00` if none). |
 | `branch_addon_amount_net` | always | Extra branches without VAT. |
@@ -100,7 +100,7 @@ Every session has: `email`, `name`, `currency`, `status`, `source`, `type`, `con
 | `insured_people_ids` | always | Comma separated Insured_People ids. Empty if none. |
 | `insurance_extension_ids` | always | Comma separated Insurance_Extension ids, one per cover row. |
 | `insurance_declarations_id` | always | The Declarations record. |
-| `total_amount` | always | What is charged now, gross. The first payment on a monthly plan. |
+| `total_amount` | always | What is charged now, gross. The first payment on a monthly plan: the ongoing monthly payment plus the joining fee and any add-ons in full. |
 | `total_amount_net` | always | `total_amount` without VAT. Insurance premiums are VAT exempt, and IPT is not VAT. |
 | `insurance_start_date` | always | The policy start date (yyyy-mm-dd). |
 | `insurance_end_date` | always | The policy end date (yyyy-mm-dd). |
@@ -112,7 +112,7 @@ Every session has: `email`, `name`, `currency`, `status`, `source`, `type`, `con
 | `town` | sometimes | Correspondence town. Left out when blank. |
 | `county` | sometimes | Correspondence county. Left out when blank. |
 | `postcode` | sometimes | Correspondence postcode. Left out when blank. |
-| `monthly_plan` | sometimes | Monthly plans only, and only while there is room under Stripe's 50 key limit (it is also on the subscription): JSON of `payments`, `first_payment`, `later_payment`, `year_one_total`, `admin_fee` and `admin_fee_net`. |
+| `monthly_plan` | sometimes | Monthly plans only, and only while there is room under Stripe's 50 key limit (it is also on the subscription): JSON of `payments`, `first_payment`, `later_payment`, `one_off_total` (the joining fee and add-ons charged in full with the first payment), `year_one_total` (what is paid over the first twelve months), `admin_fee` and `admin_fee_net`. |
 
 ### `insurance`
 
@@ -135,7 +135,7 @@ Every session has: `email`, `name`, `currency`, `status`, `source`, `type`, `con
 | `insured_people_ids` | always | Comma separated Insured_People ids. Empty if none. |
 | `insurance_extension_ids` | always | Comma separated Insurance_Extension ids, one per cover row. |
 | `insurance_declarations_id` | always | The Declarations record. |
-| `total_amount` | always | What is charged now, gross. The first payment on a monthly plan. |
+| `total_amount` | always | What is charged now, gross. The first payment on a monthly plan: the ongoing monthly payment plus the joining fee and any add-ons in full. |
 | `total_amount_net` | always | `total_amount` without VAT. Insurance premiums are VAT exempt, and IPT is not VAT. |
 
 ### `accreditation`
@@ -152,7 +152,7 @@ Every session has: `email`, `name`, `currency`, `status`, `source`, `type`, `con
 | `membership_required` | always | `true` if the school had no membership, so one is bundled with the accreditation. |
 | `membership_id` | always | The member profile of the school's current membership. Empty if none. |
 | `membership_details` | always | JSON of `required`, `type` (Associate or International when bundled), `start_date` and `expiry_date`. |
-| `monthly_plan` | sometimes | Monthly plans only, and only while there is room under Stripe's 50 key limit (it is also on the subscription): JSON of `payments`, `first_payment`, `later_payment`, `year_one_total`, `admin_fee` and `admin_fee_net`. |
+| `monthly_plan` | sometimes | Monthly plans only, and only while there is room under Stripe's 50 key limit (it is also on the subscription): JSON of `payments`, `first_payment`, `later_payment`, `one_off_total` (the joining fee and add-ons charged in full with the first payment), `year_one_total` (what is paid over the first twelve months), `admin_fee` and `admin_fee_net`. |
 
 ### `additional_venue`
 
@@ -188,7 +188,7 @@ Every session has: `email`, `name`, `currency`, `status`, `source`, `type`, `con
 | `badge_amount_net` | always | Badges without VAT. |
 | `sticker_amount` | always | Gross amount for window stickers (`0.00` if none). |
 | `sticker_amount_net` | always | Window stickers without VAT. |
-| `total_amount` | always | What is charged now, gross. The first payment on a monthly plan. |
+| `total_amount` | always | What is charged now, gross. The first payment on a monthly plan: the ongoing monthly payment plus the joining fee and any add-ons in full. |
 | `total_amount_net` | always | `total_amount` without VAT. Insurance premiums are VAT exempt, and IPT is not VAT. |
 
 ### `membership_addon`
@@ -201,7 +201,7 @@ Every session has: `email`, `name`, `currency`, `status`, `source`, `type`, `con
 | `certificate_amount` | always | Gross amount for extra certificates (`0.00` if none). |
 | `badge_amount` | always | Gross amount for badges (`0.00` if none). |
 | `sticker_amount` | always | Gross amount for window stickers (`0.00` if none). |
-| `total_amount` | always | What is charged now, gross. The first payment on a monthly plan. |
+| `total_amount` | always | What is charged now, gross. The first payment on a monthly plan: the ongoing monthly payment plus the joining fee and any add-ons in full. |
 
 ### Common keys
 
@@ -221,11 +221,9 @@ Every session has: `email`, `name`, `currency`, `status`, `source`, `type`, `con
 | --- | --- | --- |
 | `plan` | always | `annual` or `monthly`. |
 | `contact_id` | always | The CRM Contact id, so a renewal can find the customer without the session. |
-| `phased` | sometimes | `true` or `false`, monthly plans only: whether the plan has year-one lines that a schedule drops at payment 13. |
 
 ## Line item product metadata
 
 | Key | Meaning |
 | --- | --- |
 | `sku` | The price list code (the Books SKU). Catalogue lines have it as the price's `lookup_key` instead. |
-| `phase` | Monthly plans only: `ongoing`, or `year_one` for lines a schedule drops after 12 payments. |

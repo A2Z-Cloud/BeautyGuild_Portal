@@ -31,7 +31,6 @@ function registerCheckoutRoutes(
     getCrmHeaders,
     crmApiDomain,
     stripeKey,
-    scheduleWebhookSecret = '',
     publicOrigin,
     riskChecks = null,
     fetchImpl = fetch,
@@ -251,25 +250,42 @@ function registerCheckoutRoutes(
           l.priceId = null;
         }
     if (prepared.monthly) {
-      // A monthly plan is charged as 12 payments of the yearly price divided by 12, plus the admin fee. See plans.js.
+      // A monthly plan is charged as 12 payments of the yearly price divided by 12, plus the admin fee. The joining fee and add-ons are
+      // charged once, in full, with the first payment. See plans.js.
       const admin = await priceFor('admin_fee_monthly');
       const plan = plans.splitMonthly(lines, admin.unit);
-      const monthly = plan.lines
-        .filter(l => l.monthlyPence > 0)
-        .map(l => ({
-          item: l.item,
-          fee: l.fee,
-          sku: l.sku,
-          name: l.name.replace('(annual)', '(monthly)') + (l.quantity > 1 && !l.fee ? ' x ' + l.quantity : ''),
-          quantity: 1,
-          origQuantity: l.quantity,
-          scale: 1 / plans.PAYMENTS,
-          priceId: null,
-          unitPence: l.monthlyPence,
-          totalPence: l.monthlyPence,
-          interval: 'month',
-          term: l.term,
-        }));
+      const monthly = [];
+      for (const l of plan.lines) {
+        if (l.term === 'year_one') {
+          // A one-off line on the first invoice, at its catalogue price, exactly as a yearly purchase takes it.
+          monthly.push({
+            item: l.item,
+            fee: l.fee,
+            sku: l.sku,
+            name: l.name,
+            quantity: l.quantity,
+            priceId: l.priceId,
+            unitPence: l.unitPence,
+            totalPence: l.totalPence,
+            interval: null,
+            term: 'year_one',
+          });
+        } else if (l.monthlyPence > 0)
+          monthly.push({
+            item: l.item,
+            fee: l.fee,
+            sku: l.sku,
+            name: l.name.replace('(annual)', '(monthly)') + (l.quantity > 1 && !l.fee ? ' x ' + l.quantity : ''),
+            quantity: 1,
+            origQuantity: l.quantity,
+            scale: 1 / plans.PAYMENTS,
+            priceId: null,
+            unitPence: l.monthlyPence,
+            totalPence: l.monthlyPence,
+            interval: 'month',
+            term: 'ongoing',
+          });
+      }
       monthly.push({
         item: 'admin_fee_monthly',
         sku: ITEMS.admin_fee_monthly.code,
@@ -316,13 +332,14 @@ function registerCheckoutRoutes(
           payable: !b.prepared.blocked && b.prepared.payable !== false,
           ...(b.prepared.details ? { details: b.prepared.details } : {}),
           ...(b.prepared.blocked ? { blocked: b.prepared.blocked } : {}),
-          // A monthly plan: 12 payments, the first including the one-off items spread over it, then the ongoing amount from payment 13.
+          // A monthly plan: 12 payments a year, the first including the joining fee and any add-ons in full, every later one (and every renewal) the same ongoing amount.
           ...(b.plan
             ? {
                 plan: {
                   payments: plans.PAYMENTS,
                   firstPaymentPence: b.plan.firstPaymentPence,
                   laterPaymentPence: b.plan.laterPaymentPence,
+                  oneOffPence: b.plan.oneOffPence,
                   yearOneTotalPence: b.plan.yearOneTotalPence,
                   adminFeePence: b.plan.adminPence,
                 },
@@ -431,34 +448,6 @@ function registerCheckoutRoutes(
       next(e);
     }
   };
-  // Stripe tells us a monthly plan has been paid for, so it can be put on its schedule (plans.js) even if the customer never returns to the
-  // portal. The signing secret is this endpoint's own (not Creator's webhook secret); without it the route does not exist.
-  app.post(
-    '/stripe/webhook',
-    express.raw({ type: () => true, limit: '256kb' }),
-    send(async (req, res) => {
-      if (!scheduleWebhookSecret) throw new HttpError(404, 'NOT_FOUND', 'Not found.');
-      if (!plans.verifyStripeSignature(req.body, req.get('stripe-signature'), scheduleWebhookSecret, now()))
-        throw new HttpError(400, 'BAD_SIGNATURE', 'Invalid signature.');
-      let event;
-      try {
-        event = JSON.parse(req.body.toString('utf8'));
-      } catch {
-        throw new HttpError(400, 'BAD_REQUEST', 'Invalid event.');
-      }
-      const session = event?.data?.object;
-      if (
-        event?.type === 'checkout.session.completed' &&
-        session?.mode === 'subscription' &&
-        session.payment_status === 'paid' &&
-        session.subscription &&
-        session.metadata?.source === 'portal_v2'
-      ) {
-        await plans.ensureSchedule(stripe, session.subscription);
-      }
-      res.json({ received: true });
-    }),
-  );
   router.use(express.json({ limit: '40kb' }));
   router.use(async (req, res, next) => {
     try {
@@ -554,31 +543,6 @@ function registerCheckoutRoutes(
       throw new HttpError(409, 'QUOTE_EXPIRED', EXPIRED);
     }),
   );
-  // The payment return page asks us to finish a monthly plan: the customer must be the one who paid.
-  router.post(
-    '/finish',
-    send(async (req, res) => {
-      const id = String(req.body?.sessionId || '');
-      if (!/^cs_(test|live)_[A-Za-z0-9]+$/.test(id))
-        throw new HttpError(422, 'INVALID_REQUEST', 'Missing payment reference.');
-      if (!stripeKey.startsWith('sk_test_')) throw unavailable();
-      if (!limiter(req.portalUser.id))
-        throw new HttpError(429, 'RATE_LIMIT', 'Too many requests. Please wait a moment and try again.');
-      const session = await stripe('GET', '/checkout/sessions/' + id);
-      const mine =
-        String(session.customer_email || '')
-          .trim()
-          .toLowerCase() ===
-        String(req.portalUser.email || '')
-          .trim()
-          .toLowerCase();
-      if (!mine || session.metadata?.source !== 'portal_v2')
-        throw new HttpError(404, 'NOT_FOUND', 'Payment not found.');
-      if (session.mode !== 'subscription') return res.json({ status: 'not_needed' });
-      if (session.payment_status !== 'paid') return res.json({ status: 'pending' });
-      res.json({ status: (await plans.ensureSchedule(stripe, session.subscription)).status });
-    }),
-  );
   router.post(
     '/',
     send(async (req, res) => {
@@ -668,6 +632,7 @@ function registerCheckoutRoutes(
             payments: plans.PAYMENTS,
             first_payment: pounds(b.plan.firstPaymentPence),
             later_payment: pounds(b.plan.laterPaymentPence),
+            one_off_total: pounds(b.plan.oneOffPence),
             year_one_total: pounds(b.plan.yearOneTotalPence),
             admin_fee: pounds(b.plan.adminPence),
             admin_fee_net: (b.plan.adminPence / 120).toFixed(2),
@@ -677,12 +642,8 @@ function registerCheckoutRoutes(
           mode: b.mode,
           customer_email: req.portalUser.email,
           ...(expiresAt ? { expires_at: String(Math.floor(expiresAt.getTime() / 1000)) } : {}),
-          // Stripe fills in the session id, so the return page can ask us to finish setting up a monthly plan (see plans.js).
           success_url:
-            publicOrigin +
-            '/app/#/payment-return?result=success&service=' +
-            encodeURIComponent(input.service) +
-            (b.mode === 'subscription' ? '&session_id={CHECKOUT_SESSION_ID}' : ''),
+            publicOrigin + '/app/#/payment-return?result=success&service=' + encodeURIComponent(input.service),
           cancel_url:
             publicOrigin + '/app/#/payment-return?result=cancelled&service=' + encodeURIComponent(input.service),
           ...(b.contact ? { client_reference_id: String(b.contact.id) } : {}),
@@ -695,9 +656,8 @@ function registerCheckoutRoutes(
             params.set('line_items[' + i + '][price_data][unit_amount]', String(l.unitPence));
             // The price list code (the item's SKU in Books) travels on the line's product, so Creator can find the Books item by code, not by name.
             if (l.sku) params.set('line_items[' + i + '][price_data][product_data][metadata][sku]', l.sku);
-            // A line that renews recurs. A monthly plan's lines also carry their term on the product so the schedule knows which stop after 12 payments.
+            // A line that renews recurs.
             if (l.interval) params.set('line_items[' + i + '][price_data][recurring][interval]', l.interval);
-            if (b.plan) params.set('line_items[' + i + '][price_data][product_data][metadata][phase]', l.term);
           }
           params.set('line_items[' + i + '][quantity]', String(l.quantity));
         });
@@ -707,10 +667,6 @@ function registerCheckoutRoutes(
         }
         if (b.plan) {
           params.set('subscription_data[metadata][plan]', 'monthly');
-          params.set(
-            'subscription_data[metadata][phased]',
-            b.lines.some(l => l.term === 'year_one') ? 'true' : 'false',
-          );
           params.set('subscription_data[metadata][contact_id]', String(b.contact?.id || ''));
         }
         for (const [k, v] of Object.entries(meta)) params.set('metadata[' + k + ']', String(v).slice(0, 500));

@@ -153,8 +153,6 @@ export const portalApi = Object.freeze({
   startCheckout: async body => billingReq('/', { method: 'POST', body }),
   getMembershipChangeOptions: async id =>
     (await billingReq('/membership-options?recordId=' + encodeURIComponent(id))).options,
-  // After a monthly plan is paid for, asks the server to put it on its 12 month schedule. Safe to repeat.
-  finishCheckout: async sessionId => billingReq('/finish', { method: 'POST', body: { sessionId } }),
   resumePayment: async policyId => billingReq('/resume', { method: 'POST', body: { policyId } }),
   getDocuments: async (kind, id, path = '') =>
     documentHttp
