@@ -6,6 +6,8 @@
 // may pay (ownership), which items to charge, and the metadata Creator expects after payment.
 const { HttpError } = require('./errors');
 const { prorata } = require('./prorata');
+const { loadCover } = require('./cover');
+const insChange = require('./insuranceChange');
 const insurance = require('./insurance');
 
 const ID = /^\d{10,25}$/;
@@ -33,6 +35,8 @@ const ITEMS = Object.freeze({
   addon_sticker: { name: 'Window sticker', code: 'MEM-STICKER' },
   joining_fee: { name: 'Membership joining fee', code: 'MEM-JOIN' },
   membership_branch: { name: 'Additional branch', code: 'MEM-BRANCH' },
+  // The GBP 5 adjustment fee on an insurance change (including VAT; no IPT). Its Stripe price must exist, with this lookup key.
+  mta_fee: { name: 'Adjustment fee', code: 'FEE-MTA' },
   // Yearly memberships are subscriptions (the interval is checked). Every level is £55 today but has its own price so they can differ later.
   // zeroRatedPence is the zero-rated part of the fee, used only to split net from gross for Creator.
   membership_associate_annual: {
@@ -801,6 +805,140 @@ SERVICES.membership_change = {
           total_amount: total,
           total_amount_net: totalNet,
         };
+      },
+    };
+  },
+};
+
+// ---- Insurance changes (MTA R3-1): a quote for a change to a Non-Salon policy. Read only: nothing is written and nothing is paid. ----
+const ISO = /^\d{4}-\d{2}-\d{2}$/;
+const addDays = (iso, n) => isoDay(new Date(Date.parse(iso + 'T00:00:00Z') + n * 864e5));
+
+SERVICES.insurance_change = {
+  title: 'Insurance changes',
+  async prepare({ req, crm, contact, input, risk }) {
+    if (!ID.test(String(input.recordId || ''))) notFound('Membership');
+    const cover = await loadCover({
+      call: crm,
+      req,
+      contactId: contact.id,
+      dealId: String(input.recordId || ''),
+      isDraft: row => row.Application_Status === 'Draft',
+    });
+    const asked = insChange.cleanChange(input.change);
+    const today = isoDay(new Date());
+    const policy = cover.insurance;
+    // The start date is from today up to 30 days ahead and never after the end of the policy (Guild, 26 October). No back-dating online.
+    const latest =
+      policy && policy.endDate && addDays(today, 30) > policy.endDate ? policy.endDate : addDays(today, 30);
+    if (!ISO.test(asked.effectiveDate) || asked.effectiveDate < today || asked.effectiveDate > latest)
+      bad('Choose a start date from today up to ' + latest + '.');
+    const quote = insChange.quoteChange({ cover, change: asked, today });
+    const reasons = [...quote.reasons];
+
+    // A renewal can already exist (renewals open 30 days before the end). A change in the last month then also affects it, so it goes to the
+    // office (MTA-D23).
+    if (policy && policy.endDate && asked.effectiveDate > addDays(policy.endDate, -30)) {
+      const deals = await crm(
+        req,
+        'Deals/search?criteria=' +
+          esc('(Contact_Name:equals:' + contact.id + ')') +
+          '&fields=' +
+          esc('Stage,Start_Date'),
+      );
+      if (deals.some(d => d.Stage === 'Active' && d.Start_Date && d.Start_Date > policy.endDate))
+        reasons.push({
+          code: 'RENEWED',
+          message:
+            'Your policy has already been renewed, so this change also affects your renewal. Please call the office.',
+        });
+    }
+
+    // The underwriting rules on the policy as it will be, and the risk checks on any name being added.
+    const ins = insChange.afterIns({ cover, change: asked });
+    const country = (policy && policy.premises && policy.premises[0] && policy.premises[0].country) || 'United Kingdom';
+    const rules = policy ? insurance.evaluateRules(ins, country, { complete: !input.quote }) : { results: [] };
+    let screening = { results: [], riskMessage: null };
+    if (risk && asked.addPeople.length)
+      screening = await risk.screen({
+        req,
+        ins: { ...ins, insNamedPeople: asked.addPeople },
+        country,
+        contact,
+        input,
+        premises: false,
+      });
+    const merged = insurance.summarise([
+      ...rules.results,
+      ...screening.results,
+      ...reasons.map(r => ({ status: 'REFER', code: r.code, customerMessage: r.message })),
+    ]);
+    const blocked =
+      merged.overall === 'PASS' || (merged.overall === 'INCOMPLETE' && input.quote)
+        ? null
+        : {
+            status: merged.overall,
+            reasons: [...new Set(merged.results.map(r => r.customerMessage))],
+            riskMessage: screening.riskMessage,
+          };
+    const details = {
+      quoteId: policy ? insChange.quoteId({ cover, change: asked, quote }) : null,
+      outcome: blocked ? blocked.status : 'PASS',
+      effectiveDate: asked.effectiveDate,
+      term: quote.term || null,
+      items: quote.items.map(i => ({
+        label: i.label,
+        premiumPence: i.premiumPence,
+        creditPence: i.creditPence,
+        netPence: i.netPence,
+      })),
+      premiumNetPence: quote.premiumNetPence,
+      iptPence: quote.iptPence,
+      needsDeclarations:
+        asked.addPeople.length > 0 ||
+        asked.treatments.length > 0 ||
+        Boolean(asked.teaching) ||
+        Boolean(asked.equipmentTier) ||
+        Boolean(asked.elTier),
+    };
+    const inline = [];
+    if (!blocked) {
+      for (const it of quote.items)
+        if (it.netPence > 0)
+          inline.push({
+            name: 'Insurance - ' + it.label + ' (' + it.days + ' of ' + it.totalDays + ' days)',
+            unitPence: it.netPence,
+            quantity: 1,
+            sku: it.sku,
+          });
+      if (quote.iptPence)
+        inline.push({
+          name: 'Insurance Premium Tax (' + Math.round(insurance.IPT_RATE * 100) + '%)',
+          unitPence: quote.iptPence,
+          quantity: 1,
+          sku: insurance.IPT_SKU,
+        });
+      if (quote.employeesCharged)
+        inline.push({
+          name: ITEMS.employee_fee_non_salon.name + ' (pro-rata)',
+          priceItem: 'employee_fee_non_salon',
+          quantity: quote.employeesCharged,
+          prorata: quote.term,
+          sku: ITEMS.employee_fee_non_salon.code,
+        });
+      if (quote.feeApplies)
+        inline.push({ name: ITEMS.mta_fee.name, priceItem: 'mta_fee', quantity: 1, sku: ITEMS.mta_fee.code });
+    }
+    return {
+      lines: [],
+      inline,
+      blocked,
+      details,
+      // This slice only quotes: paying for an insurance change is switched off until the revision records and Creator are ready.
+      payable: false,
+      fingerprint: JSON.stringify([asked, details.quoteId]),
+      metadata: () => {
+        throw new HttpError(503, 'NOT_AVAILABLE', 'Paying for an insurance change is not available online yet.');
       },
     };
   },

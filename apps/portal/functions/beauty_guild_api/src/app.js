@@ -148,6 +148,7 @@ function createApp({
   registerCheckoutRoutes(app, {
     publicQuotesEnabled: config.publicQuotesEnabled,
     membershipChangesEnabled: config.membershipChangesEnabled,
+    insuranceChangesEnabled: config.insuranceChangesEnabled,
     enabled: config.billingEnabled,
     getCurrentUser,
     getCrmHeaders,

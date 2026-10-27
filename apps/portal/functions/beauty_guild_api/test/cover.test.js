@@ -241,3 +241,45 @@ test('the cover read never writes to the CRM or prices anything', async () => {
     assert.ok(seen.every(u => !u.includes('stripe')));
   });
 });
+
+test('the cover carries the saved levels, payment frequency, the person each cover row is for and the premises construction', async () => {
+  await withApp(
+    {
+      deals: { [DEAL]: deal() },
+      Insurance_Policy: [policy({ Payment_Frequency: 'Annual', Annual_Turnover: 90000, Annual_Wage_Roll: null })],
+      Insurance_Extension: [
+        { id: 'e1', Cover_Code: 'BUSINESS_EQUIPMENT', Premium_Net: 65, Sum_Insured: 5000, Status: 'Active' },
+        { id: 'e2', Cover_Code: 'NAMED_EMPLOYEES', Premium_Net: 32.5, Insured_Person: { id: 'p1' }, Status: 'Active' },
+        {
+          id: 'e3',
+          Cover_Code: 'EMPLOYERS_LIABILITY',
+          Premium_Net: 75,
+          Sum_Insured: '',
+          Cover_Option: 'Up to 1',
+          Status: 'Active',
+        },
+      ],
+      Insured_Premises: [
+        { id: 'm1', Standard_Construction: 'No', More_Than_15_Percent_Nonstandard: 'Yes', Country: 'United Kingdom' },
+      ],
+    },
+    async get => {
+      const c = (await get(DEAL)).body.cover.insurance;
+      assert.equal(c.paymentFrequency, 'Annual');
+      assert.equal(c.annualTurnover, 90000);
+      assert.equal(c.annualWageRoll, null);
+      assert.deepEqual(
+        c.covers.map(x => [x.code, x.sumInsured, x.option, x.personId]),
+        [
+          ['BUSINESS_EQUIPMENT', 5000, null, null],
+          ['NAMED_EMPLOYEES', null, null, 'p1'],
+          ['EMPLOYERS_LIABILITY', null, 'Up to 1', null],
+        ],
+      );
+      assert.deepEqual(
+        [c.premises[0].standardConstruction, c.premises[0].nonStandardOver15, c.premises[0].country],
+        ['no', 'yes', 'United Kingdom'],
+      );
+    },
+  );
+});

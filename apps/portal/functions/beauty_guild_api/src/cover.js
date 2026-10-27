@@ -7,6 +7,8 @@ const { TREATMENT_EXTENSIONS } = require('./insurance');
 
 const uri = s => encodeURIComponent(String(s));
 const text = v => (v == null ? '' : String(v).trim());
+// The CRM keeps these answers as Yes and No; a change reads them as yes, no or unknown.
+const yesNo = v => (/^yes/i.test(text(v)) ? 'yes' : /^no/i.test(text(v)) ? 'no' : null);
 const pence = v => (v == null || v === '' || !Number.isFinite(Number(v)) ? null : Math.round(Number(v) * 100));
 const lookupId = v => (v && typeof v === 'object' ? String(v.id || '') : text(v));
 
@@ -55,6 +57,9 @@ const POLICY_FIELDS = [
   'Contact',
   'Membership',
   'Risk_Status',
+  'Payment_Frequency',
+  'Annual_Turnover',
+  'Annual_Wage_Roll',
   'Modified_Time',
 ];
 const REVISION_FIELDS = [
@@ -124,6 +129,9 @@ async function loadCover({ call, req, contactId, dealId, isDraft }) {
         'IPT_Amount',
         'Gross_Amount',
         'Status',
+        'Sum_Insured',
+        'Cover_Option',
+        'Insured_Person',
       ]),
       by('Insured_People', ['Policy', 'Name', 'First_Name', 'Last_Name', 'Person_Type', 'Status']),
       by('Insured_Premises', [
@@ -135,6 +143,8 @@ async function loadCover({ call, req, contactId, dealId, isDraft }) {
         'County',
         'Postcode',
         'Country',
+        'Standard_Construction',
+        'More_Than_15_Percent_Nonstandard',
       ]),
     ]);
     insurance = {
@@ -144,6 +154,15 @@ async function loadCover({ call, req, contactId, dealId, isDraft }) {
       status: text(policy.Application_Status) || null,
       startDate: policy.Policy_Start_Date || null,
       endDate: policy.Policy_End_Date || null,
+      paymentFrequency: text(policy.Payment_Frequency) || null,
+      annualTurnover:
+        Number.isFinite(Number(policy.Annual_Turnover)) && policy.Annual_Turnover != null
+          ? Number(policy.Annual_Turnover)
+          : null,
+      annualWageRoll:
+        Number.isFinite(Number(policy.Annual_Wage_Roll)) && policy.Annual_Wage_Roll != null
+          ? Number(policy.Annual_Wage_Roll)
+          : null,
       covers: covers.filter(current).map(c => ({
         id: String(c.id),
         code: text(c.Cover_Code) || null,
@@ -152,6 +171,13 @@ async function loadCover({ call, req, contactId, dealId, isDraft }) {
         netPence: pence(c.Premium_Net),
         iptPence: pence(c.IPT_Amount),
         grossPence: pence(c.Gross_Amount),
+        // The level the member chose, saved at new business (the persistence fix). Blank on older policies, which a change cannot verify.
+        sumInsured:
+          c.Sum_Insured == null || c.Sum_Insured === '' || !Number.isFinite(Number(c.Sum_Insured))
+            ? null
+            : Number(c.Sum_Insured),
+        option: text(c.Cover_Option) || null,
+        personId: lookupId(c.Insured_Person) || null,
       })),
       people: people.filter(current).map(p => ({
         id: String(p.id),
@@ -160,6 +186,9 @@ async function loadCover({ call, req, contactId, dealId, isDraft }) {
       })),
       premises: premises.map(p => ({
         id: String(p.id),
+        country: text(p.Country) || null,
+        standardConstruction: yesNo(p.Standard_Construction),
+        nonStandardOver15: yesNo(p.More_Than_15_Percent_Nonstandard),
         address: [p.Address_Line_1, p.Address_Line_2, p.Town, p.County, p.Postcode].map(text).filter(Boolean),
       })),
     };

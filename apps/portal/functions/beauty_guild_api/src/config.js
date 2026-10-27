@@ -46,6 +46,8 @@ function loadConfig(env = process.env) {
       .map(s => s.trim().toLowerCase().replace(/^@/, ''))
       .filter(d => /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(d)),
     // MTA R2: pro-rated extra branch and flat items on a current membership. Off until Creator handles the membership_change payment.
+    // MTA R3: insurance change quotes (no writes, no payment yet). Off until the verification gate in docs/delivery/mta-r3-plan.md is cleared.
+    insuranceChangesEnabled: env.PORTAL_INSURANCE_CHANGES_ENABLED === 'true',
     membershipChangesEnabled: env.PORTAL_MEMBERSHIP_CHANGES_ENABLED === 'true',
     crmDraftsEnabled: env.PORTAL_CRM_DRAFTS_ENABLED === 'true',
     draftStatus: String(env.PORTAL_CRM_DRAFT_STATUS || 'Draft'),
