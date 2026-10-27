@@ -40,15 +40,17 @@ const basketLines = () => [
   line('addon_badge', 'MEM-BADGE', 'Badge', 400, 2),
   line('addon_certificate', 'MEM-CERT', 'Certificate', 400),
 ];
-const STAFF = { type: 'staff', id: 'u-77', email: 'sam@guild.example' };
+const STAFF = { type: 'staff', id: 'u-77', email: 'sam@guild.example', canWaive: true };
+const STAFF_NO_WAIVE = { type: 'staff', id: 'u-78', email: 'pat@guild.example' };
 const CUSTOMER = { type: 'customer', id: 'user-1' };
 const TODAY = '2026-10-27';
 const NOW = Date.parse('2026-10-27T12:00:00+00:00');
 // The engine's clock is fixed for the tests; basket.at moves it.
-const apply = (basket, opts = {}) => applyDiscounts(basket, { now: () => basket.at ?? NOW, ...opts });
+const apply = (basket, opts = {}) =>
+  applyDiscounts(basket, { now: () => basket.at ?? NOW, allowVouchers: true, ...opts });
 
 // A fake CRM store with the same three methods as the real one.
-function fakeStore({ vouchers = [], redeemed = {}, waived = [] } = {}) {
+function fakeStore({ vouchers = [], redemptions = [], waived = [] } = {}) {
   const calls = [];
   return {
     calls,
@@ -56,8 +58,9 @@ function fakeStore({ vouchers = [], redeemed = {}, waived = [] } = {}) {
       calls.push(['findVoucher', code]);
       return vouchers.find(v => v.code === code) || null;
     },
-    async redemptionsBy(voucherId, contactId) {
-      return redeemed[voucherId + ':' + contactId] || 0;
+    // Rows that count against a voucher: { voucherId, contactId, key }.
+    async redemptions(voucherId, { contactId } = {}) {
+      return redemptions.filter(r => r.voucherId === voucherId && (!contactId || r.contactId === contactId));
     },
     async joiningWaivers() {
       return waived;
@@ -178,6 +181,7 @@ test('the waiver log and the metadata say who, what and why', async () => {
       note: 'Rang us twice',
       appliedBy: 'staff:sam@guild.example',
       date: TODAY,
+      at: '2026-10-27T12:00:00.000Z',
     },
   ]);
   const [entry] = JSON.parse(r.metadata);
@@ -324,11 +328,11 @@ test('a voucher whose usage limit is reached is refused; one below it works', as
 });
 
 test('voucher restrictions: member type, issued to one person, once per person, switched off, wrong type, unknown', async () => {
-  const run = (v, over = {}, redeemed = {}) =>
+  const run = (v, over = {}, redemptions = []) =>
     apply(base(over), {
       code: 'SPRING',
       actor: STAFF,
-      store: fakeStore({ vouchers: v ? [v] : [], redeemed }),
+      store: fakeStore({ vouchers: v ? [v] : [], redemptions }),
     });
   await refused(run(voucher({ memberTypes: ['Full', 'International'] })), 'NOT_VALID', 'member_type');
   assert.ok(
@@ -337,9 +341,10 @@ test('voucher restrictions: member type, issued to one person, once per person, 
   assert.ok((await run(voucher({ memberTypes: [] }), { memberType: '' })).totalDiscountPence > 0, 'empty means anyone');
   await refused(run(voucher({ contactId: '999' })), 'NOT_VALID', 'other_person');
   assert.ok((await run(voucher({ contactId: '555' }))).totalDiscountPence > 0);
-  await refused(run(voucher({ onePerPerson: true }), {}, { 'v1:555': 1 }), 'NOT_VALID', 'already_used');
+  const earlier = [{ voucherId: 'v1', contactId: '555', key: 'another-application' }];
+  await refused(run(voucher({ onePerPerson: true }), {}, earlier), 'NOT_VALID', 'already_used');
   assert.ok(
-    (await run(voucher({ onePerPerson: false }), {}, { 'v1:555': 1 })).totalDiscountPence > 0,
+    (await run(voucher({ onePerPerson: false }), {}, earlier)).totalDiscountPence > 0,
     'not limited to one use',
   );
   await refused(run(voucher({ active: false })), 'NOT_VALID', 'inactive');
@@ -371,7 +376,13 @@ test('the store reads waivers from the CRM and redemptions from Creator, and ign
     },
     creator: async (req, report, criteria) => {
       creatorCalls.push([report, criteria]);
-      return [{ [R.status]: 'Used' }, { [R.status]: 'Reversed' }, { [R.status]: 'Used' }];
+      return [
+        { [R.status]: 'Used', [R.contact]: '9', [R.key]: 'k1' },
+        { [R.status]: 'Reversed', [R.key]: 'k2' },
+        { [R.status]: 'Reserved', [R.key]: 'k3' },
+        { [R.status]: 'Applied', [R.key]: 'k4' },
+        { [R.status]: 'Failed', [R.key]: 'k5' },
+      ];
     },
   });
   const waived = await store.joiningWaivers('1011174000000000099');
@@ -391,20 +402,24 @@ test('the store reads waivers from the CRM and redemptions from Creator, and ign
     crmPaths[0],
     /^Waive_Logs\/search\?criteria=\(\(Contact:equals:1011174000000000099\)and\(Item:equals:MEM-JOIN\)\)/,
   );
-  assert.equal(await store.redemptionsBy('1011174000000000001', '1011174000000000099'), 2, 'Reversed is given back');
+  const counted = await store.redemptions('1011174000000000001', { contactId: '1011174000000000099' });
+  assert.deepEqual(
+    counted.map(c => c.key),
+    ['k1', 'k3', 'k4'],
+    'Reserved, Applied and Used count; Reversed and Failed are given back',
+  );
   assert.deepEqual(creatorCalls[0], [
     'Voucher_Redemptions_Report',
     '(voucher == "1011174000000000001" && contact == "1011174000000000099")',
   ]);
+  await store.redemptions('1011174000000000001');
+  assert.equal(creatorCalls[1][1], '(voucher == "1011174000000000001")', 'for everyone');
   // Ids that are not CRM ids never reach a query, and the checks fail closed.
   await assert.rejects(store.joiningWaivers('1) or (x'), e => e.code === 'DISCOUNT_LOG_UNAVAILABLE');
-  await assert.rejects(store.redemptionsBy('1" || 1==1', '2'), e => e.code === 'DISCOUNT_LOG_UNAVAILABLE');
-  assert.equal(crmPaths.length + creatorCalls.length, 2);
+  await assert.rejects(store.redemptions('1" || 1==1'), e => e.code === 'DISCOUNT_LOG_UNAVAILABLE');
+  assert.equal(crmPaths.length + creatorCalls.length, 3);
   const noCreator = createCrmStore({ req: {}, crm: async () => [] });
-  await assert.rejects(
-    noCreator.redemptionsBy('1011174000000000001', '1011174000000000099'),
-    e => e.code === 'DISCOUNT_LOG_UNAVAILABLE',
-  );
+  await assert.rejects(noCreator.redemptions('1011174000000000001'), e => e.code === 'DISCOUNT_LOG_UNAVAILABLE');
   const down = createCrmStore({
     req: {},
     crm: async () => {
@@ -415,25 +430,152 @@ test('the store reads waivers from the CRM and redemptions from Creator, and ign
     },
   });
   await assert.rejects(down.joiningWaivers('1011174000000000099'));
-  await assert.rejects(down.redemptionsBy('1011174000000000001', '1011174000000000099'));
+  await assert.rejects(down.redemptions('1011174000000000001'));
+  // A full page of rows cannot be counted safely, so it fails closed rather than undercount.
+  const full = createCrmStore({
+    req: {},
+    crm: async () => [],
+    creator: async () => Array(200).fill({ [R.status]: 'Used' }),
+  });
+  await assert.rejects(full.redemptions('1011174000000000001'), e => e.code === 'DISCOUNT_LOG_UNAVAILABLE');
 });
 
-test('one use per person: a Used redemption in Creator refuses the voucher; none lets it through', async () => {
-  const mk = used =>
+test('one use per person: a counted redemption in Creator refuses the voucher; a Reversed one does not', async () => {
+  const mk = status =>
     createCrmStore({
       req: {},
       crm: async () => [],
-      creator: async () =>
-        used ? [{ [REDEMPTION_FIELDS.status]: 'Used' }] : [{ [REDEMPTION_FIELDS.status]: 'Reversed' }],
+      creator: async () => [{ [REDEMPTION_FIELDS.status]: status, [REDEMPTION_FIELDS.key]: 'another-application' }],
     });
-  const run = used =>
+  const run = status =>
     apply(base({ contactId: '1011174000000000099' }), {
       code: 'SPRING',
       actor: STAFF,
-      store: { ...mk(used), findVoucher: async () => voucher({ id: '1011174000000000001', onePerPerson: true }) },
+      store: { ...mk(status), findVoucher: async () => voucher({ id: '1011174000000000001', onePerPerson: true }) },
     });
-  await refused(run(true), 'NOT_VALID', 'already_used');
-  assert.ok((await run(false)).totalDiscountPence > 0);
+  await refused(run('Reserved'), 'NOT_VALID', 'already_used');
+  await refused(run('Applied'), 'NOT_VALID', 'already_used');
+  assert.ok((await run('Reversed')).totalDiscountPence > 0);
+  assert.ok((await run('Failed')).totalDiscountPence > 0);
+});
+
+test('a retry or double click makes the same redemption key and never uses the voucher twice', async () => {
+  const first = await apply(base(), { code: 'SPRING', actor: STAFF, store: fakeStore({ vouchers: [voucher()] }) });
+  const again = await apply(base(), { code: 'SPRING', actor: STAFF, store: fakeStore({ vouchers: [voucher()] }) });
+  const [rec] = first.redemptions;
+  assert.equal(rec.status, 'Reserved');
+  assert.match(rec.key, /^[0-9a-f]{32}$/);
+  assert.equal(again.redemptions[0].key, rec.key);
+  const other = await apply(base({ applicationId: 'app-2' }), {
+    code: 'SPRING',
+    actor: STAFF,
+    store: fakeStore({ vouchers: [voucher()] }),
+  });
+  assert.notEqual(other.redemptions[0].key, rec.key, 'another application is another redemption');
+  // The usage limit counts Reserved and Applied rows, but a row with this very key is this application's own and does not count twice.
+  const held = [{ voucherId: 'v1', contactId: '555', key: rec.key }];
+  const limit1 = voucher({ usageLimit: 1 });
+  assert.ok(
+    (await apply(base(), { code: 'SPRING', actor: STAFF, store: fakeStore({ vouchers: [limit1], redemptions: held }) }))
+      .totalDiscountPence > 0,
+    'the retry still gets its own use',
+  );
+  await refused(
+    apply(base({ applicationId: 'app-2' }), {
+      code: 'SPRING',
+      actor: STAFF,
+      store: fakeStore({ vouchers: [limit1], redemptions: held }),
+    }),
+    'NOT_VALID',
+    'limit_reached',
+  );
+  // The voucher's own counter alone (kept by Creator) also stops a new application.
+  await refused(
+    apply(base({ applicationId: 'app-3' }), {
+      code: 'SPRING',
+      actor: STAFF,
+      store: fakeStore({ vouchers: [voucher({ usageLimit: 3, used: 3 })] }),
+    }),
+    'NOT_VALID',
+    'limit_reached',
+  );
+});
+
+test('vouchers are gated: nothing is reserved unless redemption is switched on, and an application reference is needed', async () => {
+  const store = fakeStore({ vouchers: [voucher()] });
+  await assert.rejects(
+    applyDiscounts(base(), { now: () => NOW, code: 'SPRING', actor: STAFF, store }),
+    e => e.code === 'VOUCHERS_DISABLED' && e.status === 503,
+  );
+  assert.deepEqual(store.calls, [], 'the CRM is not even asked');
+  await refused(apply(base({ applicationId: '' }), { code: 'SPRING', actor: STAFF, store }), 'INVALID_REQUEST');
+  // Referral and waivers are not behind the voucher switch.
+  const r = await applyDiscounts(base(), {
+    now: () => NOW,
+    waivers: [{ sku: 'MEM-CERT', reason: 'Promotion' }],
+    actor: STAFF,
+    store,
+  });
+  assert.equal(r.totalDiscountPence, 400);
+});
+
+test('a waiver needs the staff capability; a staff member without it can still apply a voucher, a customer can do neither', async () => {
+  const waive = [{ sku: 'MEM-CERT', reason: 'Goodwill Gesture' }];
+  await refused(apply(base(), { waivers: waive, actor: STAFF_NO_WAIVE, store: fakeStore() }), 'NOT_PERMITTED');
+  await refused(
+    apply(base(), { waivers: waive, actor: { ...CUSTOMER, canWaive: true }, store: fakeStore() }),
+    'NOT_PERMITTED',
+  );
+  await refused(
+    apply(base(), { waivers: waive, actor: { type: 'staff', id: 'x', canWaive: 'yes' }, store: fakeStore() }),
+    'NOT_PERMITTED',
+  );
+  const voucherOnly = await apply(base(), {
+    code: 'SPRING',
+    actor: STAFF_NO_WAIVE,
+    store: fakeStore({ vouchers: [voucher()] }),
+  });
+  assert.ok(voucherOnly.totalDiscountPence > 0);
+  const ok = await apply(base(), { waivers: waive, actor: STAFF, store: fakeStore() });
+  assert.equal(ok.waiverLogs[0].at, new Date(NOW).toISOString(), 'who, what, why and when');
+});
+
+test('a code that matches two active vouchers is not valid, is logged, and an inactive twin is ignored', async () => {
+  const rowFor = (id, active) => ({
+    id,
+    [FIELDS.code]: ' spring ',
+    [FIELDS.type]: 'Bespoke Generic',
+    [FIELDS.method]: 'Fixed Amount',
+    [FIELDS.value]: '5',
+    [FIELDS.active]: active,
+    [FIELDS.appliesTo]: ['Extension'],
+  });
+  const logged = [];
+  const storeFor = rows => createCrmStore({ req: {}, crm: async () => rows, log: e => logged.push(e) });
+  assert.equal(await storeFor([rowFor('1', true), rowFor('2', true)]).findVoucher('SPRING'), null);
+  assert.deepEqual(logged, [{ event: 'duplicate_voucher_code', code: 'SPRING', voucherIds: ['1', '2'] }]);
+  assert.equal((await storeFor([rowFor('1', false), rowFor('2', true)]).findVoucher('SPRING')).id, '2');
+  assert.equal(
+    (await storeFor([rowFor('1', false)]).findVoucher('SPRING')).active,
+    false,
+    'a lone inactive one says inactive',
+  );
+  assert.equal(logged.length, 1);
+  // The engine normalises what is typed.
+  const v = voucher({ code: 'SPRING' });
+  assert.ok(
+    (await apply(base(), { code: '  spring ', actor: STAFF, store: fakeStore({ vouchers: [v] }) })).totalDiscountPence >
+      0,
+  );
+});
+
+test('voucher values: a percentage must be above 0 and at most 100, a fixed amount above 0; 15 means 15%', () => {
+  const v = (method, value) => toVoucher({ id: '1', [FIELDS.method]: method, [FIELDS.value]: value });
+  assert.equal(v('Percentage', 15).value, 15);
+  assert.equal(v('Percentage', '100.00').value, 100);
+  for (const bad of [0, -5, 100.01, 150, 'x', null]) assert.equal(v('Percentage', bad).value, 0, String(bad));
+  assert.equal(v('Fixed Amount', 12.5).value, 1250);
+  for (const bad of [0, -1, 'x', null]) assert.equal(v('Fixed Amount', bad).value, 0, String(bad));
 });
 
 test('the Creator reader asks the report with the criteria, treats an empty report as none, and fails on anything else', async () => {
@@ -488,6 +630,8 @@ test('a fixed voucher is shared down the basket until used up; a percentage take
   assert.deepEqual(pct.redemptions, [
     {
       kind: 'voucher_redemption',
+      key: pct.redemptions[0].key,
+      status: 'Reserved',
       voucherId: 'v1',
       code: 'SPRING',
       contactId: '555',
@@ -587,7 +731,7 @@ test('the additional branch is never lowered: the line keeps its price and the d
 test('the metadata value stays within Stripe’s 500 characters, dropping detail before refusing', async () => {
   const skus = ['MEM-JOIN', 'MEM-BRANCH', 'MEM-BUNDLE', 'MEM-CERT', 'MEM-BADGE', 'MEM-STICKER'];
   const lines = skus.map(s => line(null, s, s, 1000));
-  const who = { type: 'staff', id: 'u', email: 'a.very.long.staff.address@guild.example' };
+  const who = { type: 'staff', id: 'u', email: 'a.very.long.staff.address@guild.example', canWaive: true };
   const r = await apply(base({ lines, contactId: '' }), {
     waivers: skus.map(sku => ({ sku, reason: 'Payment Problem' })),
     actor: who,
@@ -750,7 +894,7 @@ test('createBranchCoupon sends a one-use fixed amount coupon with the voucher id
 
 // ---- the whole checkout, with a staff request injected the way the staff route (2b) will ----
 
-async function withStaffApp(state, request, fn, billing = 'annual') {
+async function withStaffApp(state, request, fn, billing = 'annual', env = {}) {
   const calls = [];
   const fetchImpl = async (url, init = {}) => {
     if (String(url).endsWith('/v1/coupons') && init.method === 'POST') {
@@ -771,6 +915,7 @@ async function withStaffApp(state, request, fn, billing = 'annual') {
       STRIPE_SECRET_KEY: 'sk_test_example_only',
       PORTAL_PUBLIC_ORIGIN: 'https://portal.example.test',
       PORTAL_RISK_SANCTIONS: 'false',
+      ...env,
     }),
     getCurrentUser: async () => ({ id: 'user-1', email: 'alice@example.test' }),
     getCrmHeaders: async () => ({ Authorization: 'Bearer test' }),
@@ -903,5 +1048,33 @@ test('checkout: a waived joining fee leaves the line out and makes no coupon', a
       assert.equal(r.status, 201, JSON.stringify(r.body));
       assert.equal(state.stripePosts[0].params.get('discounts[0][coupon]'), null, 'no coupon for a joining fee waiver');
     },
+  );
+});
+
+test('checkout: a voucher is refused (503) while PORTAL_VOUCHER_REDEMPTION_ENABLED is off, and applied when it is on', async () => {
+  const request = () => ({
+    actor: STAFF,
+    applicationId: 'app-9',
+    code: 'SPRING',
+    store: fakeStore({ vouchers: [voucher({ allowedItems: ['MEM-JOIN'] })] }),
+  });
+  const off = world();
+  await withStaffApp(off, request(), async ({ pay }) => {
+    const r = await pay();
+    assert.equal(r.status, 503, JSON.stringify(r.body));
+    assert.equal(off.stripePosts.length, 0);
+  });
+  const on = world();
+  await withStaffApp(
+    on,
+    request(),
+    async ({ quote, pay }) => {
+      const q = await quote();
+      assert.equal(q.discounts[0].source, 'voucher');
+      assert.equal((await pay()).status, 201);
+      assert.equal(JSON.parse(on.stripePosts[0].params.get('metadata[discounts]'))[0].voucher_id, 'v1');
+    },
+    'annual',
+    { PORTAL_VOUCHER_REDEMPTION_ENABLED: 'true' },
   );
 });

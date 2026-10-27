@@ -149,6 +149,7 @@ function createApp({
   registerCheckoutRoutes(app, {
     publicQuotesEnabled: config.publicQuotesEnabled,
     discountsEnabled: config.discountsEnabled,
+    voucherRedemptionEnabled: config.voucherRedemptionEnabled,
     discountReferenceField: config.discountReferenceField,
     discountRequestFor,
     enabled: config.billingEnabled,

@@ -11,9 +11,14 @@
 //   referral a school code already checked by discounts.check: { code, school }. Takes the joining fee off.
 //   code     a bespoke voucher code (staff only).
 //   waivers  [{ sku, amountPence?, reason, note? }] (staff only). No amount means the whole line.
-//   actor    { type: 'customer' | 'staff', id, name?, email? }
-//   store    { findVoucher(code), redemptionsBy(voucherId, contactId), joiningWaivers(contactId) } (see voucherAdapter.js)
+//   actor    { type: 'customer' | 'staff', id, name?, email?, canWaive? }. A voucher needs a staff actor; a waiver also needs
+//            canWaive === true (the staff capability the staff API supplies). A customer actor can never do either.
+//   allowVouchers  false unless the caller says vouchers may be redeemed (PORTAL_VOUCHER_REDEMPTION_ENABLED). Nothing about a voucher is
+//            reserved or returned for the caller to write while it is false.
+//   store    { findVoucher(code), redemptions(voucherId, {contactId}?), joiningWaivers(contactId) } (see voucherAdapter.js). redemptions returns
+//            the rows that COUNT against the voucher (Reserved or Applied): [{key, contactId}].
 // Throws DiscountError when anything is refused; nothing is partly applied.
+const crypto = require('node:crypto');
 const { NOT_VALID } = require('./discounts');
 const { validAt } = require('./voucherAdapter');
 
@@ -34,10 +39,17 @@ class DiscountError extends Error {
     super(message);
     this.name = 'DiscountError';
     this.code = code;
-    this.status = 422;
+    this.status = code === 'VOUCHERS_DISABLED' ? 503 : 422;
     this.detail = detail;
   }
 }
+// A deterministic key, so the same voucher, application and person always make the same redemption record (the store upserts by it).
+const redemptionKey = (voucherId, applicationId, contactId) =>
+  crypto
+    .createHash('sha256')
+    .update([voucherId, applicationId, contactId || 'new'].join('|'))
+    .digest('hex')
+    .slice(0, 32);
 const notValid = reason => new DiscountError('NOT_VALID', NOT_VALID, { reason });
 
 const money = pence => (pence / 100).toFixed(2);
@@ -49,10 +61,17 @@ function describeActor(actor) {
   const ref = String(actor.email || actor.name || actor.id || '').trim();
   if (actor.type === 'staff' && !ref)
     throw new DiscountError('NOT_PERMITTED', 'The staff member applying the discount is not known.');
-  return { staff: actor.type === 'staff', appliedBy: actor.type === 'staff' ? 'staff:' + ref : 'customer' };
+  return {
+    staff: actor.type === 'staff',
+    canWaive: actor.type === 'staff' && actor.canWaive === true,
+    appliedBy: actor.type === 'staff' ? 'staff:' + ref : 'customer',
+  };
 }
 
-async function applyDiscounts(basket, { referral = null, code = '', waivers = [], actor, store, now = Date.now } = {}) {
+async function applyDiscounts(
+  basket,
+  { referral = null, code = '', waivers = [], actor, store, allowVouchers = false, now = Date.now } = {},
+) {
   const who = describeActor(actor);
   const today = basket.today || day(now());
   const rows = basket.lines.map(line => ({
@@ -72,6 +91,8 @@ async function applyDiscounts(basket, { referral = null, code = '', waivers = []
   const rowFor = sku => rows.find(r => r.sku === sku);
   if ((code || waivers.length) && !who.staff)
     throw new DiscountError('NOT_PERMITTED', 'Only Guild staff can apply a voucher or a waiver.');
+  if (waivers.length && !who.canWaive)
+    throw new DiscountError('NOT_PERMITTED', 'This staff member is not allowed to waive charges.');
 
   // 1. The school referral code: the joining fee, in full. A fee that is not being charged leaves nothing to take off.
   if (referral) {
@@ -88,6 +109,9 @@ async function applyDiscounts(basket, { referral = null, code = '', waivers = []
 
   // 2. A bespoke voucher (staff only). Every refusal shows the same message; the reason is only in `detail`.
   if (code) {
+    if (!allowVouchers) throw new DiscountError('VOUCHERS_DISABLED', 'Vouchers cannot be applied yet.');
+    if (!basket.applicationId)
+      throw new DiscountError('INVALID_REQUEST', 'An application reference is needed to apply a voucher.');
     const typed = String(code).trim().toUpperCase();
     const voucher = typed ? await store.findVoucher(typed) : null;
     if (!voucher) throw notValid('unknown');
@@ -97,12 +121,27 @@ async function applyDiscounts(basket, { referral = null, code = '', waivers = []
     if (!voucher.kind || !voucher.value) throw notValid('unusable');
     const outside = validAt(voucher, now());
     if (outside) throw notValid(outside);
-    if (voucher.usageLimit && voucher.used >= voucher.usageLimit) throw notValid('limit_reached');
+    // One redemption per voucher, application and person: a retry or double click finds its own record by key and never uses the voucher
+    // twice. The usage limit counts every Reserved and Applied redemption, not only the voucher's own counter (which Creator updates later).
+    const key = redemptionKey(voucher.id, basket.applicationId, basket.contactId);
+    if (voucher.usageLimit) {
+      const counted = await store.redemptions(voucher.id);
+      const mine = counted.some(r => r.key === key);
+      if (
+        counted.filter(r => r.key !== key).length >= voucher.usageLimit ||
+        (voucher.used >= voucher.usageLimit && !mine)
+      )
+        throw notValid('limit_reached');
+    }
     // Eligible member types: the level being bought or held. An empty list means anyone.
     if (voucher.memberTypes.length && !voucher.memberTypes.includes(basket.memberType || ''))
       throw notValid('member_type');
     if (voucher.contactId && voucher.contactId !== String(basket.contactId || '')) throw notValid('other_person');
-    if (voucher.onePerPerson && basket.contactId && (await store.redemptionsBy(voucher.id, basket.contactId)) > 0)
+    if (
+      voucher.onePerPerson &&
+      basket.contactId &&
+      (await store.redemptions(voucher.id, { contactId: basket.contactId })).some(r => r.key !== key)
+    )
       throw notValid('already_used');
     // Percent: of each allowed line. Fixed: shared down the basket until it is used up. The joining fee comes first, as in the basket.
     const allowed = new Set(voucher.allowedItems);
@@ -120,6 +159,8 @@ async function applyDiscounts(basket, { referral = null, code = '', waivers = []
     if (!applied.length) throw notValid('nothing_to_discount');
     redemptions.push({
       kind: 'voucher_redemption',
+      key,
+      status: 'Reserved',
       voucherId: voucher.id,
       code: voucher.code,
       contactId: basket.contactId || '',
@@ -188,6 +229,7 @@ async function applyDiscounts(basket, { referral = null, code = '', waivers = []
       note,
       appliedBy: who.appliedBy,
       date: today,
+      at: new Date(now()).toISOString(),
     });
   }
 

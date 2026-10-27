@@ -25,8 +25,10 @@ function registerCheckoutRoutes(
   {
     publicQuotesEnabled = false,
     discountsEnabled = false,
+    voucherRedemptionEnabled = false,
     discountReferenceField = '',
-    // Who is applying a voucher or waivers, for the future staff route: async (req, input) => ({code, waivers, actor, store}) or null.
+    // Who is applying a voucher or waivers, for the future staff route:
+    // async (req, input) => ({code, waivers, actor, store, applicationId}) or null.
     // Nothing is wired to it yet; customers never reach it (their requests carry only the referral code).
     discountRequestFor = null,
     enabled,
@@ -233,6 +235,7 @@ function registerCheckoutRoutes(
           {
             lines,
             contactId: contact?.id ? String(contact.id) : '',
+            applicationId: request?.applicationId ? String(request.applicationId) : '',
             memberType: prepared.memberType || '',
             joiningFeeSince: prepared.joiningFeeSince || '',
           },
@@ -242,6 +245,7 @@ function registerCheckoutRoutes(
             waivers: request?.waivers,
             actor: request?.actor || { type: 'customer', id: guest ? 'guest' : req.portalUser?.id },
             store: request?.store,
+            allowVouchers: voucherRedemptionEnabled,
             now,
           },
         );

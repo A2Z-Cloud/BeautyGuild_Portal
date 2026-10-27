@@ -102,7 +102,9 @@ function toVoucher(row, fields = FIELDS) {
     code: text(row[fields.code]).toUpperCase(),
     bespoke: same(row[fields.type], BESPOKE),
     kind,
-    value: Number.isFinite(value) && value > 0 ? value : 0,
+    // A percentage is used as is (15 means 15%) and must be above 0 and no more than 100; a fixed amount must be above 0. Anything else
+    // is unusable.
+    value: Number.isFinite(value) && value > 0 && (kind !== 'percent' || value <= 100) ? value : 0,
     validFrom: timestamp(row[fields.validFrom]),
     validTo: timestamp(row[fields.validTo]),
     usageLimit: Math.max(0, Math.floor(Number(row[fields.maxUses]) || 0)),
@@ -132,14 +134,19 @@ const WAIVER_FIELDS = Object.freeze({
   status: 'Status', // picklist
 });
 // Voucher redemptions live in Creator (Voucher_Redemptions_Report). Contact and voucher are the CRM ids as text. Creator creates a Used
-// row when the payment succeeds and marks it Reversed on a refund or cancellation; only Used counts.
+// row when the payment succeeds and marks it Reversed on a refund or cancellation; only the statuses in REDEMPTION_COUNTED count.
 const REDEMPTION_REPORT = 'Voucher_Redemptions_Report';
 const REDEMPTION_FIELDS = Object.freeze({
+  key: 'redemption_key', // unique per voucher, application and person (the engine's key): UNCONFIRMED name
   contact: 'contact',
   voucher: 'voucher',
   status: 'status', // 'Used' or 'Reversed'
   date: 'redemption_date',
 });
+// Settings the A2Z side may still change, in one place. Statuses that COUNT against a voucher's usage limit and one use per person:
+// Reserved (made at payment), Applied (set when paid), and Creator's current 'Used'. Reversed and Failed give the use back.
+const REDEMPTION_COUNTED = Object.freeze(['Reserved', 'Applied', 'Used']);
+const REDEMPTION_PAGE = 200; // Creator returns at most this many rows; a full page cannot be counted safely
 const CRM_ID = /^\d{10,25}$/;
 
 // The plain waiver record -> the CRM row. Nothing writes it from here: the caller does, once the Stripe session exists (sessionId).
@@ -180,6 +187,7 @@ function createCrmStore({
   fields = FIELDS,
   waiverFields = WAIVER_FIELDS,
   redemptionFields = REDEMPTION_FIELDS,
+  log = console.warn,
 }) {
   const unavailable = what =>
     new HttpError(
@@ -203,27 +211,32 @@ function createCrmStore({
           '&fields=' +
           encodeURIComponent(['id', ...Object.values(fields)].join(',')),
       );
+      // The CRM does not yet enforce unique codes. Two ACTIVE vouchers with one code is never guessed: the code is not valid, and it is logged.
       const hits = rows.map(r => toVoucher(r, fields)).filter(v => v.code === safe.toUpperCase());
-      return hits.length === 1 ? hits[0] : null;
+      const live = hits.filter(v => v.active);
+      if (live.length > 1) {
+        log({ event: 'duplicate_voucher_code', code: safe.toUpperCase(), voucherIds: live.map(v => v.id) });
+        return null;
+      }
+      return live[0] || (hits.length === 1 ? hits[0] : null);
     },
-    // How many times this person has redeemed this voucher (Creator rows with status Used; Reversed ones are given back).
-    async redemptionsBy(voucherId, contactId) {
+    // The redemptions that count against a voucher (Reserved or Applied; Reversed and Failed are given back), for everyone or for one person.
+    async redemptions(voucherId, { contactId } = {}) {
       if (!creator) throw unavailable('voucher redemption history');
       const f = redemptionFields;
-      const rows = await creator(
-        req,
-        REDEMPTION_REPORT,
+      const criteria =
         '(' +
-          f.voucher +
-          ' == "' +
-          id(voucherId, 'voucher') +
-          '" && ' +
-          f.contact +
-          ' == "' +
-          id(contactId, 'person') +
-          '")',
-      );
-      return rows.filter(r => same(r[f.status], 'Used')).length;
+        f.voucher +
+        ' == "' +
+        id(voucherId, 'voucher') +
+        '"' +
+        (contactId ? ' && ' + f.contact + ' == "' + id(contactId, 'person') + '"' : '') +
+        ')';
+      const rows = await creator(req, REDEMPTION_REPORT, criteria);
+      if (rows.length >= REDEMPTION_PAGE) throw unavailable('voucher redemption history');
+      return rows
+        .filter(r => REDEMPTION_COUNTED.some(s => same(r[f.status], s)))
+        .map(r => ({ key: text(r[f.key]), contactId: text(r[f.contact]), status: text(r[f.status]) }));
     },
     // This person's earlier waivers of the joining fee that still count (not Void).
     async joiningWaivers(contactId) {
@@ -250,6 +263,7 @@ module.exports = {
   WAIVER_FIELDS,
   REDEMPTION_REPORT,
   REDEMPTION_FIELDS,
+  REDEMPTION_COUNTED,
   validAt,
   memberTypeOf,
   toVoucher,
