@@ -31,10 +31,12 @@ const DESCRIPTIONS = {
   subscription_type: '`annual` or `monthly`.',
   membership_start: 'The start of the membership term (yyyy-mm-dd).',
   membership_expiry: 'The end of the membership term (yyyy-mm-dd).',
-  base_membership_amount: 'Gross amount of the membership line on this payment. On a monthly plan, its monthly share.',
+  base_membership_amount:
+    'Gross amount of the membership line on this payment. On a monthly plan, its monthly share (the joining fee, add-ons and extra branches below follow the same rule: only what renews is a monthly share).',
   base_membership_amount_net:
     'The same without VAT. The zero-rated part of a membership is £38.00 a year (divided by 12 on a monthly plan).',
-  joining_fee_amount: 'Gross joining fee on this payment (`0.00` for a renewal).',
+  joining_fee_amount:
+    'Gross joining fee on this payment (`0.00` where it is not charged: a renewal, or a membership starting within a month of the last one ending). On a monthly plan it is the full fee, charged once with the first payment.',
   joining_fee_amount_net: 'Joining fee without VAT.',
   branch_addon_amount: 'Gross amount for extra branches on this payment (`0.00` if none).',
   branch_addon_amount_net: 'Extra branches without VAT.',
@@ -52,10 +54,11 @@ const DESCRIPTIONS = {
   town: 'Correspondence town. Left out when blank.',
   county: 'Correspondence county. Left out when blank.',
   postcode: 'Correspondence postcode. Left out when blank.',
-  total_amount: 'What is charged now, gross. The first payment on a monthly plan.',
+  total_amount:
+    'What is charged now, gross. The first payment on a monthly plan: the ongoing monthly payment plus the joining fee and any add-ons in full.',
   total_amount_net: '`total_amount` without VAT. Insurance premiums are VAT exempt, and IPT is not VAT.',
   monthly_plan:
-    "Monthly plans only, and only while there is room under Stripe's 50 key limit (it is also on the subscription): JSON of `payments`, `first_payment`, `later_payment`, `year_one_total`, `admin_fee` and `admin_fee_net`.",
+    "Monthly plans only, and only while there is room under Stripe's 50 key limit (it is also on the subscription): JSON of `payments`, `first_payment`, `later_payment`, `one_off_total` (the joining fee and add-ons charged in full with the first payment), `year_one_total` (what is paid over the first twelve months), `admin_fee` and `admin_fee_net`.",
   // Insurance
   insurance_start_date: 'The policy start date (yyyy-mm-dd).',
   insurance_end_date: 'The policy end date (yyyy-mm-dd).',
@@ -202,15 +205,12 @@ const SESSION_TYPES = {
 const SUBSCRIPTION = {
   plan: '`annual` or `monthly`.',
   contact_id: 'The CRM Contact id, so a renewal can find the customer without the session.',
-  phased:
-    '`true` or `false`, monthly plans only: whether the plan has year-one lines that a schedule drops at payment 13.',
 };
 const SUBSCRIPTION_REQUIRED = ['plan', 'contact_id'];
 
 // Product metadata on inline Stripe lines (read by expanding `data.price.product` on the session's line items).
 const LINE_PRODUCT = {
   sku: "The price list code (the Books SKU). Catalogue lines have it as the price's `lookup_key` instead.",
-  phase: 'Monthly plans only: `ongoing`, or `year_one` for lines a schedule drops after 12 payments.',
 };
 
 const keysFor = type => {
