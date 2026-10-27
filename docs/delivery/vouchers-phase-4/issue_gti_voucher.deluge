@@ -11,8 +11,12 @@ map Vouchers.issue_gti_voucher(string contact_id, string membership_profile_id, 
 	//   reason                 "new", "renewal" or "upgrade" (for the log only)
 	// Returns {"status": "created" | "exists" | "error", "voucher_id", "code", "message"}.
 	//
-	// CRM names are the real Discount_Voucher API names. Voucher_Code, Voucher_Key, Source_Invoice and Void_Reason
-	// are NEW fields A2Z must add first (Voucher_Code and Voucher_Key unique). Name is an Auto Number: never write to it.
+	// CRM names are the real Discount_Voucher API names. Voucher_Code already exists (text, 255) but the CRM does NOT
+	// enforce that it is unique or case-insensitive, so this function checks. Voucher_Key is NEW: unique, immutable text.
+	// Name is an Auto Number: never write to it. Applicable_Items is left empty (not used by the £25 voucher).
+	// Source_Invoice holds the Stripe invoice id (in_...) as text for now. Which CRM invoice module it may become a
+	// lookup to is undecided, so the field name is set once here.
+	source_invoice_field = "Source_Invoice";
 	crm_connection = "zoho_crm_connection";
 	module_name = "Discount_Voucher";
 	max_code_attempts = 5;
@@ -41,11 +45,14 @@ map Vouchers.issue_gti_voucher(string contact_id, string membership_profile_id, 
 		}
 		// First write wins. If two calls race, the unique key makes the second create fail, and the
 		// error branch below re-reads and returns the winner instead of reporting a failure.
+		// A clash on the code is a reason to try the next code, never to overwrite or reuse an existing voucher.
 		for each  attempt in {1,2,3,4,5}
 		{
-			code = thisapp.Vouchers.generate_voucher_code(voucher_key,attempt);
+			// Codes are always upper case. Check both cases in case the CRM search is case-sensitive.
+			code = thisapp.Vouchers.generate_voucher_code(voucher_key,attempt).toUpperCase();
 			clash = zoho.crm.searchRecords(module_name,"(Voucher_Code:equals:" + code + ")",1,1,crm_connection);
-			if(clash.size() == 0)
+			clash_lower = zoho.crm.searchRecords(module_name,"(Voucher_Code:equals:" + code.toLowerCase() + ")",1,1,crm_connection);
+			if(clash.size() == 0 && clash_lower.size() == 0)
 			{
 				record = Map();
 				record.put("Voucher_Code",code);
@@ -68,11 +75,23 @@ map Vouchers.issue_gti_voucher(string contact_id, string membership_profile_id, 
 				record.put("Valid_To",term_end.trim() + "T23:59:59+00:00");
 				record.put("Active",true);
 				record.put("Voucher_Key",voucher_key);
-				record.put("Source_Invoice",ifnull(source_invoice_id,""));
+				record.put(source_invoice_field,ifnull(source_invoice_id,""));
 				// Current_Usage_Count is left alone: GTi redemption increments it, not this process.
 				created = zoho.crm.createRecord(module_name,record,Map(),crm_connection);
 				if(created.get("id") != null)
 				{
+					// Voucher_Code is not unique in the CRM, so confirm no other record took the same code in the
+					// meantime. If one did, void OUR new record (never the other) and try the next code.
+					same_code = zoho.crm.searchRecords(module_name,"(Voucher_Code:equals:" + code + ")",1,5,crm_connection);
+					if(same_code.size() > 1)
+					{
+						undo = Map();
+						undo.put("Active",false);
+						undo.put("Void_Reason","Code clash at creation, replaced by a new code.");
+						zoho.crm.updateRecord(module_name,created.get("id"),undo,Map(),crm_connection);
+						info "Code clash for " + code + ": voided " + created.get("id") + " and retrying.";
+						continue;
+					}
 					info "Issued " + reason + " voucher " + code + " for Contact " + contact_id + " until " + term_end + " (invoice " + source_invoice_id + ")";
 					return {"status":"created","voucher_id":created.get("id"),"code":code,"message":"Issued (" + reason + ")."};
 				}
@@ -82,10 +101,11 @@ map Vouchers.issue_gti_voucher(string contact_id, string membership_profile_id, 
 				{
 					return {"status":"exists","voucher_id":raced.get(0).get("id"),"code":raced.get(0).get("Voucher_Code"),"message":"Issued by a concurrent call."};
 				}
-				return {"status":"error","message":"CRM refused the voucher. Response: " + created.toString()};
+				// Refused for another reason, possibly a clash on a code taken since the check: log it and try a new code.
+				info "CRM refused the voucher with code " + code + ": " + created.toString();
 			}
 		}
-		return {"status":"error","message":"Could not find an unused code in " + max_code_attempts + " attempts."};
+		return {"status":"error","message":"No voucher created in " + max_code_attempts + " attempts: every code clashed or the CRM refused it (see the log)."};
 	}
 	catch (e)
 	{

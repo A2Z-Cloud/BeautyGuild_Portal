@@ -1,7 +1,7 @@
 'use strict';
 // The signed-in member's own personal £25 GTi voucher(s), read from the CRM Discount_Voucher module. Read only:
 // Creator creates and voids them (docs/delivery/vouchers-phase-4-gti-voucher.md). Off unless PORTAL_VOUCHERS_ENABLED.
-// Field names are the real ones from the Guild CRM. Voucher_Code is a new unique text field A2Z adds to the module.
+// Field names are the real ones from the Guild CRM. Voucher_Code is an existing text field (255); the CRM does not yet enforce that it is unique.
 const express = require('express');
 const { HttpError } = require('./errors');
 const { createCrmClient, resolveContact } = require('./records');
