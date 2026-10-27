@@ -214,6 +214,19 @@ Outline:
 | **Add-ons (`membership_addon`) and renewal** | No code box | Online vouchers are not offered. Staff handle goodwill discounts on the phone |
 | **Staff phone widget and payment link** | Code field and waiver controls, in the staff route | See 3.6 |
 
+### 3.7a CRM configuration agreed, 27 October
+
+Reviewed against the live CRM by the A2Z CRM owner. Decisions:
+
+- **`Discount_Voucher` already has** `Voucher_Code` (text, 255) and `Applicable_Items` (multiselect: MEM-JOIN, MEM-BRANCH, MEM-BUNDLE, MEM-CERT, MEM-BADGE, MEM-STICKER). Reuse them. Uniqueness and case-insensitivity of `Voucher_Code` are not yet enforced and must be, and until they are the portal treats a code that matches more than one active voucher as not valid.
+- **New on `Discount_Voucher` (phase 4):** `Voucher_Key` (unique, immutable text), `Source_Invoice` (reference to the source invoice; which of the two CRM invoice modules is still to be chosen, and until then the Stripe invoice id is stored as text) and `Void_Reason` (multiline text).
+- **Voucher Redemption**: a separate module with a unique redemption key (so a retry can never consume a voucher twice) and statuses Reserved, Applied, Reversed and Failed. The usage limit counts Reserved plus Applied.
+- **Waiver Log**: a separate module with the six reasons (Goodwill Gesture, Complaint, Upgrade, Promotion, Payment Problem, Other). Waivers are restricted to authorised staff and carry an audit trail.
+- **Percentage vouchers** use `Discount_Value` with `Discount_Method`: 15 means 15%, not 0.15. A percentage may not exceed 100.
+- **`Valid_To`** is the exact CRM date and time. The office can choose 23:59:59 UK time if a voucher should last the whole day.
+- **Separation of duties:** voucher configuration and redemption are kept apart from waiver authority. Discounts never exceed the eligible amount.
+- **Gating:** design and implementation preparation continue while A2Z finishes the CRM configuration. Live redemption stays off until the field checks and end-to-end tests pass.
+
 ### 3.8 Smaller points
 - **A refund or cancellation** must reverse a redemption, so a released code can be counted correctly. This belongs to the cancellations workstream.
 - **The £5 adjustment fee** is not a catalogue item yet. A waiver option for it can only be built once the mid-term changes work defines it.
