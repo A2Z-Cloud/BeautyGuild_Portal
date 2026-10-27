@@ -9,6 +9,7 @@ const ENV = {
   STRIPE_SECRET_KEY: 'sk_test_example_only',
   PORTAL_PUBLIC_ORIGIN: 'https://portal.example.test',
   PORTAL_RISK_SANCTIONS: 'false',
+  PORTAL_MEMBERSHIP_CHANGES_ENABLED: 'true',
 };
 // code -> price, as in Stripe test mode: [amount in pence, billing interval or null]
 const PRICE_TABLE = {

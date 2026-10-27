@@ -5,8 +5,12 @@
 // price the matching lookup key. To add a new service, add an entry to SERVICES: it says who
 // may pay (ownership), which items to charge, and the metadata Creator expects after payment.
 const { HttpError } = require('./errors');
+const { prorata } = require('./prorata');
+const { loadCover } = require('./cover');
+const insChange = require('./insuranceChange');
+const { saveRevision, markAwaitingPayment } = require('./insuranceRevisions');
 const insurance = require('./insurance');
-const { joiningFeeDue, discountsMetadata, NOT_DUE } = require('./discounts');
+const { NOT_DUE } = require('./discounts');
 
 const ID = /^\d{10,25}$/;
 // How far ahead a start date may be, per service (UAT AL-INS-001). The same limit is used by the date pickers.
@@ -33,6 +37,8 @@ const ITEMS = Object.freeze({
   addon_sticker: { name: 'Window sticker', code: 'MEM-STICKER' },
   joining_fee: { name: 'Membership joining fee', code: 'MEM-JOIN' },
   membership_branch: { name: 'Additional branch', code: 'MEM-BRANCH' },
+  // The GBP 5 adjustment fee on an insurance change (including VAT; no IPT). Its Stripe price must exist, with this lookup key.
+  mta_fee: { name: 'Adjustment fee', code: 'FEE-MTA' },
   // Yearly memberships are subscriptions (the interval is checked). Every level is £55 today but has its own price so they can differ later.
   // zeroRatedPence is the zero-rated part of the fee, used only to split net from gross for Creator.
   membership_associate_annual: {
@@ -295,10 +301,44 @@ async function activeMembership(req, crm, contactId) {
   };
 }
 
+// The same calendar day one month on, held to the end of a short month (31 January plus a month is 28 or 29 February).
+function oneMonthOn(day) {
+  const [y, m, d] = day.split('-').map(Number);
+  const last = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+  return isoDay(new Date(Date.UTC(y, m, Math.min(d, last))));
+}
+
+// The joining fee is charged on a new purchase and on a renewal alike, unless the new membership starts within one month of the end
+// of the member's last membership of any kind (Associate, International, Full Non-Salon or Full Salon): a gap of more than a month
+// pays it again (Guild, 26 October 2026). A membership still running has no gap. With no Contact, or no earlier membership, it is due.
+// Only Active Deals count as cover: a saved draft is not one.
+async function joiningFeeDue(req, crm, contactId, start) {
+  if (!contactId) return true;
+  const deals = await crm(
+    req,
+    'Deals/search?criteria=' +
+      esc('(Contact_Name:equals:' + contactId + ')') +
+      '&fields=' +
+      esc('Stage,Membership_Type,Start_Date,Expiry_Date'),
+  );
+  const ends = deals
+    .filter(
+      d =>
+        String(d.Contact_Name?.id || contactId) === String(contactId) &&
+        d.Stage === 'Active' &&
+        d.Membership_Type &&
+        d.Expiry_Date,
+    )
+    .map(d => d.Expiry_Date)
+    .sort();
+  const last = ends[ends.length - 1];
+  return !last || start > oneMonthOn(last);
+}
+
 // Insurance is rated here, not read from Stripe: each cover row and the IPT become inline price_data lines.
 // Nothing is created in the CRM until the member pays (beforePay runs on checkout only, never on a quote),
 // and a quote that needs the Insurance team (REFER) or cannot be offered online (STOP) is never payable.
-async function insuranceLines({ req, contact, input, member, risk, start, end }) {
+async function insuranceLines({ req, contact, input, member, risk, start, end, monthly = false }) {
   const country = String(input.country || '')
     .trim()
     .slice(0, 60);
@@ -361,6 +401,7 @@ async function insuranceLines({ req, contact, input, member, risk, start, end })
         entryRoute: contact && !contact.createdNow ? 'Existing Member' : 'Public Prospect',
         termsAccepted: input.accepted === 'yes',
         audits: screening.audits,
+        frequency: monthly ? 'Monthly' : 'Annual',
         ...extra,
       }),
     // A REFER or STOP is recorded in the CRM for the Insurance team, never sent to Stripe (INCOMPLETE is the member's to fix).
@@ -377,6 +418,7 @@ async function insuranceLines({ req, contact, input, member, risk, start, end })
               entryRoute: contact && !contact.createdNow ? 'Existing Member' : 'Public Prospect',
               termsAccepted: input.accepted === 'yes',
               audits: screening.audits,
+              frequency: monthly ? 'Monthly' : 'Annual',
               referral: { status: blocked.status === 'STOP' ? 'Stopped' : 'Referred', summary },
             })
         : null,
@@ -514,14 +556,12 @@ SERVICES.membership = {
     const today = isoDay(new Date());
     const member = contact ? await activeMembership(req, crm, contact.id) : null;
     let previous = null,
-      previousExpiry = null,
       change = 'new';
     if (input.previousId) {
       if (!contact || !ID.test(String(input.previousId))) notFound('Membership');
-      const deal = (await crm(req, 'Deals/' + input.previousId + '?fields=Contact_Name,Expiry_Date'))[0];
+      const deal = (await crm(req, 'Deals/' + input.previousId + '?fields=Contact_Name'))[0];
       if (!deal || String(deal.Contact_Name?.id) !== String(contact.id)) notFound('Membership');
       previous = String(input.previousId);
-      previousExpiry = deal.Expiry_Date || null;
       change = input.changeType === 'upgrade' ? 'upgrade' : 'renewal';
     } else if (member)
       bad(
@@ -534,8 +574,8 @@ SERVICES.membership = {
     // On a monthly plan the yearly price is divided by 12. The joining fee and the add-ons are spread over the first 12 payments only
     // (term year_one); the membership and any extra branches carry on (see plans.js).
     const lines = [{ item: 'membership_' + level + '_annual', quantity: 1, term: 'ongoing' }];
-    // The joining fee is charged to a new person, and (with discounts on) to someone whose last membership expired more than 30 days ago.
-    const feeDue = joiningFeeDue({ previous, expiry: previousExpiry, today, rule: Boolean(discounts) });
+    // Whether a joining fee is due is decided by joiningFeeDue (a gap of more than a month since the last membership ended).
+    const feeDue = await joiningFeeDue(req, crm, contact?.id, start);
     // A school referral code takes the joining fee off. The line is left out here, before plans.splitMonthly runs, so yearly and monthly are exact.
     let discount = null,
       codeResult = null;
@@ -552,7 +592,7 @@ SERVICES.membership = {
     if (input.insurance && level === 'associate') throw NEEDS_FULL();
     // One date covers both: the membership and its insurance start together.
     const ins = input.insurance
-      ? await insuranceLines({ req, contact, input, member, risk, start, end: expiry })
+      ? await insuranceLines({ req, contact, input, member, risk, start, end: expiry, monthly: billing === 'monthly' })
       : null;
     return {
       lines,
@@ -638,6 +678,457 @@ SERVICES.membership = {
     };
   },
 };
+// ---- Membership changes (MTA R2): a pro-rated extra branch and flat items on a current membership ----
+const norm = v =>
+  String(v || '')
+    .trim()
+    .toLowerCase();
+const branchKey = label => Object.entries(BRANCHES).find(([, v]) => norm(v) === norm(label))?.[0] || null;
+
+// The member's current membership as a change can see it: owned, Active and within its term. Also which branches it already holds (the
+// main one, and any extra branch already bought) so a branch cannot be bought twice. Ownership comes from the search by Contact.
+async function membershipForChange(req, crm, contactId, dealId) {
+  if (!ID.test(String(dealId || ''))) notFound('Membership');
+  const today = isoDay(new Date());
+  const deals = await crm(
+    req,
+    'Deals/search?criteria=' +
+      esc('(Contact_Name:equals:' + contactId + ')') +
+      '&fields=' +
+      esc('Stage,Membership_Type,Start_Date,Expiry_Date,Membership_Branch,Application_Status'),
+  );
+  const deal = deals.find(
+    d => String(d.id) === String(dealId) && String(d.Contact_Name?.id || contactId) === String(contactId),
+  );
+  if (!deal) notFound('Membership');
+  if (
+    deal.Stage !== 'Active' ||
+    !deal.Start_Date ||
+    !deal.Expiry_Date ||
+    deal.Start_Date > today ||
+    deal.Expiry_Date < today
+  )
+    bad(
+      'Only a current membership can be changed online. Please call the office if you need help.',
+      409,
+      'MEMBERSHIP_NOT_CURRENT',
+    );
+  const [extras, full] = await Promise.all([
+    crm(req, 'Membership_Extension/search?criteria=' + esc('(Membership_Extension:equals:' + dealId + ')')),
+    crm(req, 'Deals/' + dealId),
+  ]);
+  const held = new Set(
+    [
+      ...(Array.isArray(deal.Membership_Branch) ? deal.Membership_Branch : [deal.Membership_Branch]),
+      ...extras.filter(x => /branch/i.test(String(x.Extension_Type || ''))).map(x => x.Membership_Branch),
+    ]
+      .map(branchKey)
+      .filter(Boolean),
+  );
+  return {
+    id: String(dealId),
+    type: deal.Membership_Type,
+    start: deal.Start_Date,
+    expiry: deal.Expiry_Date,
+    profileId: full[0]?.Member_Profile?.id || null,
+    held,
+  };
+}
+
+// What the member can choose: each branch, and whether they already have it.
+async function membershipChangeOptions(req, crm, contactId, dealId) {
+  const m = await membershipForChange(req, crm, contactId, dealId);
+  return {
+    term: { start: m.start, expiry: m.expiry },
+    branches: Object.entries(BRANCHES).map(([key, label]) => ({ key, label, held: m.held.has(key) })),
+  };
+}
+
+SERVICES.membership_change = {
+  title: 'Membership changes',
+  async prepare({ req, crm, contact, input }) {
+    const m = await membershipForChange(req, crm, contact.id, input.recordId);
+    const asked = list(input.branches);
+    if (new Set(asked).size !== asked.length) bad('Choose each additional branch once.');
+    for (const b of asked) {
+      if (!BRANCHES[b]) bad('Unknown branch: ' + b + '.');
+      if (m.held.has(b)) bad('You already have ' + BRANCHES[b] + '.');
+    }
+    if (asked.length > Object.keys(BRANCHES).length - 1) bad('Choose up to three additional branches.');
+    const addonsAsked = input.addons && typeof input.addons === 'object' ? input.addons : {};
+    const lines = [],
+      quantities = {};
+    for (const [key, raw] of Object.entries(addonsAsked)) {
+      if (!ADDONS[key]) bad('Unknown add-on: ' + key + '.');
+      const quantity = Number(raw);
+      if (!Number.isInteger(quantity) || quantity < 0 || quantity > 10) bad('Choose between 0 and 10 of each add-on.');
+      if (quantity) {
+        lines.push({ item: ADDONS[key], quantity });
+        quantities[key] = quantity;
+      }
+    }
+    if (!lines.length && !asked.length) bad('Choose a branch or at least one item.');
+    // An extra branch is its yearly price for the days left in the term, from today (both end days counted). It is charged once now;
+    // renewals are the Creator's side (MTA-D20, D21). Flat items are not pro-rated and carry no adjustment fee.
+    const today = isoDay(new Date());
+    const term = prorata({ start: m.start, end: m.expiry, from: today > m.start ? today : m.start });
+    const inline = asked.map(b => ({
+      name:
+        BRANCHES[b] + ': additional branch, ' + term.days + ' of ' + term.total + ' days to the end of your membership',
+      quantity: 1,
+      priceItem: 'membership_branch',
+      prorata: term,
+      sku: ITEMS.membership_branch.code,
+      branch: b,
+    }));
+    return {
+      lines,
+      inline,
+      metadata: ({ amounts, total, lines: priced, inline: charged }) => {
+        const branchLines = (charged || []).filter(l => l.sku === ITEMS.membership_branch.code);
+        const branchPence = branchLines.reduce((t, l) => t + l.totalPence, 0);
+        const yearlyPence = branchLines.reduce((t, l) => t + (l.fullUnitPence || 0) * l.quantity, 0);
+        const net = key => {
+          const l = (priced || []).find(x => x.item === ADDONS[key]);
+          return l ? netPounds(l.item, l.totalPence, l.quantity) : '0.00';
+        };
+        const branchNet = branchLines.length ? netPounds('membership_branch', branchPence, branchLines.length) : '0.00';
+        const totalNet = (Number(branchNet) + Object.keys(ADDONS).reduce((t, k) => t + Number(net(k)), 0)).toFixed(2);
+        return {
+          type: 'membership_change',
+          contact_id: contact.id,
+          quote_reference: 'BGP-' + Date.now().toString(36).toUpperCase(),
+          membership_deal_id: m.id,
+          membership_profile_id: m.profileId || '',
+          change_type: 'mta',
+          mta_scope: 'membership',
+          effective_date: today,
+          membership_start: m.start,
+          membership_expiry: m.expiry,
+          prorata_days: String(term.days),
+          prorata_total_days: String(term.total),
+          secondary_branches: asked.join(','),
+          branch_addon_amount: pounds(branchPence),
+          branch_addon_amount_net: branchNet,
+          branch_yearly_amount: pounds(yearlyPence),
+          addons: JSON.stringify(quantities),
+          bundle_amount: amounts.addon_bundle || '0.00',
+          bundle_amount_net: net('bundle'),
+          certificate_amount: amounts.addon_certificate || '0.00',
+          certificate_amount_net: net('certificate'),
+          badge_amount: amounts.addon_badge || '0.00',
+          badge_amount_net: net('badge'),
+          sticker_amount: amounts.addon_sticker || '0.00',
+          sticker_amount_net: net('sticker'),
+          total_amount: total,
+          total_amount_net: totalNet,
+        };
+      },
+    };
+  },
+};
+
+// ---- Insurance changes (MTA R3-1): a quote for a change to a Non-Salon policy. Read only: nothing is written and nothing is paid. ----
+const ISO = /^\d{4}-\d{2}-\d{2}$/;
+const addDays = (iso, n) => isoDay(new Date(Date.parse(iso + 'T00:00:00Z') + n * 864e5));
+
+// The day as the member reads it ("7 Oct 2026"), for the names of the lines.
+const dayName = iso => {
+  const [y, m, d] = iso.split('-').map(Number);
+  return (
+    d + ' ' + ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][m - 1] + ' ' + y
+  );
+};
+
+SERVICES.insurance_change = {
+  title: 'Insurance changes',
+  async prepare({ req, crm, contact, input, risk }) {
+    if (!ID.test(String(input.recordId || ''))) notFound('Membership');
+    const cover = await loadCover({
+      call: crm,
+      req,
+      contactId: contact.id,
+      dealId: String(input.recordId || ''),
+      isDraft: row => row.Application_Status === 'Draft',
+    });
+    const policy = cover.insurance;
+    // One change, or a basket of changes with their own start dates (one revision, and one GBP 5, for each date).
+    const asks = Array.isArray(input.changes) && input.changes.length ? input.changes : [input.change];
+    const cleaned = asks.map(insChange.cleanChange);
+    const today = isoDay(new Date());
+    // The start date is from today up to 30 days ahead and never after the end of the policy (Guild, 26 October). No back-dating online.
+    const latest =
+      policy && policy.endDate && addDays(today, 30) > policy.endDate ? policy.endDate : addDays(today, 30);
+    for (const c of cleaned)
+      if (!ISO.test(c.effectiveDate) || c.effectiveDate < today || c.effectiveDate > latest)
+        bad('Choose a start date from today up to ' + latest + '.');
+    const revisions = insChange.quoteBasket({ cover, changes: cleaned, today });
+    if (revisions.length > insChange.MAX_REVISIONS)
+      bad('Choose up to ' + insChange.MAX_REVISIONS + ' different start dates at a time.');
+
+    // A renewal can already exist (renewals open 30 days before the end): a later policy in force on the membership, or a renewed membership
+    // that starts after this policy ends. A change in the last month then also affects it, so it goes to the office (MTA-D23).
+    let renewed = Boolean(policy && policy.renewal);
+    if (
+      !renewed &&
+      policy &&
+      policy.endDate &&
+      revisions.some(r => r.change.effectiveDate > addDays(policy.endDate, -30))
+    ) {
+      const deals = await crm(
+        req,
+        'Deals/search?criteria=' +
+          esc('(Contact_Name:equals:' + contact.id + ')') +
+          '&fields=' +
+          esc('Stage,Start_Date'),
+      );
+      renewed = deals.some(d => d.Stage === 'Active' && d.Start_Date && d.Start_Date > policy.endDate);
+    }
+    const country = (policy && policy.premises && policy.premises[0] && policy.premises[0].country) || 'United Kingdom';
+    const inline = [];
+    const out = [];
+    for (const rev of revisions) {
+      const { change: asked, quote } = rev;
+      const reasons = [...quote.reasons];
+      if (renewed && asked.effectiveDate > addDays(policy.endDate, -30))
+        reasons.push({
+          code: 'RENEWED',
+          message:
+            'Your policy has already been renewed, so this change also affects your renewal. The office will make it for you: save your request and they will be in touch.',
+        });
+      // The underwriting rules on the policy as it will be, and the risk checks on any name being added.
+      const ins = insChange.afterIns({ cover: rev.cover, change: asked });
+      const rules = policy ? insurance.evaluateRules(ins, country, { complete: !input.quote }) : { results: [] };
+      // The answers still missing before a change can be saved as payable (the repeated declarations and confirmations).
+      const incomplete = policy
+        ? insurance
+            .evaluateRules(ins, country, { complete: true })
+            .results.filter(r => r.status === 'INCOMPLETE')
+            .map(r => r.customerMessage)
+        : [];
+      let screening = { results: [], riskMessage: null };
+      if (risk && asked.addPeople.length)
+        screening = await risk.screen({
+          req,
+          ins: { ...ins, insNamedPeople: asked.addPeople },
+          country,
+          contact,
+          input,
+          premises: false,
+        });
+      const merged = insurance.summarise([
+        ...rules.results,
+        ...screening.results,
+        ...reasons.map(r => ({ status: 'REFER', code: r.code, customerMessage: r.message })),
+      ]);
+      const blocked =
+        merged.overall === 'PASS' || (merged.overall === 'INCOMPLETE' && input.quote)
+          ? null
+          : {
+              status: merged.overall,
+              reasons: [...new Set(merged.results.map(r => r.customerMessage))],
+              riskMessage: screening.riskMessage,
+            };
+      const details = {
+        quoteId: policy ? insChange.quoteId({ cover: rev.cover, change: asked, quote }) : null,
+        rulesVersion: quote.rulesVersion,
+        incomplete,
+        outcome: blocked ? blocked.status : 'PASS',
+        effectiveDate: asked.effectiveDate,
+        term: quote.term || null,
+        items: quote.items.map(i => ({
+          label: i.label,
+          premiumPence: i.premiumPence,
+          creditPence: i.creditPence,
+          netPence: i.netPence,
+        })),
+        premiumNetPence: quote.premiumNetPence,
+        iptPence: quote.iptPence,
+        needsDeclarations: !insChange.isEmpty(asked),
+      };
+      const when = ' from ' + dayName(asked.effectiveDate);
+      if (!blocked) {
+        for (const it of quote.items)
+          if (it.netPence > 0)
+            inline.push({
+              name: 'Insurance - ' + it.label + ' (' + it.days + ' of ' + it.totalDays + ' days)',
+              unitPence: it.netPence,
+              quantity: 1,
+              sku: it.sku,
+              rev: rev.index,
+            });
+        if (quote.iptPence)
+          inline.push({
+            name: 'Insurance Premium Tax (' + Math.round(insurance.IPT_RATE * 100) + '%)' + when,
+            unitPence: quote.iptPence,
+            quantity: 1,
+            sku: insurance.IPT_SKU,
+            rev: rev.index,
+          });
+        if (quote.employeesCharged)
+          inline.push({
+            name: ITEMS.employee_fee_non_salon.name + ' (pro-rata)' + when,
+            priceItem: 'employee_fee_non_salon',
+            quantity: quote.employeesCharged,
+            prorata: quote.term,
+            sku: ITEMS.employee_fee_non_salon.code,
+            rev: rev.index,
+          });
+        if (quote.feeApplies)
+          inline.push({
+            name: ITEMS.mta_fee.name + when,
+            priceItem: 'mta_fee',
+            quantity: 1,
+            sku: ITEMS.mta_fee.code,
+            rev: rev.index,
+          });
+      }
+      out.push({ rev, blocked, details, reasons, ins });
+    }
+    // Any revision that cannot be paid for online stops the whole basket: the member takes it out, or the office handles it.
+    const worst = out.find(o => o.blocked);
+    const blocked = worst
+      ? {
+          status: out.some(o => o.blocked && o.blocked.status === 'STOP')
+            ? 'STOP'
+            : out.some(o => o.blocked && o.blocked.status === 'REFER')
+              ? 'REFER'
+              : 'INCOMPLETE',
+          reasons: [...new Set(out.flatMap(o => (o.blocked ? o.blocked.reasons : [])))],
+          riskMessage: worst.blocked.riskMessage,
+        }
+      : null;
+    const all = out.map(o => o.details);
+    const details =
+      all.length === 1
+        ? all[0]
+        : {
+            ...all[0],
+            quoteId: null,
+            outcome: blocked ? blocked.status : 'PASS',
+            revisionCount: all.length,
+            premiumNetPence: all.reduce((t, d) => t + d.premiumNetPence, 0),
+            iptPence: all.reduce((t, d) => t + d.iptPence, 0),
+            incomplete: [...new Set(all.flatMap(d => d.incomplete))],
+          };
+    const revisionData = out.map(o => ({
+      index: o.rev.index,
+      cover: o.rev.cover,
+      asked: o.rev.change,
+      quote: o.rev.quote,
+      details: o.details,
+      outcome: o.details.outcome,
+      reasons: o.blocked ? o.blocked.reasons : [],
+    }));
+    // A basket already waiting for payment (every revision Awaiting Payment on one open session) is resumed, not made again. Read only when
+    // paying.
+    let existingSessionId = null;
+    if (!input.quote && policy && !blocked) {
+      const rows = await crm(
+        req,
+        'Policy_Revisions/search?criteria=' +
+          esc('(Policy:equals:' + policy.id + ')') +
+          '&fields=' +
+          esc('Revision_Status,After_Quote_ID,Stripe_Checkout_Session_ID'),
+      );
+      const found = revisionData.map(r =>
+        rows.find(
+          x =>
+            x.After_Quote_ID === r.details.quoteId &&
+            x.Revision_Status === 'Awaiting Payment' &&
+            x.Stripe_Checkout_Session_ID,
+        ),
+      );
+      const sessions = new Set(found.map(f => f && f.Stripe_Checkout_Session_ID));
+      if (found.every(Boolean) && sessions.size === 1) existingSessionId = [...sessions][0];
+    }
+    return {
+      lines: [],
+      inline: blocked ? [] : inline,
+      blocked,
+      details,
+      revisionDetails: all,
+      // Set by the checkout from the writes and payment switches.
+      payable: false,
+      existingSessionId,
+      createFailure: 'We could not save your change. Please try again.',
+      revisions: revisionData,
+      fingerprint: JSON.stringify([out.map(o => o.rev.change), out.map(o => o.details.quoteId)]),
+      // Before the session: one revision for each start date, in order, each with its draft rows (or the one already saved for the same quote).
+      beforePay: async (create, extra) => {
+        const ids = new Map();
+        const saved = [];
+        for (const r of revisionData)
+          saved.push(
+            await saveRevision({
+              ...r,
+              ids,
+              read: path => crm(req, path),
+              create,
+              update: extra.update,
+              contactId: contact.id,
+              dealId: String(input.recordId),
+              lines: extra.lines,
+              namePrefix: extra.namePrefix,
+            }),
+          );
+        return { revisions: saved };
+      },
+      // After the session: each revision is Awaiting Payment with the session id.
+      afterSession: (sessionId, ids, update) => markAwaitingPayment({ update, saved: ids.revisions, sessionId }),
+      metadata: ({ total, inline: charged, insuranceIds }) => {
+        const saved = (insuranceIds && insuranceIds.revisions) || [];
+        const sum = pred => (charged || []).filter(pred).reduce((t, l) => t + l.totalPence, 0);
+        const premium = sum(
+          l =>
+            l.sku !== ITEMS.mta_fee.code && l.sku !== ITEMS.employee_fee_non_salon.code && l.sku !== insurance.IPT_SKU,
+        );
+        const ipt = sum(l => l.sku === insurance.IPT_SKU);
+        const fee = sum(l => l.sku === ITEMS.mta_fee.code);
+        const feeNet = (charged || [])
+          .filter(l => l.sku === ITEMS.mta_fee.code)
+          .reduce((t, l) => t + Number(netPounds('mta_fee', l.totalPence, l.quantity)) * 100, 0);
+        const employees = (charged || []).filter(l => l.sku === ITEMS.employee_fee_non_salon.code);
+        const employeeNet = employees.reduce((t, l) => {
+          const term = (revisionData.find(r => r.index === l.rev) || {}).details?.term;
+          return (
+            t +
+            Number(netPounds('employee_fee_non_salon', l.totalPence, l.quantity, term ? term.days / term.total : 1)) *
+              100
+          );
+        }, 0);
+        const employeeGross = employees.reduce((t, l) => t + l.totalPence, 0);
+        return {
+          type: 'insurance_change',
+          quote_reference: 'BGP-' + Date.now().toString(36).toUpperCase(),
+          contact_id: contact.id,
+          membership_deal_id: String(input.recordId),
+          insurance_policy_id: policy ? policy.id : '',
+          change_type: 'mta',
+          mta_scope: 'policy',
+          revision_count: String(saved.length),
+          revision_ids: saved.map(r => r.id).join(','),
+          effective_dates: revisionData.map(r => r.asked.effectiveDate).join(','),
+          quote_ids: revisionData.map(r => r.details.quoteId).join(','),
+          insurance_amount: pounds(premium + ipt),
+          insurance_net_amount: pounds(premium),
+          insurance_ipt_amount: pounds(ipt),
+          mta_fee_amount: pounds(fee),
+          named_employee_membership: employees.length
+            ? JSON.stringify({
+                count: employees.reduce((t, l) => t + l.quantity, 0),
+                amount: pounds(employeeGross),
+                amount_net: pounds(Math.round(employeeNet)),
+              })
+            : '',
+          total_amount: total,
+          total_amount_net: pounds(premium + ipt + Math.round(feeNet) + Math.round(employeeNet)),
+        };
+      },
+    };
+  },
+};
+
 const list = v => (Array.isArray(v) ? v : String(v || '').split(',')).map(x => String(x).trim()).filter(Boolean);
 
 module.exports = {
@@ -651,4 +1142,6 @@ module.exports = {
   PROCESSING_STATUS,
   isPaidStatus,
   isPayableAccreditation,
+  membershipChangeOptions,
+  oneMonthOn,
 };

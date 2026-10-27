@@ -2,14 +2,12 @@
 // The school referral code: the only code a customer enters online. The code is the school's Accreditation Reference. It takes the
 // joining fee off a membership (the fee is left out before a monthly plan is split, so yearly and monthly are both exact). Everything
 // here is behind PORTAL_DISCOUNTS_ENABLED. Redemptions are recorded by Creator from the `discounts` metadata, not by the portal.
-// Vouchers and goodwill waivers are staff-only and not part of this module. Plan: docs/delivery/vouchers-review.md, phases 0 and 1.
+// Whether a joining fee is due is decided in catalogue.js (joiningFeeDue). Vouchers and goodwill waivers are staff-only and not part of this module. Plan: docs/delivery/vouchers-review.md, phases 0 and 1.
 const { HttpError } = require('./errors');
 
 const NOT_VALID = 'That code is not valid';
 const NOT_DUE = 'You do not need a code: there is no joining fee to pay on this membership.';
 const LIMITED = 'Too many codes have been tried. Please wait an hour and try again.';
-// A joining fee is charged to a new person, or to someone whose membership ended more than this many days ago (Guild, 26 October).
-const REJOIN_DAYS = 30;
 const WRONG_PER_HOUR = 10;
 const HOUR = 60 * 60 * 1000;
 const FOUND_TTL = 60 * 1000;
@@ -28,22 +26,6 @@ const normaliseCode = raw => {
   return m ? m[1] + '-' + m[2] : '';
 };
 const crmReference = code => code.replace('-', ' - ');
-const dayNumber = iso => Date.parse(String(iso).slice(0, 10) + 'T00:00:00Z') / 864e5;
-// Whole days from the expiry date to today (UTC days, like the rest of the catalogue). Null when the date is missing or unreadable.
-function daysSinceExpiry(expiry, today) {
-  const e = dayNumber(expiry || ''),
-    t = dayNumber(today);
-  return Number.isFinite(e) && Number.isFinite(t) ? t - e : null;
-}
-// Is a joining fee due? A new person always pays it. Someone with a previous membership pays it again only when that membership
-// expired MORE than 30 days ago: day 30 is still free, day 31 pays. No known expiry date keeps the old rule (no fee on a renewal).
-function joiningFeeDue({ previous, expiry, today, rule }) {
-  if (!previous) return true;
-  if (!rule) return false;
-  const days = daysSinceExpiry(expiry, today);
-  return days !== null && days > REJOIN_DAYS;
-}
-
 // referenceField is the API name of the Accreditation Reference on Training_Centre_Accred.
 function createDiscounts({ crm, referenceField, now = Date.now }) {
   const found = new Map(), // code -> {at, school}
@@ -137,11 +119,8 @@ module.exports = {
   NOT_VALID,
   NOT_DUE,
   LIMITED,
-  REJOIN_DAYS,
   WRONG_PER_HOUR,
   normaliseCode,
-  daysSinceExpiry,
-  joiningFeeDue,
   createDiscounts,
   discountsMetadata,
 };

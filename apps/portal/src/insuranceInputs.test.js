@@ -146,7 +146,7 @@ test('AL-INS-044 and 049: wage roll is a yes/no for a salon, and the figure is o
   assert.equal(toRequest({ ...SALON, insWageRollOver125k: 'no', insWageRoll: '60000' }).insWageRoll, undefined);
 });
 test('AL-INS-073: the £10,000 single item limit is wording on the page, not a question or a block', () => {
-  const v = { ...SALON, insPropertyAwayCover: 'yes' };
+  const v = { ...SALON, insContents: 'yes', insPropertyAwayCover: 'yes' };
   assert.ok(!names(v).includes('insPropertyAwayMaxItem'));
   assert.equal(stopMessages({ ...v, insPropertyAwayMaxItem: '50000' }).length, 0);
   const field = visibleFields(v).find(f => f.name === 'insPropertyAwaySI');
@@ -228,7 +228,13 @@ test('AL-INS-004: the quote summary can edit or remove a cover', () => {
       { type: 'subcontractor', firstName: 'Bo', lastName: 'Ng' },
     ],
   };
-  assert.deepEqual(coverAction('Insurance - Contents', v).remove(), { insContents: 'no' });
+  assert.deepEqual(coverAction('Insurance - Contents', v).remove(), {
+    insContents: 'no',
+    insMoneyCover: 'no',
+    insBuildingsCover: 'no',
+    insBiCover: 'no',
+    insPropertyAwayCover: 'no',
+  });
   assert.equal(coverAction('Insurance - Contents', v).section, 'contents');
   assert.deepEqual(coverAction("Insurance - Employers' Liability", v).remove(), { insSalonEL: 'no' });
   assert.deepEqual(coverAction("Insurance - Employers' Liability", NON).remove(), { insNonSalonEL: 'no' });
@@ -258,4 +264,26 @@ test('the cover wording the customer gave is on screen, with policy documents na
   assert.ok(!text.includes('Fixed premium'));
   assert.ok(!text.includes('Contents unlocks'));
   assert.ok(!/—/.test(text));
+});
+test('Money, Buildings, Business Interruption and Property Away are only offered with Contents cover', () => {
+  const later = ['money', 'buildings', 'bi', 'propertyAway'];
+  const withoutContents = visibleSteps({ ...SALON }).map(s => s.id);
+  assert.ok(!later.some(id => withoutContents.includes(id)));
+  assert.ok(withoutContents.includes('contents'));
+  const withContents = visibleSteps({ ...SALON, insContents: 'yes' }).map(s => s.id);
+  assert.ok(later.every(id => withContents.includes(id)));
+  // A stale yes from before Contents was taken off is not sent.
+  const r = toRequest({
+    ...SALON,
+    insContents: 'no',
+    insMoneyCover: 'yes',
+    insBuildingsCover: 'yes',
+    insBiCover: 'yes',
+    insPropertyAwayCover: 'yes',
+  });
+  assert.deepEqual(
+    [r.insMoneyCover, r.insBuildingsCover, r.insBiCover, r.insPropertyAwayCover],
+    [false, false, false, false],
+  );
+  assert.equal(toRequest({ ...SALON, insContents: 'yes', insMoneyCover: 'yes' }).insMoneyCover, true);
 });
