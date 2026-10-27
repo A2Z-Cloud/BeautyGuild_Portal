@@ -76,6 +76,10 @@ Sources: the Guild's "Discount Codes and Vouchers" document (the Word version of
 | 12 | Any staff member may enter a code in the widget and on the link | No permission tiers. Every use is still recorded (13) |
 | 13 | Yes, record every waiver: who, what and why | A discount record on every staff-applied waiver (3.5) |
 | 30 days | The 30-day rule always applies | Implement as 30 days after the expiry date |
+| Follow-up 1 | A school code is **never** switched off, even for a school not complying with the accreditation terms | No deactivation flag or kill switch in the build. A code works while the school Account holds it |
+| Follow-up 2 | Waiver reasons are a **short list** (Goodwill Gesture, Complaint, and possibly Upgrade, still to be agreed). Helen Delaney also asked for free text alongside the list, or the list alone if that is not possible | A CRM picklist (so the Guild can add reasons later without a release) plus an optional free-text note |
+| Follow-up 3 | A person whose membership lapsed for over a month pays a new joining fee and can add a referral code again | Matches the plan. We read this as the once-only staff waiver also starting again with a new joining fee (a limit per joining fee); the reply did not say so directly |
+| Follow-up 4 | Live vouchers today: the individual £25 GTi voucher (issued on join, renewal or upgrade, valid until the membership expires or is cancelled) and GTILED50 (50% off the GTi LED Light Therapy Facial Course, ends 31 October 2026). Nothing live for membership extras, insurance or accreditation | Nothing to migrate for this phase. GTILED50 ends before any build and is GTi, so it is dropped. The £25 voucher still needs issuing when members join through V2 (see 6) |
 | Scoped by the user, 26 October | A staff goodwill waiver of the joining fee is allowed **once per person** | The portal refuses a second staff waiver of the joining fee for the same Contact, using the waiver log. A referral code is not affected: it follows the joining fee (answer 3). A person who rejoins after more than 30 days has a new joining fee, and the Guild can be asked whether that resets the limit (4.2) |
 
 ### 2.2 Conflicts with the portal as built
@@ -149,7 +153,7 @@ Renewals use the same inline amounts as year one (no re-rating). So:
 3. Stripe's own limits are not used for this. Stripe cannot say "unlimited uses overall, once per customer" for a shared code, and the portal opens Checkout with `customer_email`, which makes a new Stripe Customer for each payment. Customer-based rules in Stripe therefore have nothing to hold on to.
 4. **Guard against guessing.** Referral codes can be five-digit numbers. The code check needs a rate limit per user (for example 10 wrong codes an hour) and one message for every failure: "That code is not valid" (answer 10). The message does not say whether the code exists, has expired or is used up.
 5. **Staff waivers of the joining fee are once per person.** The waiver log is checked by Contact before a second waiver is accepted. The route tells the staff member who waived it before, when and why, and does not allow a second one.
-6. **School expiry.** A code whose school has expired is still valid for the student (answer 10). The portal accepts any referral code found on a school Account. Whether a code can be withdrawn on purpose, for example after misuse, is a question for the Guild (section 4).
+6. **School expiry and withdrawal.** A code is still valid for the student when the school has expired (answer 10), and the Guild confirmed a code is never switched off on purpose (follow-up 1). The portal accepts any referral code found and has no withdrawal switch.
 
 A persistent Stripe Customer per Contact would still help cancellations and the Stripe billing portal, but it is not needed for discounts. Recorded as optional work in phase 3.
 
@@ -225,11 +229,11 @@ Questions 1 to 5 and 7 to 13 are answered (section 2.1). Insurance, the joining 
 - The joining fee is charged per person.
 - Customers do not enter bespoke vouchers online.
 
-### 4.2 Still open, plain wording for the Guild
-1. **Can a school's code ever be switched off on purpose?** A school whose accreditation has expired still gives students the £10. Is there ever a reason to stop a code working, for example if it is being misused?
-2. **What reasons will staff give when they waive something?** Should the system offer a short list (for example goodwill, complaint, promotion) or free text?
-3. **If someone's membership lapses for more than a month and they rejoin, does their one joining fee waiver start again?** We are building the limit as one goodwill waiver of the joining fee per person. Please tell us whether a new joining fee after a lapse counts as a new start.
-4. **Are there vouchers live in Enki today that must keep working?** Staff will create and end vouchers in the CRM from now on. Please tell us which current vouchers must carry over, with their dates and limits.
+### 4.2 Follow-up answers, 26 October (afternoon)
+All four are answered (section 2.1, follow-up 1 to 4). Still to come from the Guild: the final list of waiver reasons (Qudsiya is confirming with Helen Delaney whether to add, for example, "Upgrade"), and examples of the £25 voucher codes, which Qudsiya has offered.
+
+### 4.2a Open, arising from the follow-up
+1. **The £25 GTi voucher today.** New joins, renewals and upgrades through the new portal need to keep issuing it. Where do the individual codes live today (Enki, the CRM or both), how are they generated and what format are they, and what happens to a member's code when their membership is cancelled? Please send the examples Qudsiya offered.
 
 ### 4.3 For us to confirm ourselves
 - What `Referral_Code_Active` means in the CRM (school current, or code on or off).
@@ -284,7 +288,7 @@ Each phase ships on its own, behind a switch (an environment flag such as `PORTA
 - A2Z (CRM): the `Voucher`, `Voucher Redemption` and waiver log modules, a test voucher, and the Voucher screen the Guild uses to create and end vouchers (replacing the separate Enki section).
 - A2Z (widget): how staff sign in to the widget and how the staff identity reaches the portal.
 - A2Z (Creator, Books): as phase 1, plus waiver reasons in the invoice record.
-- Guild: the answers in 4.2, a decision on what to do with vouchers still live in Enki, and a User Acceptance Test.
+- Guild: the final waiver reasons list (4.2) and a User Acceptance Test. No live voucher needs migrating for this scope.
 
 **Done when:** a staff member can apply a code or waiver in the widget and in the payment link, the customer pays the discounted amount, and the waiver log, the Creator invoice and the Books line all show who applied what and why.
 
@@ -336,6 +340,7 @@ The Guild is not ready for GTi, so none of this is in the build plan. It is kept
 - **GTi Student upgrade.** The joining fee waiver applies if the student membership is active or within one month of expiry. Online it uses the referral code of the school of the most recent GTi enrolment, which needs GTi enrolment data the portal does not have. The portal also does not check that the previous membership was a Student membership.
 - **GTi pricing and bundles.** Member and non-member course prices, and the £25 school bundle, are catalogue and staff-set pricing, not codes.
 - **Course vouchers.** The Guild said a course voucher lasts while it is available, generally a month, and members or the public can use it. This is a different life from a membership extras discount.
+- **Issuing the £25 voucher cannot wait for GTi.** It is live today and is given to every member who joins, renews or upgrades. Once joins and renewals go through the new portal, something must still create the member's code when the first payment succeeds, or members lose the benefit. The smallest fix is for Creator to create the voucher record (code, member, expiry) when a membership activates, and to void it on cancellation, while GTi redemption stays in Enki until GTi is rebuilt. This needs the examples and answers in 4.2a, and is not in phases 0 to 3 yet.
 - **Questions to ask the Guild when GTi starts:**
   - Where are the £25 vouchers held in the CRM today, and what is the module called?
   - Is the £25 voucher a code the member types in, or a credit applied for them? Should it also work on membership or insurance pages (we assume not)?
