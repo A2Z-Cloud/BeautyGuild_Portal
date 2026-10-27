@@ -37,10 +37,11 @@ async function withApp(env, rows, fn) {
 }
 const row = o => ({
   id: '2',
-  Voucher_Code: 'GTI-ABCDE-FGHJK',
+  Voucher_Code: '7F15B4AE',
   Voucher_Type: 'Personal £25 GTI',
   Assigned_Contact: { id: ME },
   Discount_Value: 25,
+  Valid_From: '2026-11-01T00:00:00+00:00',
   Valid_To: '2027-10-31T23:59:59+00:00',
   Active: true,
   Maximum_Total_Uses: 1,
@@ -56,7 +57,17 @@ test('an active voucher shows its code, value and date, and the search names thi
     const r = await get();
     assert.equal(r.status, 200);
     assert.deepEqual(r.body.vouchers, [
-      { id: '2', code: 'GTI-ABCDE-FGHJK', value: 25, validUntil: '2027-10-31', status: 'Active', usable: true },
+      {
+        id: '2',
+        title: '£25 Off GTi Course Voucher',
+        explanation: 'Get £25 off your next GTi Course by using the discount code.',
+        code: '7F15B4AE',
+        value: 25,
+        validFrom: '2026-11-01',
+        validUntil: '2027-10-31',
+        status: 'Active',
+        usable: true,
+      },
     ]);
     assert.ok(
       seen.some(u =>

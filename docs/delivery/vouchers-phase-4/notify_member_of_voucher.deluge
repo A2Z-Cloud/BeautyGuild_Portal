@@ -1,6 +1,7 @@
 string Vouchers.notify_member_of_voucher(string contact_email, string first_name, string code, string term_end)
 {
-	// NOTE: Emails the member their code. DRAFT WORDING: the Guild has not said how members are told today
+	// NOTE: Emails the member their code. OFF BY DEFAULT: the caller only uses it when its send_member_email switch is
+	// true, because the Guild sends no email today (one is wanted in future). DRAFT WORDING: the Guild has not said how members are told today
 	// (email, the portal or staff) or what it should say. Change the text and the From address when they do.
 	// Returns "sent", "no_email" or "failed: ...". A failure here never undoes the voucher: the code is also
 	// shown to the member in the portal (GET /portal/vouchers) and staff can read it in the CRM.

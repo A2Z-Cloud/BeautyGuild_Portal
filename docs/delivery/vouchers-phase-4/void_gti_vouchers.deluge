@@ -1,12 +1,16 @@
-map Vouchers.void_gti_vouchers(string contact_id, string membership_profile_id, string reason, string source_ref)
+map Vouchers.void_gti_vouchers(string contact_id, string membership_profile_id, string effective_date, string reason, string source_ref)
 {
-	// NOTE: Voids the member's unspent personal GTi vouchers when their membership is CANCELLED. The cancellations
-	// workstream calls this from the place that marks the membership cancelled (not from every
-	// customer.subscription.deleted: a subscription that simply ends at the term end needs nothing, because the
-	// voucher already expires with the membership). Voiding is Active = false plus Void_Reason. A voucher that is
-	// already used (Current_Usage_Count >= Maximum_Total_Uses) is left alone, and it is never reactivated.
-	// Safe to call twice: the second call finds nothing Active and reports 0 voided.
-	//   membership_profile_id  CRM Membership profile id. If "" every active personal voucher for the Contact is voided.
+	// NOTE: Ends the member's unspent personal GTi vouchers when their membership is CANCELLED. The voucher must end
+	// from the date the membership is DUE to cancel (the effective date), not the date of the request. So this does not
+	// switch the voucher off straight away: it shortens Valid_To to the end of the effective date (UK time) and records
+	// why. Active becomes false only once that date has passed (or is today or earlier when called). It never extends a
+	// voucher, never changes a used one (Current_Usage_Count >= Maximum_Total_Uses), and never reactivates one.
+	// Safe to call twice: the second call changes nothing. Call it where the cancellations workstream records the
+	// cancellation, not on every customer.subscription.deleted: a subscription that simply ends at the term end needs
+	// nothing, because the voucher already expires with the membership. A membership or insurance that is not renewed
+	// needs nothing either: the voucher is not extended.
+	//   membership_profile_id  CRM Membership profile id. If "" every active personal voucher for the Contact is ended.
+	//   effective_date         yyyy-MM-dd the cancellation takes effect
 	//   reason                 free text for the log, for example "membership cancelled"
 	//   source_ref             Stripe subscription or event id
 	crm_connection = "zoho_crm_connection";
@@ -19,6 +23,12 @@ map Vouchers.void_gti_vouchers(string contact_id, string membership_profile_id, 
 		}
 		criteria = "((Assigned_Contact:equals:" + contact_id.trim() + ")and(Voucher_Type:equals:Personal £25 GTI)and(Active:equals:true))";
 		vouchers = zoho.crm.searchRecords(module_name,criteria,1,50,crm_connection);
+		if(effective_date == null || effective_date.trim() == "")
+		{
+			return {"status":"error","message":"No effective date for the cancellation."};
+		}
+		effective_number = effective_date.trim().replaceAll("-","").toLong();
+		today_number = zoho.currentdate.toString("yyyy-MM-dd").replaceAll("-","").toLong();
 		voided = 0;
 		skipped = 0;
 		failed = 0;
@@ -41,9 +51,20 @@ map Vouchers.void_gti_vouchers(string contact_id, string membership_profile_id, 
 			}
 			if(include_it == true)
 			{
+				current_to = ifnull(voucher.get("Valid_To"),"").toString();
+				if(current_to.length() >= 10 && current_to.subString(0,10).replaceAll("-","").toLong() <= effective_number)
+				{
+					// Already ends on or before the effective date: do not extend it.
+					skipped = skipped + 1;
+					continue;
+				}
 				change = Map();
-				change.put("Active",false);
-				change.put("Void_Reason",reason + " (" + source_ref + ")");
+				change.put("Valid_To",effective_date.trim() + "T23:59:59" + thisapp.Vouchers.uk_offset(effective_date,"end"));
+				if(effective_number <= today_number)
+				{
+					change.put("Active",false);
+				}
+				change.put("Void_Reason",reason + " (" + source_ref + "), ends " + effective_date.trim());
 				updated = zoho.crm.updateRecord(module_name,voucher.get("id"),change,Map(),crm_connection);
 				if(updated.get("id") != null)
 				{
@@ -59,7 +80,7 @@ map Vouchers.void_gti_vouchers(string contact_id, string membership_profile_id, 
 				skipped = skipped + 1;
 			}
 		}
-		info "Voided " + voided + " voucher(s) for Contact " + contact_id + ", " + skipped + " skipped, " + failed + " failed (" + reason + ", " + source_ref + ")";
+		info "Ended " + voided + " voucher(s) for Contact " + contact_id + ", " + skipped + " skipped, " + failed + " failed (" + reason + ", " + source_ref + ")";
 		return {"status":if(failed == 0,"ok","partial"),"voided":voided,"skipped":skipped,"failed":failed};
 	}
 	catch (e)

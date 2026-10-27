@@ -7,11 +7,16 @@ const { HttpError } = require('./errors');
 const { createCrmClient, resolveContact } = require('./records');
 
 const PERSONAL_TYPE = 'Personal £25 GTI';
+// Discount_Voucher has no title or explanation field, so the Dashboard text for this voucher type is fixed here
+// (the same wording Enki shows today).
+const TITLE = '£25 Off GTi Course Voucher';
+const EXPLANATION = 'Get £25 off your next GTi Course by using the discount code.';
 const FIELDS = [
   'Voucher_Code',
   'Voucher_Type',
   'Assigned_Contact',
   'Discount_Value',
+  'Valid_From',
   'Valid_To',
   'Active',
   'Maximum_Total_Uses',
@@ -36,8 +41,11 @@ function mapVoucher(row, nowMs) {
   return {
     id: String(row.id),
     // The code is shown only while it can be spent; a used, void or expired code is no use to the member.
+    title: TITLE,
+    explanation: EXPLANATION,
     code: state === 'Active' ? text(row.Voucher_Code) || null : null,
     value: Number.isFinite(value) ? value : null,
+    validFrom: row.Valid_From ? String(row.Valid_From).slice(0, 10) : null,
     validUntil: row.Valid_To ? String(row.Valid_To).slice(0, 10) : null,
     status: state,
     usable: state === 'Active',
@@ -90,4 +98,4 @@ function registerVoucherRoutes(
   app.use('/portal/vouchers', router);
 }
 
-module.exports = { registerVoucherRoutes, mapVoucher, voucherState, PERSONAL_TYPE };
+module.exports = { registerVoucherRoutes, mapVoucher, voucherState, PERSONAL_TYPE, TITLE, EXPLANATION };

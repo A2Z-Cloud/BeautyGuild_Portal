@@ -1,0 +1,17 @@
+map Vouchers.write_voucher_to_enki(string voucher_id, string code, string contact_id, string term_start, string term_end)
+{
+	// NOTE: STUB, SWITCHED OFF. Redemption of the £25 voucher stays in Enki at GTi course checkout until GTi is
+	// rebuilt, so a voucher that exists only in the CRM Discount_Voucher module cannot be redeemed there. Either
+	// this function writes the voucher into Enki, or Enki is changed to read the CRM. NOBODY HAS DECIDED which, and
+	// we do not yet know who owns Enki or what interface it has (API, import file, database). This function is the
+	// single place to put the write if that is the answer. It does nothing until enki_write_enabled is true AND a
+	// body exists. It must never create a second Enki voucher (use voucher_id or the code as the key) and never throw.
+	// Enki's settings for this voucher: title "£25 Off GTi Course Voucher", explanation "Get £25 off your next GTi
+	// Course by using the discount code.", £25.00, usage Overall, max uses 1, valid from and to the term dates.
+	enki_write_enabled = false;
+	if(enki_write_enabled == false)
+	{
+		return {"status":"disabled","message":"Enki write is switched off; the Enki interface is not decided."};
+	}
+	return {"status":"error","message":"Enki write is switched on but not implemented."};
+}

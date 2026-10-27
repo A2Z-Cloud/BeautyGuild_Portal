@@ -1,4 +1,4 @@
-map Vouchers.issue_gti_voucher(string contact_id, string membership_profile_id, string member_type, string term_end, string source_invoice_id, string reason)
+map Vouchers.issue_gti_voucher(string contact_id, string membership_profile_id, string member_type, string term_start, string term_end, string source_invoice_id, string reason)
 {
 	// NOTE: Creates the member's personal £25 GTi voucher in the CRM module Discount_Voucher, once per
 	// Contact per membership term. Safe to call again for the same term: it finds the existing voucher
@@ -6,10 +6,12 @@ map Vouchers.issue_gti_voucher(string contact_id, string membership_profile_id, 
 	//   contact_id             CRM Contact id (from the subscription snapshot)
 	//   membership_profile_id  CRM Membership profile id (NOT the Deal), may be "" if not known yet
 	//   member_type            "Associate", "International" or "Full" (Full covers Non-Salon and Salon)
+	//   term_start             first day of the NEW membership term, yyyy-MM-dd. For an early renewal this is the
+	//                          renewal date (the day after the old expiry), NOT the processing date
 	//   term_end               membership expiry AFTER this payment, as yyyy-MM-dd. The term is identified by it.
 	//   source_invoice_id      Stripe invoice id, stored on the voucher so staff can trace it
 	//   reason                 "new", "renewal" or "upgrade" (for the log only)
-	// Returns {"status": "created" | "exists" | "error", "voucher_id", "code", "message"}.
+	// Returns {"status": "created" | "exists" | "skipped" | "error", "voucher_id", "code", "message"}.
 	//
 	// CRM names are the real Discount_Voucher API names. Voucher_Code already exists (text, 255) but the CRM does NOT
 	// enforce that it is unique or case-insensitive, so this function checks. Voucher_Key is NEW: unique, immutable text.
@@ -25,6 +27,10 @@ map Vouchers.issue_gti_voucher(string contact_id, string membership_profile_id, 
 		if(contact_id == null || contact_id.trim() == "")
 		{
 			return {"status":"error","message":"No Contact id, so no voucher can be issued."};
+		}
+		if(term_start == null || term_start.trim() == "")
+		{
+			return {"status":"error","message":"No term start date, so the voucher has no valid-from date."};
 		}
 		if(term_end == null || term_end.trim() == "")
 		{
@@ -42,6 +48,28 @@ map Vouchers.issue_gti_voucher(string contact_id, string membership_profile_id, 
 			found = existing.get(0);
 			info "Voucher already exists for key " + voucher_key + ": " + found.get("id");
 			return {"status":"exists","voucher_id":found.get("id"),"code":found.get("Voucher_Code"),"message":"Already issued for this term."};
+		}
+		// Skip when the Contact already holds an active, unused personal voucher that is valid on the new term's start
+		// (for example an Associate upgrading to Full mid-term). An early renewal does NOT skip: the old voucher ends
+		// the day before the new term starts, so the new voucher is still issued, starting on the renewal date.
+		// This replaces the manual approve or decline pop-up in Enki.
+		start_number = term_start.trim().replaceAll("-","").toLong();
+		held = zoho.crm.searchRecords(module_name,"((Assigned_Contact:equals:" + contact_id.trim() + ")and(Voucher_Type:equals:Personal £25 GTI)and(Active:equals:true))",1,50,crm_connection);
+		for each  held_voucher in held
+		{
+			held_from = ifnull(held_voucher.get("Valid_From"),"").toString();
+			held_to = ifnull(held_voucher.get("Valid_To"),"").toString();
+			held_used = ifnull(held_voucher.get("Current_Usage_Count"),0).toLong() >= ifnull(held_voucher.get("Maximum_Total_Uses"),1).toLong();
+			if(held_used == false && held_from.length() >= 10 && held_to.length() >= 10)
+			{
+				from_number = held_from.subString(0,10).replaceAll("-","").toLong();
+				to_number = held_to.subString(0,10).replaceAll("-","").toLong();
+				if(from_number <= start_number && to_number >= start_number)
+				{
+					info "Skipped: Contact " + contact_id + " already holds active voucher " + held_voucher.get("id") + " covering " + term_start;
+					return {"status":"skipped","voucher_id":held_voucher.get("id"),"code":held_voucher.get("Voucher_Code"),"message":"The Contact already has an active unused voucher covering the new term start."};
+				}
+			}
 		}
 		// First write wins. If two calls race, the unique key makes the second create fail, and the
 		// error branch below re-reads and returns the winner instead of reporting a failure.
@@ -69,10 +97,9 @@ map Vouchers.issue_gti_voucher(string contact_id, string membership_profile_id, 
 				record.put("Maximum_Total_Uses",1);
 				record.put("One_Use_Per_Person",true);
 				record.put("Expires_With_Membership",true);
-				// DateTime fields: ISO 8601 with an offset. CHECK on the Guild's org that the offset (+00:00 vs
-				// +01:00 in summer) gives the intended end of day; the date part is what matters for now.
-				record.put("Valid_From",zoho.currenttime.toString("yyyy-MM-dd'T'HH:mm:ss") + "+00:00");
-				record.put("Valid_To",term_end.trim() + "T23:59:59+00:00");
+				// DateTime fields, UK time: the term's first moment to the end of its last day (the Guild's rule).
+				record.put("Valid_From",term_start.trim() + "T00:00:00" + thisapp.Vouchers.uk_offset(term_start,"start"));
+				record.put("Valid_To",term_end.trim() + "T23:59:59" + thisapp.Vouchers.uk_offset(term_end,"end"));
 				record.put("Active",true);
 				record.put("Voucher_Key",voucher_key);
 				record.put(source_invoice_field,ifnull(source_invoice_id,""));
