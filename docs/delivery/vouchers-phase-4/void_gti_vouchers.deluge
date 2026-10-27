@@ -1,0 +1,63 @@
+map Vouchers.void_gti_vouchers(string contact_id, string membership_id, string reason, string source_ref)
+{
+	// NOTE: Voids the member's unspent GTi vouchers when their membership is CANCELLED. The cancellations workstream
+	// calls this from the place that marks the membership cancelled (not from every customer.subscription.deleted:
+	// a subscription that simply ends at the term end needs no void, because the voucher already expires with the
+	// membership). It only touches vouchers that are Active, so a Used voucher is never changed back.
+	// Safe to call twice: the second call finds nothing Active and reports 0 voided.
+	//   membership_id  CRM Deal id. If "" every Active voucher for the Contact is voided.
+	//   reason         free text for the log, for example "membership cancelled"
+	//   source_ref     Stripe subscription or event id
+	// Field names are the same unverified set as issue_gti_voucher.deluge: change them in both.
+	crm_connection = "zoho_crm_connection";
+	module_name = "Discount_Voucher";
+	f_membership = "Membership";
+	f_status = "Status";
+	f_note = "Void_Reason";
+	status_active = "Active";
+	status_void = "Void";
+	try 
+	{
+		if(contact_id == null || contact_id.trim() == "")
+		{
+			return {"status":"error","message":"No Contact id."};
+		}
+		criteria = "((Contact:equals:" + contact_id.trim() + ")and(" + f_status + ":equals:" + status_active + "))";
+		vouchers = zoho.crm.searchRecords(module_name,criteria,1,50,crm_connection);
+		voided = 0;
+		failed = 0;
+		for each  voucher in vouchers
+		{
+			include_it = true;
+			if(membership_id != null && membership_id.trim() != "")
+			{
+				linked = voucher.get(f_membership);
+				if(linked != null && linked.get("id") != membership_id.trim())
+				{
+					include_it = false;
+				}
+			}
+			if(include_it == true)
+			{
+				change = Map();
+				change.put(f_status,status_void);
+				change.put(f_note,reason + " (" + source_ref + ")");
+				updated = zoho.crm.updateRecord(module_name,voucher.get("id"),change,Map(),crm_connection);
+				if(updated.get("id") != null)
+				{
+					voided = voided + 1;
+				}
+				else
+				{
+					failed = failed + 1;
+				}
+			}
+		}
+		info "Voided " + voided + " voucher(s) for Contact " + contact_id + ", " + failed + " failed (" + reason + ", " + source_ref + ")";
+		return {"status":if(failed == 0,"ok","partial"),"voided":voided,"failed":failed};
+	}
+	catch (e)
+	{
+		return {"status":"error","message":"Exception: " + e};
+	}
+}

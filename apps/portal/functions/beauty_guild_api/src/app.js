@@ -9,6 +9,7 @@ const { registerCheckoutRoutes } = require('./checkout');
 const { registerDocumentRoutes } = require('./documents');
 const { registerDiagnosticsRoutes } = require('./diagnostics');
 const { registerPublicSchoolVerification } = require('./publicSchoolVerification');
+const { registerVoucherRoutes } = require('./vouchers');
 const { registerDraftRoutes } = require('./crmDrafts');
 const { registerSchoolRoutes } = require('./schoolServices');
 const { createRiskChecks } = require('./riskChecks');
@@ -144,6 +145,17 @@ function createApp({
     fetchImpl,
     hideDrafts: config.crmDraftsEnabled,
     draftStatus: config.draftStatus,
+  });
+  registerVoucherRoutes(app, {
+    enabled: config.vouchersEnabled,
+    getCurrentUser,
+    getCrmHeaders,
+    crmApiDomain: config.crmApiDomain,
+    fetchImpl,
+    module: config.voucherModule,
+    fields: config.voucherFields,
+    activeStatus: config.voucherActiveStatus,
+    now,
   });
   registerCheckoutRoutes(app, {
     publicQuotesEnabled: config.publicQuotesEnabled,

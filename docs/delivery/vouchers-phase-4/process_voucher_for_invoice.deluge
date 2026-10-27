@@ -1,0 +1,57 @@
+map Vouchers.process_voucher_for_invoice(string billing_reason, string change_type, list sku_list, string contact_id, string membership_id, string term_end, string stripe_invoice_id, string contact_email, string first_name)
+{
+	// NOTE: The trigger. The Creator processor calls this AFTER it has marked the membership Active in the CRM
+	// and set the new expiry, for a paid invoice (invoice.paid, or the first paid invoice of a subscription).
+	// It decides whether the invoice earns a voucher and, if so, issues it and tells the member.
+	// It never raises: the result is returned so the processor can store it on the invoice (suggested field
+	// Invoice_Records.Voucher_Result) and a failure never blocks Books or the membership.
+	//
+	// WHEN A VOUCHER IS EARNED (Guild rule, 26 October): the invoice is the first paid invoice of a subscription
+	// (new member, or an upgrade from GTi Student) or a subscription_cycle invoice, AND it carries a qualifying
+	// membership line. Monthly plans send a subscription_cycle invoice every month: those find the voucher
+	// already issued for the term (same expiry), so only the payment that starts a new term creates one.
+	// GTi Student, insurance only, a mid-term add-on or a named-employee-only invoice has no qualifying line,
+	// or no new expiry, so it earns nothing.
+	eligible_skus = {"MEM-ASSOC-Y","MEM-INTL-Y","MEM-FULLNS-Y","MEM-FULLS-Y","ACC-ASSOC","ACC-INTL-MEM"};
+	result = Map();
+	try 
+	{
+		if(billing_reason != "subscription_create" && billing_reason != "subscription_cycle")
+		{
+			return {"status":"skipped","message":"billing_reason " + billing_reason + " does not earn a voucher."};
+		}
+		qualifies = false;
+		for each  sku in sku_list
+		{
+			if(eligible_skus.contains(sku))
+			{
+				qualifies = true;
+			}
+		}
+		if(qualifies == false)
+		{
+			return {"status":"skipped","message":"No qualifying membership line on the invoice."};
+		}
+		reason = "new";
+		if(billing_reason == "subscription_cycle")
+		{
+			reason = "renewal";
+		}
+		else if(change_type != null && change_type.toLowerCase().contains("upgrade"))
+		{
+			reason = "upgrade";
+		}
+		result = thisapp.Vouchers.issue_gti_voucher(contact_id,membership_id,term_end,stripe_invoice_id,reason);
+		// Tell the member only when this call created the voucher, so a retry never sends a second email.
+		if(result.get("status") == "created")
+		{
+			result.put("notified",thisapp.Vouchers.notify_member_of_voucher(contact_email,first_name,result.get("code"),term_end));
+		}
+		info "Voucher result for invoice " + stripe_invoice_id + ": " + result.toString();
+	}
+	catch (e)
+	{
+		result = {"status":"error","message":"Exception: " + e};
+	}
+	return result;
+}

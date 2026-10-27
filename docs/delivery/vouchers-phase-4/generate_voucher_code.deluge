@@ -1,0 +1,23 @@
+string Vouchers.generate_voucher_code(string seed, int attempt)
+{
+	// NOTE: THE ONLY PLACE the code format lives. Replace the body when the Guild sends examples of
+	// its current codes (Enki format). Everything else treats the result as an opaque string.
+	// Current placeholder: GTI-XXXXX-XXXXX, ten characters from a 16 letter alphabet with no look-alikes
+	// (no 0, O, 1, I, 5, S), about 40 bits. It is derived from a SHA-256 of the seed, a secret salt and
+	// the attempt number, so the same seed gives the same code (a retry is stable) while the code cannot
+	// be guessed from the Contact id. The caller passes attempt 1 to 5 to step past a collision.
+	// ASSUMPTION TO CHECK IN THE CREATOR EDITOR: zoho.encryption.sha256() exists as used here. If not, use
+	// whichever Deluge hash function the editor offers; only the line marked HASH changes.
+	salt = "REPLACE-WITH-A-CREATOR-CONSTANT-NOT-THIS-TEXT";
+	hex_digits = "0123456789abcdef";
+	alphabet = "ACDEFGHJKLMNPQRT";
+	digest = zoho.encryption.sha256(salt + "|" + seed + "|" + attempt.toString());// HASH
+	code_chars = "";
+	for each  position in {0,1,2,3,4,5,6,7,8,9}
+	{
+		hex_char = digest.subString(position,position + 1).toLowerCase();
+		index = hex_digits.indexOf(hex_char);
+		code_chars = code_chars + alphabet.subString(index,index + 1);
+	}
+	return "GTI-" + code_chars.subString(0,5) + "-" + code_chars.subString(5,10);
+}
