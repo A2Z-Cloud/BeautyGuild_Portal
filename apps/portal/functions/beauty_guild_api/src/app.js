@@ -153,7 +153,6 @@ function createApp({
     getCrmHeaders,
     crmApiDomain: config.crmApiDomain,
     stripeKey: config.stripeSecretKey,
-    scheduleWebhookSecret: config.stripeScheduleWebhookSecret,
     publicOrigin: config.portalPublicOrigin,
     riskChecks,
     fetchImpl,

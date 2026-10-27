@@ -12,8 +12,8 @@ export const thenCharge = quote => {
   return { pence, interval, yearly: interval === 'month' ? pence * 12 : null };
 };
 
-// A monthly plan: 12 payments built from the yearly price, then the same payment, or a lower one once the joining fee and one-off
-// items have been paid off, renewing automatically. The first payment is Due today.
+// A monthly plan: 12 payments built from the yearly price, with the joining fee and any one-off items charged in full on the first
+// payment, so every later payment (and every renewal) is the same, renewing automatically. The first payment is Due today.
 export const planSummary = quote => {
   const plan = quote?.plan;
   if (!plan) return null;

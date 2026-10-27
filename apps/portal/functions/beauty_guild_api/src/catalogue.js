@@ -295,10 +295,44 @@ async function activeMembership(req, crm, contactId) {
   };
 }
 
+// The same calendar day one month on, held to the end of a short month (31 January plus a month is 28 or 29 February).
+function oneMonthOn(day) {
+  const [y, m, d] = day.split('-').map(Number);
+  const last = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+  return isoDay(new Date(Date.UTC(y, m, Math.min(d, last))));
+}
+
+// The joining fee is charged on a new purchase and on a renewal alike, unless the new membership starts within one month of the end
+// of the member's last membership of any kind (Associate, International, Full Non-Salon or Full Salon): a gap of more than a month
+// pays it again (Guild, 26 October 2026). A membership still running has no gap. With no Contact, or no earlier membership, it is due.
+// Only Active Deals count as cover: a saved draft is not one.
+async function joiningFeeDue(req, crm, contactId, start) {
+  if (!contactId) return true;
+  const deals = await crm(
+    req,
+    'Deals/search?criteria=' +
+      esc('(Contact_Name:equals:' + contactId + ')') +
+      '&fields=' +
+      esc('Stage,Membership_Type,Start_Date,Expiry_Date'),
+  );
+  const ends = deals
+    .filter(
+      d =>
+        String(d.Contact_Name?.id || contactId) === String(contactId) &&
+        d.Stage === 'Active' &&
+        d.Membership_Type &&
+        d.Expiry_Date,
+    )
+    .map(d => d.Expiry_Date)
+    .sort();
+  const last = ends[ends.length - 1];
+  return !last || start > oneMonthOn(last);
+}
+
 // Insurance is rated here, not read from Stripe: each cover row and the IPT become inline price_data lines.
 // Nothing is created in the CRM until the member pays (beforePay runs on checkout only, never on a quote),
 // and a quote that needs the Insurance team (REFER) or cannot be offered online (STOP) is never payable.
-async function insuranceLines({ req, contact, input, member, risk, start, end }) {
+async function insuranceLines({ req, contact, input, member, risk, start, end, monthly = false }) {
   const country = String(input.country || '')
     .trim()
     .slice(0, 60);
@@ -361,6 +395,7 @@ async function insuranceLines({ req, contact, input, member, risk, start, end })
         entryRoute: contact && !contact.createdNow ? 'Existing Member' : 'Public Prospect',
         termsAccepted: input.accepted === 'yes',
         audits: screening.audits,
+        frequency: monthly ? 'Monthly' : 'Annual',
         ...extra,
       }),
     // A REFER or STOP is recorded in the CRM for the Insurance team, never sent to Stripe (INCOMPLETE is the member's to fix).
@@ -377,6 +412,7 @@ async function insuranceLines({ req, contact, input, member, risk, start, end })
               entryRoute: contact && !contact.createdNow ? 'Existing Member' : 'Public Prospect',
               termsAccepted: input.accepted === 'yes',
               audits: screening.audits,
+              frequency: monthly ? 'Monthly' : 'Annual',
               referral: { status: blocked.status === 'STOP' ? 'Stopped' : 'Referred', summary },
             })
         : null,
@@ -532,13 +568,14 @@ SERVICES.membership = {
     // On a monthly plan the yearly price is divided by 12. The joining fee and the add-ons are spread over the first 12 payments only
     // (term year_one); the membership and any extra branches carry on (see plans.js).
     const lines = [{ item: 'membership_' + level + '_annual', quantity: 1, term: 'ongoing' }];
-    if (!previous) lines.push({ item: 'joining_fee', quantity: 1, term: 'year_one' });
+    if (await joiningFeeDue(req, crm, contact?.id, start))
+      lines.push({ item: 'joining_fee', quantity: 1, term: 'year_one' });
     if (secondary.length) lines.push({ item: 'membership_branch', quantity: secondary.length, term: 'ongoing' });
     for (const [key, quantity] of Object.entries(addons)) lines.push({ item: ADDONS[key], quantity, term: 'year_one' });
     if (input.insurance && level === 'associate') throw NEEDS_FULL();
     // One date covers both: the membership and its insurance start together.
     const ins = input.insurance
-      ? await insuranceLines({ req, contact, input, member, risk, start, end: expiry })
+      ? await insuranceLines({ req, contact, input, member, risk, start, end: expiry, monthly: billing === 'monthly' })
       : null;
     return {
       lines,
@@ -783,4 +820,5 @@ module.exports = {
   isPaidStatus,
   isPayableAccreditation,
   membershipChangeOptions,
+  oneMonthOn,
 };

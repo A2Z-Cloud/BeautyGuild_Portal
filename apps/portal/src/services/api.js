@@ -86,6 +86,10 @@ export const portalApi = Object.freeze({
       : DATA_MODE === 'demo'
         ? clone(DEMO_RECORDS.find(r => r.kind === kind && r.id === id) || null)
         : unavailable('Authenticated CRM record retrieval'),
+  getMembershipCover: async id =>
+    recordsOn
+      ? (await recordReq('/membership/' + encodeURIComponent(id) + '/cover')).cover
+      : unavailable('Your membership cover'),
   getDashboard: async () => await recordReq('/summary'),
   listSchools: async () => (await schoolReq('/schools')).schools,
   getSchoolSection: async (id, section) =>
@@ -149,8 +153,6 @@ export const portalApi = Object.freeze({
   startCheckout: async body => billingReq('/', { method: 'POST', body }),
   getMembershipChangeOptions: async id =>
     (await billingReq('/membership-options?recordId=' + encodeURIComponent(id))).options,
-  // After a monthly plan is paid for, asks the server to put it on its 12 month schedule. Safe to repeat.
-  finishCheckout: async sessionId => billingReq('/finish', { method: 'POST', body: { sessionId } }),
   resumePayment: async policyId => billingReq('/resume', { method: 'POST', body: { policyId } }),
   getDocuments: async (kind, id, path = '') =>
     documentHttp

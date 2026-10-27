@@ -7,17 +7,17 @@ Written 24 October 2026 so the Creator work can be picked up later. The portal s
 **Portal (Development, `main` plus [PR 65](https://github.com/A2Z-Cloud/BeautyGuild_Portal/pull/65), which is deployed but not yet merged)**
 - Price list v2 is built. Prices are found in Stripe by **lookup key** (the price list code), so a price change is a new Stripe price and no deployment.
 - Every membership level is £55 (£38.00 zero-rated, £14.17 standard-rated, £2.83 VAT). Named employees pay a £55 membership fee as well as any premium.
-- **Monthly plans:** the yearly price plus a £1.50 monthly admin fee, divided by 12, each payment rounded up. The joining fee and add-ons are spread over the first 12 payments and a Stripe schedule drops them at payment 13.
+- **Monthly plans:** the yearly price plus a £1.50 monthly admin fee, divided by 12, each payment rounded up. The joining fee and add-ons are charged once, in full, on the first payment (changed 27 October, MTA-D22), so there is no schedule and the monthly amount is the same at every renewal.
 - **Renewal:** membership, insurance, extra branches, employee fees and accreditation all renew automatically, yearly or monthly.
 - Every inline Stripe line carries its price list code (the Books SKU) in product metadata. Catalogue lines have it as the price's `lookup_key`.
 - Full detail: [pricing-payments.md](../api-contracts/pricing-payments.md).
 
-**Stripe (test mode):** 16 catalogue prices with lookup keys, the old prices archived, the old test subscriptions cancelled. Two webhook endpoints: Creator's (V1 handler, `zohoapis.eu`) and the portal function's own (`/stripe/webhook`, schedules monthly plans). `invoice.paid` has been added to Creator's endpoint.
+**Stripe (test mode):** 16 catalogue prices with lookup keys, the old prices archived, the old test subscriptions cancelled. One webhook endpoint matters: Creator's (V1 handler, `zohoapis.eu`). The portal function's own `/stripe/webhook` was removed on 27 October with the monthly schedule. `invoice.paid` has been added to Creator's endpoint.
 
 **Books:** 53 items imported with SKUs, taxes and (for 18 of them) Stripe price IDs. A membership is two Books items (zero-rated and standard-rated). Insurance premiums are VAT exempt; IPT is its own item (`INS-IPT`).
 
 **Verified with a real payment:** an annual accreditation with Associate membership (£409). Session `mode=subscription`, `subscription_type=annual`, line `sku=ACC-ASSOC`, subscription metadata `plan=annual` and `contact_id`.
-**Not yet verified with a real payment:** monthly membership with a joining fee and a badge (to see the two phase schedule), annual membership with insurance, insurance on its own, monthly accreditation, a one-off additional venue.
+**Not yet verified with a real payment:** monthly membership with a joining fee and a badge (first invoice with the joining fee and badge in full, then the ongoing amount), annual membership with insurance, insurance on its own, monthly accreditation, a one-off additional venue.
 
 ## 2. The Creator app (agreed shape)
 
