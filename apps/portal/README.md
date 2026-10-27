@@ -95,6 +95,11 @@ A public school number search has been added at the standalone hash routes /app/
 
 The requested beautyguild.com/verify/12345 address needs a separate WordPress route or redirect; QR codes are not part of this change. See [School Verification V1 handover](../../docs/school-accreditation-verification-v1.md) for setup, CRM dependencies, security and testing.
 
+
+## Proposed MTA self-service workstream (not implemented)
+
+The [customer portal MTA functional specification](../../requirements/mta/customer-portal-functional-spec.md) defines proposed contextual Membership/Insurance changes, quote and referral journeys, payment handling and revision documents. It is a review specification only: no MTA route, backend processing service, underwriting engine or policy endorsement is implemented or deployed by this link.
+
 ## Formatting and linting
 
 Code style is Prettier's job and real mistakes are ESLint's, so reviews can be about behaviour.
