@@ -58,7 +58,14 @@ function londonOffsetMs(ms) {
       .map(p => [p.type, p.value]),
   );
   return (
-    Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second) -
+    Date.UTC(
+      Number(parts.year),
+      Number(parts.month) - 1,
+      Number(parts.day),
+      Number(parts.hour),
+      Number(parts.minute),
+      Number(parts.second),
+    ) -
     Math.floor(ms / 1000) * 1000
   );
 }
@@ -222,7 +229,7 @@ function createCrmStore({
       return live[0] || (hits.length === 1 ? hits[0] : null);
     },
     // The redemptions that count against a voucher (Reserved or Applied; Reversed and Failed are given back), for everyone or for one person.
-    async redemptions(voucherId, { contactId } = {}) {
+    async redemptions(voucherId, /** @type {{ contactId?: string }} */ { contactId } = {}) {
       if (!creator) throw unavailable('voucher redemption history');
       const f = redemptionFields;
       const criteria =

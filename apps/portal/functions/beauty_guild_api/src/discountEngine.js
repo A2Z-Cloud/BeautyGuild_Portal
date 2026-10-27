@@ -68,10 +68,12 @@ function describeActor(actor) {
   };
 }
 
-async function applyDiscounts(
-  basket,
-  { referral = null, code = '', waivers = [], actor, store, allowVouchers = false, now = Date.now } = {},
-) {
+/**
+ * @param {any} basket
+ * @param {any} [options] referral, code, waivers, actor, store, allowVouchers, now (see the top of this file)
+ */
+async function applyDiscounts(basket, options = {}) {
+  const { referral = null, code = '', waivers = [], actor, store, allowVouchers = false, now = Date.now } = options;
   const who = describeActor(actor);
   const today = basket.today || day(now());
   const rows = basket.lines.map(line => ({

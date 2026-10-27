@@ -1,0 +1,72 @@
+map Vouchers.void_gti_vouchers(string contact_id, string membership_profile_id, string reason, string source_ref)
+{
+	// NOTE: MANUAL void, with a reason, for a voucher that must not be used (for example one issued in error). It is NOT
+	// the cancellation path: a voucher ends with the end of the membership, and sync_voucher_end_date.deluge moves
+	// Valid_To when the membership's end date changes. Voiding is Active = false plus Void_Reason, immediately.
+	// It leaves a used voucher alone (Current_Usage_Count >= Maximum_Total_Uses) and never reactivates one.
+	// Safe to call twice: the second call finds nothing Active and reports 0 voided.
+	//   membership_profile_id  CRM Membership profile id. If "" every active personal voucher for the Contact is voided.
+	//   reason                 free text, for example "issued in error"
+	//   source_ref             who or what asked (a staff name, a ticket or a Stripe id)
+	crm_connection = "zoho_crm_connection";
+	module_name = "Discount_Voucher";
+	try 
+	{
+		if(contact_id == null || contact_id.trim() == "")
+		{
+			return {"status":"error","message":"No Contact id."};
+		}
+		if(reason == null || reason.trim() == "")
+		{
+			return {"status":"error","message":"A reason is required to void a voucher."};
+		}
+		criteria = "((Assigned_Contact:equals:" + contact_id.trim() + ")and(Voucher_Type:equals:Personal £25 GTI)and(Active:equals:true))";
+		vouchers = zoho.crm.searchRecords(module_name,criteria,1,50,crm_connection);
+		voided = 0;
+		skipped = 0;
+		failed = 0;
+		for each  voucher in vouchers
+		{
+			include_it = true;
+			if(membership_profile_id != null && membership_profile_id.trim() != "")
+			{
+				linked = voucher.get("Assigned_Member_Profile");
+				if(linked != null && linked.get("id") != membership_profile_id.trim())
+				{
+					include_it = false;
+				}
+			}
+			max_uses = ifnull(voucher.get("Maximum_Total_Uses"),1).toLong();
+			used = ifnull(voucher.get("Current_Usage_Count"),0).toLong();
+			if(used >= max_uses)
+			{
+				include_it = false;
+			}
+			if(include_it == true)
+			{
+				change = Map();
+				change.put("Active",false);
+				change.put("Void_Reason",reason.trim() + " (" + source_ref + ")");
+				updated = zoho.crm.updateRecord(module_name,voucher.get("id"),change,Map(),crm_connection);
+				if(updated.get("id") != null)
+				{
+					voided = voided + 1;
+				}
+				else
+				{
+					failed = failed + 1;
+				}
+			}
+			else
+			{
+				skipped = skipped + 1;
+			}
+		}
+		info "Voided " + voided + " voucher(s) for Contact " + contact_id + ", " + skipped + " skipped, " + failed + " failed (" + reason + ", " + source_ref + ")";
+		return {"status":if(failed == 0,"ok","partial"),"voided":voided,"skipped":skipped,"failed":failed};
+	}
+	catch (e)
+	{
+		return {"status":"error","message":"Exception: " + e};
+	}
+}

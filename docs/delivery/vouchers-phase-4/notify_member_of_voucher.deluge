@@ -1,0 +1,32 @@
+string Vouchers.notify_member_of_voucher(string contact_email, string first_name, string code, string term_end)
+{
+	// NOTE: Emails the member their code. OFF BY DEFAULT: the caller only uses it when its send_member_email switch is
+	// true, because the Guild sends no email today (one is wanted in future). DRAFT WORDING: the Guild has not said how members are told today
+	// (email, the portal or staff) or what it should say. Change the text and the From address when they do.
+	// Returns "sent", "no_email" or "failed: ...". A failure here never undoes the voucher: the code is also
+	// shown to the member in the portal (GET /portal/vouchers) and staff can read it in the CRM.
+	if(contact_email == null || contact_email.trim() == "")
+	{
+		return "no_email";
+	}
+	try 
+	{
+		greeting = "Hello";
+		if(first_name != null && first_name.trim() != "")
+		{
+			greeting = "Hello " + first_name.trim();
+		}
+		sendmail
+		[
+			from :zoho.adminuserid
+			to :contact_email.trim()
+			subject :"Your £25 GTi voucher"
+			message :"<p>" + greeting + ",</p><p>Thank you for your membership of the Guild of Beauty Therapists. Your personal GTi voucher is <strong>" + code + "</strong>.</p><p>It is worth £25 off a practical GTi course, or a £25 contribution to a theory-only course. It can be used once, and is valid until " + term_end + ", or until your membership ends if that is sooner.</p><p>Beauty Guild</p>"
+		]
+		return "sent";
+	}
+	catch (e)
+	{
+		return "failed: " + e;
+	}
+}

@@ -1,0 +1,71 @@
+map Vouchers.process_voucher_for_invoice(string billing_reason, string change_type, list sku_list, string contact_id, string membership_profile_id, string term_start, string term_end, string stripe_invoice_id, string contact_email, string first_name)
+{
+	// NOTE: The trigger. The Creator processor calls this AFTER it has marked the membership Active in the CRM
+	// and set the new expiry, for a paid invoice (invoice.paid, or the first paid invoice of a subscription).
+	// It decides whether the invoice earns a voucher and, if so, issues it (and emails the member if that switch is on).
+	// It never raises: the result is returned so the processor can store it on the invoice (suggested field
+	// Invoice_Records.Voucher_Result) and a failure never blocks Books or the membership.
+	//
+	// WHEN A VOUCHER IS EARNED (Guild rule, 26 October): the invoice is the first paid invoice of a subscription
+	// (new member, or an upgrade from GTi Student) or a subscription_cycle invoice, AND it carries a qualifying
+	// membership line. Monthly plans send a subscription_cycle invoice every month: those find the voucher
+	// already issued for the term (same expiry), so only the payment that starts a new term creates one.
+	// term_start is the first day of the NEW term (for an early renewal, the renewal date, not today).
+	// GTi Student, insurance only, a mid-term add-on or a named-employee-only invoice has no qualifying line,
+	// or no new expiry, so it earns nothing.
+	// SKU to the CRM Eligible_Member_Types value. Full covers Non-Salon and Salon.
+	type_by_sku = {"MEM-ASSOC-Y":"Associate","ACC-ASSOC":"Associate","MEM-INTL-Y":"International","ACC-INTL-MEM":"International","MEM-FULLNS-Y":"Full","MEM-FULLS-Y":"Full"};
+	// SWITCHES. The Guild sends no email today (one is wanted in future), so the email is OFF. Issuing is automatic when
+	// the membership is verified in the CRM; approval_required is an OPTIONAL step, OFF by default. When it is on, the
+	// voucher is created not yet active (Active = false) and a CRM approval step activates it.
+	send_member_email = false;
+	approval_required = false;
+	result = Map();
+	try 
+	{
+		if(billing_reason != "subscription_create" && billing_reason != "subscription_cycle")
+		{
+			return {"status":"skipped","message":"billing_reason " + billing_reason + " does not earn a voucher."};
+		}
+		member_type = "";
+		for each  sku in sku_list
+		{
+			if(type_by_sku.get(sku) != null)
+			{
+				member_type = type_by_sku.get(sku);
+			}
+		}
+		if(member_type == "")
+		{
+			return {"status":"skipped","message":"No qualifying membership line on the invoice."};
+		}
+		reason = "new";
+		if(billing_reason == "subscription_cycle")
+		{
+			reason = "renewal";
+		}
+		else if(change_type != null && change_type.toLowerCase().contains("upgrade"))
+		{
+			reason = "upgrade";
+		}
+		result = thisapp.Vouchers.issue_gti_voucher(contact_id,membership_profile_id,member_type,term_start,term_end,stripe_invoice_id,reason,approval_required);
+		// Tell the member only when this call created the voucher, so a retry never sends a second email.
+		if(result.get("status") == "created")
+		{
+			if(send_member_email == true)
+			{
+				result.put("notified",thisapp.Vouchers.notify_member_of_voucher(contact_email,first_name,result.get("code"),term_end));
+			}
+			else
+			{
+				result.put("notified","off");
+			}
+		}
+		info "Voucher result for invoice " + stripe_invoice_id + ": " + result.toString();
+	}
+	catch (e)
+	{
+		result = {"status":"error","message":"Exception: " + e};
+	}
+	return result;
+}

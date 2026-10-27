@@ -59,7 +59,7 @@ test("every purchase type sends exactly the keys in the contract, and stays unde
 });
 test('every contract key is exercised by at least one scenario, so none is dead', async () => {
   const sessions = await build();
-  for (const type of Object.keys(contract.SESSION_TYPES)) {
+  for (const type of Object.keys(contract.SESSION_TYPES).filter(t => !contract.TESTED_ELSEWHERE.has(t))) {
     const seen = new Set(sessions.filter(s => s.type === type).flatMap(s => s.keys));
     const { required, optional } = contract.keysFor(type);
     assert.deepEqual(
@@ -85,7 +85,7 @@ test('subscription metadata matches the contract', async () => {
     } else assert.deepEqual(s.subscription, [], s.label + ': a one-off payment carries no subscription metadata');
   }
 });
-test('every inline line carries a price list code, and monthly lines say whether they stop after 12 payments', async () => {
+test('every inline line carries a price list code', async () => {
   for (const s of await build()) {
     const lines = new Set([...s.params.keys()].map(k => k.match(/^line_items\[(\d+)\]/)?.[1]).filter(Boolean));
     for (const i of lines) {
@@ -96,13 +96,6 @@ test('every inline line carries a price list code, and monthly lines say whether
         /^[A-Z][A-Z0-9-]+$/,
         s.label + ': line ' + i + ' has no price list code',
       );
-      if (s.params.get('subscription_data[metadata][plan]') === 'monthly') {
-        assert.match(
-          s.params.get(`line_items[${i}][price_data][product_data][metadata][phase]`) || '',
-          /^(ongoing|year_one)$/,
-          s.label + ': line ' + i + ' has no phase',
-        );
-      }
     }
   }
 });

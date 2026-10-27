@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const { createApp } = require('../src/app');
 const { loadConfig } = require('../src/config');
 const { world, IDS } = require('./helpers/world');
-const { joiningFeeDue, daysSinceExpiry, normaliseCode, NOT_VALID, NOT_DUE } = require('../src/discounts');
+const { normaliseCode, NOT_VALID, NOT_DUE } = require('../src/discounts');
 
 const ON = { PORTAL_DISCOUNTS_ENABLED: 'true' };
 // The school's Accreditation Reference is the code. Account is the school.
@@ -63,21 +63,17 @@ async function withApp(state, fn, env = {}, { guest = false } = {}) {
     await new Promise(resolve => server.close(resolve));
   }
 }
+// An Active Deal that ended (or ends) this many days from today. Whether a joining fee is due is main's rule (catalogue.js).
+const lapsed = offset => ({
+  id: IDS.deal,
+  Stage: 'Active',
+  Membership_Type: 'Associate Member',
+  Start_Date: '2020-01-01',
+  Expiry_Date: day(offset),
+  Contact_Name: { id: IDS.me },
+});
 const joiningLine = q => q.lines.find(l => /joining fee/i.test(l.name));
 
-test('the 30 day rule: day 30 pays no joining fee, day 31 pays it', () => {
-  const today = '2026-10-26';
-  const due = (previous, expiry, rule = true) => joiningFeeDue({ previous, expiry, today, rule });
-  assert.equal(due(null, null), true, 'a new person always pays it');
-  assert.equal(due('1', '2026-10-26'), false, 'expired today');
-  assert.equal(due('1', '2026-09-26'), false, 'day 30 (expired 30 days ago) pays no fee');
-  assert.equal(due('1', '2026-09-25'), true, 'day 31 pays the fee');
-  assert.equal(due('1', '2027-01-01'), false, 'still current');
-  assert.equal(due('1', null), false, 'no known expiry keeps the renewal free');
-  assert.equal(due('1', '2020-01-01', false), false, 'rule off: the old behaviour');
-  assert.equal(daysSinceExpiry('2026-09-26', today), 30);
-  assert.equal(daysSinceExpiry('garbage', today), null);
-});
 test('codes are the Accreditation Reference, in any spacing or case, and cannot carry search syntax', () => {
   for (const same of ['ACC-0155', 'acc 0155', ' ACC - 0155 ', 'acc0155']) assert.equal(normaliseCode(same), 'ACC-0155');
   for (const bad of [
@@ -95,32 +91,6 @@ test('codes are the Accreditation Reference, in any spacing or case, and cannot 
     assert.equal(normaliseCode(bad), '', bad);
 });
 
-for (const billing of ['annual', 'monthly'])
-  test('renewal joining fee, ' + billing + ': 30 days after expiry is free, 31 days pays', async () => {
-    for (const [ago, charged] of [
-      [30, false],
-      [31, true],
-      [0, false],
-    ]) {
-      const state = world({ previousDeal: { Expiry_Date: day(-ago) }, deals: [] });
-      await withApp(
-        state,
-        async ({ quote }) => {
-          const q = await quote({ ...BUY, billing, previousId: IDS.deal });
-          assert.equal(Boolean(joiningLine(q)), charged, ago + ' days: ' + JSON.stringify(q.lines));
-        },
-        ON,
-      );
-    }
-  });
-test('renewal, rule off: a membership 90 days lapsed still skips the joining fee (nothing changes by default)', async () => {
-  const state = world({ previousDeal: { Expiry_Date: day(-90) } });
-  await withApp(state, async ({ quote }) => {
-    const q = await quote({ ...BUY, previousId: IDS.deal });
-    assert.equal(joiningLine(q), undefined);
-    assert.equal(q.joiningFee, undefined);
-  });
-});
 test('new person: the joining fee is charged yearly and monthly', async () => {
   for (const billing of ['annual', 'monthly']) {
     const state = world({ unlinked: true });
@@ -155,7 +125,7 @@ test('a valid school code waives the joining fee: yearly, and monthly to the pen
       });
       const monthlyPlain = await quote({ ...BUY, billing: 'monthly' }),
         monthly = await quote({ ...BUY, billing: 'monthly', code: 'ACC-0155' });
-      assert.equal(monthlyPlain.totalPence, 692);
+      assert.equal(monthlyPlain.totalPence, 1609, 'the first payment carries the joining fee in full');
       assert.equal(monthly.totalPence, 609, 'built from the lines Stripe gets, so the first payment is exact');
       assert.equal(monthly.plan.firstPaymentPence, 609);
       assert.equal(monthly.plan.laterPaymentPence, 609);
@@ -213,7 +183,7 @@ test('about 10 wrong codes an hour per person, then a rate limit; the same wrong
 });
 test('a code is ignored with a clear message when no joining fee is due', async () => {
   await withApp(
-    world({ schools: SCHOOL, previousDeal: { Expiry_Date: day(-10) } }),
+    world({ schools: SCHOOL, deals: [lapsed(-10)] }),
     async ({ quote }) => {
       const q = await quote({ ...BUY, previousId: IDS.deal, code: 'ACC-0155' });
       assert.deepEqual(q.codeResult, { status: 'not_due', message: NOT_DUE });
@@ -223,9 +193,9 @@ test('a code is ignored with a clear message when no joining fee is due', async 
     ON,
   );
 });
-test('a lapsed member (31 days) can use a code on the joining fee they now pay', async () => {
+test('a lapsed member (gap over a month) can use a code on the joining fee they now pay', async () => {
   await withApp(
-    world({ schools: SCHOOL, previousDeal: { Expiry_Date: day(-31) } }),
+    world({ schools: SCHOOL, deals: [lapsed(-45)] }),
     async ({ quote }) => {
       const q = await quote({ ...BUY, previousId: IDS.deal, code: 'ACC-0155' });
       assert.equal(q.discount.amountPence, 1000);

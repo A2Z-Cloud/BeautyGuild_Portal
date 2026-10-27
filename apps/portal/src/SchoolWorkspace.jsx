@@ -17,6 +17,7 @@ import { PageHeading, Notice, Status } from './UiParts.jsx';
 import { formatDate } from './format.js';
 import { INTEGRATIONS, portalApi } from './services/api.js';
 import { DocumentsPanel } from './DocumentsPanel.jsx';
+import { MembershipCoverPanel } from './MembershipCover.jsx';
 import { QualificationForm, SessionForm, TutorForm, BookingForm } from './SchoolActionForms.jsx';
 import SchoolVerification from './SchoolVerification.jsx';
 import CourseGroups from './components/CourseGroups.jsx';
@@ -592,7 +593,7 @@ export function MembershipManagement() {
       <PageHeading
         eyebrow="GUILD MEMBERSHIP"
         title={record.value?.title || 'Membership details'}
-        description="Membership details, purchased add-ons and invoices."
+        description="Membership details, your cover, change history, purchased add-ons and invoices."
       />
       {!INTEGRATIONS.schoolServices ? (
         <Notice title="Coming soon">Your membership services will appear here soon.</Notice>
@@ -608,6 +609,12 @@ export function MembershipManagement() {
           <nav className="school-tabs">
             <button className={tab === 'details' ? 'active' : ''} onClick={() => setQuery({ tab: 'details' })}>
               Details
+            </button>
+            <button className={tab === 'cover' ? 'active' : ''} onClick={() => setQuery({ tab: 'cover' })}>
+              Your cover
+            </button>
+            <button className={tab === 'history' ? 'active' : ''} onClick={() => setQuery({ tab: 'history' })}>
+              Change history
             </button>
             <button className={tab === 'addons' ? 'active' : ''} onClick={() => setQuery({ tab: 'addons' })}>
               Add-ons
@@ -632,6 +639,10 @@ export function MembershipManagement() {
                   ))}
                 </dl>
               )
+            ) : tab === 'cover' ? (
+              <MembershipCoverPanel id={id} view="cover" />
+            ) : tab === 'history' ? (
+              <MembershipCoverPanel id={id} view="history" />
             ) : tab === 'addons' ? (
               extension.loading ? (
                 <p>Loading add-ons…</p>
@@ -651,9 +662,15 @@ export function MembershipManagement() {
                   />
                   {INTEGRATIONS.stripeCheckout && (
                     <p>
-                      <Link className="btn btn-primary" to={'/pay/membership_addon/' + id}>
-                        Buy add-ons
-                      </Link>
+                      {INTEGRATIONS.membershipChanges ? (
+                        <Link className="btn btn-primary" to={'/pay/membership_change/' + id}>
+                          Add a branch or buy add-ons
+                        </Link>
+                      ) : (
+                        <Link className="btn btn-primary" to={'/pay/membership_addon/' + id}>
+                          Buy add-ons
+                        </Link>
+                      )}
                     </p>
                   )}
                 </>

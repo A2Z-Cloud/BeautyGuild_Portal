@@ -4,9 +4,8 @@
 //   1. every price list code has exactly one active price in Stripe, with the amount and interval the portal expects;
 //   2. every purchase type makes a real Checkout Session that Stripe accepts (key limit, line shapes), whose total matches the
 //      metadata Creator reads, and whose metadata Stripe stored as sent;
-//   3. a real monthly subscription is put on its schedule by plans.ensureSchedule (12 months with every line, then the rest).
-// Nothing is charged: sessions are expired straight away, and the subscription uses Stripe's test card in a throwaway
-// customer that is deleted. Skipped unless STRIPE_TEST_KEY (an sk_test_ key) is set, so it never runs by accident:
+//   (A monthly plan's joining fee and add-ons are one-off lines on the first invoice, so there is no schedule to test.)
+// Nothing is charged: sessions are expired straight away. Skipped unless STRIPE_TEST_KEY (an sk_test_ key) is set, so it never runs by accident:
 //   STRIPE_TEST_KEY=sk_test_... npm run test:stripe        (in apps/portal)
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -39,7 +38,6 @@ const post = (path, obj) =>
     body: plans.form(obj),
     key: 'contract-' + Date.now() + '-' + Math.random().toString(36).slice(2),
   });
-
 test('every price list code has one active Stripe price with the expected amount and interval', { skip }, async () => {
   assert.equal(Object.keys(PRICE_TABLE).length, 16);
   for (const [code, [pence, interval]] of Object.entries(PRICE_TABLE)) {
@@ -101,62 +99,6 @@ test(
   },
 );
 
-test(
-  'a monthly subscription is put on its schedule: 12 months with every line, then the lines that carry on',
-  { skip, timeout: 120000 },
-  async () => {
-    let customer, subscription, schedule;
-    const products = [];
-    try {
-      customer = await post('/customers', { name: 'ZZ contract test (safe to delete)' });
-      const pm = await post('/payment_methods/pm_card_visa/attach', { customer: customer.id });
-      await post('/customers/' + customer.id, { invoice_settings: { default_payment_method: pm.id } });
-      // A subscription's inline price needs an existing product, so make them first (the sku and phase sit on the product, as the portal sends them).
-      const item = async (name, pence, phase) => {
-        const product = await post('/products', { name, metadata: { sku: 'MEM-JOIN', phase } });
-        products.push(product.id);
-        return {
-          quantity: 1,
-          price_data: { currency: 'gbp', unit_amount: pence, recurring: { interval: 'month' }, product: product.id },
-        };
-      };
-      subscription = await post('/subscriptions', {
-        customer: customer.id,
-        items: [
-          await item('ZZ test ongoing line', 500, 'ongoing'),
-          await item('ZZ test year one line', 100, 'year_one'),
-        ],
-        metadata: { plan: 'monthly', phased: 'true' },
-      });
-      assert.equal(subscription.status, 'active', 'the test card should have paid the first month');
-
-      assert.deepEqual(await plans.ensureSchedule(stripe, subscription.id), { status: 'scheduled', dropped: 1 });
-      // Safe to run again: the webhook and the payment return page both call it.
-      assert.deepEqual(await plans.ensureSchedule(stripe, subscription.id), { status: 'already' });
-
-      const sub = await stripe('GET', '/subscriptions/' + subscription.id + '?expand[]=items.data.price.product');
-      schedule = await stripe('GET', '/subscription_schedules/' + sub.schedule);
-      assert.equal(schedule.end_behavior, 'release');
-      assert.equal(schedule.phases.length, 2);
-      assert.equal(schedule.phases[0].items.length, 2, 'phase one carries every line');
-      assert.equal(schedule.phases[1].items.length, 1, 'phase two drops the year-one line');
-      const months = (a, b) => Math.round((b - a) / (30.44 * 24 * 3600));
-      assert.equal(months(schedule.phases[0].start_date, schedule.phases[0].end_date), plans.PAYMENTS);
-      assert.equal(months(schedule.phases[1].start_date, schedule.phases[1].end_date), plans.PAYMENTS);
-    } finally {
-      if (schedule?.id)
-        await stripe('POST', '/subscription_schedules/' + schedule.id + '/cancel', {
-          body: '',
-          key: 'c-' + schedule.id,
-        }).catch(() => {});
-      if (subscription?.id) await stripe('DELETE', '/subscriptions/' + subscription.id).catch(() => {});
-      if (customer?.id) await stripe('DELETE', '/customers/' + customer.id).catch(() => {});
-      // Keep the Stripe catalogue tidy: the products this test made are archived.
-      for (const id of products) await post('/products/' + id, { active: false }).catch(() => {});
-    }
-  },
-);
-
 // Phase 3 (docs/delivery/vouchers-review.md): the additional branch discount is a per-checkout fixed amount coupon.
 test(
   'a branch coupon is accepted on a subscription Checkout Session and takes its amount off the first invoice only',
@@ -201,10 +143,10 @@ test(
 );
 
 test(
-  'a repeating 12 month branch coupon survives plans.ensureSchedule: it is in phase one of the schedule and on the first invoice',
+  'a repeating 12 month branch coupon is on the subscription and takes its amount off the first invoice',
   { skip, timeout: 120000 },
   async () => {
-    let customer, subscription, schedule, coupon;
+    let customer, subscription, coupon;
     const products = [];
     try {
       coupon = await post('/coupons', {
@@ -219,39 +161,24 @@ test(
       customer = await post('/customers', { name: 'ZZ contract test (safe to delete)' });
       const pm = await post('/payment_methods/pm_card_visa/attach', { customer: customer.id });
       await post('/customers/' + customer.id, { invoice_settings: { default_payment_method: pm.id } });
-      const item = async (name, pence, phase) => {
-        const product = await post('/products', { name, metadata: { sku: 'MEM-BRANCH', phase } });
-        products.push(product.id);
-        return {
-          quantity: 1,
-          price_data: { currency: 'gbp', unit_amount: pence, recurring: { interval: 'month' }, product: product.id },
-        };
-      };
+      const product = await post('/products', { name: 'ZZ test branch', metadata: { sku: 'MEM-BRANCH' } });
+      products.push(product.id);
       subscription = await post('/subscriptions', {
         customer: customer.id,
-        items: [await item('ZZ test branch', 125, 'ongoing'), await item('ZZ test year one line', 100, 'year_one')],
+        items: [
+          {
+            quantity: 1,
+            price_data: { currency: 'gbp', unit_amount: 125, recurring: { interval: 'month' }, product: product.id },
+          },
+        ],
         discounts: [{ coupon: coupon.id }],
-        metadata: { plan: 'monthly', phased: 'true' },
-        expand: ['latest_invoice'],
+        expand: ['latest_invoice', 'discounts'],
       });
       assert.equal(subscription.status, 'active');
       assert.equal(subscription.latest_invoice.total_discount_amounts[0].amount, 83, 'first payment');
-
-      assert.deepEqual(await plans.ensureSchedule(stripe, subscription.id), { status: 'scheduled', dropped: 1 });
-      const sub = await stripe('GET', '/subscriptions/' + subscription.id + '?expand[]=discounts');
-      const onSub = (sub.discounts || []).map(d => d.source?.coupon?.id || d.source?.coupon || d.coupon?.id);
-      assert.deepEqual(onSub, [coupon.id], 'the subscription still has the coupon after the schedule is applied');
-      schedule = await stripe('GET', '/subscription_schedules/' + sub.schedule);
-      const phaseCoupons = d =>
-        (d || []).map(x => x.coupon?.id || x.coupon || x.source?.coupon?.id || x.source?.coupon);
-      assert.deepEqual(phaseCoupons(schedule.phases[0].discounts), [coupon.id], 'phase one carries the coupon');
-      assert.deepEqual(phaseCoupons(schedule.phases[1].discounts), [], 'phase two (payment 13 onward) has none');
+      const onSub = (subscription.discounts || []).map(d => d.source?.coupon?.id || d.source?.coupon || d.coupon?.id);
+      assert.deepEqual(onSub, [coupon.id], 'the subscription carries the coupon, which Stripe ends after 12 months');
     } finally {
-      if (schedule?.id)
-        await stripe('POST', '/subscription_schedules/' + schedule.id + '/cancel', {
-          body: '',
-          key: 'c-' + schedule.id,
-        }).catch(() => {});
       if (subscription?.id) await stripe('DELETE', '/subscriptions/' + subscription.id).catch(() => {});
       if (customer?.id) await stripe('DELETE', '/customers/' + customer.id).catch(() => {});
       if (coupon?.id) await stripe('DELETE', '/coupons/' + coupon.id).catch(() => {});

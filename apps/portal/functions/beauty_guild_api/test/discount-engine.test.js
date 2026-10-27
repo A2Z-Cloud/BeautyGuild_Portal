@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const { createApp } = require('../src/app');
 const { loadConfig } = require('../src/config');
 const plans = require('../src/plans');
-const { world, IDS } = require('./helpers/world');
+const { world } = require('./helpers/world');
 const { applyDiscounts, DiscountError, METADATA_LIMIT } = require('../src/discountEngine');
 const {
   FIELDS,
@@ -13,7 +13,6 @@ const {
   validAt,
   memberTypeOf,
   toCrmWaiverLog,
-  toWaiver,
   WAIVER_FIELDS,
   REDEMPTION_FIELDS,
   createCrmStore,
@@ -131,7 +130,7 @@ test('a referral code with no joining fee in the basket discounts nothing and re
   assert.equal(r.metadata, '');
 });
 
-test('monthly spread: a lowered one-off line is shared over the first 12 payments, to the penny', async () => {
+test('monthly: a lowered one-off line is charged once, in full, with the first payment', async () => {
   const waivers = [
     { sku: 'MEM-BADGE', amountPence: 250, reason: 'Promotion' },
     { sku: 'MEM-CERT', reason: 'Goodwill Gesture' },
@@ -146,21 +145,18 @@ test('monthly spread: a lowered one-off line is shared over the first 12 payment
   assert.equal(badge.name, 'Badge x 2');
   assert.ok(!r.lines.some(l => l.sku === 'MEM-CERT'), 'a free line is dropped');
   assert.equal(r.totalDiscountPence, 650);
+  // A monthly plan charges one-off lines once, in full, with the first payment (plans.js): the lowered badge is paid at its lowered price,
+  // and every payment from the second on, and every renewal, is untouched.
   const split = plans.splitMonthly(r.lines, 150);
-  const total = r.lines.reduce((t, l) => t + l.totalPence, 0);
-  // Every payment is the rounded-up twelfth of what the customer owes, and the shares add up to it exactly.
-  assert.equal(split.firstPaymentPence, Math.ceil(total / 12) + 150);
+  assert.equal(split.oneOffPence, 1550, 'joining fee 10.00 plus the lowered badge 5.50; the certificate is gone');
+  assert.equal(split.firstPaymentPence, split.laterPaymentPence + 1550);
   assert.equal(
-    split.lines.reduce((t, l) => t + l.monthlyPence, 0),
-    Math.ceil(total / 12),
-  );
-  assert.equal(
-    listPlan.lines.reduce((t, l) => t + l.totalPence, 0) - total,
+    listPlan.firstPaymentPence - split.firstPaymentPence,
     650,
-    'the whole discount comes off the year one total',
+    'the whole discount comes off the first payment',
   );
-  assert.ok(split.firstPaymentPence < listPlan.firstPaymentPence);
-  assert.equal(split.laterPaymentPence, listPlan.laterPaymentPence, 'payment 13 onward is untouched');
+  assert.equal(split.laterPaymentPence, listPlan.laterPaymentPence);
+  assert.equal(listPlan.yearOneTotalPence - split.yearOneTotalPence, 650);
 });
 
 test('the waiver log and the metadata say who, what and why', async () => {
@@ -998,7 +994,7 @@ test('checkout, monthly: a branch discount repeats for 12 months at the monthly 
       const q = await quote();
       assert.equal(q.discounts[0].amountPence, 996, '12 x 83p, not the £10.00 asked for');
       assert.equal(q.plan.firstPaymentPence, list.firstPaymentPence - 83);
-      assert.equal(q.plan.yearOneTotalPence, (list.firstPaymentPence - 83) * 12);
+      assert.equal(q.plan.yearOneTotalPence, list.yearOneTotalPence - 996, 'twelve payments, each 83p less');
       assert.equal(q.plan.laterPaymentPence, list.laterPaymentPence, 'payment 13 onward is untouched');
       assert.equal(q.totalPence, q.plan.firstPaymentPence);
       const r = await pay();

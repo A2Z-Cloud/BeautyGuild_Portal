@@ -20,6 +20,7 @@ Everything is served under `/server/beauty_guild_api`. Routes behind a switch re
 | `POST /portal/management/schools/:id/qualifications`, `/sessions`, `/tutors`, `/sessions/:sessionId/bookings` | `PORTAL_SCHOOL_SERVICES_ENABLED` and `PORTAL_SCHOOL_WRITES_ENABLED` | signed in | CRM, Creator | Add qualifications, course dates, tutors and bookings |
 | `GET /portal/checkout/quote`, `POST /portal/checkout/quote` | `PORTAL_BILLING_ENABLED` | signed in | CRM, Stripe (prices) | Server-built price summary; the POST form carries insurance answers |
 | `POST /portal/checkout` | `PORTAL_BILLING_ENABLED` | signed in, rate limited | CRM, Stripe | Creates the Stripe Checkout Session for an accreditation, venue, membership add-ons, membership or insurance. Creator handles payment afterwards. Needs a `sk_test_` key |
+| `GET /portal/vouchers` | `PORTAL_VOUCHERS_ENABLED` | signed in | CRM `Discount_Voucher` (module name is a setting: `PORTAL_VOUCHER_MODULE`) | The member's own £25 GTi voucher; the code is shown only while usable. Read only: Creator issues and voids it |
 | `POST/GET/PUT/DELETE /portal/drafts...` | `PORTAL_CRM_DRAFTS_ENABLED` | signed in | CRM | Saved applications (membership and insurance) |
 | `GET /portal/diagnostics/modules`, `/fields`, `/find` | `PORTAL_DIAGNOSTICS_ENABLED` and an email allow-list | signed in, allow-listed | CRM metadata only | Read-only field and module names while connecting the CRM |
 

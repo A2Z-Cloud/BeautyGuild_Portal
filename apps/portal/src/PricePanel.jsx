@@ -111,13 +111,9 @@ export default function PricePanel({
                 <p className="price-then">
                   {plan.same
                     ? 'Monthly plan: ' + money(plan.firstPence) + ' a month, renewing automatically.'
-                    : 'Monthly plan: ' +
+                    : 'Monthly plan: your first payment is ' +
                       money(plan.firstPence) +
-                      ' a month for the first ' +
-                      plan.payments +
-                      ' payments, which spreads your joining fee and extras over the year. From payment ' +
-                      (plan.payments + 1) +
-                      ' it is ' +
+                      ', which includes your joining fee and extras in full. Every payment after that is ' +
                       money(plan.laterPence) +
                       ' a month, renewing automatically.'}
                   {' It includes a monthly admin fee of ' + money(plan.adminPence) + '.'}

@@ -1,0 +1,13 @@
+string Vouchers.generate_voucher_code(string seed, int attempt)
+{
+	// NOTE: THE ONLY PLACE the code format lives. Replace the body if the Guild changes its format.
+	// Format (the Guild's current one, 27 October): 8 random upper-case hexadecimal characters, for example 7F15B4AE.
+	// It is derived from a SHA-256 of the seed, a secret salt and the attempt number, so the same seed gives the same
+	// code (a retry is stable) while the code cannot be guessed from a Contact id. The caller passes attempt 1 to 5 to
+	// step past a clash. 8 hex characters is 32 bits: the Guild's format, so a clash is checked by the caller.
+	// ASSUMPTION TO CHECK IN THE CREATOR EDITOR: zoho.encryption.sha256() exists as used here. If not, use whichever
+	// Deluge hash function the editor offers; only the line marked HASH changes.
+	salt = "REPLACE-WITH-A-CREATOR-CONSTANT-NOT-THIS-TEXT";
+	digest = zoho.encryption.sha256(salt + "|" + seed + "|" + attempt.toString());// HASH
+	return digest.subString(0,8).toUpperCase();
+}

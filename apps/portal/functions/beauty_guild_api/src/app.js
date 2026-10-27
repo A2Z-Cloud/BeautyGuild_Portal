@@ -9,6 +9,7 @@ const { registerCheckoutRoutes } = require('./checkout');
 const { registerDocumentRoutes } = require('./documents');
 const { registerDiagnosticsRoutes } = require('./diagnostics');
 const { registerPublicSchoolVerification } = require('./publicSchoolVerification');
+const { registerVoucherRoutes } = require('./vouchers');
 const { registerDraftRoutes } = require('./crmDrafts');
 const { registerSchoolRoutes } = require('./schoolServices');
 const { createRiskChecks } = require('./riskChecks');
@@ -146,18 +147,31 @@ function createApp({
     hideDrafts: config.crmDraftsEnabled,
     draftStatus: config.draftStatus,
   });
+  registerVoucherRoutes(app, {
+    enabled: config.vouchersEnabled,
+    getCurrentUser,
+    getCrmHeaders,
+    crmApiDomain: config.crmApiDomain,
+    fetchImpl,
+    module: config.voucherModule,
+    now,
+  });
   registerCheckoutRoutes(app, {
     publicQuotesEnabled: config.publicQuotesEnabled,
     discountsEnabled: config.discountsEnabled,
     voucherRedemptionEnabled: config.voucherRedemptionEnabled,
     discountReferenceField: config.discountReferenceField,
     discountRequestFor,
+    membershipChangesEnabled: config.membershipChangesEnabled,
+    insuranceChangesEnabled: config.insuranceChangesEnabled,
+    insuranceChangesWritesEnabled: config.insuranceChangesWritesEnabled,
+    insuranceChangesPaymentEnabled: config.insuranceChangesPaymentEnabled,
+    revisionNamePrefix: config.revisionNamePrefix,
     enabled: config.billingEnabled,
     getCurrentUser,
     getCrmHeaders,
     crmApiDomain: config.crmApiDomain,
     stripeKey: config.stripeSecretKey,
-    scheduleWebhookSecret: config.stripeScheduleWebhookSecret,
     publicOrigin: config.portalPublicOrigin,
     riskChecks,
     fetchImpl,
