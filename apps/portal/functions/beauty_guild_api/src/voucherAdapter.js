@@ -115,44 +115,82 @@ function toVoucher(row, fields = FIELDS) {
   };
 }
 
-// The plain log records -> CRM rows. The names on the left are guesses like FIELDS; nothing writes them from here (the caller does).
-function toCrmWaiverLog(r) {
+// The Waive_Logs module (CRM, created 28 October). Real API names from the field list. Status values are expected to be Pending, Paid and
+// Void; a Void waiver (the checkout was abandoned) does not count against the once-per-person limit.
+const WAIVER_MODULE = 'Waive_Logs';
+const WAIVER_FIELDS = Object.freeze({
+  contact: 'Contact', // lookup
+  application: 'Application', // single line
+  item: 'Item', // picklist of price list codes
+  amount: 'Amount', // currency
+  listPrice: 'List_Price', // currency
+  reason: 'Reason', // picklist
+  note: 'Note',
+  staffMember: 'Staff_Member', // single line
+  date: 'Date',
+  session: 'Stripe_Checkout_Session',
+  status: 'Status', // picklist
+});
+// Voucher redemptions live in Creator (Voucher_Redemptions_Report). Contact and voucher are the CRM ids as text. Creator creates a Used
+// row when the payment succeeds and marks it Reversed on a refund or cancellation; only Used counts.
+const REDEMPTION_REPORT = 'Voucher_Redemptions_Report';
+const REDEMPTION_FIELDS = Object.freeze({
+  contact: 'contact',
+  voucher: 'voucher',
+  status: 'status', // 'Used' or 'Reversed'
+  date: 'redemption_date',
+});
+const CRM_ID = /^\d{10,25}$/;
+
+// The plain waiver record -> the CRM row. Nothing writes it from here: the caller does, once the Stripe session exists (sessionId).
+function toCrmWaiverLog(r, { sessionId = '' } = {}, f = WAIVER_FIELDS) {
   return {
-    Contact: r.contactId || null,
-    Application: r.applicationId || null,
-    Item: r.sku,
-    Amount: r.amountPence / 100,
-    List_Price: r.listPence / 100,
-    Reason: r.reason,
-    Note: r.note || null,
-    Staff_Member: r.appliedBy,
-    Date: r.date,
+    [f.contact]: r.contactId || null,
+    [f.application]: r.applicationId || null,
+    [f.item]: r.sku,
+    [f.amount]: r.amountPence / 100,
+    [f.listPrice]: r.listPence / 100,
+    [f.reason]: r.reason,
+    [f.note]: r.note || null,
+    [f.staffMember]: r.appliedBy,
+    [f.date]: r.date,
+    [f.session]: sessionId || null,
+    [f.status]: 'Pending',
   };
 }
-function toCrmRedemption(r) {
+// A CRM waiver row -> the plain shape the engine compares (date, reason, who, application). Void ones are not returned.
+function toWaiver(row, f = WAIVER_FIELDS) {
   return {
-    Voucher: r.voucherId,
-    Code: r.code,
-    Contact: r.contactId || null,
-    Application: r.applicationId || null,
-    Amount: r.amountPence / 100,
-    Items: r.skus.join(','),
-    Applied_By: r.appliedBy,
-    Status: 'Pending',
-    Date: r.date,
+    date: text(row[f.date]).slice(0, 10),
+    sku: text(row[f.item]).toUpperCase(),
+    reason: text(row[f.reason]),
+    appliedBy: text(row[f.staffMember]),
+    applicationId: text(row[f.application]),
+    status: text(row[f.status]),
   };
 }
 
-// Read-only CRM store for the engine. crm(req, path) is the portal's CRM client. Only vouchers are read from the one module that is known;
-// the waiver and redemption history need log modules that do not exist yet, so those checks FAIL CLOSED (they throw) until the modules
-// are built and read here: a missing log must never quietly allow a second once-only waiver.
-function createCrmStore({ crm, req, fields = FIELDS }) {
-  const unconfigured = what =>
+// Read-only store for the engine. crm(req, path) is the portal's CRM client; creator(req, report, criteria) reads a Creator report and
+// returns its rows. Vouchers and waivers come from the CRM, redemptions from Creator. Both history checks FAIL CLOSED: if the source cannot
+// be read (or no Creator reader is supplied) they throw, so a missing log never quietly allows a second once-only waiver or voucher use.
+function createCrmStore({
+  crm,
+  creator,
+  req,
+  fields = FIELDS,
+  waiverFields = WAIVER_FIELDS,
+  redemptionFields = REDEMPTION_FIELDS,
+}) {
+  const unavailable = what =>
     new HttpError(
       503,
       'DISCOUNT_LOG_UNAVAILABLE',
-      'The ' + what + ' log is not set up, so this discount cannot be checked.',
+      'The ' + what + ' cannot be checked right now, so this discount cannot be applied.',
     );
+  const id = (value, what) => {
+    if (!CRM_ID.test(String(value))) throw unavailable(what);
+    return String(value);
+  };
   return {
     async findVoucher(code) {
       const safe = /^[A-Za-z0-9_-]{1,40}$/.test(code) ? code : '';
@@ -168,13 +206,54 @@ function createCrmStore({ crm, req, fields = FIELDS }) {
       const hits = rows.map(r => toVoucher(r, fields)).filter(v => v.code === safe.toUpperCase());
       return hits.length === 1 ? hits[0] : null;
     },
-    async redemptionsBy() {
-      throw unconfigured('voucher redemption');
+    // How many times this person has redeemed this voucher (Creator rows with status Used; Reversed ones are given back).
+    async redemptionsBy(voucherId, contactId) {
+      if (!creator) throw unavailable('voucher redemption history');
+      const f = redemptionFields;
+      const rows = await creator(
+        req,
+        REDEMPTION_REPORT,
+        '(' +
+          f.voucher +
+          ' == "' +
+          id(voucherId, 'voucher') +
+          '" && ' +
+          f.contact +
+          ' == "' +
+          id(contactId, 'person') +
+          '")',
+      );
+      return rows.filter(r => same(r[f.status], 'Used')).length;
     },
-    async joiningWaivers() {
-      throw unconfigured('waiver');
+    // This person's earlier waivers of the joining fee that still count (not Void).
+    async joiningWaivers(contactId) {
+      const f = waiverFields;
+      const rows = await crm(
+        req,
+        WAIVER_MODULE +
+          '/search?criteria=' +
+          encodeURIComponent(
+            '((' + f.contact + ':equals:' + id(contactId, 'person') + ')and(' + f.item + ':equals:MEM-JOIN))',
+          ) +
+          '&fields=' +
+          encodeURIComponent(['id', ...Object.values(f)].join(',')),
+      );
+      return rows.map(r => toWaiver(r, f)).filter(w => !same(w.status, 'Void'));
     },
   };
 }
 
-module.exports = { MODULE, FIELDS, validAt, memberTypeOf, toVoucher, toCrmWaiverLog, toCrmRedemption, createCrmStore };
+module.exports = {
+  MODULE,
+  FIELDS,
+  WAIVER_MODULE,
+  WAIVER_FIELDS,
+  REDEMPTION_REPORT,
+  REDEMPTION_FIELDS,
+  validAt,
+  memberTypeOf,
+  toVoucher,
+  toWaiver,
+  toCrmWaiverLog,
+  createCrmStore,
+};

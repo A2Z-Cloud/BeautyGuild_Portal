@@ -13,9 +13,12 @@ const {
   validAt,
   memberTypeOf,
   toCrmWaiverLog,
-  toCrmRedemption,
+  toWaiver,
+  WAIVER_FIELDS,
+  REDEMPTION_FIELDS,
   createCrmStore,
 } = require('../src/voucherAdapter');
+const { createCreatorReader } = require('../src/creatorReports');
 const { branchCouponPlan, createBranchCoupon } = require('../src/branchCoupon');
 const { NOT_VALID } = require('../src/discounts');
 
@@ -182,7 +185,20 @@ test('the waiver log and the metadata say who, what and why', async () => {
   assert.equal(entry.reason, 'Other');
   assert.equal(entry.applied_by, 'staff:sam@guild.example');
   assert.equal(entry.code, undefined);
-  assert.deepEqual(toCrmWaiverLog(r.waiverLogs[0]).Staff_Member, 'staff:sam@guild.example');
+  const row = toCrmWaiverLog(r.waiverLogs[0], { sessionId: 'cs_test_1' });
+  assert.deepEqual(row, {
+    Contact: '555',
+    Application: 'app-1',
+    Item: 'MEM-JOIN',
+    Amount: 10,
+    List_Price: 10,
+    Reason: 'Other',
+    Note: 'Rang us twice',
+    Staff_Member: 'staff:sam@guild.example',
+    Date: TODAY,
+    Stripe_Checkout_Session: 'cs_test_1',
+    Status: 'Pending',
+  });
 });
 
 test('once per person: a second waiver of the joining fee is refused and says who waived it before', async () => {
@@ -332,15 +348,116 @@ test('voucher restrictions: member type, issued to one person, once per person, 
   await refused(run(null), 'NOT_VALID', 'unknown');
 });
 
-test('one use per person fails closed while the redemption history does not exist', async () => {
-  const store = {
-    ...fakeStore({ vouchers: [voucher({ onePerPerson: true })] }),
-    redemptionsBy: createCrmStore({ crm: async () => [], req: {} }).redemptionsBy,
-  };
+test('the store reads waivers from the CRM and redemptions from Creator, and ignores Void and Reversed ones', async () => {
+  const crmPaths = [],
+    creatorCalls = [];
+  const W = WAIVER_FIELDS,
+    R = REDEMPTION_FIELDS;
+  const waiver = (status, over = {}) => ({
+    id: 'w' + Math.random(),
+    [W.date]: '2026-09-01',
+    [W.item]: 'MEM-JOIN',
+    [W.reason]: 'Complaint',
+    [W.staffMember]: 'staff:kim',
+    [W.application]: 'old-app',
+    [W.status]: status,
+    ...over,
+  });
+  const store = createCrmStore({
+    req: {},
+    crm: async (req, path) => {
+      crmPaths.push(decodeURIComponent(path));
+      return [waiver('Paid'), waiver('Pending'), waiver('Void')];
+    },
+    creator: async (req, report, criteria) => {
+      creatorCalls.push([report, criteria]);
+      return [{ [R.status]: 'Used' }, { [R.status]: 'Reversed' }, { [R.status]: 'Used' }];
+    },
+  });
+  const waived = await store.joiningWaivers('1011174000000000099');
+  assert.deepEqual(
+    waived.map(w => w.status),
+    ['Paid', 'Pending'],
+  );
+  assert.deepEqual(waived[0], {
+    date: '2026-09-01',
+    sku: 'MEM-JOIN',
+    reason: 'Complaint',
+    appliedBy: 'staff:kim',
+    applicationId: 'old-app',
+    status: 'Paid',
+  });
+  assert.match(
+    crmPaths[0],
+    /^Waive_Logs\/search\?criteria=\(\(Contact:equals:1011174000000000099\)and\(Item:equals:MEM-JOIN\)\)/,
+  );
+  assert.equal(await store.redemptionsBy('1011174000000000001', '1011174000000000099'), 2, 'Reversed is given back');
+  assert.deepEqual(creatorCalls[0], [
+    'Voucher_Redemptions_Report',
+    '(voucher == "1011174000000000001" && contact == "1011174000000000099")',
+  ]);
+  // Ids that are not CRM ids never reach a query, and the checks fail closed.
+  await assert.rejects(store.joiningWaivers('1) or (x'), e => e.code === 'DISCOUNT_LOG_UNAVAILABLE');
+  await assert.rejects(store.redemptionsBy('1" || 1==1', '2'), e => e.code === 'DISCOUNT_LOG_UNAVAILABLE');
+  assert.equal(crmPaths.length + creatorCalls.length, 2);
+  const noCreator = createCrmStore({ req: {}, crm: async () => [] });
   await assert.rejects(
-    apply(base(), { code: 'SPRING', actor: STAFF, store }),
+    noCreator.redemptionsBy('1011174000000000001', '1011174000000000099'),
     e => e.code === 'DISCOUNT_LOG_UNAVAILABLE',
   );
+  const down = createCrmStore({
+    req: {},
+    crm: async () => {
+      throw new Error('CRM down');
+    },
+    creator: async () => {
+      throw new Error('Creator down');
+    },
+  });
+  await assert.rejects(down.joiningWaivers('1011174000000000099'));
+  await assert.rejects(down.redemptionsBy('1011174000000000001', '1011174000000000099'));
+});
+
+test('one use per person: a Used redemption in Creator refuses the voucher; none lets it through', async () => {
+  const mk = used =>
+    createCrmStore({
+      req: {},
+      crm: async () => [],
+      creator: async () =>
+        used ? [{ [REDEMPTION_FIELDS.status]: 'Used' }] : [{ [REDEMPTION_FIELDS.status]: 'Reversed' }],
+    });
+  const run = used =>
+    apply(base({ contactId: '1011174000000000099' }), {
+      code: 'SPRING',
+      actor: STAFF,
+      store: { ...mk(used), findVoucher: async () => voucher({ id: '1011174000000000001', onePerPerson: true }) },
+    });
+  await refused(run(true), 'NOT_VALID', 'already_used');
+  assert.ok((await run(false)).totalDiscountPence > 0);
+});
+
+test('the Creator reader asks the report with the criteria, treats an empty report as none, and fails on anything else', async () => {
+  const seen = [];
+  const reader = body =>
+    createCreatorReader({
+      getCreatorHeaders: async () => ({ Authorization: 'c' }),
+      creatorApiDomain: 'https://creator.example.test',
+      creatorAccountOwner: 'owner',
+      creatorAppLinkName: 'app',
+      fetchImpl: async url => {
+        seen.push(url);
+        return { ok: true, json: async () => body };
+      },
+    });
+  assert.deepEqual(await reader({ code: 3000, data: [{ a: 1 }] })({}, 'Voucher_Redemptions_Report', '(a == "1")'), [
+    { a: 1 },
+  ]);
+  assert.ok(
+    seen[0].startsWith('https://creator.example.test/creator/v2.1/data/owner/app/report/Voucher_Redemptions_Report?'),
+  );
+  assert.ok(seen[0].endsWith('criteria=' + encodeURIComponent('(a == "1")')));
+  assert.deepEqual(await reader({ code: 9280 })({}, 'r', 'c'), []);
+  await assert.rejects(reader({ code: 2945 })({}, 'r', 'c'), e => e.status === 502);
 });
 
 test('a fixed voucher is shared down the basket until used up; a percentage takes its share of each allowed line', async () => {
@@ -381,7 +498,6 @@ test('a fixed voucher is shared down the basket until used up; a percentage take
       date: TODAY,
     },
   ]);
-  assert.equal(toCrmRedemption(pct.redemptions[0]).Status, 'Pending');
   const entries = JSON.parse(pct.metadata);
   assert.ok(entries.every(e => e.source === 'voucher' && e.code === 'SPRING' && e.voucher_id === 'v1'));
 });
@@ -492,7 +608,7 @@ test('the metadata value stays within Stripe’s 500 characters, dropping detail
   );
 });
 
-test('the adapter keeps every CRM field name in one place and fails closed on the logs that do not exist yet', async () => {
+test('the adapter keeps every CRM field name in one place', async () => {
   // Shaped like the example record GR0001, with the expected Voucher_Code field added.
   const row = {
     id: '123',
@@ -575,8 +691,6 @@ test('the adapter keeps every CRM field name in one place and fails closed on th
       'Discount_Voucher/search?criteria=' + encodeURIComponent('(' + FIELDS.code + ':equals:SPRING)'),
     ),
   );
-  await assert.rejects(store.joiningWaivers('1'), e => e.code === 'DISCOUNT_LOG_UNAVAILABLE');
-  await assert.rejects(store.redemptionsBy('1', '2'), e => e.code === 'DISCOUNT_LOG_UNAVAILABLE');
 });
 
 test('branchCouponPlan: once on a yearly purchase, 12 repeating months on a monthly plan, never above the branch price', () => {
