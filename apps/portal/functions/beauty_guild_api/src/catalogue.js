@@ -858,6 +858,13 @@ SERVICES.insurance_change = {
     const ins = insChange.afterIns({ cover, change: asked });
     const country = (policy && policy.premises && policy.premises[0] && policy.premises[0].country) || 'United Kingdom';
     const rules = policy ? insurance.evaluateRules(ins, country, { complete: !input.quote }) : { results: [] };
+    // The answers still missing before a change can be saved as payable (the repeated declarations and confirmations).
+    const incomplete = policy
+      ? insurance
+          .evaluateRules(ins, country, { complete: true })
+          .results.filter(r => r.status === 'INCOMPLETE')
+          .map(r => r.customerMessage)
+      : [];
     let screening = { results: [], riskMessage: null };
     if (risk && asked.addPeople.length)
       screening = await risk.screen({
@@ -883,6 +890,8 @@ SERVICES.insurance_change = {
           };
     const details = {
       quoteId: policy ? insChange.quoteId({ cover, change: asked, quote }) : null,
+      rulesVersion: quote.rulesVersion,
+      incomplete,
       outcome: blocked ? blocked.status : 'PASS',
       effectiveDate: asked.effectiveDate,
       term: quote.term || null,
@@ -936,6 +945,8 @@ SERVICES.insurance_change = {
       details,
       // This slice only quotes: paying for an insurance change is switched off until the revision records and Creator are ready.
       payable: false,
+      // What the revision writer saves (insuranceRevisions.js); the route supplies the priced lines.
+      revision: { cover, asked, quote, details, outcome: details.outcome, reasons: blocked ? blocked.reasons : [] },
       fingerprint: JSON.stringify([asked, details.quoteId]),
       metadata: () => {
         throw new HttpError(503, 'NOT_AVAILABLE', 'Paying for an insurance change is not available online yet.');

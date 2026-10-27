@@ -131,6 +131,7 @@ test('a Full member sees their membership, extras and insurance cover, people, p
       Policy_Revisions: [
         {
           id: 'r1',
+          Revision_Status: 'Applied',
           Membership: { id: DEAL },
           Change_Type: 'MTA',
           Change_Scope: 'Policy Only',
@@ -177,6 +178,7 @@ test('a Full member sees their membership, extras and insurance cover, people, p
         ['r2', 'r1'],
         'newest first',
       );
+      assert.equal(c.revisions.items[1].status, 'Applied');
     },
   );
 });

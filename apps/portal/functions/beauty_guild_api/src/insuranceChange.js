@@ -20,6 +20,9 @@ const EL_TIERS = [1, 3, 5];
 const TREATMENT_IDS = insurance.TREATMENT_EXTENSIONS.map(t => t.id);
 const NAMED = { employee: 'NAMED_EMPLOYEES', subcontractor: 'NAMED_SUBCONTRACTORS' };
 const day = v => /^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) && !Number.isNaN(Date.parse(v + 'T00:00:00Z'));
+// The day before a date: a replaced row or a removed person is covered up to and including this day, and the new cover starts on the date,
+// so cover is continuous with no overlap and both end days count (the same as the pro-rata).
+const dayBefore = iso => new Date(Date.parse(iso + 'T00:00:00Z') - 864e5).toISOString().slice(0, 10);
 const text = (v, max = 60) =>
   String(v == null ? '' : v)
     .trim()
@@ -83,17 +86,11 @@ function rate({ people = [], treatments = [], teaching = '', equipmentTier = 0, 
 // One cover's rate and its price list code.
 const price = (args, code) => rate(args)[code] || { pence: 0, sku: null };
 
-// An Employers' Liability tier saved as Cover_Option ("3", "Up to 3"); anything else cannot be verified.
-const elTierOf = option => {
-  const m = String(option || '').match(/^\s*(?:up to\s*)?(1|3|5)\s*$/i);
-  return m ? Number(m[1]) : 0;
-};
-
 function quoteChange({ cover, change, today }) {
   const reasons = [];
   const refer = (code, message) => reasons.push({ code, message });
   const insuranceCover = cover && cover.insurance;
-  const base = { rulesVersion: RULES_VERSION, effectiveDate: change.effectiveDate, items: [], reasons };
+  const base = { rulesVersion: RULES_VERSION, effectiveDate: change.effectiveDate, items: [], endings: [], reasons };
   if (!insuranceCover) {
     refer('NO_POLICY', 'We could not find a current insurance policy on this membership.');
     return {
@@ -131,8 +128,9 @@ function quoteChange({ cover, change, today }) {
   const byCode = code => covers.find(c => c.code === code);
   const people = insuranceCover.people || [];
   const items = [];
-  const add = (code, label, priced, creditPence = 0) => {
+  const add = (code, label, priced, creditPence = 0, extra = {}) => {
     items.push({
+      ...extra,
       code,
       label,
       sku: priced.sku,
@@ -189,6 +187,7 @@ function quoteChange({ cover, change, today }) {
       'Replace ' + out.name + ' with ' + [inn.firstName, inn.lastName].filter(Boolean).join(' '),
       now,
       old.netPence,
+      { kind: 'swap', replacesId: old.id, person: inn, removePersonId: out.id },
     );
     // The membership fee carries over when an employee replaces an employee: nothing is charged or credited.
   }
@@ -207,6 +206,7 @@ function quoteChange({ cover, change, today }) {
       'Replace ' + out.name + ' with ' + [inn.firstName, inn.lastName].filter(Boolean).join(' '),
       now,
       old.netPence,
+      { kind: 'swap', replacesId: old.id, person: inn, removePersonId: out.id },
     );
     employeesCharged += inn.type === 'employee' ? 1 : 0;
   }
@@ -215,6 +215,8 @@ function quoteChange({ cover, change, today }) {
       NAMED[inn.type],
       'Add ' + inn.type + ' ' + [inn.firstName, inn.lastName].filter(Boolean).join(' '),
       price({ people: [inn] }, NAMED[inn.type]),
+      0,
+      { kind: 'add', person: inn },
     );
     employeesCharged += inn.type === 'employee' ? 1 : 0;
   }
@@ -228,11 +230,13 @@ function quoteChange({ cover, change, today }) {
     .map(c => c.code.slice('TREATMENT_'.length).toLowerCase());
   for (const id of change.treatments) {
     const key = 'TREATMENT_' + id.toUpperCase();
-    add(key, insurance.TREATMENT_EXTENSIONS.find(t => t.id === id).name, price({ treatments: [id] }, key));
+    add(key, insurance.TREATMENT_EXTENSIONS.find(t => t.id === id).name, price({ treatments: [id] }, key), 0, {
+      kind: 'add',
+    });
   }
   const treatmentsAfter = new Set([...heldTreatments, ...change.treatments]);
   if (change.teaching === 'standard' && !byCode('TEACHING') && !byCode('TEACHING_PLUS'))
-    add('TEACHING', 'Teaching + Student Cover', price({ teaching: 'standard' }, 'TEACHING'));
+    add('TEACHING', 'Teaching + Student Cover', price({ teaching: 'standard' }, 'TEACHING'), 0, { kind: 'add' });
   if (change.teaching === 'additional' && !byCode('TEACHING_PLUS')) {
     const old = byCode('TEACHING');
     if (old && old.netPence == null)
@@ -246,6 +250,7 @@ function quoteChange({ cover, change, today }) {
         'Teaching + Student Cover + Additional Treatments' + (old ? ' (replacing standard teaching)' : ''),
         price({ teaching: 'additional' }, 'TEACHING_PLUS'),
         old ? old.netPence : 0,
+        { kind: old ? 'increase' : 'add', replacesId: old ? old.id : undefined },
       );
   }
 
@@ -264,6 +269,7 @@ function quoteChange({ cover, change, today }) {
         'Business Equipment increased to £' + change.equipmentTier.toLocaleString('en-GB'),
         price({ equipmentTier: change.equipmentTier, nonStandard }, 'BUSINESS_EQUIPMENT'),
         held.netPence,
+        { kind: 'increase', replacesId: held.id, sumInsured: change.equipmentTier },
       );
   }
   // ---- Employers' Liability
@@ -274,20 +280,15 @@ function quoteChange({ cover, change, today }) {
         'EMPLOYERS_LIABILITY',
         "Employers' Liability up to " + change.elTier,
         price({ elTier: change.elTier }, 'EMPLOYERS_LIABILITY'),
+        0,
+        { kind: 'add', elTier: change.elTier },
       );
-    else if (!elTierOf(held.option) || held.netPence == null)
+    // A held Employers' Liability level is never verified online: Cover_Option's picklist has no real tiers yet (Guild CRM, 27 October), so an
+    // increase goes to the office until the pricing tiers are mapped to it.
+    else
       refer(
-        'UNVERIFIED_COVER',
-        "We could not confirm your current Employers' Liability level. Please call the office.",
-      );
-    else if (change.elTier < elTierOf(held.option))
-      refer('DOWNGRADE', 'Reducing cover may mean a refund, which the office works out. Please call the office.');
-    else if (change.elTier > elTierOf(held.option))
-      add(
-        'EMPLOYERS_LIABILITY',
-        "Employers' Liability increased to up to " + change.elTier,
-        price({ elTier: change.elTier }, 'EMPLOYERS_LIABILITY'),
-        held.netPence,
+        'EL_OFFICE',
+        "Changes to your Employers' Liability level are made by the office for now. Please call the office.",
       );
   }
   // A choice that changes nothing (the same level, or cover already held) is not a change.
@@ -315,10 +316,22 @@ function quoteChange({ cover, change, today }) {
   const premiumNetPence = items.reduce((t, it) => t + it.netPence, 0);
   const iptPence = Math.round(premiumNetPence * insurance.IPT_RATE);
 
+  // What Creator ends when it applies the revision: each replaced cover row and each removed person, covered up to the day before the new
+  // cover starts. Nothing is ended here; the portal never edits live cover.
+  const lastDay = dayBefore(change.effectiveDate);
+  const endings = [
+    ...items
+      .filter(i => i.replacesId)
+      .map(i => ({ module: 'Insurance_Extension', id: i.replacesId, effectiveTo: lastDay })),
+    ...items
+      .filter(i => i.removePersonId)
+      .map(i => ({ module: 'Insured_People', id: i.removePersonId, effectiveTo: lastDay })),
+  ];
   const outcome = reasons.length ? 'REFER' : 'PASS';
   return {
     ...base,
     items,
+    endings,
     outcome,
     premiumNetPence,
     iptPence,
@@ -383,6 +396,7 @@ function quoteId({ cover, change, quote }) {
 }
 
 module.exports = {
+  dayBefore,
   RULES_VERSION,
   MAX_PEOPLE,
   EQUIPMENT_TIERS,
@@ -392,6 +406,5 @@ module.exports = {
   quoteChange,
   afterIns,
   quoteId,
-  elTierOf,
   rate,
 };

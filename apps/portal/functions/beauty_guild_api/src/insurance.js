@@ -650,6 +650,7 @@ async function createRecords(
 }
 
 module.exports = {
+  COVER_TYPE_BY_CODE,
   sumInsured,
   IPT_RATE,
   IPT_SKU,
