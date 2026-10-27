@@ -84,7 +84,7 @@ function fixture(over = {}) {
       });
     if (url.match(/Deals\/\d+\?fields=/)) return json({ data: t.deal ? [t.deal] : [] });
     if (url.includes('Membership_Extension/search')) return { status: 204, ok: true, json: async () => ({}) };
-    if (url.includes('Insurance_Policy/search')) return json({ data: t.policy ? [t.policy] : [] });
+    if (url.includes('Insurance_Policy/search')) return json({ data: t.policies || (t.policy ? [t.policy] : []) });
     if (url.includes('Insurance_Extension/search')) return json({ data: t.covers });
     if (url.includes('Insured_People/search')) return json({ data: t.people });
     if (url.includes('Insured_Premises/search')) return json({ data: t.premises });
@@ -260,6 +260,55 @@ test('a change in the last month of a policy that has already been renewed goes 
   await withApp(fixture({ policy }), async ({ quote }) => {
     assert.equal((await quote(ASK({ addPeople: [SUB] }))).body.quote.details.outcome, 'PASS', 'no renewal yet');
   });
+});
+// MTA-D23: a renewal policy already in force on the membership. The current policy is the one that covers today, and a change in its last
+// 30 days goes to the office, saved as Under Review, with a plain message.
+const ENDING = {
+  id: 'pol1',
+  Application_Status: 'Active',
+  Policy_Type: 'Non Salon',
+  Policy_Start_Date: iso(-350),
+  Policy_End_Date: iso(10),
+  Contact: { id: ME },
+  Membership: { id: DEAL },
+  Payment_Frequency: 'Annual',
+};
+const RENEWAL = { ...ENDING, id: 'pol2', Policy_Start_Date: iso(11), Policy_End_Date: iso(375) };
+test('a renewal policy already in force sends a change in the last 30 days to the office, and the current policy is still the one covering today', async () => {
+  await withApp(fixture({ policies: [RENEWAL, ENDING] }), async ({ quote }) => {
+    const r = await quote(ASK({ addPeople: [SUB] }));
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.equal(r.body.quote.blocked.status, 'REFER');
+    assert.match(r.body.quote.blocked.reasons.join(' '), /already been renewed/);
+    assert.match(r.body.quote.blocked.reasons.join(' '), /office will make it for you/);
+  });
+});
+test('a renewal in force does not stop a change that is not in the last 30 days, and nothing is referred without one', async () => {
+  const ending = { ...ENDING, Policy_End_Date: iso(60) };
+  await withApp(fixture({ policies: [{ ...RENEWAL, Policy_Start_Date: iso(61) }, ending] }), async ({ quote }) => {
+    const r = await quote(ASK({ addPeople: [SUB] }));
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.equal(r.body.quote.details.outcome, 'PASS');
+  });
+  await withApp(fixture({ policies: [ENDING] }), async ({ quote }) => {
+    assert.equal((await quote(ASK({ addPeople: [SUB] }))).body.quote.details.outcome, 'PASS');
+  });
+});
+test('a change referred because of a renewal is saved Under Review, with no priced lines and no rows', async () => {
+  const w = fixture({ policies: [RENEWAL, ENDING] });
+  await withApp(
+    w,
+    async ({ save }) => {
+      const r = await save(ASK({ addPeople: [SUB] }));
+      assert.equal(r.status, 201, JSON.stringify(r.body));
+      assert.equal(r.body.revision.status, 'Under Review');
+      const [rev] = posts(w, 'Policy_Revisions');
+      assert.equal(rev.Revision_Status, 'Under Review');
+      assert.match(JSON.parse(rev.Request_Details).reasons.join(' '), /already been renewed/);
+      assert.equal(w.crmPosts.length, 1, 'only the header');
+    },
+    WRITES,
+  );
 });
 test("a member cannot quote for someone else's membership, and paying for an insurance change is refused", async () => {
   await withApp(
