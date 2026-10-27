@@ -4,7 +4,7 @@ What the portal now sends to Stripe, and what Creator needs to do with it. Writt
 
 ## 1. What changed, in one paragraph
 
-Every membership level is £55 (£38.00 zero-rated, £14.17 standard-rated, £2.83 VAT). Insurance, extra branches and named employee fees now **renew yearly** with the membership, so insurance is a subscription even on its own. **Monthly plans** exist: yearly price plus a £1.50 monthly admin fee, divided by 12, each payment rounded up, with the joining fee and add-ons spread over the first 12 payments and a Stripe schedule dropping them at payment 13. A named employee pays a £55 membership fee as well as any premium.
+Every membership level is £55 (£38.00 zero-rated, £14.17 standard-rated, £2.83 VAT). Insurance, extra branches and named employee fees now **renew yearly** with the membership, so insurance is a subscription even on its own. **Monthly plans** exist: yearly price plus a £1.50 monthly admin fee, divided by 12, each payment rounded up, with the joining fee and add-ons charged once, in full, on the first payment (so every later payment and renewal is the same; there is no schedule). A named employee pays a £55 membership fee as well as any premium.
 
 ## 2. Events
 
@@ -12,7 +12,7 @@ Creator's Stripe endpoint (the `zohoapis.eu` one) listens to: `checkout.session.
 
 **Missing: `invoice.paid`.** Every monthly payment after the first, and every yearly renewal, arrives as an invoice. Without `invoice.paid` Creator has no event for "the 2nd monthly payment was taken". Add it to the endpoint (or tell me and I will add it) and decide what Creator does with it (section 5).
 
-The portal function has its own separate endpoint for `checkout.session.completed` (it only puts monthly plans on their 12 month schedule). It does not replace Creator's.
+The portal function no longer has a Stripe webhook of its own (it used to put monthly plans on a 12 month schedule; there is no schedule now). Creator's endpoint is the only one.
 
 ## 3. What arrives
 
@@ -27,12 +27,12 @@ Always: `email`, `name`, `currency`, `status`, `source` (`portal_v2`), `type`, `
 
 **New in this release**
 - `named_employee_membership`: JSON `{"count":1,"amount":"55.00","amount_net":"52.17"}`. The fee for named employees, charged once per employee. It carries VAT and is **outside** `insurance_amount` and IPT.
-- `monthly_plan` (monthly only, when there is room under Stripe's 50 key limit): JSON `payments`, `first_payment`, `later_payment`, `year_one_total`, `admin_fee`, `admin_fee_net`.
+- `monthly_plan` (monthly only, when there is room under Stripe's 50 key limit): JSON `payments`, `first_payment`, `later_payment`, `one_off_total`, `year_one_total`, `admin_fee`, `admin_fee_net`.
 
 **What the amounts mean on a monthly plan.** `total_amount` is the **first payment**. The per-item amounts (`base_membership_amount`, `joining_fee_amount` and so on) are the **monthly shares** on that first invoice, and the net amounts split the zero-rated part as £38 divided by 12. The `insurance_*` amounts stay **yearly**.
 
 ### Subscription metadata (`customer.subscription.created` and later)
-`plan` (`annual` or `monthly`), `contact_id`, and for monthly `phased` (`true` if the plan has year-one lines that drop at payment 13).
+`plan` (`annual` or `monthly`) and `contact_id`. (`phased` and the `phase` product metadata were removed on 27 October: there is no schedule.)
 
 ### Line items
 Each Stripe line item is one of:
@@ -54,7 +54,7 @@ Use the workbook `Books-Items-and-Mapping-v2.xlsx`, tabs **Items** (53 items, SK
 
 1. **Annual purchase** (`subscription_type=annual`): as now, plus insurance lines that renew. Check the Deal, membership and policy records still activate.
 2. **Monthly purchase** (`subscription_type=monthly`): create the first invoice from the first payment's lines. Activate the membership and policy for the full term on the first payment, not month by month.
-3. **Every later payment** (`invoice.paid`, `billing_reason=subscription_cycle`): create a payment and invoice for that month. From payment 13 the amount drops when there were year-one lines, so do not compare against the first amount.
+3. **Every later payment** (`invoice.paid`, `billing_reason=subscription_cycle`): create a payment and invoice for that month. The amount is the same from payment 2 on (the joining fee and add-ons are only on the first), so do not compare against the first amount.
 4. **Yearly renewals** (annual plans, `invoice.paid` a year later): renew the membership and policy dates. The renewal charges the same amounts; premiums are not re-rated.
 5. **Insurance only** is now `mode=subscription` (it used to be a one-off payment). Check that your handler does not assume `mode=payment` for `type=insurance`.
 6. **Named employee fee:** read `named_employee_membership`, add the fee to the invoice as a membership item (`MEM-FULLNS-Y` for non-salon, `MEM-FULLS-Y` for salon, count times the amount), and keep it out of the IPT calculation.
@@ -68,7 +68,7 @@ Use the Development portal (`/app/`), Stripe test mode, and the Stripe test card
 
 | Test | What to check |
 | --- | --- |
-| Monthly Associate, new member (£6.92) | One subscription with two phases in Stripe (12 months with every line, then without the joining fee); first invoice £6.92; CRM Deal active |
+| Monthly Associate, new member (£16.09) | One subscription, no phases; first invoice £16.09 (£6.09 ongoing plus the £10.00 joining fee in full); every later invoice £6.09; CRM Deal active |
 | Annual Associate with a badge (£69.00) | Subscription yearly; badge is a one-off; invoice split into £38.00 zero-rated, £14.17 standard-rated and the badge |
 | Annual Full non-salon with insurance | Yearly subscription with membership, premiums and IPT as yearly lines; policy active |
 | Insurance only, an existing member | `mode=subscription`; policy active; does not create a second Contact |
@@ -80,5 +80,5 @@ Use the Development portal (`/app/`), Stripe test mode, and the Stripe test card
 
 - Does the handler read the session metadata only, or also the line items? The code on each line (`lookup_key` or `metadata.sku`) is how to find the Books item.
 - Does it assume `mode=payment` for any `type`?
-- What does it do on `customer.subscription.updated` (the portal's schedule makes this event fire when a monthly plan is scheduled)?
+- What does it do on `customer.subscription.updated`?
 - Where does the Books item come from today: name, ID, or Stripe price ID?

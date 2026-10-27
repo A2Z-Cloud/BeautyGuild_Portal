@@ -32,11 +32,10 @@ Linked to the BeautyGuildPortal project (13537000000088009, Development) via `ap
 
 ~~~sh
 cd apps/portal
-VITE_PUBLIC_BASE=/app/ npm run build
-catalyst deploy --only client
+scripts/deploy-client.sh
 ~~~
 
-`public/client-package.json` is copied into `dist/` by the build and is required by Catalyst.
+Use the script, not a bare `npm run build`. The client reads its settings at build time, and a build without the live `VITE_` flags is a demo build (no sign-in, no prices). The script holds the full flag set, refuses to deploy a build that is not live, and `--build-only` builds and checks without deploying. `public/client-package.json` is copied into `dist/` by the build and is required by Catalyst.
 
 ## Manual deployment and Catalyst considerations
 

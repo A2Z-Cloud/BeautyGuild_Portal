@@ -487,7 +487,7 @@ test('Full non-salon is the same 55 pounds as Associate and its net splits the 3
     MEM_ENV,
   );
 });
-test('a monthly plan: yearly price divided by 12 and rounded up, the joining fee and add-ons spread over the first 12 payments, plus the admin fee', async () => {
+test('a monthly plan: yearly price divided by 12 and rounded up, plus the admin fee, with the joining fee and add-ons charged once in full on the first payment', async () => {
   const w = unlinked(world({ priceOverride: RECURRING }));
   await withApp(
     w,
@@ -496,35 +496,39 @@ test('a monthly plan: yearly price divided by 12 and rounded up, the joining fee
       assert.equal(q.status, 200, JSON.stringify(q.body));
       assert.deepEqual(q.body.quote.plan, {
         payments: 12,
-        firstPaymentPence: 692,
+        firstPaymentPence: 1609,
         laterPaymentPence: 609,
-        yearOneTotalPence: 8304,
+        oneOffPence: 1000,
+        yearOneTotalPence: 8308,
         adminFeePence: 150,
       });
       const r = await post({ ...BUY, billing: 'monthly' });
       assert.equal(r.status, 201, JSON.stringify(r.body));
       const p = w.stripePosts[0].params;
       assert.equal(p.get('mode'), 'subscription');
-      // membership 4.59 and joining fee 0.83 are inline monthly prices; the admin fee is the catalogue price
+      // the membership is an inline monthly price; the joining fee is a one-off line at its catalogue price; the admin fee is the catalogue price
       assert.equal(p.get('line_items[0][price_data][unit_amount]'), '459');
       assert.equal(p.get('line_items[0][price_data][recurring][interval]'), 'month');
-      assert.equal(p.get('line_items[0][price_data][product_data][metadata][phase]'), 'ongoing');
-      assert.equal(p.get('line_items[1][price_data][unit_amount]'), '83');
-      assert.equal(p.get('line_items[1][price_data][product_data][metadata][phase]'), 'year_one');
+      assert.ok(p.get('line_items[1][price]'), 'the joining fee is a catalogue price');
+      assert.equal(p.get('line_items[1][price_data][recurring][interval]'), null, 'and does not recur');
       assert.equal(p.get('line_items[2][price]'), 'price_admin1111111');
       assert.equal(p.get('subscription_data[metadata][plan]'), 'monthly');
-      assert.equal(p.get('subscription_data[metadata][phased]'), 'true');
-      assert.match(p.get('success_url'), /session_id=\{CHECKOUT_SESSION_ID\}$/);
       assert.equal(p.get('metadata[subscription_type]'), 'monthly');
-      assert.equal(p.get('metadata[total_amount]'), '6.92');
+      assert.equal(p.get('metadata[total_amount]'), '16.09');
       assert.equal(p.get('metadata[base_membership_amount]'), '4.59');
       assert.equal(p.get('metadata[base_membership_amount_net]'), '4.35', 'the zero-rated part is 38.00 divided by 12');
-      assert.equal(p.get('metadata[joining_fee_amount]'), '0.83');
+      assert.equal(
+        p.get('metadata[joining_fee_amount]'),
+        '10.00',
+        'the joining fee is the full amount, not a monthly share',
+      );
+      assert.equal(p.get('metadata[joining_fee_amount_net]'), '8.33');
       assert.deepEqual(JSON.parse(p.get('metadata[monthly_plan]')), {
         payments: 12,
-        first_payment: '6.92',
+        first_payment: '16.09',
         later_payment: '6.09',
-        year_one_total: '83.04',
+        one_off_total: '10.00',
+        year_one_total: '83.08',
         admin_fee: '1.50',
         admin_fee_net: '1.25',
       });
@@ -532,7 +536,7 @@ test('a monthly plan: yearly price divided by 12 and rounded up, the joining fee
     MEM_ENV,
   );
 });
-test('a monthly renewal has nothing to drop after 12 payments, so it needs no schedule; extra branches carry on', async () => {
+test('a monthly renewal is the ongoing amount at every payment; extra branches carry on', async () => {
   const w = world({ deals: [activeDeal], priceOverride: RECURRING });
   await withApp(
     w,
@@ -540,10 +544,28 @@ test('a monthly renewal has nothing to drop after 12 payments, so it needs no sc
       const r = await post({ ...BUY, billing: 'monthly', previousId: DEAL, branches: 'nails' });
       assert.equal(r.status, 201, JSON.stringify(r.body));
       const p = w.stripePosts[0].params;
-      assert.equal(p.get('subscription_data[metadata][phased]'), 'false');
       // 55.00 + 15.00 branch = 70.00 a year, so 5.84 a month rounded up, plus 1.50
       assert.equal(p.get('metadata[total_amount]'), '7.34');
-      assert.equal(p.get('line_items[1][price_data][product_data][metadata][phase]'), 'ongoing');
+      assert.equal(p.get('line_items[1][price_data][recurring][interval]'), 'month');
+    },
+    MEM_ENV,
+  );
+});
+test('add-ons bought on a monthly plan are paid once with the first payment, so the monthly amount is the same at renewal', async () => {
+  const w = world({ deals: [activeDeal], priceOverride: RECURRING });
+  await withApp(
+    w,
+    async ({ post }) => {
+      const r = await post({ ...BUY, billing: 'monthly', previousId: DEAL, addons: { badge: 2 } });
+      assert.equal(r.status, 201, JSON.stringify(r.body));
+      const p = w.stripePosts[0].params;
+      // ongoing 6.09, plus two badges at 4.00 in full
+      assert.equal(p.get('metadata[total_amount]'), '14.09');
+      assert.equal(p.get('metadata[badge_amount]'), '8.00');
+      const oneOff = [0, 1, 2].filter(
+        i => p.get('line_items[' + i + '][price]') && !p.get('line_items[' + i + '][price_data][recurring][interval]'),
+      );
+      assert.ok(oneOff.length >= 1);
     },
     MEM_ENV,
   );
@@ -565,6 +587,81 @@ test('renewal waives the joining fee, needs an owned previous membership, and li
     },
     MEM_ENV,
   );
+});
+// The joining fee is charged again after a gap in cover of more than one month between any memberships, on a new purchase and on a
+// renewal alike (Guild, 26 October 2026).
+const lapsedDeal = (daysAgo, extra = {}) => ({
+  ...activeDeal,
+  Expiry_Date: new Date(Date.now() - daysAgo * 864e5).toISOString().slice(0, 10),
+  ...extra,
+});
+test('a membership that ended within a month: no joining fee, with or without the old one named', async () => {
+  const w = world({ deals: [lapsedDeal(20)], priceOverride: RECURRING });
+  await withApp(
+    w,
+    async ({ post }) => {
+      assert.equal((await post(BUY)).status, 201);
+      assert.equal(w.stripePosts[0].params.get('metadata[joining_fee_amount]'), '0.00');
+      assert.equal(w.stripePosts[0].params.get('line_items[1][price]'), null);
+      assert.equal((await post({ ...BUY, previousId: DEAL })).status, 201);
+      assert.equal(w.stripePosts[1].params.get('metadata[change_type]'), 'renewal');
+      assert.equal(w.stripePosts[1].params.get('metadata[joining_fee_amount]'), '0.00');
+    },
+    MEM_ENV,
+  );
+});
+test('a gap of more than a month pays the joining fee again, on a new purchase and on a renewal', async () => {
+  const w = world({ deals: [lapsedDeal(75)], priceOverride: RECURRING });
+  await withApp(
+    w,
+    async ({ post }) => {
+      assert.equal((await post(BUY)).status, 201);
+      assert.equal(w.stripePosts[0].params.get('metadata[joining_fee_amount]'), '10.00');
+      assert.equal((await post({ ...BUY, previousId: DEAL })).status, 201);
+      assert.equal(w.stripePosts[1].params.get('metadata[change_type]'), 'renewal');
+      assert.equal(w.stripePosts[1].params.get('metadata[joining_fee_amount]'), '10.00');
+    },
+    MEM_ENV,
+  );
+});
+test('the joining fee looks at the latest membership of any type, and a saved draft is not cover', async () => {
+  const w = world({
+    deals: [
+      lapsedDeal(400, { id: 'old', Membership_Type: 'Full Member (Salon)' }),
+      lapsedDeal(10, { id: 'recent', Membership_Type: 'Full Member (Non-Salon)' }),
+      // A draft that happens to run into the future is not a membership.
+      { ...activeDeal, id: 'draft', Stage: 'Draft', Expiry_Date: '2999-01-01' },
+    ],
+    priceOverride: RECURRING,
+  });
+  await withApp(
+    w,
+    async ({ post }) => {
+      assert.equal((await post(BUY)).status, 201);
+      assert.equal(w.stripePosts[0].params.get('metadata[joining_fee_amount]'), '0.00');
+    },
+    MEM_ENV,
+  );
+  const draftOnly = world({
+    deals: [{ ...activeDeal, id: 'draft', Stage: 'Draft', Expiry_Date: '2999-01-01' }],
+    priceOverride: RECURRING,
+  });
+  await withApp(
+    draftOnly,
+    async ({ post }) => {
+      assert.equal((await post(BUY)).status, 201);
+      assert.equal(draftOnly.stripePosts[0].params.get('metadata[joining_fee_amount]'), '10.00');
+    },
+    MEM_ENV,
+  );
+});
+test('one month on holds the day, and the end of a short month', () => {
+  const { oneMonthOn } = require('../src/catalogue');
+  assert.equal(oneMonthOn('2026-06-30'), '2026-07-30');
+  assert.equal(oneMonthOn('2026-12-15'), '2027-01-15');
+  assert.equal(oneMonthOn('2026-01-31'), '2026-02-28');
+  assert.equal(oneMonthOn('2028-01-31'), '2028-02-29');
+  assert.equal(oneMonthOn('2026-03-31'), '2026-04-30');
 });
 // ---- Membership changes (MTA R2): a pro-rated extra branch and flat items on a current membership ----
 const CHANGE_ENV = { ...MEM_ENV, PORTAL_MEMBERSHIP_CHANGES_ENABLED: 'true' };
@@ -1832,82 +1929,21 @@ test('paying twice makes one Contact, and an existing Contact is never made agai
   );
 });
 
-// ---- Monthly plans after payment: the schedule ----
-const crypto = require('node:crypto');
-const subscriptionWorld = (extra = {}) => {
-  const w = world({
-    sessions: {
-      cs_test_paid1: {
-        id: 'cs_test_paid1',
-        mode: 'subscription',
-        payment_status: 'paid',
-        status: 'complete',
-        customer_email: 'alice@example.test',
-        subscription: 'sub_abc123',
-        metadata: { source: 'portal_v2' },
-      },
-      cs_test_other1: {
-        id: 'cs_test_other1',
-        mode: 'subscription',
-        payment_status: 'paid',
-        status: 'complete',
-        customer_email: 'bob@example.test',
-        subscription: 'sub_abc123',
-        metadata: { source: 'portal_v2' },
-      },
-      cs_test_open01: {
-        id: 'cs_test_open01',
-        mode: 'subscription',
-        payment_status: 'unpaid',
-        status: 'open',
-        customer_email: 'alice@example.test',
-        subscription: null,
-        metadata: { source: 'portal_v2' },
-      },
-      cs_test_payment: {
-        id: 'cs_test_payment',
-        mode: 'payment',
-        payment_status: 'paid',
-        status: 'complete',
-        customer_email: 'alice@example.test',
-        metadata: { source: 'portal_v2' },
-      },
+test('the monthly plan schedule is gone: there is no finish call and no function webhook, because nothing stops after 12 payments', async () => {
+  const w = world({ priceOverride: RECURRING });
+  await withApp(
+    w,
+    async ({ post }) => {
+      assert.equal((await post({ ...BUY, billing: 'monthly' })).status, 201);
+      const p = w.stripePosts[0].params;
+      assert.equal(p.get('subscription_data[metadata][phased]'), null);
+      assert.equal(p.get('line_items[0][price_data][product_data][metadata][phase]'), null);
+      assert.doesNotMatch(p.get('success_url'), /session_id/);
     },
-    ...extra,
-  });
-  w.schedulePosts = [];
-  const prod = phase => ({ metadata: phase ? { phase } : {} });
-  w.external = async (url, init = {}) => {
-    const json = body => ({ status: 200, ok: true, json: async () => body });
-    if (url.startsWith('https://api.stripe.com/v1/subscriptions/'))
-      return json({
-        id: 'sub_abc123',
-        status: 'active',
-        schedule: w.scheduled ? 'sub_sched_1' : null,
-        items: {
-          data: [
-            { price: { id: 'price_m', product: prod('ongoing') }, quantity: 1 },
-            { price: { id: 'price_j', product: prod('year_one') }, quantity: 1 },
-          ],
-        },
-      });
-    if (url === 'https://api.stripe.com/v1/subscription_schedules') {
-      w.scheduled = true;
-      w.schedulePosts.push('create');
-      return json({ id: 'sub_sched_1', phases: [{ start_date: 1760000000 }] });
-    }
-    if (url.startsWith('https://api.stripe.com/v1/subscription_schedules/')) {
-      w.schedulePosts.push(new URLSearchParams(init.body));
-      return json({ id: 'sub_sched_1' });
-    }
-    return null;
-  };
-  return w;
-};
-test('the return page finishes a monthly plan for the customer who paid, once', async () => {
-  const w = subscriptionWorld();
+    MEM_ENV,
+  );
   const app = createApp({
-    config: loadConfig(ENV),
+    config: loadConfig({ ...ENV, STRIPE_SCHEDULE_WEBHOOK_SECRET: 'whsec_unused' }),
     getCurrentUser: async () => ({ id: 'user-1', email: 'alice@example.test' }),
     getCrmHeaders: async () => ({}),
     getAnalyticsHeaders: async () => ({}),
@@ -1918,98 +1954,9 @@ test('the return page finishes a monthly plan for the customer who paid, once', 
     const s = app.listen(0, '127.0.0.1', () => resolve(s));
   });
   try {
-    const finish = async sessionId => {
-      const r = await fetch('http://127.0.0.1:' + server.address().port + '/portal/checkout/finish', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId }),
-      });
-      return { status: r.status, body: await r.json() };
-    };
-    assert.deepEqual((await finish('cs_test_paid1')).body, { status: 'scheduled' });
-    assert.equal(w.schedulePosts.length, 2, 'one schedule made and set');
-    assert.deepEqual((await finish('cs_test_paid1')).body, { status: 'already' }, 'a second call changes nothing');
-    assert.equal(w.schedulePosts.length, 2);
-    assert.equal((await finish('cs_test_other1')).status, 404, 'a payment made by someone else is not found');
-    assert.deepEqual((await finish('cs_test_open01')).body, { status: 'pending' });
-    assert.deepEqual((await finish('cs_test_payment')).body, { status: 'not_needed' });
-    assert.equal((await finish('nonsense')).status, 422);
-  } finally {
-    await new Promise(resolve => server.close(resolve));
-  }
-});
-test("the function's own Stripe webhook schedules a paid monthly plan, and only with a valid signature", async () => {
-  const secret = 'whsec_function_test';
-  for (const [label, sign, expectScheduled, status] of [
-    ['valid', true, true, 200],
-    ['bad signature', false, false, 400],
-  ]) {
-    const w = subscriptionWorld();
-    const app = createApp({
-      config: loadConfig({ ...ENV, STRIPE_SCHEDULE_WEBHOOK_SECRET: secret }),
-      getCurrentUser: async () => null,
-      getCrmHeaders: async () => ({}),
-      getAnalyticsHeaders: async () => ({}),
-      getCreatorHeaders: async () => ({}),
-      fetchImpl: w.fetchImpl,
-    });
-    const server = await new Promise(resolve => {
-      const s = app.listen(0, '127.0.0.1', () => resolve(s));
-    });
-    try {
-      const body = JSON.stringify({
-        id: 'evt_1',
-        type: 'checkout.session.completed',
-        data: {
-          object: {
-            id: 'cs_test_paid1',
-            mode: 'subscription',
-            payment_status: 'paid',
-            subscription: 'sub_abc123',
-            metadata: { source: 'portal_v2' },
-          },
-        },
-      });
-      const t = String(Math.floor(Date.now() / 1000));
-      const header =
-        't=' +
-        t +
-        ',v1=' +
-        crypto
-          .createHmac('sha256', sign ? secret : 'wrong')
-          .update(t + '.' + body)
-          .digest('hex');
-      const r = await fetch('http://127.0.0.1:' + server.address().port + '/stripe/webhook', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Stripe-Signature': header },
-        body,
-      });
-      assert.equal(r.status, status, label);
-      assert.equal(w.schedulePosts.length > 0, expectScheduled, label);
-    } finally {
-      await new Promise(resolve => server.close(resolve));
-    }
-  }
-  // Without a signing secret the route does not exist.
-  const w = subscriptionWorld();
-  await withApp(w, async () => {});
-  const app = createApp({
-    config: loadConfig(ENV),
-    getCurrentUser: async () => null,
-    getCrmHeaders: async () => ({}),
-    getAnalyticsHeaders: async () => ({}),
-    getCreatorHeaders: async () => ({}),
-    fetchImpl: w.fetchImpl,
-  });
-  const server = await new Promise(resolve => {
-    const s = app.listen(0, '127.0.0.1', () => resolve(s));
-  });
-  try {
-    assert.equal(
-      (await fetch('http://127.0.0.1:' + server.address().port + '/stripe/webhook', { method: 'POST', body: '{}' }))
-        .status,
-      404,
-    );
+    const base = 'http://127.0.0.1:' + server.address().port;
+    for (const path of ['/portal/checkout/finish', '/stripe/webhook'])
+      assert.equal((await fetch(base + path, { method: 'POST', body: '{}' })).status, 404, path);
   } finally {
     await new Promise(resolve => server.close(resolve));
   }
@@ -2029,11 +1976,10 @@ test('membership with insurance on a monthly plan: premiums and IPT are ongoing 
       assert.equal(r.status, 201, JSON.stringify(r.body));
       const p = w.stripePosts[0].params;
       assert.equal(p.get('mode'), 'subscription');
-      // ongoing 55.00 + 32.50 + 65.00 + 11.70 IPT = 164.20 a year, 13.69 a month; the joining fee adds 0.83; the admin fee 1.50
-      assert.equal(p.get('metadata[total_amount]'), '16.02');
+      // ongoing 55.00 + 32.50 + 65.00 + 11.70 IPT = 164.20 a year, 13.69 a month; the admin fee 1.50; the joining fee 10.00 in full on the first payment
+      assert.equal(p.get('metadata[total_amount]'), '25.19');
       assert.deepEqual(lineNames(p), [
         'Full Member (Non-Salon) membership (monthly)',
-        'Membership joining fee',
         'Insurance - Medical Malpractice',
         'Insurance - Business Equipment',
         'Insurance Premium Tax (12%)',
@@ -2047,10 +1993,8 @@ test('membership with insurance on a monthly plan: premiums and IPT are ongoing 
       assert.equal(w.crmPosts.find(c => c.module === 'Insurance_Policy').record.Quoted_Amount, 109.2);
       const keys = [...p.keys()].filter(k => k.startsWith('metadata['));
       assert.ok(keys.length <= 50, 'metadata keys: ' + keys.length);
-      const phases = [0, 1, 2, 3, 4].map(i =>
-        p.get('line_items[' + i + '][price_data][product_data][metadata][phase]'),
-      );
-      assert.deepEqual(phases, ['ongoing', 'year_one', 'ongoing', 'ongoing', 'ongoing']);
+      assert.ok(p.get('line_items[1][price]'), 'the joining fee is a one-off catalogue price');
+      assert.equal(p.get('line_items[1][price_data][recurring][interval]'), null);
     },
     MEM_ENV,
   );
@@ -2101,7 +2045,9 @@ test('a yearly extra branch and every line of a monthly plan carry their codes; 
       );
       p = w.stripePosts[1].params;
       const codes = [0, 1, 2, 3].map(i => skuOf(p, i));
-      assert.deepEqual(codes, ['MEM-FULLNS-Y', 'MEM-JOIN', 'MEM-BRANCH', 'MEM-BADGE']);
+      // The joining fee and the badge are one-off catalogue prices (their lookup keys are their codes); the rest are inline monthly lines.
+      assert.deepEqual(codes, ['MEM-FULLNS-Y', null, 'MEM-BRANCH', null]);
+      assert.ok(p.get('line_items[1][price]') && p.get('line_items[3][price]'), 'one-off items are catalogue prices');
       assert.equal(
         p.get('line_items[4][price]'),
         'price_admin1111111',
@@ -2123,6 +2069,7 @@ test('monthly accreditation: the yearly price divided by 12 and rounded up, plus
       payments: 12,
       firstPaymentPence: 3100,
       laterPaymentPence: 3100,
+      oneOffPence: 0,
       yearOneTotalPence: 37200,
       adminFeePence: 150,
     });
@@ -2132,18 +2079,11 @@ test('monthly accreditation: the yearly price divided by 12 and rounded up, plus
     assert.equal(p.get('line_items[0][price_data][unit_amount]'), '2950');
     assert.equal(p.get('line_items[0][price_data][recurring][interval]'), 'month');
     assert.equal(p.get('line_items[0][price_data][product_data][metadata][sku]'), 'ACC-STD');
-    assert.equal(p.get('line_items[0][price_data][product_data][metadata][phase]'), 'ongoing');
     assert.equal(p.get('line_items[1][price]'), 'price_admin1111111');
     assert.equal(p.get('subscription_data[metadata][plan]'), 'monthly');
-    assert.equal(
-      p.get('subscription_data[metadata][phased]'),
-      'false',
-      'nothing drops at payment 13, so it needs no schedule',
-    );
     assert.equal(p.get('metadata[subscription_type]'), 'monthly');
     assert.equal(p.get('metadata[product_amount]'), '31.00', 'what is charged now');
     assert.equal(p.get('metadata[product_yearly_amount]'), '354.00');
-    assert.match(p.get('success_url'), /session_id=\{CHECKOUT_SESSION_ID\}$/);
   });
 });
 test('monthly accreditation with Associate membership: 409.00 a year is 35.59 a month with the admin fee', async () => {
@@ -2157,4 +2097,79 @@ test('monthly accreditation with Associate membership: 409.00 a year is 35.59 a 
     assert.equal(p.get('line_items[0][price_data][product_data][metadata][sku]'), 'ACC-ASSOC');
     assert.equal(p.get('metadata[product_yearly_amount]'), '409.00');
   });
+});
+
+// ---- Cover levels and payment frequency are saved at new business, so a later change can see what the member has (MTA R3) ----
+const policyAndRows = w => {
+  const posts = w.crmPosts || [];
+  const rows = posts.filter(c => c.module === 'Insurance_Extension').map(c => c.record);
+  return {
+    policy: posts.find(c => c.module === 'Insurance_Policy').record,
+    rows,
+    by: code => rows.find(r => r.Cover_Code === code),
+  };
+};
+test('a Non-Salon policy saves its equipment tier as the sum insured, and pays Annual', async () => {
+  const w = fullWorld();
+  await withApp(w, async ({ post }) => {
+    assert.equal((await post(INSURE)).status, 201);
+    const { policy, by } = policyAndRows(w);
+    assert.equal(policy.Payment_Frequency, 'Annual');
+    assert.equal(policy.Annual_Wage_Roll, undefined, 'a wage roll is only asked of a Salon with Employers Liability');
+    assert.equal(by('BUSINESS_EQUIPMENT').Sum_Insured, 5000);
+    assert.equal(by('MEDMAL').Sum_Insured, undefined, 'liability has no sum insured');
+  });
+});
+test('a Salon policy saves its turnover, wage roll and the total sum insured of each property cover', async () => {
+  const w = fullWorld();
+  await withApp(w, async ({ post }) => {
+    const salon = {
+      ...SALON_PREMISES,
+      insSalonEL: true,
+      insWageRoll: 60000,
+      insStock: 1000,
+      insMoneyCover: true,
+      insBuildingsCover: true,
+      insBuildingsSI: 100000,
+      insFixturesSI: 5000,
+      insBiCover: true,
+      insBiIncome: 40000,
+      insBiDebts: 10000,
+      insPropertyAwayCover: true,
+      insPropertyAwaySI: 4000,
+    };
+    assert.equal((await post({ ...INSURE, insurance: salon })).status, 201);
+    const { policy, by } = policyAndRows(w);
+    assert.equal(policy.Annual_Turnover, 90000);
+    assert.equal(policy.Annual_Wage_Roll, 60000);
+    assert.equal(by('CONTENTS').Sum_Insured, 2000 + 5000 + 1000, 'computers, equipment and stock');
+    assert.equal(by('BUILDINGS').Sum_Insured, 105000);
+    assert.equal(by('BUSINESS_INTERRUPTION').Sum_Insured, 50000);
+    assert.equal(by('PROPERTY_AWAY').Sum_Insured, 4000);
+    assert.equal(by('MONEY').Sum_Insured, undefined, 'money has a fixed limit, nothing to save');
+    assert.equal(by('EMPLOYERS_LIABILITY').Sum_Insured, undefined, 'the wage roll is on the policy');
+  });
+});
+test('a member who pays monthly has Payment_Frequency Monthly on the policy, a yearly payer Annual', async () => {
+  for (const [billing, frequency] of [
+    ['monthly', 'Monthly'],
+    ['annual', 'Annual'],
+  ]) {
+    const w = unlinked(world({ priceOverride: RECURRING }));
+    await withApp(
+      w,
+      async ({ post }) => {
+        const r = await post({
+          ...BUY,
+          level: 'full_non_salon',
+          billing,
+          insurance: INS_OK,
+          country: 'United Kingdom',
+        });
+        assert.equal(r.status, 201, JSON.stringify(r.body));
+        assert.equal(policyAndRows(w).policy.Payment_Frequency, frequency, billing);
+      },
+      MEM_ENV,
+    );
+  }
 });
