@@ -146,6 +146,8 @@ Already done on main and no longer part of this scope: the price list v2 rating 
 
 The staff widget could be started before the portal journeys if the Guild would rather process MTAs in CRM first. The engine is shared, so changing the order does not create rework.
 
+R3 (payable insurance changes) is planned in detail in [mta-r3-plan.md](mta-r3-plan.md): the live CRM fields it uses, the revision lifecycle, the PR sequence and the verification gate.
+
 ### Next actions
 
 1. Send the Guild only what is still open: D23 (a change in the last month of a policy already renewed), D26 (employee certificates and logins), D03 rounding, D04 membership fee refunds, D14 duplicate documents fee, and D20 (future-dated changes for monthly payers). D22, D24 and D25 are decided; the Guild confirms them in testing.
