@@ -4,6 +4,8 @@ Written 24 October 2026 for A2Z Cloud and the Guild of Beauty Therapists, update
 
 **Scope.** Insurance, membership and accreditation only. The Guild is not ready for GTi, so everything GTi (the £25 voucher, GTi courses, GTi Student upgrades) is parked in section 6. The school referral credit scheme (the £12 credit to schools and the Diary Date deductions) is being retired and is not covered.
 
+Specs that follow from this review: [what Creator must do](vouchers-creator-spec.md) and [the staff route](vouchers-staff-route-spec.md).
+
 Sources: the Guild's "Discount Codes and Vouchers" document (the Word version of 24 October; the PDF of 20 October has identical text), the Guild's email answers of 26 October, [pricing-payments.md](../api-contracts/pricing-payments.md), [creator-payments-app.md](creator-payments-app.md), and `catalogue.js`, `checkout.js` and `plans.js` in `apps/portal/functions/beauty_guild_api/src`.
 
 ## Summary

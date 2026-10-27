@@ -25,7 +25,7 @@ Flow: **Stripe event, then the log, then (fetched from Stripe) payment, invoice 
 
 Forms already built: **Stripe Webhook Log**, **Invoice Records**, **Subscription**. What each purchase sends to Stripe, the metadata keys and how to test are in the [Creator handover](creator-handover-price-list-v2.md); the fields are on the forms themselves. Decisions taken:
 - The log is a plain inbox: Event ID (no duplicates), type, raw payload, status, attempts, Stripe object id, livemode. No business logic in it.
-- Invoice details stay lean: lines are saved as **JSON** in one field (code, name, qty, gross, interval; a `discounts` array stays empty for now). Line reporting is Books' job, not Creator's.
+- Invoice details stay lean: lines are saved as **JSON** in one field (code, name, qty, gross, interval; a `discounts` array, defined in [vouchers-creator-spec.md](vouchers-creator-spec.md)). Line reporting is Books' job, not Creator's.
 - Invoices have **Stripe Invoice ID (no duplicates)** and a **Subscription** lookup, plus **Books Sync Status** and **Books Error** so a failed push is visible and retryable.
 - Subscriptions hold the checkout metadata snapshot, because renewals do not carry it.
 - Creator **fetches the object from Stripe by id** (with `expand`) rather than trusting the event payload, pinned to API version `2026-06-24.dahlia` (what Creator's endpoint already sends) through one constant.
@@ -41,6 +41,8 @@ Forms already built: **Stripe Webhook Log**, **Invoice Records**, **Subscription
 See section 5 of the [Creator handover](creator-handover-price-list-v2.md). In short: `subscription_type` (`annual` or `monthly`) on membership and accreditation; monthly lines are **monthly shares** and the amount drops at payment 13 when there were year-one lines; insurance on its own is now `mode=subscription`; `named_employee_membership` (JSON) is new and sits outside IPT; `contact_id` is now set for new customers too; every renewal arrives as `invoice.paid`.
 
 **Splitting a membership into the two Books items:** take 38/55 of the membership line as the zero-rated item and the rest as the standard-rated item (VAT is 20% of that), putting any rounding on the standard line, so the invoice total always equals Stripe's.
+
+**Vouchers and discounts.** What Creator must do (the `discounts` entry, redemptions held in Creator, the Waive_Logs status, Books line discounts, and issuing the £25 GTi voucher) is in [vouchers-creator-spec.md](vouchers-creator-spec.md). The staff side is in [vouchers-staff-route-spec.md](vouchers-staff-route-spec.md).
 
 ## 4. Open decisions
 - Additional venues (£60 a year) are still a single payment. Should they renew with the accreditation?
