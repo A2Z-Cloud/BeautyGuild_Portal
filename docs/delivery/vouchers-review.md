@@ -230,7 +230,9 @@ Questions 1 to 5 and 7 to 13 are answered (section 2.1). Insurance, the joining 
 - Customers do not enter bespoke vouchers online.
 
 ### 4.2 Follow-up answers, 26 October (afternoon)
-All four are answered (section 2.1, follow-up 1 to 4). Still to come from the Guild: the final list of waiver reasons (Qudsiya is confirming with Helen Delaney whether to add, for example, "Upgrade"), and examples of the £25 voucher codes, which Qudsiya has offered.
+All four are answered (section 2.1, follow-up 1 to 4). A2Z proposes the waiver reasons list (below), and the Guild can add to it later. Still to come from the Guild: examples of the £25 voucher codes, which Qudsiya has offered.
+
+**Proposed waiver reasons** (a CRM picklist the Guild can extend without a release, with an optional free-text note, required when the reason is Other): Goodwill Gesture, Complaint, Upgrade, Promotion, Payment Problem, Other. They are chosen in the CRM phone payment widget and on the payment link, and stored in the waiver log with the staff member.
 
 ### 4.2a Open, arising from the follow-up
 1. **The £25 GTi voucher today.** New joins, renewals and upgrades through the new portal need to keep issuing it. Where do the individual codes live today (Enki, the CRM or both), how are they generated and what format are they, and what happens to a member's code when their membership is cancelled? Please send the examples Qudsiya offered.
@@ -279,7 +281,7 @@ Each phase ships on its own, behind a switch (an environment flag such as `PORTA
 
 **How.**
 1. **A staff-only endpoint.** A separate route that only a signed-in Guild staff member can call. It builds the same basket and prices it with the same code as the customer route, so a phone payment and an online payment come out the same. The widget and the payment link both call it, and it returns either a payment link or the session the widget needs. This depends on the phone widget calling the portal's pricing and not re-pricing in its own code: to confirm with the widget build.
-2. **What staff can apply.** A referral code; a bespoke voucher code (looked up in the CRM `Voucher` record: dates, usage limit, restrictions such as members only, allowed items); and waivers on the joining fee, any of the one-off extras, and (when it exists) the £5 adjustment fee. A waiver needs a reason. Any staff member can do all of these (Guild answer 12), except that a goodwill waiver of the joining fee is allowed once per person; a second is refused and the staff member is shown the earlier one.
+2. **What staff can apply.** A referral code; a bespoke voucher code (looked up in the CRM `Voucher` record: dates, usage limit, restrictions such as members only, allowed items); and waivers on the joining fee, any of the one-off extras, and (when it exists) the £5 adjustment fee. A waiver needs a reason, picked from the reasons list (4.2) with an optional note; the reasons picker and the code and waiver controls are part of the CRM phone payment widget. Any staff member can do all of these (Guild answer 12), except that a goodwill waiver of the joining fee is allowed once per person; a second is refused and the staff member is shown the earlier one.
 3. **Price it.** Same rule as phase 1 for every one-off line: left out when free, otherwise lowered, and on a monthly plan spread over the first 12 payments (Guild answer 9). A voucher can only discount the items its record allows.
 4. **Record it.** A waiver log record in the CRM (Contact, application, item, amount, code or none, reason, staff member, date) and the same `discounts` entry in the metadata, with `source` `voucher` or `staff_waiver`. Voucher use is counted against the voucher's usage limit when the payment succeeds.
 5. **Not in this phase.** A discount on the additional branch (phase 3).
@@ -288,7 +290,7 @@ Each phase ships on its own, behind a switch (an environment flag such as `PORTA
 - A2Z (CRM): the `Voucher`, `Voucher Redemption` and waiver log modules, a test voucher, and the Voucher screen the Guild uses to create and end vouchers (replacing the separate Enki section).
 - A2Z (widget): how staff sign in to the widget and how the staff identity reaches the portal.
 - A2Z (Creator, Books): as phase 1, plus waiver reasons in the invoice record.
-- Guild: the final waiver reasons list (4.2) and a User Acceptance Test. No live voucher needs migrating for this scope.
+- Guild: agree the waiver reasons list (4.2) and a User Acceptance Test. No live voucher needs migrating for this scope.
 
 **Done when:** a staff member can apply a code or waiver in the widget and in the payment link, the customer pays the discounted amount, and the waiver log, the Creator invoice and the Books line all show who applied what and why.
 
@@ -306,7 +308,21 @@ Each phase ships on its own, behind a switch (an environment flag such as `PORTA
 
 **Done when:** a yearly branch discount and a monthly one both show the first year discounted and the renewal at full price, in Stripe and in Books.
 
-### Later: GTi
+### Phase 4: issue the £25 GTi voucher on verification
+**What.** Every member who joins, renews or upgrades from GTi Student keeps getting their individual £25 GTi voucher, now generated by the new system.
+
+**How.**
+1. **Trigger.** Creator creates the voucher when the membership is verified and becomes Active, from the first paid invoice (a new membership, a renewal or an upgrade). One voucher per Contact per membership term: a retry finds the existing one and never creates a second.
+2. **Record.** A CRM voucher record (code, Contact, membership, value £25, valid until the membership expiry), in the format and place the Guild uses today (to confirm from Qudsiya's examples).
+3. **Cancellation.** The voucher is voided when the membership is cancelled (it lasts until the membership expires or is cancelled). This is shared with the cancellations workstream.
+4. **Redemption.** Unchanged for now: GTi courses are redeemed where they are today (Enki) until GTi is rebuilt. If codes are held in Enki, the new system must write the voucher there too, or Enki must read it from the CRM: to confirm.
+5. **Telling the member.** The member needs to be told their code. How this happens today (email, the portal, or staff) is to confirm.
+
+**Needs from others.** Guild: the voucher examples, where the codes live and how they are made, what wording the member gets. A2Z: the Creator process, the CRM record, the link to Enki if needed.
+
+**Done when:** a new member, a renewal and a GTi Student upgrade each get one £25 voucher on verification, a retry does not create a second, and cancelling the membership voids it.
+
+### Later: the rest of GTi
 Parked in section 6.
 
 ### Who does what
@@ -317,6 +333,7 @@ Parked in section 6.
 | 1: referral code | Code check, pricing, price panel, redemption record, saved applications | Redemption module, test school code | Store the discount, mark the redemption | Line discount | Wording, UAT |
 | 2: staff route | Staff endpoint, voucher check, waivers | Voucher, redemption and waiver modules, test voucher | Waiver and voucher records | Line discount with reason | Answers in 4.2, Enki vouchers, UAT |
 | 3: branch discount | Per-checkout coupon, schedule check | none | Read coupon from invoice | none | UAT |
+| 4: £25 voucher | none | Voucher record | Create on verification, void on cancellation | none | Examples, wording, UAT |
 
 ### How we test and release
 - Every phase is built and tested against the Stripe test account. No live key is used.
@@ -340,7 +357,7 @@ The Guild is not ready for GTi, so none of this is in the build plan. It is kept
 - **GTi Student upgrade.** The joining fee waiver applies if the student membership is active or within one month of expiry. Online it uses the referral code of the school of the most recent GTi enrolment, which needs GTi enrolment data the portal does not have. The portal also does not check that the previous membership was a Student membership.
 - **GTi pricing and bundles.** Member and non-member course prices, and the £25 school bundle, are catalogue and staff-set pricing, not codes.
 - **Course vouchers.** The Guild said a course voucher lasts while it is available, generally a month, and members or the public can use it. This is a different life from a membership extras discount.
-- **Issuing the £25 voucher cannot wait for GTi.** It is live today and is given to every member who joins, renews or upgrades. Once joins and renewals go through the new portal, something must still create the member's code when the first payment succeeds, or members lose the benefit. The smallest fix is for Creator to create the voucher record (code, member, expiry) when a membership activates, and to void it on cancellation, while GTi redemption stays in Enki until GTi is rebuilt. This needs the examples and answers in 4.2a, and is not in phases 0 to 3 yet.
+- **Issuing the £25 voucher is now in the plan (phase 4).** It is live today and is given to every member who joins, renews or upgrades from GTi Student. Decision, 27 October: A2Z sets up a CRM and Creator process that generates the member's voucher when their membership is verified and becomes active. Redemption on GTi courses stays where it is until GTi is rebuilt. See phase 4.
 - **Questions to ask the Guild when GTi starts:**
   - Where are the £25 vouchers held in the CRM today, and what is the module called?
   - Is the £25 voucher a code the member types in, or a credit applied for them? Should it also work on membership or insurance pages (we assume not)?
