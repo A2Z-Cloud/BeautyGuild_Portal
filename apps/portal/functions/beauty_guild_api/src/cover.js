@@ -75,7 +75,7 @@ const REVISION_FIELDS = [
 const policyRoute = type => (/^non/i.test(text(type)) ? 'non_salon' : text(type) ? 'salon' : null);
 
 // call(req, path) is the CRM client. isDraft(row, definition) is the records route's own rule for hiding saved drafts.
-async function loadCover({ call, req, contactId, dealId, isDraft }) {
+async function loadCover({ call, req, contactId, dealId, isDraft, today = new Date().toISOString().slice(0, 10) }) {
   const rows = await call(req, 'Deals/' + dealId + '?fields=' + uri(DEAL_FIELDS.join(',')));
   const deal = rows[0];
   if (!deal || lookupId(deal.Contact_Name) !== String(contactId) || (isDraft && isDraft(deal)))
@@ -103,7 +103,7 @@ async function loadCover({ call, req, contactId, dealId, isDraft }) {
     ),
   ]);
 
-  const policy = policies
+  const inForce = policies
     .filter(
       p =>
         lookupId(p.Contact) === String(contactId) &&
@@ -111,7 +111,15 @@ async function loadCover({ call, req, contactId, dealId, isDraft }) {
         !NOT_IN_FORCE.has(text(p.Application_Status)) &&
         !(p.Application_Status === 'Referred' && p.Risk_Status === 'Stopped'),
     )
-    .sort((a, b) => text(b.Policy_Start_Date).localeCompare(text(a.Policy_Start_Date)))[0];
+    .sort((a, b) => text(b.Policy_Start_Date).localeCompare(text(a.Policy_Start_Date)));
+  // The policy that covers today. A renewal that has been bought early starts later, so it is not the current policy: it is the renewal
+  // (MTA-D23). With nothing covering today (an ended or not yet started policy) the latest one is used, as before.
+  const policy =
+    inForce.find(
+      p => text(p.Policy_Start_Date) <= today && (!text(p.Policy_End_Date) || text(p.Policy_End_Date) >= today),
+    ) || inForce[0];
+  const renewal =
+    (policy && inForce.find(p => p !== policy && text(p.Policy_Start_Date) > text(policy.Policy_Start_Date))) || null;
 
   let insurance = null;
   if (policy) {
@@ -157,6 +165,8 @@ async function loadCover({ call, req, contactId, dealId, isDraft }) {
       status: text(policy.Application_Status) || null,
       startDate: policy.Policy_Start_Date || null,
       endDate: policy.Policy_End_Date || null,
+      // A later policy on the same membership that is already in force: the renewal. A change late in this policy also affects it.
+      renewal: renewal ? { id: String(renewal.id), startDate: renewal.Policy_Start_Date || null } : null,
       paymentFrequency: text(policy.Payment_Frequency) || null,
       annualTurnover:
         Number.isFinite(Number(policy.Annual_Turnover)) && policy.Annual_Turnover != null

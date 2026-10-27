@@ -285,3 +285,22 @@ test('the cover carries the saved levels, payment frequency, the person each cov
     },
   );
 });
+// MTA-D23: a renewal bought early starts later and is in force. The current policy is the one that covers today, and the renewal is reported.
+const isoIn = n => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10);
+test('with a renewal already in force the current policy is the one covering today, and the renewal is reported', async () => {
+  const ending = policy({ Policy_Start_Date: isoIn(-350), Policy_End_Date: isoIn(10) });
+  const renewal = policy({ id: 'p-renewal', Policy_Start_Date: isoIn(11), Policy_End_Date: isoIn(375) });
+  await withApp({ deals: { [DEAL]: deal() }, Insurance_Policy: [renewal, ending] }, async get => {
+    const c = (await get(DEAL)).body.cover.insurance;
+    assert.equal(c.id, POLICY);
+    assert.deepEqual(c.renewal, { id: 'p-renewal', startDate: isoIn(11) });
+  });
+  await withApp({ deals: { [DEAL]: deal() }, Insurance_Policy: [ending] }, async get => {
+    assert.equal((await get(DEAL)).body.cover.insurance.renewal, null);
+  });
+  // Nothing covers today (the only policy has not started): the latest one is used, as before.
+  const future = policy({ Policy_Start_Date: isoIn(5), Policy_End_Date: isoIn(369) });
+  await withApp({ deals: { [DEAL]: deal() }, Insurance_Policy: [future] }, async get => {
+    assert.equal((await get(DEAL)).body.cover.insurance.id, POLICY);
+  });
+});

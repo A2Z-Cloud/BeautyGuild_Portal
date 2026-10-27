@@ -849,10 +849,15 @@ SERVICES.insurance_change = {
     if (revisions.length > insChange.MAX_REVISIONS)
       bad('Choose up to ' + insChange.MAX_REVISIONS + ' different start dates at a time.');
 
-    // A renewal can already exist (renewals open 30 days before the end). A change in the last month then also affects it, so it goes to the
-    // office (MTA-D23).
-    let renewed = false;
-    if (policy && policy.endDate && revisions.some(r => r.change.effectiveDate > addDays(policy.endDate, -30))) {
+    // A renewal can already exist (renewals open 30 days before the end): a later policy in force on the membership, or a renewed membership
+    // that starts after this policy ends. A change in the last month then also affects it, so it goes to the office (MTA-D23).
+    let renewed = Boolean(policy && policy.renewal);
+    if (
+      !renewed &&
+      policy &&
+      policy.endDate &&
+      revisions.some(r => r.change.effectiveDate > addDays(policy.endDate, -30))
+    ) {
       const deals = await crm(
         req,
         'Deals/search?criteria=' +
@@ -872,7 +877,7 @@ SERVICES.insurance_change = {
         reasons.push({
           code: 'RENEWED',
           message:
-            'Your policy has already been renewed, so this change also affects your renewal. Please call the office.',
+            'Your policy has already been renewed, so this change also affects your renewal. The office will make it for you: save your request and they will be in touch.',
         });
       // The underwriting rules on the policy as it will be, and the risk checks on any name being added.
       const ins = insChange.afterIns({ cover: rev.cover, change: asked });
