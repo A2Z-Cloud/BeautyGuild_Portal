@@ -651,9 +651,15 @@ export function MembershipManagement() {
                   />
                   {INTEGRATIONS.stripeCheckout && (
                     <p>
-                      <Link className="btn btn-primary" to={'/pay/membership_addon/' + id}>
-                        Buy add-ons
-                      </Link>
+                      {INTEGRATIONS.membershipChanges ? (
+                        <Link className="btn btn-primary" to={'/pay/membership_change/' + id}>
+                          Add a branch or buy add-ons
+                        </Link>
+                      ) : (
+                        <Link className="btn btn-primary" to={'/pay/membership_addon/' + id}>
+                          Buy add-ons
+                        </Link>
+                      )}
                     </p>
                   )}
                 </>

@@ -130,7 +130,11 @@ async function withApp(state, fn, env = {}) {
       const r = await fetch(url('/portal/checkout/quote?' + q));
       return { status: r.status, body: await r.json() };
     };
-    await fn({ post, get });
+    const raw = async path => {
+      const r = await fetch(url(path));
+      return { status: r.status, body: await r.json() };
+    };
+    await fn({ post, get, raw });
   } finally {
     await new Promise(resolve => server.close(resolve));
   }
@@ -561,6 +565,121 @@ test('renewal waives the joining fee, needs an owned previous membership, and li
     },
     MEM_ENV,
   );
+});
+// ---- Membership changes (MTA R2): a pro-rated extra branch and flat items on a current membership ----
+const CHANGE_ENV = { ...MEM_ENV, PORTAL_MEMBERSHIP_CHANGES_ENABLED: 'true' };
+const isoIn = n => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10);
+// A 365 day term with 100 days gone: from today to the end is 265 days (both end days counted).
+const termDeal = (extra = {}) => ({ ...activeDeal, Start_Date: isoIn(-100), Expiry_Date: isoIn(264), ...extra });
+const CHANGE = { service: 'membership_change', recordId: DEAL };
+test('membership changes are off until the switch is on, for quotes, payments and the options', async () => {
+  const w = world({ deals: [termDeal()], priceOverride: RECURRING });
+  await withApp(
+    w,
+    async ({ post, get, raw }) => {
+      assert.equal((await post({ ...CHANGE, branches: 'nails' })).status, 503);
+      assert.equal((await get('service=membership_change&recordId=' + DEAL + '&branches=nails')).status, 503);
+      assert.equal((await raw('/portal/checkout/membership-options?recordId=' + DEAL)).status, 503);
+      assert.equal(w.stripePosts.length, 0);
+    },
+    MEM_ENV,
+  );
+});
+test('an extra branch is the yearly price for the days left, to the penny, and a flat item is charged in full with no fee', async () => {
+  const w = world({ deals: [termDeal({ Membership_Branch: 'Guild of Beauty Therapists' })], priceOverride: RECURRING });
+  await withApp(
+    w,
+    async ({ post, get, raw }) => {
+      const q = await get('service=membership_change&recordId=' + DEAL + '&branches=nails&addons=badge:1');
+      assert.equal(q.status, 200, JSON.stringify(q.body));
+      // 15.00 x 265 / 365 = 10.89; the badge is 4.00 in full; no GBP 5 fee on a branch or items
+      assert.equal(q.body.quote.totalPence, 1089 + 400);
+      assert.equal(q.body.quote.mode, 'payment');
+      const r = await post({ ...CHANGE, branches: 'nails', addons: { badge: 1 } });
+      assert.equal(r.status, 201, JSON.stringify(r.body));
+      const p = w.stripePosts[0].params;
+      assert.equal(p.get('mode'), 'payment');
+      const metadata = k => p.get('metadata[' + k + ']');
+      assert.equal(metadata('type'), 'membership_change');
+      assert.equal(metadata('change_type'), 'mta');
+      assert.equal(metadata('mta_scope'), 'membership');
+      assert.equal(metadata('membership_deal_id'), DEAL);
+      assert.equal(metadata('effective_date'), isoIn(0));
+      assert.equal(metadata('prorata_days'), '265');
+      assert.equal(metadata('prorata_total_days'), '365');
+      assert.equal(metadata('secondary_branches'), 'nails');
+      assert.equal(metadata('branch_addon_amount'), '10.89');
+      assert.equal(metadata('branch_yearly_amount'), '15.00', 'what the branch costs from the next renewal');
+      assert.equal(metadata('badge_amount'), '4.00');
+      assert.equal(metadata('total_amount'), '14.89');
+      assert.ok(Math.abs(Number(metadata('branch_addon_amount_net')) - 10.89 / 1.2) < 0.011);
+      const lines = [0, 1].map(i => ({
+        sku: p.get('line_items[' + i + '][price_data][product_data][metadata][sku]'),
+        unit: p.get('line_items[' + i + '][price_data][unit_amount]'),
+        price: p.get('line_items[' + i + '][price]'),
+      }));
+      assert.ok(
+        lines.some(l => l.sku === 'MEM-BRANCH' && l.unit === '1089'),
+        'one inline line for the branch',
+      );
+      assert.ok(
+        lines.some(l => l.price),
+        'the badge is a catalogue price',
+      );
+      assert.equal(
+        [...p.keys()].filter(k => /line_items\[\d+\]\[price/.test(k) && k.endsWith('[recurring][interval]')).length,
+        0,
+      );
+      const o = await raw('/portal/checkout/membership-options?recordId=' + DEAL);
+      assert.deepEqual(
+        o.body.options.branches.map(b => [b.key, b.held]),
+        [
+          ['beauty', true],
+          ['holistic', false],
+          ['nails', false],
+          ['hair', false],
+        ],
+      );
+    },
+    CHANGE_ENV,
+  );
+});
+test('a branch already held, an unknown or repeated branch, nothing chosen and an item out of range are refused', async () => {
+  const w = world({ deals: [termDeal({ Membership_Branch: 'Guild of Nail Technicians' })], priceOverride: RECURRING });
+  await withApp(
+    w,
+    async ({ post }) => {
+      assert.equal((await post({ ...CHANGE, branches: 'nails' })).status, 422, 'the main branch');
+      assert.equal((await post({ ...CHANGE, branches: 'spa' })).status, 422);
+      assert.equal((await post({ ...CHANGE, branches: 'hair,hair' })).status, 422);
+      assert.equal((await post({ ...CHANGE })).status, 422, 'nothing chosen');
+      assert.equal((await post({ ...CHANGE, addons: { badge: 11 } })).status, 422);
+      assert.equal((await post({ ...CHANGE, addons: { pen: 1 } })).status, 422);
+      assert.equal(w.stripePosts.length, 0, 'nothing reached Stripe');
+    },
+    CHANGE_ENV,
+  );
+});
+test('only a current membership of the signed-in member can be changed, and one that ends tomorrow is too late for a branch', async () => {
+  for (const [label, deal, status, code] of [
+    ['expired', termDeal({ Expiry_Date: isoIn(-1) }), 409, 'MEMBERSHIP_NOT_CURRENT'],
+    ['not started', termDeal({ Start_Date: isoIn(1) }), 409, 'MEMBERSHIP_NOT_CURRENT'],
+    ['not active', termDeal({ Stage: 'Draft' }), 409, 'MEMBERSHIP_NOT_CURRENT'],
+    ['someone else', termDeal({ Contact_Name: { id: 'someone-else' } }), 404, 'NOT_FOUND'],
+    ['too late', termDeal({ Start_Date: isoIn(-364), Expiry_Date: isoIn(0) }), 422, 'TOO_LATE_TO_CHANGE'],
+  ]) {
+    const w = world({ deals: [deal], priceOverride: RECURRING });
+    await withApp(
+      w,
+      async ({ post }) => {
+        const r = await post({ ...CHANGE, branches: 'nails' });
+        assert.equal(r.status, status, label);
+        assert.equal(r.body.code, code, label);
+        assert.equal(w.stripePosts.length, 0, label);
+      },
+      CHANGE_ENV,
+    );
+  }
 });
 test('membership input is validated', async () => {
   const w = world({ priceOverride: RECURRING });

@@ -45,6 +45,8 @@ function loadConfig(env = process.env) {
       .split(',')
       .map(s => s.trim().toLowerCase().replace(/^@/, ''))
       .filter(d => /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(d)),
+    // MTA R2: pro-rated extra branch and flat items on a current membership. Off until Creator handles the membership_change payment.
+    membershipChangesEnabled: env.PORTAL_MEMBERSHIP_CHANGES_ENABLED === 'true',
     crmDraftsEnabled: env.PORTAL_CRM_DRAFTS_ENABLED === 'true',
     draftStatus: String(env.PORTAL_CRM_DRAFT_STATUS || 'Draft'),
     // A verified user with no CRM Contact gets one at first save. Set to 'false' to refuse instead.

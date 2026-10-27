@@ -5,6 +5,7 @@
 // price the matching lookup key. To add a new service, add an entry to SERVICES: it says who
 // may pay (ownership), which items to charge, and the metadata Creator expects after payment.
 const { HttpError } = require('./errors');
+const { prorata } = require('./prorata');
 const insurance = require('./insurance');
 
 const ID = /^\d{10,25}$/;
@@ -618,6 +619,156 @@ SERVICES.membership = {
     };
   },
 };
+// ---- Membership changes (MTA R2): a pro-rated extra branch and flat items on a current membership ----
+const norm = v =>
+  String(v || '')
+    .trim()
+    .toLowerCase();
+const branchKey = label => Object.entries(BRANCHES).find(([, v]) => norm(v) === norm(label))?.[0] || null;
+
+// The member's current membership as a change can see it: owned, Active and within its term. Also which branches it already holds (the
+// main one, and any extra branch already bought) so a branch cannot be bought twice. Ownership comes from the search by Contact.
+async function membershipForChange(req, crm, contactId, dealId) {
+  if (!ID.test(String(dealId || ''))) notFound('Membership');
+  const today = isoDay(new Date());
+  const deals = await crm(
+    req,
+    'Deals/search?criteria=' +
+      esc('(Contact_Name:equals:' + contactId + ')') +
+      '&fields=' +
+      esc('Stage,Membership_Type,Start_Date,Expiry_Date,Membership_Branch,Application_Status'),
+  );
+  const deal = deals.find(
+    d => String(d.id) === String(dealId) && String(d.Contact_Name?.id || contactId) === String(contactId),
+  );
+  if (!deal) notFound('Membership');
+  if (
+    deal.Stage !== 'Active' ||
+    !deal.Start_Date ||
+    !deal.Expiry_Date ||
+    deal.Start_Date > today ||
+    deal.Expiry_Date < today
+  )
+    bad(
+      'Only a current membership can be changed online. Please call the office if you need help.',
+      409,
+      'MEMBERSHIP_NOT_CURRENT',
+    );
+  const [extras, full] = await Promise.all([
+    crm(req, 'Membership_Extension/search?criteria=' + esc('(Membership_Extension:equals:' + dealId + ')')),
+    crm(req, 'Deals/' + dealId),
+  ]);
+  const held = new Set(
+    [
+      ...(Array.isArray(deal.Membership_Branch) ? deal.Membership_Branch : [deal.Membership_Branch]),
+      ...extras.filter(x => /branch/i.test(String(x.Extension_Type || ''))).map(x => x.Membership_Branch),
+    ]
+      .map(branchKey)
+      .filter(Boolean),
+  );
+  return {
+    id: String(dealId),
+    type: deal.Membership_Type,
+    start: deal.Start_Date,
+    expiry: deal.Expiry_Date,
+    profileId: full[0]?.Member_Profile?.id || null,
+    held,
+  };
+}
+
+// What the member can choose: each branch, and whether they already have it.
+async function membershipChangeOptions(req, crm, contactId, dealId) {
+  const m = await membershipForChange(req, crm, contactId, dealId);
+  return {
+    term: { start: m.start, expiry: m.expiry },
+    branches: Object.entries(BRANCHES).map(([key, label]) => ({ key, label, held: m.held.has(key) })),
+  };
+}
+
+SERVICES.membership_change = {
+  title: 'Membership changes',
+  async prepare({ req, crm, contact, input }) {
+    const m = await membershipForChange(req, crm, contact.id, input.recordId);
+    const asked = list(input.branches);
+    if (new Set(asked).size !== asked.length) bad('Choose each additional branch once.');
+    for (const b of asked) {
+      if (!BRANCHES[b]) bad('Unknown branch: ' + b + '.');
+      if (m.held.has(b)) bad('You already have ' + BRANCHES[b] + '.');
+    }
+    if (asked.length > Object.keys(BRANCHES).length - 1) bad('Choose up to three additional branches.');
+    const addonsAsked = input.addons && typeof input.addons === 'object' ? input.addons : {};
+    const lines = [],
+      quantities = {};
+    for (const [key, raw] of Object.entries(addonsAsked)) {
+      if (!ADDONS[key]) bad('Unknown add-on: ' + key + '.');
+      const quantity = Number(raw);
+      if (!Number.isInteger(quantity) || quantity < 0 || quantity > 10) bad('Choose between 0 and 10 of each add-on.');
+      if (quantity) {
+        lines.push({ item: ADDONS[key], quantity });
+        quantities[key] = quantity;
+      }
+    }
+    if (!lines.length && !asked.length) bad('Choose a branch or at least one item.');
+    // An extra branch is its yearly price for the days left in the term, from today (both end days counted). It is charged once now;
+    // renewals are the Creator's side (MTA-D20, D21). Flat items are not pro-rated and carry no adjustment fee.
+    const today = isoDay(new Date());
+    const term = prorata({ start: m.start, end: m.expiry, from: today > m.start ? today : m.start });
+    const inline = asked.map(b => ({
+      name:
+        BRANCHES[b] + ': additional branch, ' + term.days + ' of ' + term.total + ' days to the end of your membership',
+      quantity: 1,
+      priceItem: 'membership_branch',
+      prorata: term,
+      sku: ITEMS.membership_branch.code,
+      branch: b,
+    }));
+    return {
+      lines,
+      inline,
+      metadata: ({ amounts, total, lines: priced, inline: charged }) => {
+        const branchLines = (charged || []).filter(l => l.sku === ITEMS.membership_branch.code);
+        const branchPence = branchLines.reduce((t, l) => t + l.totalPence, 0);
+        const yearlyPence = branchLines.reduce((t, l) => t + (l.fullUnitPence || 0) * l.quantity, 0);
+        const net = key => {
+          const l = (priced || []).find(x => x.item === ADDONS[key]);
+          return l ? netPounds(l.item, l.totalPence, l.quantity) : '0.00';
+        };
+        const branchNet = branchLines.length ? netPounds('membership_branch', branchPence, branchLines.length) : '0.00';
+        const totalNet = (Number(branchNet) + Object.keys(ADDONS).reduce((t, k) => t + Number(net(k)), 0)).toFixed(2);
+        return {
+          type: 'membership_change',
+          contact_id: contact.id,
+          quote_reference: 'BGP-' + Date.now().toString(36).toUpperCase(),
+          membership_deal_id: m.id,
+          membership_profile_id: m.profileId || '',
+          change_type: 'mta',
+          mta_scope: 'membership',
+          effective_date: today,
+          membership_start: m.start,
+          membership_expiry: m.expiry,
+          prorata_days: String(term.days),
+          prorata_total_days: String(term.total),
+          secondary_branches: asked.join(','),
+          branch_addon_amount: pounds(branchPence),
+          branch_addon_amount_net: branchNet,
+          branch_yearly_amount: pounds(yearlyPence),
+          addons: JSON.stringify(quantities),
+          bundle_amount: amounts.addon_bundle || '0.00',
+          bundle_amount_net: net('bundle'),
+          certificate_amount: amounts.addon_certificate || '0.00',
+          certificate_amount_net: net('certificate'),
+          badge_amount: amounts.addon_badge || '0.00',
+          badge_amount_net: net('badge'),
+          sticker_amount: amounts.addon_sticker || '0.00',
+          sticker_amount_net: net('sticker'),
+          total_amount: total,
+          total_amount_net: totalNet,
+        };
+      },
+    };
+  },
+};
+
 const list = v => (Array.isArray(v) ? v : String(v || '').split(',')).map(x => String(x).trim()).filter(Boolean);
 
 module.exports = {
@@ -631,4 +782,5 @@ module.exports = {
   PROCESSING_STATUS,
   isPaidStatus,
   isPayableAccreditation,
+  membershipChangeOptions,
 };
