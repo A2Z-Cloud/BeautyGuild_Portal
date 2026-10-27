@@ -48,6 +48,8 @@ function loadConfig(env = process.env) {
     // MTA R2: pro-rated extra branch and flat items on a current membership. Off until Creator handles the membership_change payment.
     // MTA R3: insurance change quotes (no writes, no payment yet). Off until the verification gate in docs/delivery/mta-r3-plan.md is cleared.
     // MTA R3-2: saving a quoted change as a revision and draft rows in the CRM. Needs the new CRM fields (docs/api-contracts/pricing-payments.md).
+    // MTA R3-3: paying for a change (one checkout for the basket). Needs the writes switch too, Creator's handler and the FEE-MTA Stripe price.
+    insuranceChangesPaymentEnabled: env.PORTAL_INSURANCE_CHANGES_PAYMENT === 'true',
     insuranceChangesWritesEnabled: env.PORTAL_INSURANCE_CHANGES_WRITES === 'true',
     // Policy_Revisions.Name is mandatory and not auto-numbered: a revision is named this prefix, a space and its quote id (default MTA).
     revisionNamePrefix: String(env.PORTAL_REVISION_NAME_PREFIX || 'MTA')

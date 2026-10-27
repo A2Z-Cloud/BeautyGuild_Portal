@@ -28,6 +28,7 @@ function registerCheckoutRoutes(
     membershipChangesEnabled = false,
     insuranceChangesEnabled = false,
     insuranceChangesWritesEnabled = false,
+    insuranceChangesPaymentEnabled = false,
     revisionNamePrefix = '',
     enabled,
     getCurrentUser,
@@ -191,6 +192,9 @@ function registerCheckoutRoutes(
       risk: guest ? null : riskChecks,
     });
     if (prepared.alreadyPaid) return { service, contact, alreadyPaid: true };
+    // An insurance change is payable only when the writes and the payment switches are both on (docs/delivery/mta-r3-plan.md, the gate).
+    if (input.service === 'insurance_change')
+      prepared.payable = insuranceChangesWritesEnabled && insuranceChangesPaymentEnabled;
     const lines = [];
     for (const l of prepared.lines) {
       const price = await priceFor(l.item);
@@ -223,6 +227,7 @@ function registerCheckoutRoutes(
       }
       lines.push({
         item: null,
+        rev: l.rev,
         fee: l.priceItem && !l.prorata ? l.priceItem : null,
         fullUnitPence: l.prorata ? live : undefined,
         sku: l.sku || null,
@@ -334,6 +339,7 @@ function registerCheckoutRoutes(
           mode: b.mode,
           payable: !b.prepared.blocked && b.prepared.payable !== false,
           ...(b.prepared.details ? { details: b.prepared.details } : {}),
+          ...(b.prepared.revisionDetails ? { revisions: b.prepared.revisionDetails } : {}),
           ...(b.prepared.blocked ? { blocked: b.prepared.blocked } : {}),
           // A monthly plan: 12 payments a year, the first including the joining fee and any add-ons in full, every later one (and every renewal) the same ongoing amount.
           ...(b.plan
@@ -373,6 +379,7 @@ function registerCheckoutRoutes(
     lastName: String(src.lastName || ''),
     country: String(src.country || ''),
     change: src.change && typeof src.change === 'object' && !Array.isArray(src.change) ? src.change : null,
+    changes: Array.isArray(src.changes) ? src.changes.filter(c => c && typeof c === 'object').slice(0, 6) : null,
     businessName: String(src.businessName || ''),
     address1: String(src.address1 || ''),
     address2: String(src.address2 || ''),
@@ -403,6 +410,21 @@ function registerCheckoutRoutes(
     } catch {
       /* The charge still stands; Creator reconciles from the Stripe event. */
     }
+  } // As crmUpdate, but a failure is an error: used where the CRM must agree with what Stripe has been told.
+  async function crmUpdateStrict(req, module, id, fields) {
+    let r;
+    try {
+      r = await fetchImpl(crmApiDomain + '/crm/v3/' + module + '/' + id, {
+        method: 'PUT',
+        signal: AbortSignal.timeout(15000),
+        headers: { ...(await getCrmHeaders(req)), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: [fields] }),
+      });
+    } catch {
+      throw new HttpError(502, 'CRM_UNAVAILABLE', 'We could not finish setting up your payment. Please try again.');
+    }
+    if (!r.ok)
+      throw new HttpError(502, 'CRM_UNAVAILABLE', 'We could not finish setting up your payment. Please try again.');
   }
 
   // Creates a CRM record and returns its id. Used for the insurance records, which exist before payment.
@@ -495,23 +517,30 @@ function registerCheckoutRoutes(
       if (!limiter(req.portalUser.id))
         throw new HttpError(429, 'RATE_LIMIT', 'Too many requests. Please wait a moment and try again.');
       const b = await build(req, { ...inputFrom(req.body || {}), service: 'insurance_change', quote: true });
-      const r = b.prepared.revision;
-      if (!r) throw new HttpError(422, 'INVALID_REQUEST', 'Choose a change to save.');
+      const revisions = b.prepared.revisions;
+      if (!revisions || !revisions.length) throw new HttpError(422, 'INVALID_REQUEST', 'Choose a change to save.');
       // A change the member can pay for is only saved once every declaration and confirmation is answered.
-      if (r.outcome === 'PASS' && r.details.incomplete.length)
-        throw new HttpError(422, 'INCOMPLETE', [...new Set(r.details.incomplete)].join(' '));
+      for (const r of revisions)
+        if (r.outcome === 'PASS' && r.details.incomplete.length)
+          throw new HttpError(422, 'INCOMPLETE', [...new Set(r.details.incomplete)].join(' '));
       const failure = 'We could not save your change. Please try again.';
-      const saved = await saveRevision({
-        read: path => crm(req, path),
-        create: (module, record) => crmCreate(req, module, record, failure),
-        update: (module, id, fields) => crmUpdate(req, module, id, fields),
-        contactId: b.contact.id,
-        dealId: String(req.body?.recordId || ''),
-        ...r,
-        lines: b.lines,
-        namePrefix: revisionNamePrefix,
-      });
-      res.status(saved.reused ? 200 : 201).json({ revision: saved });
+      const ids = new Map();
+      const saved = [];
+      for (const r of revisions)
+        saved.push(
+          await saveRevision({
+            ...r,
+            ids,
+            read: path => crm(req, path),
+            create: (module, record) => crmCreate(req, module, record, failure),
+            update: (module, id, fields) => crmUpdate(req, module, id, fields),
+            contactId: b.contact.id,
+            dealId: String(req.body?.recordId || ''),
+            lines: b.lines,
+            namePrefix: revisionNamePrefix,
+          }),
+        );
+      res.status(saved.every(x => x.reused) ? 200 : 201).json({ revision: saved[0], revisions: saved });
     }),
   );
   // What a member can choose when changing a membership: each branch and whether they already hold it.
@@ -588,8 +617,11 @@ function registerCheckoutRoutes(
       if (!limiter(req.portalUser.id))
         throw new HttpError(429, 'RATE_LIMIT', 'Too many requests. Please wait a moment and try again.');
       const input = inputFrom(req.body || {});
-      // An insurance change is quoted only for now: paying needs the revision records and Creator (docs/delivery/mta-r3-plan.md).
-      if (input.service === 'insurance_change')
+      // Paying for an insurance change needs the revision records, the payment switch and Creator (the gate in docs/delivery/mta-r3-plan.md).
+      if (
+        input.service === 'insurance_change' &&
+        !(insuranceChangesEnabled && insuranceChangesWritesEnabled && insuranceChangesPaymentEnabled)
+      )
         throw new HttpError(
           503,
           'PAYMENT_NOT_AVAILABLE',
@@ -639,9 +671,12 @@ function registerCheckoutRoutes(
         // A payable insurance quote lives as long as its Stripe session: 23 hours 50 minutes (Stripe's limit is 24 hours).
         const expiresAt = b.prepared.beforePay ? new Date(now() + QUOTE_LIFE_MS) : null;
         const insuranceIds = b.prepared.beforePay
-          ? await b.prepared.beforePay((module, record) => crmCreate(req, module, record), {
+          ? await b.prepared.beforePay((module, record) => crmCreate(req, module, record, b.prepared.createFailure), {
               expiresAt,
               feesPence: b.fees.grossPence,
+              update: (module, id, fields) => crmUpdate(req, module, id, fields),
+              lines: b.lines,
+              namePrefix: revisionNamePrefix,
             })
           : null;
         const catalogue = b.lines.filter(l => l.item);
@@ -732,6 +767,21 @@ function registerCheckoutRoutes(
           await crmUpdate(req, 'Insurance_Policy', insuranceIds.policyId, { Stripe_Checkout_Session_ID: session.id });
         if (b.prepared.record)
           await crmUpdate(req, b.prepared.record.module, b.prepared.record.id, b.prepared.record.update(session.id));
+        // A change's revisions are marked Awaiting Payment with the session id. If that fails the session is expired, so no one can pay
+        // for a change the CRM does not know is waiting.
+        if (b.prepared.afterSession) {
+          try {
+            await b.prepared.afterSession(session.id, insuranceIds, (module, id, fields) =>
+              crmUpdateStrict(req, module, id, fields),
+            );
+          } catch (e) {
+            await stripe('POST', '/checkout/sessions/' + encodeURIComponent(session.id) + '/expire', {
+              body: new URLSearchParams(),
+              key: 'portal-v2-expire-' + session.id,
+            }).catch(() => {});
+            throw e;
+          }
+        }
         return session;
       };
       if (b.prepared.beforePay) {

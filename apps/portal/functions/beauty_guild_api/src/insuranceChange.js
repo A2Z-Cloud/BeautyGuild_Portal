@@ -86,6 +86,17 @@ function rate({ people = [], treatments = [], teaching = '', equipmentTier = 0, 
 // One cover's rate and its price list code.
 const price = (args, code) => rate(args)[code] || { pence: 0, sku: null };
 
+const daysInclusive = (from, to) => (Date.parse(to + 'T00:00:00Z') - Date.parse(from + 'T00:00:00Z')) / 864e5 + 1;
+// What a cover row costs for a whole year. A row added by an earlier change was charged only from its start date, so its recorded premium
+// is scaled up by the days of the policy over the days the row covers. A row that runs from the start of the policy is already a year.
+function annualPence(row, policy) {
+  const from = row.effectiveFrom,
+    to = row.effectiveTo || policy.endDate;
+  if (!from || !policy.startDate || !policy.endDate || from <= policy.startDate || !to || to < from)
+    return row.netPence;
+  return Math.round((row.netPence * daysInclusive(policy.startDate, policy.endDate)) / daysInclusive(from, to));
+}
+
 function quoteChange({ cover, change, today }) {
   const reasons = [];
   const refer = (code, message) => reasons.push({ code, message });
@@ -125,6 +136,7 @@ function quoteChange({ cover, change, today }) {
   });
   const nonStandard = (insuranceCover.premises || []).some(p => p.standardConstruction === 'no');
   const covers = insuranceCover.covers || [];
+  const annual = row => annualPence(row, insuranceCover);
   const byCode = code => covers.find(c => c.code === code);
   const people = insuranceCover.people || [];
   const items = [];
@@ -186,7 +198,7 @@ function quoteChange({ cover, change, today }) {
       code,
       'Replace ' + out.name + ' with ' + [inn.firstName, inn.lastName].filter(Boolean).join(' '),
       now,
-      old.netPence,
+      annual(old),
       { kind: 'swap', replacesId: old.id, person: inn, removePersonId: out.id },
     );
     // The membership fee carries over when an employee replaces an employee: nothing is charged or credited.
@@ -205,7 +217,7 @@ function quoteChange({ cover, change, today }) {
       NAMED[inn.type],
       'Replace ' + out.name + ' with ' + [inn.firstName, inn.lastName].filter(Boolean).join(' '),
       now,
-      old.netPence,
+      annual(old),
       { kind: 'swap', replacesId: old.id, person: inn, removePersonId: out.id },
     );
     employeesCharged += inn.type === 'employee' ? 1 : 0;
@@ -249,7 +261,7 @@ function quoteChange({ cover, change, today }) {
         'TEACHING_PLUS',
         'Teaching + Student Cover + Additional Treatments' + (old ? ' (replacing standard teaching)' : ''),
         price({ teaching: 'additional' }, 'TEACHING_PLUS'),
-        old ? old.netPence : 0,
+        old ? annual(old) : 0,
         { kind: old ? 'increase' : 'add', replacesId: old ? old.id : undefined },
       );
   }
@@ -268,7 +280,7 @@ function quoteChange({ cover, change, today }) {
         'BUSINESS_EQUIPMENT',
         'Business Equipment increased to £' + change.equipmentTier.toLocaleString('en-GB'),
         price({ equipmentTier: change.equipmentTier, nonStandard }, 'BUSINESS_EQUIPMENT'),
-        held.netPence,
+        annual(held),
         { kind: 'increase', replacesId: held.id, sumInsured: change.equipmentTier },
       );
   }
@@ -372,6 +384,85 @@ function afterIns({ cover, change }) {
   });
 }
 
+// Changes with the same start date are one revision (one set of documents, one GBP 5): their answers are combined. Several dates are
+// several revisions, in date order, at most MAX_REVISIONS.
+const MAX_REVISIONS = 3;
+function mergeSameDate(changes) {
+  const byDate = new Map();
+  for (const c of changes) {
+    const m = byDate.get(c.effectiveDate);
+    if (!m) {
+      byDate.set(c.effectiveDate, {
+        ...c,
+        addPeople: [...c.addPeople],
+        removePeople: [...c.removePeople],
+        treatments: [...c.treatments],
+      });
+      continue;
+    }
+    m.addPeople.push(...c.addPeople);
+    m.removePeople = [...new Set([...m.removePeople, ...c.removePeople])];
+    m.treatments = [...new Set([...m.treatments, ...c.treatments])];
+    m.teaching = c.teaching || m.teaching;
+    m.equipmentTier = Math.max(m.equipmentTier, c.equipmentTier);
+    m.elTier = Math.max(m.elTier, c.elTier);
+    m.declarations = m.declarations.length ? m.declarations : c.declarations;
+    m.qualified = m.qualified || c.qualified;
+    m.patchTesting = m.patchTesting || c.patchTesting;
+    m.confirmations = {
+      ...c.confirmations,
+      ...Object.fromEntries(Object.entries(m.confirmations).filter(([, v]) => v)),
+    };
+  }
+  return [...byDate.values()].sort((a, b) => a.effectiveDate.localeCompare(b.effectiveDate));
+}
+
+// The cover as it will be once a quoted change is applied: replaced rows and removed people gone, and a pending row (and person) for each
+// item, so a later change in the same basket is priced against it. Pending ids are replaced by the real draft ids when the revisions are saved.
+function applyChange(cover, quote, change, index) {
+  const policy = cover.insurance;
+  const gone = new Set(quote.items.filter(i => i.replacesId).map(i => i.replacesId));
+  const goneP = new Set(change.removePeople);
+  const covers = (policy.covers || []).filter(c => !gone.has(c.id));
+  const people = (policy.people || []).filter(p => !goneP.has(p.id));
+  quote.items.forEach((it, k) => {
+    const id = 'pending:' + index + ':' + k;
+    let personId = null;
+    if (it.person) {
+      personId = id + ':person';
+      people.push({
+        id: personId,
+        name: [it.person.firstName, it.person.lastName].filter(Boolean).join(' '),
+        type: it.person.type,
+      });
+    }
+    covers.push({
+      id,
+      code: it.code,
+      netPence: it.premiumPence,
+      sumInsured: it.sumInsured || null,
+      option: null,
+      personId,
+      effectiveFrom: change.effectiveDate,
+      effectiveTo: policy.endDate,
+    });
+  });
+  return { ...cover, insurance: { ...policy, covers, people } };
+}
+
+// A basket of changes: one revision per start date, in date order, each priced against the cover as it will be after the earlier ones.
+// A revision that is referred is not applied to the cover the next one sees.
+function quoteBasket({ cover, changes, today }) {
+  const revisions = [];
+  let current = cover;
+  mergeSameDate(changes).forEach((change, index) => {
+    const quote = quoteChange({ cover: current, change, today });
+    revisions.push({ change, quote, cover: current, index });
+    if (quote.outcome === 'PASS') current = applyChange(current, quote, change, index);
+  });
+  return revisions;
+}
+
 // A reference for this quote, so a payment can be checked against exactly what was quoted. The same cover and the same change on the
 // same day give the same reference; a change to the policy, the change or the rules gives a different one.
 function quoteId({ cover, change, quote }) {
@@ -396,6 +487,11 @@ function quoteId({ cover, change, quote }) {
 }
 
 module.exports = {
+  MAX_REVISIONS,
+  mergeSameDate,
+  applyChange,
+  quoteBasket,
+  annualPence,
   dayBefore,
   RULES_VERSION,
   MAX_PEOPLE,

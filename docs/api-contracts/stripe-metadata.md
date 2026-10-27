@@ -161,6 +161,27 @@ Every session has: `email`, `name`, `currency`, `status`, `source`, `type`, `con
 | `centre_id` | always | The Training_Centres record the venue is for. |
 | `accreditation_id` | always | The Training_Centre_Accred record being paid. |
 
+### `insurance_change`
+
+| Key | Present | Meaning |
+| --- | --- | --- |
+| `quote_reference` | always | A reference for this quote (`BGP-` and a time code). Not unique across retries. |
+| `membership_deal_id` | always | The member's current membership Deal. |
+| `insurance_policy_id` | always | The Insurance_Policy created before payment. Empty when insurance is not requested. |
+| `change_type` | always | `new`, `renewal` or `upgrade` for a purchase; `mta` for a change to a current membership. |
+| `mta_scope` | always | `membership` for a change to the membership only (a branch or items), `policy` for an insurance change. |
+| `revision_count` | always | Insurance changes: how many revisions (start dates) this payment is for, 1 to 3. |
+| `revision_ids` | always | Insurance changes: the Policy_Revisions ids paid for, comma separated, in start date order. Creator applies each once. |
+| `effective_dates` | always | Insurance changes: the start date of each revision (yyyy-mm-dd), comma separated, in the same order as `revision_ids`. |
+| `quote_ids` | always | Insurance changes: the quote reference of each revision (After_Quote_ID), comma separated, in the same order. |
+| `insurance_amount` | always | Premiums plus IPT for the year, whatever the payment plan. |
+| `insurance_net_amount` | always | Premiums before IPT, for the year. |
+| `insurance_ipt_amount` | always | Insurance Premium Tax for the year. |
+| `mta_fee_amount` | always | Insurance changes: the adjustment fees in this payment, gross (GBP 5.00 for each revision, including VAT). `0.00` if none. |
+| `named_employee_membership` | always | JSON `{"count":1,"amount":"55.00","amount_net":"52.17"}`: the membership fee each named employee pays, charged once per employee. It carries VAT and sits outside `insurance_amount` and IPT. |
+| `total_amount` | always | What is charged now, gross. The first payment on a monthly plan: the ongoing monthly payment plus the joining fee and any add-ons in full. |
+| `total_amount_net` | always | `total_amount` without VAT. Insurance premiums are VAT exempt, and IPT is not VAT. |
+
 ### `membership_change`
 
 | Key | Present | Meaning |
@@ -169,7 +190,7 @@ Every session has: `email`, `name`, `currency`, `status`, `source`, `type`, `con
 | `membership_deal_id` | always | The member's current membership Deal. |
 | `membership_profile_id` | always | The member profile of the customer's current membership. Empty for a new member. |
 | `change_type` | always | `new`, `renewal` or `upgrade` for a purchase; `mta` for a change to a current membership. |
-| `mta_scope` | always | `membership` for a change to the membership only (a branch or items). Insurance changes will add `policy` and `both`. |
+| `mta_scope` | always | `membership` for a change to the membership only (a branch or items), `policy` for an insurance change. |
 | `effective_date` | always | The day the change starts (yyyy-mm-dd): today, for a membership change. The pro-rata runs from this day to the end of the term. |
 | `membership_start` | always | The start of the membership term (yyyy-mm-dd). |
 | `membership_expiry` | always | The end of the membership term (yyyy-mm-dd). |

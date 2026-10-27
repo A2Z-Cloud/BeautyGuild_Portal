@@ -55,7 +55,7 @@ test("every purchase type sends exactly the keys in the contract, and stays unde
 });
 test('every contract key is exercised by at least one scenario, so none is dead', async () => {
   const sessions = await build();
-  for (const type of Object.keys(contract.SESSION_TYPES)) {
+  for (const type of Object.keys(contract.SESSION_TYPES).filter(t => !contract.TESTED_ELSEWHERE.has(t))) {
     const seen = new Set(sessions.filter(s => s.type === type).flatMap(s => s.keys));
     const { required, optional } = contract.keysFor(type);
     assert.deepEqual(
