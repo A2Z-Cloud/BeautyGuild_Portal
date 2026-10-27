@@ -17,6 +17,7 @@ const TITLES = {
   accreditation: 'Accreditation payment',
   additional_venue: 'Additional venue payment',
   membership_addon: 'Membership add-ons',
+  membership_change: 'Change your membership',
 };
 
 // One page for every payable service. The server decides what is charged; this page only asks for a
@@ -29,8 +30,24 @@ export default function CheckoutPage() {
     [state, setState] = useState({ loading: true, quote: null, error: '', busy: false });
   // An accreditation is paid yearly or monthly and renews by itself either way.
   const [billing, setBilling] = useState('annual');
-  const isAddon = service === 'membership_addon',
+  // A membership change is a basket: extra branches (pro-rated to the end of the term) and flat items. Items alone use the add-ons service.
+  const isChange = service === 'membership_change',
+    isAddon = service === 'membership_addon' || isChange,
     isAccreditation = service === 'accreditation';
+  const [branches, setBranches] = useState([]),
+    [options, setOptions] = useState(null);
+  const branchCsv = branches.join(',');
+  useEffect(() => {
+    if (!isChange || !INTEGRATIONS.stripeCheckout) return undefined;
+    let alive = true;
+    portalApi
+      .getMembershipChangeOptions(recordId)
+      .then(o => alive && setOptions(o))
+      .catch(e => alive && setState(s => ({ ...s, loading: false, error: e.message })));
+    return () => {
+      alive = false;
+    };
+  }, [isChange, recordId]);
   const picked = Object.entries(addons)
     .filter(([, n]) => n > 0)
     .map(([k, n]) => k + ':' + n)
@@ -38,7 +55,7 @@ export default function CheckoutPage() {
   useEffect(() => {
     let alive = true;
     if (!INTEGRATIONS.stripeCheckout || !TITLES[service]) return undefined;
-    if (isAddon && !picked) {
+    if (isAddon && !picked && !branchCsv) {
       setState({ loading: false, quote: null, error: '', busy: false });
       return undefined;
     }
@@ -49,6 +66,7 @@ export default function CheckoutPage() {
         recordId,
         ...(centreId ? { centreId } : {}),
         ...(isAddon ? { addons: picked } : {}),
+        ...(isChange ? { branches: branchCsv } : {}),
         ...(isAccreditation ? { billing } : {}),
       })
       .then(quote => alive && setState({ loading: false, quote, error: '', busy: false }))
@@ -56,7 +74,7 @@ export default function CheckoutPage() {
     return () => {
       alive = false;
     };
-  }, [service, recordId, centreId, picked, isAddon, isAccreditation, billing]);
+  }, [service, recordId, centreId, picked, branchCsv, isAddon, isChange, isAccreditation, billing]);
   async function pay() {
     if (state.busy) return;
     setState(s => ({ ...s, busy: true, error: '' }));
@@ -66,6 +84,7 @@ export default function CheckoutPage() {
         recordId,
         ...(centreId ? { centreId } : {}),
         ...(isAddon ? { addons } : {}),
+        ...(isChange ? { branches: branchCsv } : {}),
         ...(isAccreditation ? { billing } : {}),
       });
       if (r.alreadyPaid) {
@@ -94,6 +113,28 @@ export default function CheckoutPage() {
         <Notice title="Not available yet">Online payment is not available yet.</Notice>
       ) : (
         <section className="surface padded">
+          {isChange && (
+            <div className="addon-picker">
+              <h2>Add a branch</h2>
+              <p className="muted">
+                An extra branch is charged for the days left in your membership. It costs its full yearly price from
+                your next renewal.
+              </p>
+              {(options?.branches || []).map(b => (
+                <label key={b.key} className="addon-row">
+                  <span>{b.label + (b.held ? ' (you have this)' : '')}</span>
+                  <input
+                    type="checkbox"
+                    disabled={b.held}
+                    checked={branches.includes(b.key)}
+                    onChange={e =>
+                      setBranches(list => (e.target.checked ? [...list, b.key] : list.filter(k => k !== b.key)))
+                    }
+                  />
+                </label>
+              ))}
+            </div>
+          )}
           {isAddon && (
             <div className="addon-picker">
               <h2>Choose your add-ons</h2>
