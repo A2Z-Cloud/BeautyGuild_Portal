@@ -91,7 +91,7 @@ test('a used or expired voucher never exposes its code', async () => {
     }
   });
 });
-test('a voided, bespoke or other contact\'s voucher in the result is dropped', async () => {
+test("a voided, bespoke or other contact's voucher in the result is dropped", async () => {
   const rows = [
     row({ id: '6', Active: false }),
     row({ id: '7', Voucher_Type: 'Bespoke Generic' }),

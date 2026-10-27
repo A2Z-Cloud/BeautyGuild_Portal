@@ -54,7 +54,15 @@ function mapVoucher(row, nowMs) {
 
 function registerVoucherRoutes(
   app,
-  { enabled, getCurrentUser, getCrmHeaders, crmApiDomain, fetchImpl = fetch, module = 'Discount_Voucher', now = Date.now },
+  {
+    enabled,
+    getCurrentUser,
+    getCrmHeaders,
+    crmApiDomain,
+    fetchImpl = fetch,
+    module = 'Discount_Voucher',
+    now = Date.now,
+  },
 ) {
   const router = express.Router();
   const { call } = createCrmClient({ getCrmHeaders, crmApiDomain, fetchImpl });
