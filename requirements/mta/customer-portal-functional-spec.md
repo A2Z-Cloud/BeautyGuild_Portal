@@ -1,7 +1,8 @@
 # Beauty Guild | Customer Portal MTA Functional Specification
 
 **Status:** Proposed for Guild, Finance and insurer review. Not approved for implementation or production.
-**Version:** 0.4 | 26 October 2026
+**Version:** 0.5 | 27 October 2026
+**Change from 0.4:** three decisions taken on 27 October. MTA-D25: a like-for-like swap carries the membership fee over (a full swap). MTA-D24: build one checkout for a basket with several effective dates, each revision with its own GBP 5; the Guild will test and confirm. MTA-D22: proceed with charging the joining fee and flat items in month 1 for monthly payers, which removes the 12-month schedule. Sections 7A, 10A, 13A, 13B and 18 and the acceptance scenarios are updated; the build scope adds the month-1 change as a work package.
 **Change from 0.3:** records the Guild's replies of 26 October 2026 (email thread and the "MTA Portal Changes to Review" sheet, from Helen Delaney). Settled: the pro-rata rule (remaining days divided by days on the policy, 365 or 366, both end days counted), the GBP 30 minimum removed, one GBP 5 fee per set of regenerated documents, the swap rule, contents before other property cover (new business too), the joining fee gap rule, start dates, saved requests, Salon/Non-Salon quotes online, and monthly payers. New sections 7A (swaps), 10A (revisions and the fee) and 13B (monthly payers). The earlier statement that the sample letters used a 364-day basis is corrected: that was the old system. Decision changes are listed in section 18.
 **Change from 0.2:** brought up to date with Portal V2 main (8c85ca1). Price list v2 (agreed with the Guild on 21 October) closes MTA-D12, D13 and D15 and mostly closes D14; section 7 now uses the v2 figures. New section 13A covers renewing subscriptions (yearly and monthly), which every membership, insurance, branch, employee fee and accreditation purchase now is; MTA-D17 is re-worded and MTA-D20 and D21 are added. Section 15A is re-baselined. Prices are found in Stripe by lookup key, not price ID.
 **Change from 0.1 (in 0.2):** adds the Cancellations pack, Policy Documents pack and the sample adjustment letters; records what the samples settle; maps every journey to Portal V2 as built (section 15A); unblocks the Associate upgrade and Salon/Non-Salon replacement rules; adds new pricing conflicts to section 18. Build planning is in [docs/delivery/mta-build-scope.md](../../docs/delivery/mta-build-scope.md).
@@ -186,7 +187,7 @@ Additions, and swaps where the net transaction is payable, are intended for onli
 
 ### 7A. Swapping named people [SOURCE + DESIGN]
 
-[SOURCE] In a swap the new person takes the place of the one removed. The Guild's replies of 26 October say the existing membership fee should carry across, which gives the same money as crediting the old fee and charging the new one on the same day. Employees have no portal login, and the portal records named people on the policy only. [DECISION] MTA-D25: ask the Guild to confirm "the membership fee carries over on a like-for-like swap" in one line, because the Guild's reply on this point answered a different question (employee certificates).
+[SOURCE] In a swap the new person takes the place of the one removed. The Guild's replies of 26 October say the existing membership fee should carry across, which gives the same money as crediting the old fee and charging the new one on the same day. Employees have no portal login, and the portal records named people on the policy only. **Decided 27 October (MTA-D25): a like-for-like swap is a full swap and the membership fee carries over.** The Guild's reply on this point (about employee certificates) did not state it, so it is confirmed in Guild testing.
 
 [DESIGN] Rule to build, per replaced person:
 - **Employee for employee:** no membership fee charged or credited. Pay the GBP 5 fee, and on a Non-Salon policy the premium and IPT difference (none for a like-for-like swap). A Salon swap is GBP 5.
@@ -320,7 +321,7 @@ The summary must show:
 
 [SOURCE, Guild 26 October] The fee follows the documents. Changes that start on the same date and can be processed in one regeneration of the documents are one revision with one GBP 5. Changes with different start dates are separate revisions, each with its own GBP 5, even if the member enters them in one sitting (the Guild's example: Microneedling from 01/11/2026 and an employee from 15/12/2026, entered together, is two revisions and two fees). The charge depends on the effective dates, not on when the member submits.
 
-[DESIGN] Proposed handling (MTA-D24, to confirm):
+**Decided 27 October (MTA-D24): build this way; the Guild will test and confirm.**
 - The member can build one basket with several dated changes. The portal groups them into revisions by effective date and shows each with its own GBP 5 line.
 - One checkout takes all of them. The money is taken now, and cover and pro-rata start on each effective date.
 - Revisions are ordered by date, and each is priced against the cover as it will be after the earlier ones.
@@ -364,12 +365,12 @@ Suggested wording: "This change needs help from our Membership and Insurance tea
 
 [SOURCE: Portal V2 as built, see pricing-payments.md] Everything a member buys now renews automatically, yearly or monthly: the membership, extra branches, insurance premiums, IPT, named employee fees and accreditation are Stripe subscription lines (insurance on its own is a subscription too). The earlier drafts of this spec assumed one-off insurance payments. Facts an MTA has to work with:
 - **Yearly plan.** Each renewing item is an inline yearly line. The renewal charges the same amounts as year one (no re-rating), and renews a year after payment, which can be up to 30 days away from the policy anniversary.
-- **Monthly plan.** Each payment is the yearly price plus the GBP 1.50 monthly admin fee, divided by 12 and rounded up. The joining fee and add-ons are spread over the first 12 payments and a Stripe schedule drops them at payment 13. Lines carry a `phase` (`ongoing` or `year_one`); the subscription carries `plan=monthly`, `phased` and `contact_id`.
+- **Monthly plan (as built, changing under MTA-D22).** Each payment is the yearly price plus the GBP 1.50 monthly admin fee, divided by 12 and rounded up. Today the joining fee and add-ons are spread over the first 12 payments and a Stripe schedule drops them at payment 13. Lines carry a `phase` (`ongoing` or `year_one`); the subscription carries `plan=monthly`, `phased` and `contact_id`. Once MTA-D22 is built (section 13B) the joining fee and add-ons are charged once on the first payment, every subscription line is ongoing, and there is no schedule.
 - **Metadata.** Insurance amounts stay yearly in the CRM even on a monthly plan. Per-item amounts for a monthly plan are monthly shares.
 
 What an MTA must therefore do beyond taking a payment [DESIGN, subject to MTA-D17 and MTA-D20]:
 - **Charge for the rest of this term.** The Guild's rule is that MTA and cancellation prices are pro-rated by the action date and the policy end date (MTA-D17). This is a one-off charge, taken through Checkout.
-- **Change the subscription.** A new branch, person, treatment or cover must also join the subscription, so the renewal amount changes. A yearly plan renews at the new yearly amount. A monthly plan's remaining payments change: the price list says monthly prices are amended going forward, and the new monthly amount follows the plan rule above. A monthly schedule must be updated, not just the subscription, or the extra line would be dropped or repeated at payment 13.
+- **Change the subscription.** A new branch, person, treatment or cover must also join the subscription, so the renewal amount changes. A yearly plan renews at the new yearly amount. A monthly plan's remaining payments change: the price list says monthly prices are amended going forward, and the new monthly amount follows the plan rule above. Until MTA-D22 is built, a monthly plan with year-one lines has a schedule that must be updated with the subscription, or the extra line would be dropped or repeated at payment 13. After it, there is no schedule and a change only alters the monthly amount.
 - **Stop or change it on cancellation.** A cancellation stops the subscription and ends its schedule. A downgrade replaces the Full subscription with an Associate one. An Associate upgrade ends the Associate subscription and starts the Full one (section 8A). Cooling-off cancellations also refund the payments already taken.
 - **Never double-charge or double-apply.** The one-off MTA payment and the subscription change must be tied to one revision, applied once, and safe to retry.
 - **Keep the CRM and Stripe in step.** The renewal amount in Stripe, the policy's cover rows and the shown renewal date must agree, including after a future-dated change.
@@ -387,9 +388,9 @@ The Creator side is being rebuilt as a new payments app (forms Stripe Webhook Lo
 - A flat item (badge, certificate, sticker, bundle) bought part way through the year is paid once, not spread over the monthly payments.
 - The same days rule as section 10 applies.
 
-[DESIGN] To confirm with the Guild (MTA-D20, D22):
+[DESIGN] To confirm with the Guild (MTA-D20):
 - **Future-dated change in a later billing month:** proposal is to take the GBP 5 now (the documents are made now), and the part-month charge and higher payment start at the billing month that contains the effective date.
-- **Items and joining fee at joining (Guild suggestion, A2Z recommends yes):** charge the flat items, and the joining fee, in month 1 so the monthly amount is the same at every renewal. This replaces the rule agreed on 21 October that spreads them over the first 12 payments with a Stripe schedule dropping them at payment 13, and it removes the schedule that a mid-term change would otherwise have to rewrite. It needs Guild and Finance sign-off and changes the first-payment examples in pricing-payments.md (for example the Associate new member GBP 6.92 then GBP 6.09).
+- **Decided 27 October (MTA-D22): charge the joining fee and flat items in month 1.** For a monthly plan, the first payment is the ongoing monthly payment (yearly price plus admin fee, divided by 12, rounded up) plus the joining fee and any add-ons in full, as one-off lines on the first invoice, the way a yearly plan already takes them. Every later payment is the ongoing monthly payment, so the amount is the same at every renewal. This replaces the rule agreed on 21 October that spread them over 12 payments with a schedule dropping them at payment 13. Effects: the `ensureSchedule` step, the payment return call that triggers it and the portal's schedule webhook are no longer needed for plans; per-item amounts in the payment metadata for these items become the full amounts, not monthly shares; the first-payment examples in pricing-payments.md and the Creator handover change (for example the Associate new member GBP 6.92 then GBP 6.09). The Creator payments app is being built now, so its owner must be told before the Subscription and Invoice forms assume a 12-payment shape. Confirm no live monthly subscriptions exist (the portal is in Stripe test mode today) before changing it.
 
 
 ## 14. Documents, email and revision history
@@ -552,7 +553,7 @@ These labels are suggested. Map to actual CRM statuses after verifying layouts, 
 | CP-MTA-27 | Every policy wording in the journey and the adjustment emails opens the supplied document for the cover held. |
 | CP-MTA-28 | Changing login email keeps access to all records; name, trading name and correspondence address stay read-only. |
 | CP-MTA-29 | Yearly payer adds a person or branch: the pro-rated amount is charged once now, and the next renewal is for the new yearly total. Retrying does not charge twice or add the line twice. |
-| CP-MTA-30 | Monthly payer makes a payable change: the remaining monthly payments change from the agreed point, the schedule still drops year-one lines at payment 13, and nothing is repeated or lost. |
+| CP-MTA-30 | Monthly payer makes a payable change: the one-off covers the rest of the billing month plus the GBP 5, the monthly payment rises from the next billing month without the fee, no schedule exists to update, and nothing is repeated or lost. |
 | CP-MTA-31 | A cancellation, downgrade or Associate upgrade processed by staff stops or replaces the Stripe subscription, ends any monthly schedule, and no further renewal is taken. |
 | CP-MTA-32 | An MTA payment is recorded by Creator as an MTA (not a renewal or a new activation), with invoice lines by price list code, whichever of invoice and checkout events arrives first. |
 | CP-MTA-33 | A new price from price list v2 (a person fee, Advanced Electrolysis, the GBP 5 fee) is read from Stripe by lookup key, and changing the Stripe price changes the quote with no deployment. |
@@ -564,10 +565,12 @@ These labels are suggested. Map to actual CRM statuses after verifying layouts, 
 | CP-MTA-39 | A monthly payer pays a one-off for the rest of their billing month including the GBP 5, the monthly amount rises from the next billing month without the fee, and a badge bought mid-year is paid at once. |
 | CP-MTA-40 | A change in the last month of a policy that has already been renewed raises the renewal check (MTA-D23) and is never dated beyond the policy end. |
 | CP-MTA-41 | A Salon/Non-Salon quote is available online; owing money allows payment online, a refund due directs the member to the office with the request saved. |
+| CP-MTA-42 | A monthly new member pays the joining fee and any add-ons in full on the first payment and the same ongoing amount on every later payment, including at renewal, with no schedule created and no change at payment 13. |
+| CP-MTA-43 | A like-for-like swap charges no membership fee and no credit (section 7A) and the removed person's cover ends on the new person's start date. |
 
 ## 18. Decisions blocking a fully build-ready specification
 
-Status as at 26 October 2026 (v0.4), including the Guild's replies of that day. "Evidence" means the sample documents point to an answer that still needs confirming. "Answered" means price list v2 or the Guild's replies settle it.
+Status as at 27 October 2026 (v0.5), including the Guild's replies of 26 October and the decisions of 27 October (D22, D24, D25).
 
 | ID | Required decision | Status | Suggested owner |
 | --- | --- | --- | --- |
@@ -592,10 +595,10 @@ Status as at 26 October 2026 (v0.4), including the Guild's replies of that day. 
 | MTA-D19 | Whether Money, Buildings, Business Interruption and Property Away depend on Contents, in new business and MTAs. | **Closed (26 October).** They need Contents, in both. Portal V2 new business must change (section 15A) | Guild |
 | MTA-D20 | Subscription mechanics for an MTA (section 13A): how a monthly schedule is updated, how the renewal date is kept against the policy anniversary (up to 30 days apart today), what a cancellation or downgrade does to the subscription, and the future-dated month question (section 13B). | **Partly answered.** The monthly rules are in 13B. The rest is open | Guild / Finance / A2Z |
 | MTA-D21 | Creator payments app scope for MTAs: invoices by price list code, credit notes, subscription updates, and which side (portal function or Creator) changes the Stripe subscription. Creator covers payments first; mid-term changes come afterwards. | New | A2Z / Creator owner |
-| MTA-D22 | Charge flat items and the joining fee in month 1 for monthly payers at joining, instead of spreading over 12 payments (the Guild's suggestion, section 13B). A2Z recommends yes: it removes the schedule and keeps the monthly amount the same at renewal. | New. Needs Guild and Finance sign-off; changes the 21 October rule and the first-payment examples | Guild / Finance |
+| MTA-D22 | Charge flat items and the joining fee in month 1 for monthly payers at joining, instead of spreading over 12 payments (section 13B). | **Decided 27 October: proceed.** The Guild suggested it. Changes the 21 October rule and the first-payment examples; the Creator owner to be told now. Finance to confirm the new first-payment amounts in testing | Guild / Finance / A2Z |
 | MTA-D23 | A change in the last month of a policy that has already been renewed (renewals open 30 days before the end): flag it, and decide whether to apply to both terms, refer, or warn. | New (Guild request) | Guild |
-| MTA-D24 | One checkout for a basket with several effective dates, each its own revision and GBP 5 (section 10A). | New. A2Z proposal, to confirm | Guild / A2Z |
-| MTA-D25 | Confirm "the membership fee carries over on a like-for-like swap" (section 7A). The Guild's reply answered a different question (employee certificates). | New. One line needed | Guild |
+| MTA-D24 | One checkout for a basket with several effective dates, each its own revision and GBP 5 (section 10A). | **Decided 27 October: build it.** The Guild will test and confirm | Guild / A2Z |
+| MTA-D25 | The membership fee carries over on a like-for-like swap (section 7A). | **Decided 27 October: a full swap.** The Guild confirms in testing | Guild / A2Z |
 | MTA-D26 | Are membership certificates made for added employees, and do employees get a portal login? Today the portal charges the GBP 55.00 as a fee on the policy holder's payment, creates no employee membership record or certificate, and employees have no login (the Guild asked; confirm it was requested of A2Z and where it sits). | New (Guild question) | Guild / A2Z |
 
 ## 19. Implementation/release sequencing (proposal only)
