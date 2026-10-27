@@ -25,6 +25,7 @@ function registerCheckoutRoutes(
   {
     publicQuotesEnabled = false,
     membershipChangesEnabled = false,
+    insuranceChangesEnabled = false,
     enabled,
     getCurrentUser,
     getCrmHeaders,
@@ -165,6 +166,8 @@ function registerCheckoutRoutes(
     const service = SERVICES[input.service];
     if (!service) throw new HttpError(422, 'INVALID_REQUEST', 'Choose something to pay for.');
     // Creator does not handle this payment type yet, so it stays off until the switch is turned on (PORTAL_MEMBERSHIP_CHANGES_ENABLED).
+    if (input.service === 'insurance_change' && !insuranceChangesEnabled)
+      throw new HttpError(503, 'NOT_AVAILABLE', 'Insurance changes are not available online yet.');
     if (input.service === 'membership_change' && !membershipChangesEnabled)
       throw new HttpError(503, 'NOT_AVAILABLE', 'Membership changes are not available online yet.');
     let contact = null;
@@ -310,7 +313,8 @@ function registerCheckoutRoutes(
           currency: 'GBP',
           totalPence: b.totalPence,
           mode: b.mode,
-          payable: !b.prepared.blocked,
+          payable: !b.prepared.blocked && b.prepared.payable !== false,
+          ...(b.prepared.details ? { details: b.prepared.details } : {}),
           ...(b.prepared.blocked ? { blocked: b.prepared.blocked } : {}),
           // A monthly plan: 12 payments, the first including the one-off items spread over it, then the ongoing amount from payment 13.
           ...(b.plan
@@ -348,6 +352,7 @@ function registerCheckoutRoutes(
     firstName: String(src.firstName || ''),
     lastName: String(src.lastName || ''),
     country: String(src.country || ''),
+    change: src.change && typeof src.change === 'object' && !Array.isArray(src.change) ? src.change : null,
     businessName: String(src.businessName || ''),
     address1: String(src.address1 || ''),
     address2: String(src.address2 || ''),
@@ -582,6 +587,13 @@ function registerCheckoutRoutes(
       if (!limiter(req.portalUser.id))
         throw new HttpError(429, 'RATE_LIMIT', 'Too many requests. Please wait a moment and try again.');
       const input = inputFrom(req.body || {});
+      // An insurance change is quoted only for now: paying needs the revision records and Creator (docs/delivery/mta-r3-plan.md).
+      if (input.service === 'insurance_change')
+        throw new HttpError(
+          503,
+          'PAYMENT_NOT_AVAILABLE',
+          'Paying for an insurance change is not available online yet.',
+        );
       let b = await build(req, input);
       // Rules that stop the purchase outright, or answers still missing, record nothing and make no Contact. Anything else
       // (a payment or a referral for the Insurance team) needs the customer to exist in the CRM first.
