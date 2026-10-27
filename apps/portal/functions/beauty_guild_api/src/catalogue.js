@@ -8,6 +8,7 @@ const { HttpError } = require('./errors');
 const { prorata } = require('./prorata');
 const { loadCover } = require('./cover');
 const insChange = require('./insuranceChange');
+const { saveRevision, markAwaitingPayment } = require('./insuranceRevisions');
 const insurance = require('./insurance');
 
 const ID = /^\d{10,25}$/;
@@ -777,6 +778,14 @@ SERVICES.membership_change = {
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 const addDays = (iso, n) => isoDay(new Date(Date.parse(iso + 'T00:00:00Z') + n * 864e5));
 
+// The day as the member reads it ("7 Oct 2026"), for the names of the lines.
+const dayName = iso => {
+  const [y, m, d] = iso.split('-').map(Number);
+  return (
+    d + ' ' + ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][m - 1] + ' ' + y
+  );
+};
+
 SERVICES.insurance_change = {
   title: 'Insurance changes',
   async prepare({ req, crm, contact, input, risk }) {
@@ -788,20 +797,25 @@ SERVICES.insurance_change = {
       dealId: String(input.recordId || ''),
       isDraft: row => row.Application_Status === 'Draft',
     });
-    const asked = insChange.cleanChange(input.change);
-    const today = isoDay(new Date());
     const policy = cover.insurance;
+    // One change, or a basket of changes with their own start dates (one revision, and one GBP 5, for each date).
+    const asks = Array.isArray(input.changes) && input.changes.length ? input.changes : [input.change];
+    const cleaned = asks.map(insChange.cleanChange);
+    const today = isoDay(new Date());
     // The start date is from today up to 30 days ahead and never after the end of the policy (Guild, 26 October). No back-dating online.
     const latest =
       policy && policy.endDate && addDays(today, 30) > policy.endDate ? policy.endDate : addDays(today, 30);
-    if (!ISO.test(asked.effectiveDate) || asked.effectiveDate < today || asked.effectiveDate > latest)
-      bad('Choose a start date from today up to ' + latest + '.');
-    const quote = insChange.quoteChange({ cover, change: asked, today });
-    const reasons = [...quote.reasons];
+    for (const c of cleaned)
+      if (!ISO.test(c.effectiveDate) || c.effectiveDate < today || c.effectiveDate > latest)
+        bad('Choose a start date from today up to ' + latest + '.');
+    const revisions = insChange.quoteBasket({ cover, changes: cleaned, today });
+    if (revisions.length > insChange.MAX_REVISIONS)
+      bad('Choose up to ' + insChange.MAX_REVISIONS + ' different start dates at a time.');
 
     // A renewal can already exist (renewals open 30 days before the end). A change in the last month then also affects it, so it goes to the
     // office (MTA-D23).
-    if (policy && policy.endDate && asked.effectiveDate > addDays(policy.endDate, -30)) {
+    let renewed = false;
+    if (policy && policy.endDate && revisions.some(r => r.change.effectiveDate > addDays(policy.endDate, -30))) {
       const deals = await crm(
         req,
         'Deals/search?criteria=' +
@@ -809,110 +823,248 @@ SERVICES.insurance_change = {
           '&fields=' +
           esc('Stage,Start_Date'),
       );
-      if (deals.some(d => d.Stage === 'Active' && d.Start_Date && d.Start_Date > policy.endDate))
+      renewed = deals.some(d => d.Stage === 'Active' && d.Start_Date && d.Start_Date > policy.endDate);
+    }
+    const country = (policy && policy.premises && policy.premises[0] && policy.premises[0].country) || 'United Kingdom';
+    const inline = [];
+    const out = [];
+    for (const rev of revisions) {
+      const { change: asked, quote } = rev;
+      const reasons = [...quote.reasons];
+      if (renewed && asked.effectiveDate > addDays(policy.endDate, -30))
         reasons.push({
           code: 'RENEWED',
           message:
             'Your policy has already been renewed, so this change also affects your renewal. Please call the office.',
         });
-    }
-
-    // The underwriting rules on the policy as it will be, and the risk checks on any name being added.
-    const ins = insChange.afterIns({ cover, change: asked });
-    const country = (policy && policy.premises && policy.premises[0] && policy.premises[0].country) || 'United Kingdom';
-    const rules = policy ? insurance.evaluateRules(ins, country, { complete: !input.quote }) : { results: [] };
-    // The answers still missing before a change can be saved as payable (the repeated declarations and confirmations).
-    const incomplete = policy
-      ? insurance
-          .evaluateRules(ins, country, { complete: true })
-          .results.filter(r => r.status === 'INCOMPLETE')
-          .map(r => r.customerMessage)
-      : [];
-    let screening = { results: [], riskMessage: null };
-    if (risk && asked.addPeople.length)
-      screening = await risk.screen({
-        req,
-        ins: { ...ins, insNamedPeople: asked.addPeople },
-        country,
-        contact,
-        input,
-        premises: false,
-      });
-    const merged = insurance.summarise([
-      ...rules.results,
-      ...screening.results,
-      ...reasons.map(r => ({ status: 'REFER', code: r.code, customerMessage: r.message })),
-    ]);
-    const blocked =
-      merged.overall === 'PASS' || (merged.overall === 'INCOMPLETE' && input.quote)
-        ? null
-        : {
-            status: merged.overall,
-            reasons: [...new Set(merged.results.map(r => r.customerMessage))],
-            riskMessage: screening.riskMessage,
-          };
-    const details = {
-      quoteId: policy ? insChange.quoteId({ cover, change: asked, quote }) : null,
-      rulesVersion: quote.rulesVersion,
-      incomplete,
-      outcome: blocked ? blocked.status : 'PASS',
-      effectiveDate: asked.effectiveDate,
-      term: quote.term || null,
-      items: quote.items.map(i => ({
-        label: i.label,
-        premiumPence: i.premiumPence,
-        creditPence: i.creditPence,
-        netPence: i.netPence,
-      })),
-      premiumNetPence: quote.premiumNetPence,
-      iptPence: quote.iptPence,
-      needsDeclarations:
-        asked.addPeople.length > 0 ||
-        asked.treatments.length > 0 ||
-        Boolean(asked.teaching) ||
-        Boolean(asked.equipmentTier) ||
-        Boolean(asked.elTier),
-    };
-    const inline = [];
-    if (!blocked) {
-      for (const it of quote.items)
-        if (it.netPence > 0)
+      // The underwriting rules on the policy as it will be, and the risk checks on any name being added.
+      const ins = insChange.afterIns({ cover: rev.cover, change: asked });
+      const rules = policy ? insurance.evaluateRules(ins, country, { complete: !input.quote }) : { results: [] };
+      // The answers still missing before a change can be saved as payable (the repeated declarations and confirmations).
+      const incomplete = policy
+        ? insurance
+            .evaluateRules(ins, country, { complete: true })
+            .results.filter(r => r.status === 'INCOMPLETE')
+            .map(r => r.customerMessage)
+        : [];
+      let screening = { results: [], riskMessage: null };
+      if (risk && asked.addPeople.length)
+        screening = await risk.screen({
+          req,
+          ins: { ...ins, insNamedPeople: asked.addPeople },
+          country,
+          contact,
+          input,
+          premises: false,
+        });
+      const merged = insurance.summarise([
+        ...rules.results,
+        ...screening.results,
+        ...reasons.map(r => ({ status: 'REFER', code: r.code, customerMessage: r.message })),
+      ]);
+      const blocked =
+        merged.overall === 'PASS' || (merged.overall === 'INCOMPLETE' && input.quote)
+          ? null
+          : {
+              status: merged.overall,
+              reasons: [...new Set(merged.results.map(r => r.customerMessage))],
+              riskMessage: screening.riskMessage,
+            };
+      const details = {
+        quoteId: policy ? insChange.quoteId({ cover: rev.cover, change: asked, quote }) : null,
+        rulesVersion: quote.rulesVersion,
+        incomplete,
+        outcome: blocked ? blocked.status : 'PASS',
+        effectiveDate: asked.effectiveDate,
+        term: quote.term || null,
+        items: quote.items.map(i => ({
+          label: i.label,
+          premiumPence: i.premiumPence,
+          creditPence: i.creditPence,
+          netPence: i.netPence,
+        })),
+        premiumNetPence: quote.premiumNetPence,
+        iptPence: quote.iptPence,
+        needsDeclarations: !insChange.isEmpty(asked),
+      };
+      const when = ' from ' + dayName(asked.effectiveDate);
+      if (!blocked) {
+        for (const it of quote.items)
+          if (it.netPence > 0)
+            inline.push({
+              name: 'Insurance - ' + it.label + ' (' + it.days + ' of ' + it.totalDays + ' days)',
+              unitPence: it.netPence,
+              quantity: 1,
+              sku: it.sku,
+              rev: rev.index,
+            });
+        if (quote.iptPence)
           inline.push({
-            name: 'Insurance - ' + it.label + ' (' + it.days + ' of ' + it.totalDays + ' days)',
-            unitPence: it.netPence,
+            name: 'Insurance Premium Tax (' + Math.round(insurance.IPT_RATE * 100) + '%)' + when,
+            unitPence: quote.iptPence,
             quantity: 1,
-            sku: it.sku,
+            sku: insurance.IPT_SKU,
+            rev: rev.index,
           });
-      if (quote.iptPence)
-        inline.push({
-          name: 'Insurance Premium Tax (' + Math.round(insurance.IPT_RATE * 100) + '%)',
-          unitPence: quote.iptPence,
-          quantity: 1,
-          sku: insurance.IPT_SKU,
-        });
-      if (quote.employeesCharged)
-        inline.push({
-          name: ITEMS.employee_fee_non_salon.name + ' (pro-rata)',
-          priceItem: 'employee_fee_non_salon',
-          quantity: quote.employeesCharged,
-          prorata: quote.term,
-          sku: ITEMS.employee_fee_non_salon.code,
-        });
-      if (quote.feeApplies)
-        inline.push({ name: ITEMS.mta_fee.name, priceItem: 'mta_fee', quantity: 1, sku: ITEMS.mta_fee.code });
+        if (quote.employeesCharged)
+          inline.push({
+            name: ITEMS.employee_fee_non_salon.name + ' (pro-rata)' + when,
+            priceItem: 'employee_fee_non_salon',
+            quantity: quote.employeesCharged,
+            prorata: quote.term,
+            sku: ITEMS.employee_fee_non_salon.code,
+            rev: rev.index,
+          });
+        if (quote.feeApplies)
+          inline.push({
+            name: ITEMS.mta_fee.name + when,
+            priceItem: 'mta_fee',
+            quantity: 1,
+            sku: ITEMS.mta_fee.code,
+            rev: rev.index,
+          });
+      }
+      out.push({ rev, blocked, details, reasons, ins });
+    }
+    // Any revision that cannot be paid for online stops the whole basket: the member takes it out, or the office handles it.
+    const worst = out.find(o => o.blocked);
+    const blocked = worst
+      ? {
+          status: out.some(o => o.blocked && o.blocked.status === 'STOP')
+            ? 'STOP'
+            : out.some(o => o.blocked && o.blocked.status === 'REFER')
+              ? 'REFER'
+              : 'INCOMPLETE',
+          reasons: [...new Set(out.flatMap(o => (o.blocked ? o.blocked.reasons : [])))],
+          riskMessage: worst.blocked.riskMessage,
+        }
+      : null;
+    const all = out.map(o => o.details);
+    const details =
+      all.length === 1
+        ? all[0]
+        : {
+            ...all[0],
+            quoteId: null,
+            outcome: blocked ? blocked.status : 'PASS',
+            revisionCount: all.length,
+            premiumNetPence: all.reduce((t, d) => t + d.premiumNetPence, 0),
+            iptPence: all.reduce((t, d) => t + d.iptPence, 0),
+            incomplete: [...new Set(all.flatMap(d => d.incomplete))],
+          };
+    const revisionData = out.map(o => ({
+      index: o.rev.index,
+      cover: o.rev.cover,
+      asked: o.rev.change,
+      quote: o.rev.quote,
+      details: o.details,
+      outcome: o.details.outcome,
+      reasons: o.blocked ? o.blocked.reasons : [],
+    }));
+    // A basket already waiting for payment (every revision Awaiting Payment on one open session) is resumed, not made again. Read only when
+    // paying.
+    let existingSessionId = null;
+    if (!input.quote && policy && !blocked) {
+      const rows = await crm(
+        req,
+        'Policy_Revisions/search?criteria=' +
+          esc('(Policy:equals:' + policy.id + ')') +
+          '&fields=' +
+          esc('Revision_Status,After_Quote_ID,Stripe_Checkout_Session_ID'),
+      );
+      const found = revisionData.map(r =>
+        rows.find(
+          x =>
+            x.After_Quote_ID === r.details.quoteId &&
+            x.Revision_Status === 'Awaiting Payment' &&
+            x.Stripe_Checkout_Session_ID,
+        ),
+      );
+      const sessions = new Set(found.map(f => f && f.Stripe_Checkout_Session_ID));
+      if (found.every(Boolean) && sessions.size === 1) existingSessionId = [...sessions][0];
     }
     return {
       lines: [],
-      inline,
+      inline: blocked ? [] : inline,
       blocked,
       details,
-      // This slice only quotes: paying for an insurance change is switched off until the revision records and Creator are ready.
+      revisionDetails: all,
+      // Set by the checkout from the writes and payment switches.
       payable: false,
-      // What the revision writer saves (insuranceRevisions.js); the route supplies the priced lines.
-      revision: { cover, asked, quote, details, outcome: details.outcome, reasons: blocked ? blocked.reasons : [] },
-      fingerprint: JSON.stringify([asked, details.quoteId]),
-      metadata: () => {
-        throw new HttpError(503, 'NOT_AVAILABLE', 'Paying for an insurance change is not available online yet.');
+      existingSessionId,
+      createFailure: 'We could not save your change. Please try again.',
+      revisions: revisionData,
+      fingerprint: JSON.stringify([out.map(o => o.rev.change), out.map(o => o.details.quoteId)]),
+      // Before the session: one revision for each start date, in order, each with its draft rows (or the one already saved for the same quote).
+      beforePay: async (create, extra) => {
+        const ids = new Map();
+        const saved = [];
+        for (const r of revisionData)
+          saved.push(
+            await saveRevision({
+              ...r,
+              ids,
+              read: path => crm(req, path),
+              create,
+              update: extra.update,
+              contactId: contact.id,
+              dealId: String(input.recordId),
+              lines: extra.lines,
+              namePrefix: extra.namePrefix,
+            }),
+          );
+        return { revisions: saved };
+      },
+      // After the session: each revision is Awaiting Payment with the session id.
+      afterSession: (sessionId, ids, update) => markAwaitingPayment({ update, saved: ids.revisions, sessionId }),
+      metadata: ({ total, inline: charged, insuranceIds }) => {
+        const saved = (insuranceIds && insuranceIds.revisions) || [];
+        const sum = pred => (charged || []).filter(pred).reduce((t, l) => t + l.totalPence, 0);
+        const premium = sum(
+          l =>
+            l.sku !== ITEMS.mta_fee.code && l.sku !== ITEMS.employee_fee_non_salon.code && l.sku !== insurance.IPT_SKU,
+        );
+        const ipt = sum(l => l.sku === insurance.IPT_SKU);
+        const fee = sum(l => l.sku === ITEMS.mta_fee.code);
+        const feeNet = (charged || [])
+          .filter(l => l.sku === ITEMS.mta_fee.code)
+          .reduce((t, l) => t + Number(netPounds('mta_fee', l.totalPence, l.quantity)) * 100, 0);
+        const employees = (charged || []).filter(l => l.sku === ITEMS.employee_fee_non_salon.code);
+        const employeeNet = employees.reduce((t, l) => {
+          const term = (revisionData.find(r => r.index === l.rev) || {}).details?.term;
+          return (
+            t +
+            Number(netPounds('employee_fee_non_salon', l.totalPence, l.quantity, term ? term.days / term.total : 1)) *
+              100
+          );
+        }, 0);
+        const employeeGross = employees.reduce((t, l) => t + l.totalPence, 0);
+        return {
+          type: 'insurance_change',
+          quote_reference: 'BGP-' + Date.now().toString(36).toUpperCase(),
+          contact_id: contact.id,
+          membership_deal_id: String(input.recordId),
+          insurance_policy_id: policy ? policy.id : '',
+          change_type: 'mta',
+          mta_scope: 'policy',
+          revision_count: String(saved.length),
+          revision_ids: saved.map(r => r.id).join(','),
+          effective_dates: revisionData.map(r => r.asked.effectiveDate).join(','),
+          quote_ids: revisionData.map(r => r.details.quoteId).join(','),
+          insurance_amount: pounds(premium + ipt),
+          insurance_net_amount: pounds(premium),
+          insurance_ipt_amount: pounds(ipt),
+          mta_fee_amount: pounds(fee),
+          named_employee_membership: employees.length
+            ? JSON.stringify({
+                count: employees.reduce((t, l) => t + l.quantity, 0),
+                amount: pounds(employeeGross),
+                amount_net: pounds(Math.round(employeeNet)),
+              })
+            : '',
+          total_amount: total,
+          total_amount_net: pounds(premium + ipt + Math.round(feeNet) + Math.round(employeeNet)),
+        };
       },
     };
   },

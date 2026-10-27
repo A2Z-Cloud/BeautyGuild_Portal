@@ -67,6 +67,15 @@ function fixture(over = {}) {
     url = decodeURIComponent(String(url));
     if (init.method === 'POST' || init.method === 'PUT') w.writes.push(url);
     if (init.method === 'PUT') w.puts.push({ url, body: JSON.parse(init.body).data[0] });
+    if (init.method === 'PUT' && t.failPut) return json({ data: [{ status: 'error' }] }, 500);
+    if (t.openSession && url.includes('/checkout/sessions/' + t.openSession) && (!init.method || init.method === 'GET'))
+      return json({
+        id: t.openSession,
+        status: 'open',
+        payment_status: 'unpaid',
+        url: 'https://checkout.stripe.com/c/pay/' + t.openSession,
+        metadata: {},
+      });
     if (init.method === 'POST' && t.failExtension && url.includes('/crm/v3/Insurance_Extension'))
       return json({ data: [{ status: 'error' }] }, 400);
     if (url.includes('lookup_keys[]=FEE-MTA'))
@@ -539,4 +548,240 @@ test('a revision name is always set, unique when there is no quote id, and never
   assert.match(a, /^MTA REQ-[0-9A-F]{10}$/);
   assert.notEqual(a, b);
   assert.equal(revisionName('X'.repeat(200), 'QC-ABC').length, 120);
+});
+
+// ---- R3-3: paying for a basket of changes in one checkout ----
+const PAY = { ...WRITES, PORTAL_INSURANCE_CHANGES_PAYMENT: 'true' };
+const contract = require('../src/metadataContract');
+const ASKS = changes => ({
+  service: 'insurance_change',
+  recordId: DEAL,
+  changes: changes.map(c => ({ effectiveDate: iso(0), ...ANSWERS, ...c })),
+});
+const meta = w =>
+  Object.fromEntries(
+    [...w.stripePosts.at(-1).params.entries()]
+      .filter(([k]) => k.startsWith('metadata['))
+      .map(([k, v]) => [k.slice(9, -1), v]),
+  );
+const sessionLines = w => {
+  const p = w.stripePosts.at(-1).params;
+  return [...new Set([...p.keys()].map(k => k.match(/^line_items\[(\d+)\]/)?.[1]).filter(Boolean))].map(i => ({
+    name: p.get('line_items[' + i + '][price_data][product_data][name]'),
+    unit: Number(p.get('line_items[' + i + '][price_data][unit_amount]')),
+    sku: p.get('line_items[' + i + '][price_data][product_data][metadata][sku]'),
+  }));
+};
+
+test('paying is off until the payment switch is on as well as the writes switch', async () => {
+  const w = fixture();
+  await withApp(
+    w,
+    async ({ pay, quote }) => {
+      assert.equal((await quote(ASK({ addPeople: [SUB], ...ANSWERS }))).body.quote.payable, false);
+      const r = await pay(ASK({ addPeople: [SUB], ...ANSWERS }));
+      assert.equal(r.status, 503);
+      assert.equal(r.body.code, 'PAYMENT_NOT_AVAILABLE');
+      assert.equal(w.crmPosts.length, 0);
+      assert.equal(w.stripePosts.length, 0);
+    },
+    WRITES,
+  );
+  const on = fixture();
+  await withApp(
+    on,
+    async ({ quote }) => assert.equal((await quote(ASK({ addPeople: [SUB], ...ANSWERS }))).body.quote.payable, true),
+    PAY,
+  );
+});
+test('one change: the revision is saved, one Stripe session is made, and the revision is Awaiting Payment with the session id', async () => {
+  const w = fixture();
+  await withApp(
+    w,
+    async ({ pay }) => {
+      const r = await pay(ASK({ addPeople: [SUB], ...ANSWERS }));
+      assert.equal(r.status, 201, JSON.stringify(r.body));
+      assert.match(r.body.checkoutUrl, /^https:\/\/checkout\.stripe\.com\//);
+      const p = w.stripePosts[0].params;
+      assert.equal(p.get('mode'), 'payment', 'a one-off payment');
+      assert.deepEqual(
+        sessionLines(w).map(l => [l.sku, l.unit]),
+        [
+          ['INS-NAMED-SUB-NS', 1500],
+          ['INS-IPT', 180],
+          ['FEE-MTA', 500],
+        ],
+      );
+      const [rev] = posts(w, 'Policy_Revisions');
+      const m = meta(w);
+      assert.equal(m.type, 'insurance_change');
+      assert.equal(m.revision_count, '1');
+      assert.equal(m.revision_ids, '9' + '1'.padStart(18, '0'));
+      assert.equal(m.quote_ids, rev.After_Quote_ID);
+      assert.equal(m.effective_dates, iso(0));
+      assert.equal(m.insurance_policy_id, 'pol1');
+      assert.deepEqual(
+        [m.insurance_amount, m.insurance_net_amount, m.insurance_ipt_amount, m.mta_fee_amount, m.total_amount],
+        ['16.80', '15.00', '1.80', '5.00', '21.80'],
+      );
+      assert.equal(m.total_amount_net, '20.97', 'premium and IPT, and the fee without its VAT (4.17)');
+      assert.equal(m.named_employee_membership, '');
+      const { required, optional } = contract.keysFor('insurance_change');
+      assert.deepEqual(
+        required.filter(k => !(k in m)),
+        [],
+        'every required key is sent',
+      );
+      assert.deepEqual(
+        Object.keys(m).filter(k => ![...required, ...optional].includes(k) && !contract.SESSION_COMMON.includes(k)),
+        [],
+        'and nothing else',
+      );
+      const mark = w.puts.find(x => /Policy_Revisions\//.test(x.url));
+      assert.deepEqual(mark.body, { Revision_Status: 'Awaiting Payment', Stripe_Checkout_Session_ID: 'cs_test_1' });
+      assert.match(mark.url, new RegExp('Policy_Revisions/' + m.revision_ids + '$'));
+    },
+    PAY,
+  );
+});
+test('a basket of two start dates is two revisions in one checkout: each its own fee, the second priced against the cover after the first', async () => {
+  const w = fixture();
+  await withApp(
+    w,
+    async ({ pay }) => {
+      const r = await pay(
+        ASKS([
+          { effectiveDate: iso(0), treatments: ['spmu'], teaching: 'standard' },
+          { effectiveDate: iso(5), teaching: 'additional' },
+        ]),
+      );
+      assert.equal(r.status, 201, JSON.stringify(r.body));
+      assert.equal(w.stripePosts.length, 1, 'one Stripe session');
+      assert.equal(posts(w, 'Policy_Revisions').length, 2);
+      const lines = sessionLines(w);
+      assert.equal(lines.filter(l => l.sku === 'FEE-MTA').length, 2, 'a GBP 5 fee for each start date');
+      assert.match(lines.find(l => l.sku === 'FEE-MTA').name, /from /);
+      const second = posts(w, 'Insurance_Extension').find(x => x.Cover_Code === 'TEACHING_PLUS');
+      const teaching = w.crmPosts.findIndex(
+        c => c.module === 'Insurance_Extension' && c.record.Cover_Code === 'TEACHING',
+      );
+      assert.equal(
+        second.Supersedes_Extension,
+        '9' + String(teaching + 1).padStart(18, '0'),
+        'it names the draft row the first revision made',
+      );
+      assert.equal(second.Effective_From, iso(5));
+      // 150.00 for 360 of 365 days is 147.95, less the 75.00 standard teaching for the same days (73.97), is 73.98 net
+      const items = JSON.parse(posts(w, 'Policy_Revisions')[1].Request_Details).items;
+      assert.equal(items[0].netPence, 7398);
+      const m = meta(w);
+      assert.equal(m.revision_count, '2');
+      assert.equal(m.revision_ids.split(',').length, 2);
+      assert.equal(m.effective_dates, iso(0) + ',' + iso(5));
+      assert.equal(
+        w.puts.filter(x => x.body.Revision_Status === 'Awaiting Payment').length,
+        2,
+        'both revisions marked',
+      );
+      assert.equal(new Set(w.puts.map(x => x.body.Stripe_Checkout_Session_ID)).size, 1, 'with the same session');
+    },
+    PAY,
+  );
+});
+test('changes that start on the same date are one revision and one fee, and more than three dates are refused', async () => {
+  const w = fixture();
+  await withApp(
+    w,
+    async ({ pay }) => {
+      const r = await pay(ASKS([{ treatments: ['spmu'] }, { addPeople: [SUB] }]));
+      assert.equal(r.status, 201, JSON.stringify(r.body));
+      assert.equal(posts(w, 'Policy_Revisions').length, 1);
+      assert.equal(sessionLines(w).filter(l => l.sku === 'FEE-MTA').length, 1);
+      const four = ASKS([0, 1, 2, 3].map(n => ({ effectiveDate: iso(n), treatments: ['spmu'] })));
+      assert.equal((await pay(four)).status, 422);
+    },
+    PAY,
+  );
+});
+test('a basket already waiting for payment on an open session is resumed, a different change in flight blocks, and nothing is made twice', async () => {
+  const first = fixture();
+  await withApp(
+    first,
+    async ({ pay }) => assert.equal((await pay(ASK({ addPeople: [SUB], ...ANSWERS }))).status, 201),
+    PAY,
+  );
+  const qid = posts(first, 'Policy_Revisions')[0].After_Quote_ID;
+  const again = fixture({
+    openSession: 'cs_test_open',
+    revisions: [
+      {
+        id: 'rev9',
+        Policy: { id: 'pol1' },
+        Revision_Status: 'Awaiting Payment',
+        After_Quote_ID: qid,
+        Stripe_Checkout_Session_ID: 'cs_test_open',
+      },
+    ],
+  });
+  await withApp(
+    again,
+    async ({ pay }) => {
+      const r = await pay(ASK({ addPeople: [SUB], ...ANSWERS }));
+      assert.equal(r.status, 200, JSON.stringify(r.body));
+      assert.deepEqual([r.body.reused, r.body.checkoutUrl], [true, 'https://checkout.stripe.com/c/pay/cs_test_open']);
+      assert.equal(again.crmPosts.length, 0);
+      assert.equal(again.stripePosts.length, 0);
+    },
+    PAY,
+  );
+  const busy = fixture({
+    revisions: [
+      {
+        id: 'rev8',
+        Policy: { id: 'pol1' },
+        Revision_Status: 'Awaiting Payment',
+        After_Quote_ID: 'QC-OTHER',
+        Stripe_Checkout_Session_ID: 'cs_x',
+      },
+    ],
+  });
+  await withApp(
+    busy,
+    async ({ pay }) => {
+      const r = await pay(ASK({ addPeople: [SUB], ...ANSWERS }));
+      assert.equal(r.status, 409);
+      assert.equal(r.body.code, 'REVISION_IN_PROGRESS');
+      assert.equal(busy.stripePosts.length, 0);
+    },
+    PAY,
+  );
+});
+test('a referred change or missing answers are not paid for, and if the revision cannot be marked the session is expired', async () => {
+  const w = fixture();
+  await withApp(
+    w,
+    async ({ pay }) => {
+      const removal = await pay(ASK({ removePeople: ['p1'], ...ANSWERS }));
+      assert.equal(removal.status, 422);
+      assert.equal(removal.body.code, 'REFERRAL_REQUIRED');
+      const missing = await pay(ASK({ addPeople: [SUB] }));
+      assert.equal(missing.status, 422);
+      assert.equal(w.stripePosts.length, 0);
+      assert.equal(w.crmPosts.length, 0, 'nothing is saved for a payment that cannot happen');
+    },
+    PAY,
+  );
+  const failing = fixture({ failPut: true });
+  await withApp(
+    failing,
+    async ({ pay }) => {
+      const r = await pay(ASK({ addPeople: [SUB], ...ANSWERS }));
+      assert.equal(r.status, 502);
+      assert.ok(
+        failing.writes.some(u => /checkout\/sessions\/cs_test_1\/expire$/.test(u)),
+        'the open session was expired',
+      );
+    },
+    PAY,
+  );
 });

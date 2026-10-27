@@ -1,15 +1,18 @@
 'use strict';
-// Saves a quoted insurance change as a revision in the CRM (MTA R3-2): a Policy_Revisions header and, for a change the member can pay
+// Saves a quoted insurance change as a revision in the CRM (MTA R3-2, R3-3): a Policy_Revisions header and, for a change the member can pay
 // for, draft Insurance_Extension and Insured_People rows linked to it. Behind PORTAL_INSURANCE_CHANGES_WRITES.
 //
 // The rules that keep live cover safe (Guild CRM review, 27 October 2026):
 //   - Live cover rows are never edited here. Everything written is new, Status Draft, linked to the revision and dated from the effective
-//     date to the policy end. An increase or swap names the row it replaces (Supersedes_Extension) and the person it removes is in the
-//     request details; Creator ends the old rows when the revision is applied after payment.
-//   - The portal only ever sets Revision_Status to Quoted (a payable change) or Under Review (referred, for the office). Awaiting
-//     Payment comes with the checkout (R3-3). Approved, Scheduled and Applied are Creator's.
-//   - The same quote is saved once: a repeat returns the open revision. A change already in flight (Awaiting Payment, Approved,
-//     Scheduled) blocks a new one.
+//     date to the policy end. An increase or swap names the row it replaces (Supersedes_Extension) and `Request_Details.endings` lists the
+//     live rows and people the change ends, each with the last day they are covered (the day before the new cover starts). Creator ends
+//     them when the revision is applied after verified payment.
+//   - The portal only ever sets Revision_Status to Quoted (a payable change), Under Review (referred, for the office) and Awaiting
+//     Payment (a checkout exists, with its session id). Approved, Scheduled and Applied are Creator's.
+//   - The same quote is saved once: a repeat returns the open revision. A different change already in flight (Awaiting Payment,
+//     Approved, Scheduled) blocks a new one.
+// A basket of several start dates is one revision for each date, saved in order. A change that replaces a row made by an earlier change in
+// the same basket names the real draft row just created for it (the `ids` map shared across the basket).
 const crypto = require('node:crypto');
 const { HttpError } = require('./errors');
 const { COVER_TYPE_BY_CODE, IPT_RATE } = require('./insurance');
@@ -22,6 +25,16 @@ const FEE_SKU = 'FEE-MTA';
 const EMPLOYEE_FEE_SKU = 'MEM-FULLNS-Y';
 // The zero-rated part of the GBP 55.00 membership fee (the rest is standard rated and includes VAT).
 const EMPLOYEE_FEE_ZERO_RATED_PENCE = 3800;
+const pending = id => String(id).startsWith('pending:');
+
+// A readable, unique name. The quote id is the reference once a policy is known; a request that has none (nothing to quote yet) gets a
+// random request reference so the name is still unique. Policy_Revisions.Name is mandatory text of up to 120 characters, not auto-numbered.
+const revisionName = (prefix, quoteId) =>
+  (
+    String(prefix || 'MTA').trim() +
+    ' ' +
+    (quoteId || 'REQ-' + crypto.randomBytes(5).toString('hex').toUpperCase())
+  ).slice(0, 120);
 
 // The VAT in what is charged on top of the premium: the adjustment fee (all standard rated, VAT included) and the pro-rated employee
 // membership fee (standard rated apart from its zero-rated part). Premiums carry IPT, not VAT.
@@ -37,17 +50,11 @@ function vatPence(lines, term) {
   return vat;
 }
 
-// A readable, unique name. The quote id is the reference once a policy is known; a request that has none (nothing to quote yet) gets a
-// random request reference so the name is still unique.
-const revisionName = (prefix, quoteId) =>
-  (
-    String(prefix || 'MTA').trim() +
-    ' ' +
-    (quoteId || 'REQ-' + crypto.randomBytes(5).toString('hex').toUpperCase())
-  ).slice(0, 120);
-
-// read(path) -> rows, create(module, record) -> id, update(module, id, fields), all against the CRM.
+// read(path) -> rows, create(module, record) -> id, update(module, id, fields), all against the CRM. `lines` are the priced checkout lines;
+// those tagged with this revision's index are its own.
 async function saveRevision({
+  index = 0,
+  ids = new Map(),
   read,
   create,
   update,
@@ -69,23 +76,36 @@ async function saveRevision({
     'Policy_Revisions/search?criteria=' +
       uri('(Policy:equals:' + policy.id + ')') +
       '&fields=' +
-      uri('Revision_Status,After_Quote_ID,Policy'),
+      uri('Revision_Status,After_Quote_ID,Policy,Stripe_Checkout_Session_ID'),
   );
   const mine = existing.filter(r => String(r.Policy?.id || policy.id) === String(policy.id));
-  if (mine.some(r => IN_FLIGHT.has(String(r.Revision_Status || ''))))
+  // The same quote already waiting for payment is the same request, not another change in flight.
+  if (mine.some(r => IN_FLIGHT.has(String(r.Revision_Status || '')) && r.After_Quote_ID !== details.quoteId))
     throw new HttpError(
       409,
       'REVISION_IN_PROGRESS',
       'You already have a change in progress on this policy. Please wait for it to finish or call the office.',
     );
-  const same = mine.find(r => r.After_Quote_ID === details.quoteId && REUSABLE.has(String(r.Revision_Status || '')));
+  const same = mine.find(
+    r =>
+      r.After_Quote_ID === details.quoteId &&
+      (REUSABLE.has(String(r.Revision_Status || '')) || r.Revision_Status === 'Awaiting Payment'),
+  );
   if (same)
-    return { id: String(same.id), status: same.Revision_Status, quoteId: details.quoteId, reused: true, rows: 0 };
+    return {
+      id: String(same.id),
+      status: same.Revision_Status,
+      quoteId: details.quoteId,
+      sessionId: same.Stripe_Checkout_Session_ID || null,
+      reused: true,
+      rows: 0,
+    };
 
+  const ownLines = (lines || []).filter(l => l.rev === undefined || l.rev === index);
   const payable = outcome === 'PASS';
   const status = payable ? 'Quoted' : 'Under Review';
   // What the member asked for, with the repeated declarations and confirmations, so the office can pick it up without asking again,
-  // and so Creator knows which rows the change removes.
+  // and so Creator knows which rows the change ends.
   const payload = {
     v: details.rulesVersion || null,
     source: 'portal_v2',
@@ -103,11 +123,11 @@ async function saveRevision({
       netPence: i.netPence,
     })),
     removePeople: asked.removePeople,
-    // Rows Creator ends when it applies the revision, each covered up to and including effectiveTo (the day before the new cover starts).
-    endings: quote.endings || [],
+    // Live rows Creator ends when it applies the revision, each covered up to and including effectiveTo (the day before the new cover
+    // starts). A row made by an earlier change in the same basket is named by Supersedes_Extension on the draft row instead.
+    endings: (quote.endings || []).filter(e => !pending(e.id)),
   };
   const header = {
-    // Policy_Revisions.Name is mandatory text of up to 120 characters and not auto-numbered.
     Name: revisionName(namePrefix, details.quoteId),
     Policy: policy.id,
     Membership: dealId,
@@ -121,8 +141,8 @@ async function saveRevision({
       ? {
           Premium_Delta_Net: money2(quote.premiumNetPence),
           IPT_Delta: money2(quote.iptPence),
-          VAT_Delta: money2(vatPence(lines, quote.term)),
-          MTA_Fee: money2((lines || []).filter(l => l.sku === FEE_SKU).reduce((t, l) => t + l.totalPence, 0)),
+          VAT_Delta: money2(vatPence(ownLines, quote.term)),
+          MTA_Fee: money2(ownLines.filter(l => l.sku === FEE_SKU).reduce((t, l) => t + l.totalPence, 0)),
           Fee_Waived: false,
         }
       : {}),
@@ -131,7 +151,7 @@ async function saveRevision({
   let rows = 0;
   if (payable) {
     try {
-      for (const item of quote.items) {
+      for (const [k, item] of quote.items.entries()) {
         let personId;
         if (item.person) {
           personId = await create('Insured_People', {
@@ -145,10 +165,11 @@ async function saveRevision({
             Effective_From: asked.effectiveDate,
             Effective_To: policy.endDate || undefined,
           });
+          ids.set('pending:' + index + ':' + k + ':person', personId);
           rows += 1;
         }
         const ipt = Math.round(item.premiumPence * IPT_RATE);
-        await create('Insurance_Extension', {
+        const rowId = await create('Insurance_Extension', {
           Policy: policy.id,
           Policy_Revision: revisionId,
           Cover_Type:
@@ -165,9 +186,10 @@ async function saveRevision({
           Status: 'Draft',
           Effective_From: asked.effectiveDate,
           Effective_To: policy.endDate || undefined,
-          Supersedes_Extension: item.replacesId || undefined,
+          Supersedes_Extension: item.replacesId ? ids.get(item.replacesId) || item.replacesId : undefined,
           Insured_Person: personId,
         });
+        ids.set('pending:' + index + ':' + k, rowId);
         rows += 1;
       }
     } catch (e) {
@@ -176,7 +198,17 @@ async function saveRevision({
       throw e;
     }
   }
-  return { id: String(revisionId), status, quoteId: details.quoteId, reused: false, rows };
+  return { id: String(revisionId), status, quoteId: details.quoteId, sessionId: null, reused: false, rows };
 }
 
-module.exports = { saveRevision, revisionName, vatPence, IN_FLIGHT, REUSABLE };
+// Once a checkout session exists, each revision is Awaiting Payment with its session id. A failure here is thrown: the session must not be
+// left open for a revision the CRM does not know is waiting (the caller expires it).
+async function markAwaitingPayment({ update, saved, sessionId }) {
+  for (const r of saved)
+    await update('Policy_Revisions', r.id, {
+      Revision_Status: 'Awaiting Payment',
+      Stripe_Checkout_Session_ID: sessionId,
+    });
+}
+
+module.exports = { saveRevision, markAwaitingPayment, revisionName, vatPence, IN_FLIGHT, REUSABLE };

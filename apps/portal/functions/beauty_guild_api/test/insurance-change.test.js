@@ -1,7 +1,16 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { cleanChange, quoteChange, afterIns, quoteId, dayBefore } = require('../src/insuranceChange');
+const {
+  cleanChange,
+  quoteChange,
+  afterIns,
+  quoteId,
+  dayBefore,
+  annualPence,
+  mergeSameDate,
+  quoteBasket,
+} = require('../src/insuranceChange');
 const { prorate } = require('../src/prorata');
 const { evaluateRules } = require('../src/insurance');
 
@@ -197,4 +206,57 @@ test('a quote reference is the same for the same cover and change, and different
     id,
     'the policy changed',
   );
+});
+
+test('a row added part way through the term is annualised before it is credited, a row from the start of the policy is not', () => {
+  const policy = { startDate: '2026-09-30', endDate: '2027-09-29' };
+  assert.equal(annualPence({ netPence: 6500, effectiveFrom: null }, policy), 6500);
+  assert.equal(annualPence({ netPence: 6500, effectiveFrom: '2026-09-30' }, policy), 6500);
+  // 100.00 a year charged for 184 of 365 days is 50.41; scaled back it is 100.00 (to the penny)
+  const half = { netPence: Math.round((10000 * 184) / 365), effectiveFrom: '2027-03-30', effectiveTo: '2027-09-29' };
+  assert.equal(annualPence(half, policy), 10000);
+});
+test('changes with the same start date are one revision, and several dates are priced in order against the cover after the earlier ones', () => {
+  const same = mergeSameDate([
+    cleanChange({ effectiveDate: TODAY, treatments: ['spmu'], equipmentTier: 10000 }),
+    cleanChange({
+      effectiveDate: TODAY,
+      treatments: ['dermaplaning'],
+      equipmentTier: 5000,
+      addPeople: [{ type: 'subcontractor', firstName: 'Bo', lastName: 'Ng' }],
+    }),
+  ]);
+  assert.equal(same.length, 1);
+  assert.deepEqual(
+    [same[0].treatments, same[0].equipmentTier, same[0].addPeople.length],
+    [['spmu', 'dermaplaning'], 10000, 1],
+  );
+  const basket = quoteBasket({
+    cover: cover(),
+    today: TODAY,
+    changes: [
+      cleanChange({ effectiveDate: '2026-10-12', teaching: 'additional' }),
+      cleanChange({ effectiveDate: TODAY, treatments: ['spmu'], teaching: 'standard' }),
+    ],
+  });
+  assert.deepEqual(
+    basket.map(r => r.change.effectiveDate),
+    [TODAY, '2026-10-12'],
+    'in date order',
+  );
+  assert.equal(basket[0].quote.outcome, 'PASS');
+  // the second needs a treatment and has standard teaching to upgrade: both come from the first revision
+  assert.equal(basket[1].quote.outcome, 'PASS', JSON.stringify(basket[1].quote.reasons));
+  assert.match(basket[1].quote.items[0].replacesId, /^pending:0:/);
+  // a referred first revision is not applied to the cover the second sees
+  const referred = quoteBasket({
+    cover: cover(),
+    today: TODAY,
+    changes: [
+      cleanChange({ effectiveDate: TODAY, removePeople: ['p1'] }),
+      cleanChange({ effectiveDate: '2026-10-12', teaching: 'additional' }),
+    ],
+  });
+  assert.equal(referred[0].quote.outcome, 'REFER');
+  assert.ok(referred[1].quote.reasons.some(r => r.code === 'TEACHING_NEEDS_TREATMENT'));
 });

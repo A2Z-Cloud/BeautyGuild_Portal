@@ -133,6 +133,8 @@ async function loadCover({ call, req, contactId, dealId, isDraft }) {
         'Sum_Insured',
         'Cover_Option',
         'Insured_Person',
+        'Effective_From',
+        'Effective_To',
       ]),
       by('Insured_People', ['Policy', 'Name', 'First_Name', 'Last_Name', 'Person_Type', 'Status']),
       by('Insured_Premises', [
@@ -179,6 +181,9 @@ async function loadCover({ call, req, contactId, dealId, isDraft }) {
             : Number(c.Sum_Insured),
         option: text(c.Cover_Option) || null,
         personId: lookupId(c.Insured_Person) || null,
+        // A row added by a change runs from its start date, not from the start of the policy.
+        effectiveFrom: c.Effective_From || null,
+        effectiveTo: c.Effective_To || null,
       })),
       people: people.filter(current).map(p => ({
         id: String(p.id),

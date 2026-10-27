@@ -54,8 +54,16 @@ const DESCRIPTIONS = {
   postcode: 'Correspondence postcode. Left out when blank.',
   total_amount: 'What is charged now, gross. The first payment on a monthly plan.',
   total_amount_net: '`total_amount` without VAT. Insurance premiums are VAT exempt, and IPT is not VAT.',
-  mta_scope:
-    '`membership` for a change to the membership only (a branch or items). Insurance changes will add `policy` and `both`.',
+  revision_count: 'Insurance changes: how many revisions (start dates) this payment is for, 1 to 3.',
+  revision_ids:
+    'Insurance changes: the Policy_Revisions ids paid for, comma separated, in start date order. Creator applies each once.',
+  effective_dates:
+    'Insurance changes: the start date of each revision (yyyy-mm-dd), comma separated, in the same order as `revision_ids`.',
+  quote_ids:
+    'Insurance changes: the quote reference of each revision (After_Quote_ID), comma separated, in the same order.',
+  mta_fee_amount:
+    'Insurance changes: the adjustment fees in this payment, gross (GBP 5.00 for each revision, including VAT). `0.00` if none.',
+  mta_scope: '`membership` for a change to the membership only (a branch or items), `policy` for an insurance change.',
   effective_date:
     'The day the change starts (yyyy-mm-dd): today, for a membership change. The pro-rata runs from this day to the end of the term.',
   prorata_days: 'Days left in the term from `effective_date`, both end days counted.',
@@ -193,6 +201,28 @@ const SESSION_TYPES = {
     optional: ['monthly_plan'],
   },
   additional_venue: { required: ['centre_id', 'accreditation_id'], optional: [] },
+  // Exercised by test/insurance-change-quote.test.js (it needs a fake policy and cover, which the shared scenarios do not have).
+  insurance_change: {
+    required: [
+      'quote_reference',
+      'membership_deal_id',
+      'insurance_policy_id',
+      'change_type',
+      'mta_scope',
+      'revision_count',
+      'revision_ids',
+      'effective_dates',
+      'quote_ids',
+      'insurance_amount',
+      'insurance_net_amount',
+      'insurance_ipt_amount',
+      'mta_fee_amount',
+      'named_employee_membership',
+      'total_amount',
+      'total_amount_net',
+    ],
+    optional: [],
+  },
   membership_change: {
     required: [
       'quote_reference',
@@ -312,7 +342,11 @@ function fitToStripeLimit(meta) {
   return out;
 }
 
+// Types whose keys are checked by their own test, not by the shared scenarios.
+const TESTED_ELSEWHERE = new Set(['insurance_change']);
+
 module.exports = {
+  TESTED_ELSEWHERE,
   MAX_FILLED_KEYS,
   filledCount,
   fitToStripeLimit,

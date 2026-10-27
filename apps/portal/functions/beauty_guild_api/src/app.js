@@ -150,6 +150,7 @@ function createApp({
     membershipChangesEnabled: config.membershipChangesEnabled,
     insuranceChangesEnabled: config.insuranceChangesEnabled,
     insuranceChangesWritesEnabled: config.insuranceChangesWritesEnabled,
+    insuranceChangesPaymentEnabled: config.insuranceChangesPaymentEnabled,
     revisionNamePrefix: config.revisionNamePrefix,
     enabled: config.billingEnabled,
     getCurrentUser,
