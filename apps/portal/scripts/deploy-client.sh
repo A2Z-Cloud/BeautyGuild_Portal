@@ -26,6 +26,9 @@ export VITE_PORTAL_CRM_DRAFTS=true
 export VITE_PORTAL_CRM_ACCREDITATION=true
 export VITE_PORTAL_PUBLIC_QUOTES=true
 export VITE_PUBLIC_SCHOOL_VERIFICATION=true
+# Insurance changes (MTA R3-4) on the Development client. The server switches (PORTAL_INSURANCE_CHANGES_*) are separate, and a change
+# only saves or takes payment when those are on too. Membership changes (VITE_PORTAL_MEMBERSHIP_CHANGES) stay off here for now.
+export VITE_PORTAL_INSURANCE_CHANGES=true
 
 # vite build (not npm run build) so the flags above are exactly what is compiled; public/client-package.json is copied into dist/ by the build.
 npx vite build
