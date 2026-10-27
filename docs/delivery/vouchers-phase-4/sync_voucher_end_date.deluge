@@ -1,0 +1,72 @@
+map Vouchers.sync_voucher_end_date(string contact_id, string membership_profile_id, string term_start, string membership_end_date, string source_ref)
+{
+	// NOTE: A voucher ends with the end of the membership: Valid_To always equals the membership's end date (end of
+	// that day, UK time) and Expires_With_Membership stays true. Call this WHENEVER the membership's end date changes,
+	// for example when the cancellations workstream brings the end date forward to the date the membership is due to
+	// cancel. It sets Valid_To on the voucher for THAT term to the new end date. Safe to call twice (it only writes
+	// when the date differs), and it never deactivates, voids or deletes anything: once the date passes, the voucher
+	// is simply expired.
+	//   term_start           first day of the term whose end date changed, yyyy-MM-dd. It picks the voucher by its
+	//                        Valid_From, so an early renewal's NEW voucher (a later term) is never touched
+	//   membership_end_date  the membership's current end date, yyyy-MM-dd
+	//   source_ref           what moved the date (a cancellation id, a Stripe id), for the log
+	// An unspent voucher only: a used one (Current_Usage_Count >= Maximum_Total_Uses) is left alone.
+	// Not called on a normal renewal: a renewal gets its own new voucher, it does not stretch the old one.
+	crm_connection = "zoho_crm_connection";
+	module_name = "Discount_Voucher";
+	try 
+	{
+		if(contact_id == null || contact_id.trim() == "" || term_start == null || term_start.trim() == "" || membership_end_date == null || membership_end_date.trim() == "")
+		{
+			return {"status":"error","message":"Contact id, term start and membership end date are all required."};
+		}
+		new_valid_to = membership_end_date.trim() + "T23:59:59" + thisapp.Vouchers.uk_offset(membership_end_date,"end");
+		criteria = "((Assigned_Contact:equals:" + contact_id.trim() + ")and(Voucher_Type:equals:Personal £25 GTI)and(Active:equals:true))";
+		vouchers = zoho.crm.searchRecords(module_name,criteria,1,50,crm_connection);
+		changed = 0;
+		unchanged = 0;
+		failed = 0;
+		for each  voucher in vouchers
+		{
+			held_from = ifnull(voucher.get("Valid_From"),"").toString();
+			held_to = ifnull(voucher.get("Valid_To"),"").toString();
+			in_scope = (held_from.length() >= 10 && held_from.subString(0,10) == term_start.trim());
+			if(in_scope == true && membership_profile_id != null && membership_profile_id.trim() != "")
+			{
+				linked = voucher.get("Assigned_Member_Profile");
+				if(linked != null && linked.get("id") != membership_profile_id.trim())
+				{
+					in_scope = false;
+				}
+			}
+			used = ifnull(voucher.get("Current_Usage_Count"),0).toLong() >= ifnull(voucher.get("Maximum_Total_Uses"),1).toLong();
+			if(in_scope == true && used == false)
+			{
+				if(held_to.length() >= 10 && held_to.subString(0,10) == membership_end_date.trim())
+				{
+					unchanged = unchanged + 1;
+				}
+				else
+				{
+					change = Map();
+					change.put("Valid_To",new_valid_to);
+					updated = zoho.crm.updateRecord(module_name,voucher.get("id"),change,Map(),crm_connection);
+					if(updated.get("id") != null)
+					{
+						changed = changed + 1;
+					}
+					else
+					{
+						failed = failed + 1;
+					}
+				}
+			}
+		}
+		info "Synced Valid_To to " + membership_end_date + " for Contact " + contact_id + ": " + changed + " changed, " + unchanged + " already right, " + failed + " failed (" + source_ref + ")";
+		return {"status":if(failed == 0,"ok","partial"),"changed":changed,"unchanged":unchanged,"failed":failed};
+	}
+	catch (e)
+	{
+		return {"status":"error","message":"Exception: " + e};
+	}
+}

@@ -1,0 +1,32 @@
+string Vouchers.uk_offset(string date_text, string time_of_day)
+{
+	// NOTE: UK clock offset ("+00:00" or "+01:00") for a yyyy-MM-dd date, so voucher dates are written in UK time.
+	// time_of_day is "start" (00:00:00) or "end" (23:59:59): the two differ only on the Sundays the clocks change.
+	// British Summer Time runs from the last Sunday of March to the last Sunday of October. The change dates are a
+	// short table for 2026 to 2035; outside it the function returns "+00:00" and logs, so extend the table before 2036.
+	bst_starts = {"2026-03-29","2027-03-28","2028-03-26","2029-03-25","2030-03-31","2031-03-30","2032-03-28","2033-03-27","2034-03-26","2035-03-25"};
+	bst_ends = {"2026-10-25","2027-10-31","2028-10-29","2029-10-28","2030-10-27","2031-10-26","2032-10-31","2033-10-30","2034-10-29","2035-10-28"};
+	d = date_text.trim().replaceAll("-","").toLong();
+	year_index = date_text.trim().subString(0,4).toLong() - 2026;
+	if(year_index < 0 || year_index > 9)
+	{
+		info "uk_offset: " + date_text + " is outside the table (2026 to 2035), using +00:00.";
+		return "+00:00";
+	}
+	s = bst_starts.get(year_index).replaceAll("-","").toLong();
+	e = bst_ends.get(year_index).replaceAll("-","").toLong();
+	in_bst = false;
+	if(time_of_day == "end")
+	{
+		in_bst = (d >= s && d < e);
+	}
+	else
+	{
+		in_bst = (d > s && d <= e);
+	}
+	if(in_bst == true)
+	{
+		return "+01:00";
+	}
+	return "+00:00";
+}

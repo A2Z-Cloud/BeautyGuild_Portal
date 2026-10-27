@@ -35,6 +35,8 @@ function loadConfig(env = process.env) {
     loqateCountries: String(env.LOQATE_COUNTRY_FILTER || '').trim(),
     loqateMaxResults: boundedInt(env.LOQATE_MAX_RESULTS, 40, 1, 100),
     recordsEnabled: env.PORTAL_RECORDS_ENABLED === 'true',
+    vouchersEnabled: env.PORTAL_VOUCHERS_ENABLED === 'true',
+    voucherModule: safeName(env.PORTAL_VOUCHER_MODULE, 'Discount_Voucher', 'PORTAL_VOUCHER_MODULE'),
     diagnosticsEnabled: env.PORTAL_DIAGNOSTICS_ENABLED === 'true',
     diagnosticsEmails: String(env.PORTAL_DIAGNOSTICS_EMAILS || '')
       .split(',')
