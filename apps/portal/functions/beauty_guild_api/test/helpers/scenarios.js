@@ -93,6 +93,11 @@ const SCENARIOS = [
   ['accreditation: monthly', { deals: [FULL] }, { service: 'accreditation', recordId: IDS.acc, billing: 'monthly' }],
   ['additional venue', {}, { service: 'additional_venue', recordId: IDS.acc, centreId: IDS.centre }],
   ['membership add-ons', { deals: [FULL] }, { service: 'membership_addon', recordId: IDS.deal, addons: { badge: 2 } }],
+  [
+    'membership change: an extra branch and a badge',
+    { deals: [FULL] },
+    { service: 'membership_change', recordId: IDS.deal, branches: 'nails', addons: { badge: 1 } },
+  ],
 ];
 
 module.exports = { SCENARIOS };

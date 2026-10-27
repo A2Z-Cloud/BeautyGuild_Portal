@@ -18,7 +18,7 @@ Every session has: `email`, `name`, `currency`, `status`, `source`, `type`, `con
 | `membership_profile_id` | always | The member profile of the customer's current membership. Empty for a new member. |
 | `existing_membership` | always | JSON of the current membership (type, start_date, expiry_date, deal_id) when renewing or upgrading. Empty for a new member. |
 | `previous_membership_id` | always | The Deal being renewed or upgraded. Empty for a new membership. |
-| `change_type` | always | `new`, `renewal` or `upgrade`. |
+| `change_type` | always | `new`, `renewal` or `upgrade` for a purchase; `mta` for a change to a current membership. |
 | `membership_level` | always | `associate`, `full_non_salon` or `full_salon`. |
 | `primary_branch` | always | The main branch: `beauty`, `holistic`, `nails` or `hair`. |
 | `secondary_branches` | always | Comma separated additional branches. Empty if none. |
@@ -69,7 +69,7 @@ Every session has: `email`, `name`, `currency`, `status`, `source`, `type`, `con
 | `membership_profile_id` | always | The member profile of the customer's current membership. Empty for a new member. |
 | `existing_membership` | always | JSON of the current membership (type, start_date, expiry_date, deal_id) when renewing or upgrading. Empty for a new member. |
 | `previous_membership_id` | always | The Deal being renewed or upgraded. Empty for a new membership. |
-| `change_type` | always | `new`, `renewal` or `upgrade`. |
+| `change_type` | always | `new`, `renewal` or `upgrade` for a purchase; `mta` for a change to a current membership. |
 | `membership_level` | always | `associate`, `full_non_salon` or `full_salon`. |
 | `primary_branch` | always | The main branch: `beauty`, `holistic`, `nails` or `hair`. |
 | `secondary_branches` | always | Comma separated additional branches. Empty if none. |
@@ -161,6 +161,36 @@ Every session has: `email`, `name`, `currency`, `status`, `source`, `type`, `con
 | `centre_id` | always | The Training_Centres record the venue is for. |
 | `accreditation_id` | always | The Training_Centre_Accred record being paid. |
 
+### `membership_change`
+
+| Key | Present | Meaning |
+| --- | --- | --- |
+| `quote_reference` | always | A reference for this quote (`BGP-` and a time code). Not unique across retries. |
+| `membership_deal_id` | always | The member's current membership Deal. |
+| `membership_profile_id` | always | The member profile of the customer's current membership. Empty for a new member. |
+| `change_type` | always | `new`, `renewal` or `upgrade` for a purchase; `mta` for a change to a current membership. |
+| `mta_scope` | always | `membership` for a change to the membership only (a branch or items). Insurance changes will add `policy` and `both`. |
+| `effective_date` | always | The day the change starts (yyyy-mm-dd): today, for a membership change. The pro-rata runs from this day to the end of the term. |
+| `membership_start` | always | The start of the membership term (yyyy-mm-dd). |
+| `membership_expiry` | always | The end of the membership term (yyyy-mm-dd). |
+| `prorata_days` | always | Days left in the term from `effective_date`, both end days counted. |
+| `prorata_total_days` | always | Days the whole term runs (365, or 366 if it spans 29 February). The pro-rata is `prorata_days` over this. |
+| `secondary_branches` | always | Comma separated additional branches. Empty if none. |
+| `branch_addon_amount` | always | Gross amount for extra branches on this payment (`0.00` if none). |
+| `branch_addon_amount_net` | always | Extra branches without VAT. |
+| `branch_yearly_amount` | always | The full yearly gross price of the extra branches bought, which they cost from the next renewal (what Creator should add to the renewal). `0.00` if none. |
+| `addons` | always | JSON of the add-on quantities, for example `{"badge":1}`. `{}` if none. |
+| `bundle_amount` | always | Gross amount for the membership bundle (`0.00` if none). |
+| `bundle_amount_net` | always | Bundle without VAT. |
+| `certificate_amount` | always | Gross amount for extra certificates (`0.00` if none). |
+| `certificate_amount_net` | always | Certificates without VAT. |
+| `badge_amount` | always | Gross amount for badges (`0.00` if none). |
+| `badge_amount_net` | always | Badges without VAT. |
+| `sticker_amount` | always | Gross amount for window stickers (`0.00` if none). |
+| `sticker_amount_net` | always | Window stickers without VAT. |
+| `total_amount` | always | What is charged now, gross. The first payment on a monthly plan: the ongoing monthly payment plus the joining fee and any add-ons in full. |
+| `total_amount_net` | always | `total_amount` without VAT. Insurance premiums are VAT exempt, and IPT is not VAT. |
+
 ### `membership_addon`
 
 | Key | Present | Meaning |
@@ -182,7 +212,7 @@ Every session has: `email`, `name`, `currency`, `status`, `source`, `type`, `con
 | `currency` | always | Always GBP. |
 | `status` | always | Always `pending` when the session is made; the real outcome arrives with the payment events. |
 | `source` | always | Always `portal_v2`, so Creator can tell portal sessions from any other source. |
-| `type` | always | The purchase type: membership, membership_insurance, insurance, accreditation, additional_venue or membership_addon. |
+| `type` | always | The purchase type: membership, membership_insurance, insurance, accreditation, membership_change, additional_venue or membership_addon. |
 | `contact_id` | always | The CRM Contact id. Always set when paying: the portal makes the Contact first if there is none. |
 
 ## Subscription metadata (`customer.subscription.*`, and on invoices as `parent.subscription_details.metadata`)

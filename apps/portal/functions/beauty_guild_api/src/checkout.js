@@ -8,12 +8,15 @@ const crypto = require('node:crypto');
 const { HttpError } = require('./errors');
 const { resolveContact, createCrmClient } = require('./records');
 const { createRateLimiter, clientKey } = require('./rateLimit');
-const { ITEMS, SERVICES, pounds, netPounds } = require('./catalogue');
+const { ITEMS, SERVICES, pounds, netPounds, membershipChangeOptions } = require('./catalogue');
+const { prorate } = require('./prorata');
 const plans = require('./plans');
 const { fitToStripeLimit, filledCount, MAX_FILLED_KEYS } = require('./metadataContract');
 
 const STRIPE = 'https://api.stripe.com/v1';
 const ID = /^\d{10,25}$/;
+// Stripe will not take a charge under 30p; below 50p a pro-rated line is not worth taking online.
+const MIN_PRORATA_PENCE = 50;
 const EXPIRED = 'This quote has expired. Please get a new quote.';
 const PRICE_ID = /^price_[A-Za-z0-9]{6,}$/;
 
@@ -21,6 +24,7 @@ function registerCheckoutRoutes(
   app,
   {
     publicQuotesEnabled = false,
+    membershipChangesEnabled = false,
     enabled,
     getCurrentUser,
     getCrmHeaders,
@@ -159,6 +163,9 @@ function registerCheckoutRoutes(
   async function build(req, input, { guest = false, createContact = false } = {}) {
     const service = SERVICES[input.service];
     if (!service) throw new HttpError(422, 'INVALID_REQUEST', 'Choose something to pay for.');
+    // Creator does not handle this payment type yet, so it stays off until the switch is turned on (PORTAL_MEMBERSHIP_CHANGES_ENABLED).
+    if (input.service === 'membership_change' && !membershipChangesEnabled)
+      throw new HttpError(503, 'NOT_AVAILABLE', 'Membership changes are not available online yet.');
     let contact = null;
     // A guest (no account) has no contact and is never risk screened: their price is a guide, and the checks run when they pay.
     if (!guest) {
@@ -196,10 +203,22 @@ function registerCheckoutRoutes(
     // Computed items (insurance premiums) have no catalogue price: they travel as inline price_data. A named employee's membership fee is
     // charged once, inline, at the live membership price (priceItem).
     for (const l of prepared.inline || []) {
-      const unit = l.priceItem ? (await priceFor(l.priceItem)).unit : l.unitPence;
+      const live = l.priceItem ? (await priceFor(l.priceItem)).unit : null;
+      // A pro-rated line (an extra branch part way through the term) is the live yearly price for the days left, to the penny.
+      let unit = l.priceItem ? live : l.unitPence;
+      if (l.prorata) {
+        unit = prorate(live, l.prorata);
+        if (unit < MIN_PRORATA_PENCE)
+          throw new HttpError(
+            422,
+            'TOO_LATE_TO_CHANGE',
+            'Your membership ends too soon to add this online. Please call the office.',
+          );
+      }
       lines.push({
         item: null,
-        fee: l.priceItem || null,
+        fee: l.priceItem && !l.prorata ? l.priceItem : null,
+        fullUnitPence: l.prorata ? live : undefined,
         sku: l.sku || null,
         name: l.name,
         quantity: l.quantity,
@@ -453,6 +472,16 @@ function registerCheckoutRoutes(
       res.json({ quote: { ...view(await build(req, input, { guest: true })), indicative: true } });
     }),
   );
+  // What a member can choose when changing a membership: each branch and whether they already hold it.
+  router.get(
+    '/membership-options',
+    send(async (req, res) => {
+      if (!membershipChangesEnabled)
+        throw new HttpError(503, 'NOT_AVAILABLE', 'Membership changes are not available online yet.');
+      const contact = await resolveContact(req, crm, req.portalUser);
+      res.json({ options: await membershipChangeOptions(req, crm, contact.id, String(req.query.recordId || '')) });
+    }),
+  );
   router.get(
     '/quote',
     send(async (req, res) => {
@@ -579,6 +608,7 @@ function registerCheckoutRoutes(
             amounts,
             total: pounds(b.totalPence),
             lines: catalogue,
+            inline: b.lines.filter(l => !l.item),
             insuranceIds,
             fees: b.fees,
             annualPence: b.annualPence,

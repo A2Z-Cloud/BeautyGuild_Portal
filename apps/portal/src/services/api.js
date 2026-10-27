@@ -64,6 +64,8 @@ export const INTEGRATIONS = Object.freeze({
   pricing: false,
   underwriting: false,
   stripeCheckout: billingOn,
+  // Pro-rated extra branch and flat items on a current membership. Off until Creator handles the membership_change payment.
+  membershipChanges: billingOn && import.meta.env.VITE_PORTAL_MEMBERSHIP_CHANGES === 'true',
   publicQuotes: publicQuotesOn,
   policyIssuance: false,
   workdrive: documentsOn,
@@ -149,6 +151,8 @@ export const portalApi = Object.freeze({
     publicHttp ? (await publicHttp('/public/quote', { method: 'POST', body })).quote : unavailable('Pricing'),
   submit: async () => unavailable('CRM submission'),
   startCheckout: async body => billingReq('/', { method: 'POST', body }),
+  getMembershipChangeOptions: async id =>
+    (await billingReq('/membership-options?recordId=' + encodeURIComponent(id))).options,
   resumePayment: async policyId => billingReq('/resume', { method: 'POST', body: { policyId } }),
   getDocuments: async (kind, id, path = '') =>
     documentHttp

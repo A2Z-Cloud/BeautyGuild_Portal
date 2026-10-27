@@ -13,7 +13,7 @@ const DESCRIPTIONS = {
   currency: 'Always GBP.',
   status: 'Always `pending` when the session is made; the real outcome arrives with the payment events.',
   source: 'Always `portal_v2`, so Creator can tell portal sessions from any other source.',
-  type: 'The purchase type: membership, membership_insurance, insurance, accreditation, additional_venue or membership_addon.',
+  type: 'The purchase type: membership, membership_insurance, insurance, accreditation, membership_change, additional_venue or membership_addon.',
   contact_id: 'The CRM Contact id. Always set when paying: the portal makes the Contact first if there is none.',
   // Membership
   quote_reference: 'A reference for this quote (`BGP-` and a time code). Not unique across retries.',
@@ -22,7 +22,7 @@ const DESCRIPTIONS = {
   existing_membership:
     'JSON of the current membership (type, start_date, expiry_date, deal_id) when renewing or upgrading. Empty for a new member.',
   previous_membership_id: 'The Deal being renewed or upgraded. Empty for a new membership.',
-  change_type: '`new`, `renewal` or `upgrade`.',
+  change_type: '`new`, `renewal` or `upgrade` for a purchase; `mta` for a change to a current membership.',
   membership_level: '`associate`, `full_non_salon` or `full_salon`.',
   primary_branch: 'The main branch: `beauty`, `holistic`, `nails` or `hair`.',
   secondary_branches: 'Comma separated additional branches. Empty if none.',
@@ -57,6 +57,15 @@ const DESCRIPTIONS = {
   total_amount:
     'What is charged now, gross. The first payment on a monthly plan: the ongoing monthly payment plus the joining fee and any add-ons in full.',
   total_amount_net: '`total_amount` without VAT. Insurance premiums are VAT exempt, and IPT is not VAT.',
+  mta_scope:
+    '`membership` for a change to the membership only (a branch or items). Insurance changes will add `policy` and `both`.',
+  effective_date:
+    'The day the change starts (yyyy-mm-dd): today, for a membership change. The pro-rata runs from this day to the end of the term.',
+  prorata_days: 'Days left in the term from `effective_date`, both end days counted.',
+  prorata_total_days:
+    'Days the whole term runs (365, or 366 if it spans 29 February). The pro-rata is `prorata_days` over this.',
+  branch_yearly_amount:
+    'The full yearly gross price of the extra branches bought, which they cost from the next renewal (what Creator should add to the renewal). `0.00` if none.',
   monthly_plan:
     "Monthly plans only, and only while there is room under Stripe's 50 key limit (it is also on the subscription): JSON of `payments`, `first_payment`, `later_payment`, `one_off_total` (the joining fee and add-ons charged in full with the first payment), `year_one_total` (what is paid over the first twelve months), `admin_fee` and `admin_fee_net`.",
   // Insurance
@@ -187,6 +196,36 @@ const SESSION_TYPES = {
     optional: ['monthly_plan'],
   },
   additional_venue: { required: ['centre_id', 'accreditation_id'], optional: [] },
+  membership_change: {
+    required: [
+      'quote_reference',
+      'membership_deal_id',
+      'membership_profile_id',
+      'change_type',
+      'mta_scope',
+      'effective_date',
+      'membership_start',
+      'membership_expiry',
+      'prorata_days',
+      'prorata_total_days',
+      'secondary_branches',
+      'branch_addon_amount',
+      'branch_addon_amount_net',
+      'branch_yearly_amount',
+      'addons',
+      'bundle_amount',
+      'bundle_amount_net',
+      'certificate_amount',
+      'certificate_amount_net',
+      'badge_amount',
+      'badge_amount_net',
+      'sticker_amount',
+      'sticker_amount_net',
+      'total_amount',
+      'total_amount_net',
+    ],
+    optional: [],
+  },
   membership_addon: {
     required: [
       'membership_deal_id',
