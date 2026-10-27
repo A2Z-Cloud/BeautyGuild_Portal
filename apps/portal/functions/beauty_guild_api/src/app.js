@@ -12,6 +12,7 @@ const { registerPublicSchoolVerification } = require('./publicSchoolVerification
 const { registerVoucherRoutes } = require('./vouchers');
 const { registerDraftRoutes } = require('./crmDrafts');
 const { registerSchoolRoutes } = require('./schoolServices');
+const { registerStaffRoutes } = require('./staff');
 const { createRiskChecks } = require('./riskChecks');
 
 const TEXT_MIN = 3;
@@ -59,7 +60,8 @@ function createApp({
       !req.path.startsWith('/stripe/webhook') &&
       !req.path.startsWith('/public/quote') &&
       !req.path.startsWith('/portal/drafts') &&
-      !req.path.startsWith('/portal/management')
+      !req.path.startsWith('/portal/management') &&
+      !req.path.startsWith('/staff')
     )
       return next(new HttpError(405, 'METHOD_NOT_ALLOWED', 'Method not allowed.'));
     return next();
@@ -186,6 +188,17 @@ function createApp({
     fetchImpl,
     listCourses: req => courses.listActiveGti(req),
     sleep: accreditationSleep,
+  });
+  registerStaffRoutes(app, {
+    enabled: config.staffApiEnabled,
+    secrets: config.staffApiSecrets,
+    roles: config.staffApiRoles,
+    windowSeconds: config.staffApiWindowSeconds,
+    getCrmHeaders,
+    crmApiDomain: config.crmApiDomain,
+    fetchImpl,
+    now,
+    log,
   });
   registerDiagnosticsRoutes(app, {
     enabled: config.diagnosticsEnabled,

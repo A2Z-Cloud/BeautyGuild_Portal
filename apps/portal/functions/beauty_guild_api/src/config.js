@@ -26,6 +26,18 @@ function unitFloat(value, fallback) {
   return Number.isFinite(n) && n > 0 && n <= 1 ? n : fallback;
 }
 
+// Staff API signing secrets (staff.js). Needed only when the staff API is on. Two are accepted so a secret can be rotated: set the new
+// one as STAFF_API_SECRET and move the old one to STAFF_API_SECRET_PREVIOUS until the CRM function has been updated.
+function staffSecrets(env) {
+  if (env.PORTAL_STAFF_API_ENABLED !== 'true') return [];
+  const secrets = [env.STAFF_API_SECRET, env.STAFF_API_SECRET_PREVIOUS]
+    .map(v => String(v || '').trim())
+    .filter(Boolean);
+  if (!secrets.length) throw new Error('STAFF_API_SECRET is required when PORTAL_STAFF_API_ENABLED is true');
+  if (secrets.some(v => v.length < 32)) throw new Error('The staff API secrets must be at least 32 characters');
+  return Object.freeze(secrets);
+}
+
 function loadConfig(env = process.env) {
   return Object.freeze({
     crmApiDomain: httpsUrl(env.CRM_API_DOMAIN, 'https://www.zohoapis.eu', 'CRM_API_DOMAIN'),
@@ -37,6 +49,15 @@ function loadConfig(env = process.env) {
     recordsEnabled: env.PORTAL_RECORDS_ENABLED === 'true',
     vouchersEnabled: env.PORTAL_VOUCHERS_ENABLED === 'true',
     voucherModule: safeName(env.PORTAL_VOUCHER_MODULE, 'Discount_Voucher', 'PORTAL_VOUCHER_MODULE'),
+    // Staff API for the CRM Staff Workspace widget: signed requests from a CRM function, checked against the CRM user. Off unless 'true'.
+    // The roles are CRM profile or role names allowed to use it. An empty list allows nobody.
+    staffApiEnabled: env.PORTAL_STAFF_API_ENABLED === 'true',
+    staffApiSecrets: staffSecrets(env),
+    staffApiRoles: String(env.PORTAL_STAFF_API_ROLES || '')
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean),
+    staffApiWindowSeconds: boundedInt(env.PORTAL_STAFF_API_WINDOW_SECONDS, 300, 30, 600),
     diagnosticsEnabled: env.PORTAL_DIAGNOSTICS_ENABLED === 'true',
     diagnosticsEmails: String(env.PORTAL_DIAGNOSTICS_EMAILS || '')
       .split(',')
