@@ -15,6 +15,7 @@ import BuyMembership from './BuyMembership.jsx';
 import BuyInsurance from './BuyInsurance.jsx';
 import ErrorBoundary from './ErrorBoundary.jsx';
 import CheckoutPage from './CheckoutPage.jsx';
+import InsuranceChange from './InsuranceChange.jsx';
 import PublicSchoolVerification from './PublicSchoolVerification.jsx';
 import SavedDrafts from './SavedDrafts.jsx';
 import {
@@ -103,6 +104,7 @@ export default function App() {
           <Route path="/invoices" element={<AccountInvoices />} />
           <Route path="/documents" element={<AccountDocuments />} />
           <Route path="/membership/manage/:id" element={<MembershipManagement />} />
+          <Route path="/membership/manage/:id/changes/new" element={<InsuranceChange />} />
           <Route path="/records/:kind/:id" element={<RecordDetail />} />
           <Route path="/membership/:id" element={<RecordDetail kindOverride="membership" />} />
           <Route path="/insurance/:id" element={<RecordDetail kindOverride="insurance" />} />

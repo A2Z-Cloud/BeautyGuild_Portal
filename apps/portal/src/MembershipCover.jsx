@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Notice } from './UiParts.jsx';
 import { formatDate } from './format.js';
-import { portalApi } from './services/api.js';
+import { Link } from 'react-router-dom';
+import { INTEGRATIONS, portalApi } from './services/api.js';
+import { eligibility } from './insuranceChangeForm.js';
 
 const money = pence => '£' + (pence / 100).toFixed(2);
 const GUILD_PHONE = '01332 224830';
@@ -40,7 +42,7 @@ function Waiting({ state, what }) {
 }
 
 // The member's current membership and insurance, read only. Changes are not offered online yet.
-export function CoverSummary({ state }) {
+export function CoverSummary({ state, id }) {
   const wait = Waiting({ state, what: 'your cover' });
   if (wait) return wait;
   const cover = state.value;
@@ -121,10 +123,19 @@ export function CoverSummary({ state }) {
             : 'We could not find a current insurance policy on this membership.'}
         </p>
       )}
-      {!cover.canChange && (
-        <p className="price-vat">
-          To change your membership or cover, please call the office on {GUILD_PHONE}. Changes online are coming soon.
+      {INTEGRATIONS.insuranceChanges && insurance && eligibility(cover).online ? (
+        <p>
+          <Link className="btn btn-primary" to={'/membership/manage/' + id + '/changes/new'}>
+            Make changes to my insurance
+          </Link>
         </p>
+      ) : (
+        !cover.canChange && (
+          <p className="price-vat">
+            To change your membership or cover, please call the office on {GUILD_PHONE}.
+            {INTEGRATIONS.insuranceChanges ? '' : ' Changes online are coming soon.'}
+          </p>
+        )
       )}
     </>
   );
@@ -143,6 +154,7 @@ export function ChangeHistory({ state }) {
         { label: 'Requested', value: r => formatDate(r.requested) },
         { label: 'Starts', value: r => formatDate(r.effectiveDate) },
         { label: 'Change', value: r => [r.type, r.scope].filter(Boolean).join(': ') || '—' },
+        { label: 'Status', value: r => r.status || '—' },
       ]}
     />
   );
@@ -162,5 +174,5 @@ export function MembershipCoverPanel({ id, view }) {
       active = false;
     };
   }, [id]);
-  return view === 'history' ? <ChangeHistory state={state} /> : <CoverSummary state={state} />;
+  return view === 'history' ? <ChangeHistory state={state} /> : <CoverSummary state={state} id={id} />;
 }

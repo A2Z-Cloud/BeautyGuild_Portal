@@ -7,7 +7,7 @@
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
-    "test": "node --test src/validation.test.js src/insuranceInputs.test.js src/storedState.test.js src/savedDraft.test.js src/priceSummary.test.js src/prefill.test.js src/repoHygiene.test.js src/startDate.test.js src/accreditationInputs.test.js src/sectionKey.test.js src/serviceRecords.test.js src/membershipDetails.test.js src/legal.test.js src/branches.test.js src/accreditationState.test.js src/typography.test.js src/referral.test.js src/services/integration.test.mjs",
+    "test": "node --test src/validation.test.js src/insuranceInputs.test.js src/storedState.test.js src/savedDraft.test.js src/priceSummary.test.js src/prefill.test.js src/repoHygiene.test.js src/startDate.test.js src/accreditationInputs.test.js src/sectionKey.test.js src/serviceRecords.test.js src/membershipDetails.test.js src/legal.test.js src/branches.test.js src/accreditationState.test.js src/typography.test.js src/referral.test.js src/insuranceChangeForm.test.js src/services/integration.test.mjs",
     "check": "npm run format:check && npm run lint && npm run typecheck && npm run test && npm run build",
     "build:auth-css": "node scripts/build-auth-css.mjs",
     "format": "prettier --write \"src/**/*.{js,jsx,mjs,css}\" \"functions/beauty_guild_api/**/*.js\" \"scripts/*.mjs\" auth-css/overrides.css vite.config.js eslint.config.js",
