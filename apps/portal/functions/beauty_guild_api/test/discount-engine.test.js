@@ -7,7 +7,15 @@ const { loadConfig } = require('../src/config');
 const plans = require('../src/plans');
 const { world, IDS } = require('./helpers/world');
 const { applyDiscounts, DiscountError, METADATA_LIMIT } = require('../src/discountEngine');
-const { FIELDS, toVoucher, toCrmWaiverLog, toCrmRedemption, createCrmStore } = require('../src/voucherAdapter');
+const {
+  FIELDS,
+  toVoucher,
+  validAt,
+  memberTypeOf,
+  toCrmWaiverLog,
+  toCrmRedemption,
+  createCrmStore,
+} = require('../src/voucherAdapter');
 const { branchCouponPlan, createBranchCoupon } = require('../src/branchCoupon');
 const { NOT_VALID } = require('../src/discounts');
 
@@ -32,6 +40,9 @@ const basketLines = () => [
 const STAFF = { type: 'staff', id: 'u-77', email: 'sam@guild.example' };
 const CUSTOMER = { type: 'customer', id: 'user-1' };
 const TODAY = '2026-10-27';
+const NOW = Date.parse('2026-10-27T12:00:00+00:00');
+// The engine's clock is fixed for the tests; basket.at moves it.
+const apply = (basket, opts = {}) => applyDiscounts(basket, { now: () => basket.at ?? NOW, ...opts });
 
 // A fake CRM store with the same three methods as the real one.
 function fakeStore({ vouchers = [], redeemed = {}, waived = [] } = {}) {
@@ -55,11 +66,13 @@ const voucher = (over = {}) => ({
   code: 'SPRING',
   kind: 'fixed',
   value: 500,
-  startDate: '2026-10-01',
-  endDate: '2026-12-31',
+  bespoke: true,
+  validFrom: Date.parse('2026-10-01T00:00:00+01:00'),
+  validTo: Date.parse('2026-12-31T23:59:59+00:00'),
   usageLimit: 0,
   used: 0,
-  membersOnly: false,
+  onePerPerson: false,
+  memberTypes: [],
   allowedItems: ['MEM-JOIN', 'MEM-BADGE', 'MEM-CERT', 'MEM-BRANCH', 'MEM-BUNDLE', 'MEM-STICKER'],
   contactId: '',
   active: true,
@@ -69,7 +82,7 @@ const base = (over = {}) => ({
   lines: basketLines(),
   contactId: '555',
   applicationId: 'app-1',
-  member: false,
+  memberType: 'Associate',
   today: TODAY,
   ...over,
 });
@@ -83,7 +96,7 @@ const refused = async (promise, code, reason) => {
 };
 
 test('referral code: the joining fee is left out, one entry, recorded as the customer', async () => {
-  const r = await applyDiscounts(base(), {
+  const r = await apply(base(), {
     referral: { code: 'ACC-0155', school: { id: 'S1', accreditationId: 'A1' } },
     actor: CUSTOMER,
   });
@@ -107,7 +120,7 @@ test('referral code: the joining fee is left out, one entry, recorded as the cus
 
 test('a referral code with no joining fee in the basket discounts nothing and records nothing', async () => {
   const lines = basketLines().filter(l => l.sku !== 'MEM-JOIN');
-  const r = await applyDiscounts(base({ lines }), { referral: { code: 'ACC-0155', school: {} }, actor: CUSTOMER });
+  const r = await apply(base({ lines }), { referral: { code: 'ACC-0155', school: {} }, actor: CUSTOMER });
   assert.equal(r.totalDiscountPence, 0);
   assert.equal(r.metadata, '');
 });
@@ -118,7 +131,7 @@ test('monthly spread: a lowered one-off line is shared over the first 12 payment
     { sku: 'MEM-CERT', reason: 'Goodwill Gesture' },
   ];
   const listPlan = plans.splitMonthly(basketLines(), 150);
-  const r = await applyDiscounts(base(), { waivers, actor: STAFF, store: fakeStore() });
+  const r = await apply(base(), { waivers, actor: STAFF, store: fakeStore() });
   const badge = r.lines.find(l => l.sku === 'MEM-BADGE');
   assert.equal(badge.totalPence, 800 - 250);
   assert.equal(badge.priceId, null, 'a lowered line is inline, not the catalogue price');
@@ -145,7 +158,7 @@ test('monthly spread: a lowered one-off line is shared over the first 12 payment
 });
 
 test('the waiver log and the metadata say who, what and why', async () => {
-  const r = await applyDiscounts(base(), {
+  const r = await apply(base(), {
     waivers: [{ sku: 'MEM-JOIN', reason: 'Other', note: 'Rang us twice' }],
     actor: STAFF,
     store: fakeStore(),
@@ -176,11 +189,11 @@ test('once per person: a second waiver of the joining fee is refused and says wh
   const prior = { date: '2026-03-01', reason: 'Complaint', appliedBy: 'staff:kim', applicationId: 'old-app' };
   const waive = [{ sku: 'MEM-JOIN', reason: 'Goodwill Gesture' }];
   await assert.rejects(
-    applyDiscounts(base(), { waivers: waive, actor: STAFF, store: fakeStore({ waived: [prior] }) }),
+    apply(base(), { waivers: waive, actor: STAFF, store: fakeStore({ waived: [prior] }) }),
     e => e.code === 'WAIVER_ALREADY_USED' && /2026-03-01, Complaint, staff:kim/.test(e.message),
   );
   // A waiver made before the current joining fee began (the person lapsed for over 30 days since) is an earlier fee's.
-  const fresh = await applyDiscounts(base({ joiningFeeSince: '2026-06-01' }), {
+  const fresh = await apply(base({ joiningFeeSince: '2026-06-01' }), {
     waivers: waive,
     actor: STAFF,
     store: fakeStore({ waived: [prior] }),
@@ -188,7 +201,7 @@ test('once per person: a second waiver of the joining fee is refused and says wh
   assert.equal(fresh.totalDiscountPence, 1000);
   // A waiver made after it still counts.
   await refused(
-    applyDiscounts(base({ joiningFeeSince: '2026-02-01' }), {
+    apply(base({ joiningFeeSince: '2026-02-01' }), {
       waivers: waive,
       actor: STAFF,
       store: fakeStore({ waived: [prior] }),
@@ -196,14 +209,14 @@ test('once per person: a second waiver of the joining fee is refused and says wh
     'WAIVER_ALREADY_USED',
   );
   // A retry of the same application does not count against itself.
-  const retry = await applyDiscounts(base({ applicationId: 'old-app' }), {
+  const retry = await apply(base({ applicationId: 'old-app' }), {
     waivers: waive,
     actor: STAFF,
     store: fakeStore({ waived: [prior] }),
   });
   assert.equal(retry.totalDiscountPence, 1000);
   // A waiver of another item is not limited.
-  const other = await applyDiscounts(base(), {
+  const other = await apply(base(), {
     waivers: [{ sku: 'MEM-CERT', reason: 'Promotion' }],
     actor: STAFF,
     store: fakeStore({ waived: [prior] }),
@@ -212,8 +225,7 @@ test('once per person: a second waiver of the joining fee is refused and says wh
 });
 
 test('waiver rules: reason from the list, a note for Other, discountable items only, in the basket, a sensible amount', async () => {
-  const run = (waivers, lines) =>
-    applyDiscounts(base(lines ? { lines } : {}), { waivers, actor: STAFF, store: fakeStore() });
+  const run = (waivers, lines) => apply(base(lines ? { lines } : {}), { waivers, actor: STAFF, store: fakeStore() });
   await refused(run([{ sku: 'MEM-CERT', reason: 'Because' }]), 'INVALID_WAIVER');
   await refused(run([{ sku: 'MEM-CERT', reason: 'Other' }]), 'INVALID_WAIVER');
   await refused(run([{ sku: 'MEM-CERT', reason: 'Other', note: '   ' }]), 'INVALID_WAIVER');
@@ -237,7 +249,7 @@ test('non-discountable items: the membership fee, accreditation, insurance, IPT,
   for (const sku of ['MEM-ASSOC-Y', 'ACC-STD', 'INS-CORE', 'INS-IPT', 'MEM-ADMIN', 'MEM-FULLS-Y']) {
     const lines = [...basketLines(), line(null, sku, sku, 1000, 1, 'ongoing')];
     await refused(
-      applyDiscounts(base({ lines }), {
+      apply(base({ lines }), {
         waivers: [{ sku, reason: 'Goodwill Gesture' }],
         actor: STAFF,
         store: fakeStore(),
@@ -250,7 +262,7 @@ test('non-discountable items: the membership fee, accreditation, insurance, IPT,
 test('a voucher never touches a non-discountable item, even one it lists', async () => {
   const lines = [...basketLines(), line(null, 'INS-IPT', 'IPT', 300, 1, 'ongoing')];
   const v = voucher({ kind: 'percent', value: 100, allowedItems: ['MEM-ASSOC-Y', 'INS-IPT', 'MEM-CERT'] });
-  const r = await applyDiscounts(base({ lines }), {
+  const r = await apply(base({ lines }), {
     code: 'spring',
     actor: STAFF,
     store: fakeStore({ vouchers: [v] }),
@@ -259,7 +271,7 @@ test('a voucher never touches a non-discountable item, even one it lists', async
   assert.equal(r.lines.find(l => l.sku === 'MEM-ASSOC-Y').totalPence, 5500);
   assert.equal(r.lines.find(l => l.sku === 'INS-IPT').totalPence, 300);
   await refused(
-    applyDiscounts(base({ lines: [lines[0], lines[5]] }), {
+    apply(base({ lines: [lines[0], lines[5]] }), {
       code: 'SPRING',
       actor: STAFF,
       store: fakeStore({ vouchers: [v] }),
@@ -269,56 +281,70 @@ test('a voucher never touches a non-discountable item, even one it lists', async
   );
 });
 
-test('a voucher outside its dates is refused with the one message', async () => {
-  for (const [today, reason] of [
-    ['2026-09-30', 'not_started'],
-    ['2027-01-01', 'expired'],
-  ]) {
-    await assert.rejects(
-      applyDiscounts(base({ today }), { code: 'SPRING', actor: STAFF, store: fakeStore({ vouchers: [voucher()] }) }),
-      e => e.message === NOT_VALID && e.code === 'NOT_VALID' && e.detail.reason === reason,
-    );
-  }
-  for (const today of ['2026-10-01', '2026-12-31'])
-    assert.ok(
-      (
-        await applyDiscounts(base({ today }), {
-          code: 'SPRING',
-          actor: STAFF,
-          store: fakeStore({ vouchers: [voucher()] }),
-        })
-      ).totalDiscountPence > 0,
-      'the first and last day are inside',
-    );
+test('a voucher outside its dates is refused with the one message; the exact timestamps are the limits', async () => {
+  const run = at => apply(base({ at }), { code: 'SPRING', actor: STAFF, store: fakeStore({ vouchers: [voucher()] }) });
+  for (const [at, reason] of [
+    [Date.parse('2026-09-30T23:59:59+01:00'), 'not_started'],
+    [Date.parse('2027-01-01T00:00:00+00:00'), 'expired'],
+  ])
+    await assert.rejects(run(at), e => e.message === NOT_VALID && e.code === 'NOT_VALID' && e.detail.reason === reason);
+  for (const at of [Date.parse('2026-10-01T00:00:00+01:00'), Date.parse('2026-12-31T23:59:59+00:00')])
+    assert.ok((await run(at)).totalDiscountPence > 0, 'the first and last moment are inside');
+  // A voucher with no end date never expires.
+  const open = apply(base({ at: Date.parse('2040-01-01T00:00:00Z') }), {
+    code: 'SPRING',
+    actor: STAFF,
+    store: fakeStore({ vouchers: [voucher({ validTo: null })] }),
+  });
+  assert.ok((await open).totalDiscountPence > 0);
 });
 
 test('a voucher whose usage limit is reached is refused; one below it works', async () => {
-  const run = v => applyDiscounts(base(), { code: 'SPRING', actor: STAFF, store: fakeStore({ vouchers: [v] }) });
+  const run = v => apply(base(), { code: 'SPRING', actor: STAFF, store: fakeStore({ vouchers: [v] }) });
   await refused(run(voucher({ usageLimit: 10, used: 10 })), 'NOT_VALID', 'limit_reached');
   await refused(run(voucher({ usageLimit: 10, used: 11 })), 'NOT_VALID', 'limit_reached');
   assert.ok((await run(voucher({ usageLimit: 10, used: 9 }))).totalDiscountPence > 0);
   assert.ok((await run(voucher({ usageLimit: 0, used: 999 }))).totalDiscountPence > 0, 'no limit');
 });
 
-test('voucher restrictions: members only, issued to one person, once per person, switched off, unknown', async () => {
+test('voucher restrictions: member type, issued to one person, once per person, switched off, wrong type, unknown', async () => {
   const run = (v, over = {}, redeemed = {}) =>
-    applyDiscounts(base(over), {
+    apply(base(over), {
       code: 'SPRING',
       actor: STAFF,
       store: fakeStore({ vouchers: v ? [v] : [], redeemed }),
     });
-  await refused(run(voucher({ membersOnly: true })), 'NOT_VALID', 'members_only');
-  assert.ok((await run(voucher({ membersOnly: true }), { member: true })).totalDiscountPence > 0);
+  await refused(run(voucher({ memberTypes: ['Full', 'International'] })), 'NOT_VALID', 'member_type');
+  assert.ok(
+    (await run(voucher({ memberTypes: ['Full', 'International'] }), { memberType: 'Full' })).totalDiscountPence > 0,
+  );
+  assert.ok((await run(voucher({ memberTypes: [] }), { memberType: '' })).totalDiscountPence > 0, 'empty means anyone');
   await refused(run(voucher({ contactId: '999' })), 'NOT_VALID', 'other_person');
   assert.ok((await run(voucher({ contactId: '555' }))).totalDiscountPence > 0);
-  await refused(run(voucher(), {}, { 'v1:555': 1 }), 'NOT_VALID', 'already_used');
+  await refused(run(voucher({ onePerPerson: true }), {}, { 'v1:555': 1 }), 'NOT_VALID', 'already_used');
+  assert.ok(
+    (await run(voucher({ onePerPerson: false }), {}, { 'v1:555': 1 })).totalDiscountPence > 0,
+    'not limited to one use',
+  );
   await refused(run(voucher({ active: false })), 'NOT_VALID', 'inactive');
+  await refused(run(voucher({ bespoke: false })), 'NOT_VALID', 'wrong_type');
   await refused(run(voucher({ kind: '' })), 'NOT_VALID', 'unusable');
   await refused(run(null), 'NOT_VALID', 'unknown');
 });
 
+test('one use per person fails closed while the redemption history does not exist', async () => {
+  const store = {
+    ...fakeStore({ vouchers: [voucher({ onePerPerson: true })] }),
+    redemptionsBy: createCrmStore({ crm: async () => [], req: {} }).redemptionsBy,
+  };
+  await assert.rejects(
+    apply(base(), { code: 'SPRING', actor: STAFF, store }),
+    e => e.code === 'DISCOUNT_LOG_UNAVAILABLE',
+  );
+});
+
 test('a fixed voucher is shared down the basket until used up; a percentage takes its share of each allowed line', async () => {
-  const fixed = await applyDiscounts(base(), {
+  const fixed = await apply(base(), {
     code: 'SPRING',
     actor: STAFF,
     store: fakeStore({ vouchers: [voucher({ value: 1200, allowedItems: ['MEM-JOIN', 'MEM-CERT'] })] }),
@@ -330,7 +356,7 @@ test('a fixed voucher is shared down the basket until used up; a percentage take
       ['MEM-CERT', 200],
     ],
   );
-  const pct = await applyDiscounts(base(), {
+  const pct = await apply(base(), {
     code: 'SPRING',
     actor: STAFF,
     store: fakeStore({ vouchers: [voucher({ kind: 'percent', value: 25, allowedItems: ['MEM-JOIN', 'MEM-BADGE'] })] }),
@@ -362,7 +388,7 @@ test('a fixed voucher is shared down the basket until used up; a percentage take
 
 test('a voucher and a referral code can share a basket, each on its own line, and a waiver on a free line is refused', async () => {
   const v = voucher({ allowedItems: ['MEM-CERT'], value: 300 });
-  const r = await applyDiscounts(base(), {
+  const r = await apply(base(), {
     referral: { code: 'ACC-0155', school: {} },
     code: 'SPRING',
     actor: STAFF,
@@ -374,7 +400,7 @@ test('a voucher and a referral code can share a basket, each on its own line, an
     ['referral', 'voucher'],
   );
   await refused(
-    applyDiscounts(base(), {
+    apply(base(), {
       referral: { code: 'ACC-0155', school: {} },
       waivers: [{ sku: 'MEM-JOIN', reason: 'Complaint' }],
       actor: STAFF,
@@ -386,24 +412,24 @@ test('a voucher and a referral code can share a basket, each on its own line, an
 
 test('only staff may apply a voucher or a waiver; the actor must be known', async () => {
   await refused(
-    applyDiscounts(base(), { code: 'SPRING', actor: CUSTOMER, store: fakeStore({ vouchers: [voucher()] }) }),
+    apply(base(), { code: 'SPRING', actor: CUSTOMER, store: fakeStore({ vouchers: [voucher()] }) }),
     'NOT_PERMITTED',
   );
   await refused(
-    applyDiscounts(base(), {
+    apply(base(), {
       waivers: [{ sku: 'MEM-CERT', reason: 'Complaint' }],
       actor: CUSTOMER,
       store: fakeStore(),
     }),
     'NOT_PERMITTED',
   );
-  await refused(applyDiscounts(base(), { actor: undefined }), 'NOT_PERMITTED');
-  await refused(applyDiscounts(base(), { actor: { type: 'robot', id: 'x' } }), 'NOT_PERMITTED');
-  await refused(applyDiscounts(base(), { actor: { type: 'staff' } }), 'NOT_PERMITTED');
+  await refused(apply(base(), { actor: undefined }), 'NOT_PERMITTED');
+  await refused(apply(base(), { actor: { type: 'robot', id: 'x' } }), 'NOT_PERMITTED');
+  await refused(apply(base(), { actor: { type: 'staff' } }), 'NOT_PERMITTED');
 });
 
 test('the additional branch is never lowered: the line keeps its price and the discount goes to a coupon', async () => {
-  const r = await applyDiscounts(base(), {
+  const r = await apply(base(), {
     waivers: [{ sku: 'MEM-BRANCH', amountPence: 500, reason: 'Promotion' }],
     actor: STAFF,
     store: fakeStore(),
@@ -426,7 +452,7 @@ test('the additional branch is never lowered: the line keeps its price and the d
   );
   // A waiver cannot take more than the branch costs.
   await refused(
-    applyDiscounts(base(), {
+    apply(base(), {
       waivers: [{ sku: 'MEM-BRANCH', amountPence: 1501, reason: 'Promotion' }],
       actor: STAFF,
       store: fakeStore(),
@@ -434,7 +460,7 @@ test('the additional branch is never lowered: the line keeps its price and the d
     'INVALID_WAIVER',
   );
   // A voucher over the branch price is capped at it.
-  const capped = await applyDiscounts(base(), {
+  const capped = await apply(base(), {
     code: 'SPRING',
     actor: STAFF,
     store: fakeStore({ vouchers: [voucher({ value: 9000, allowedItems: ['MEM-BRANCH'] })] }),
@@ -446,7 +472,7 @@ test('the metadata value stays within Stripe’s 500 characters, dropping detail
   const skus = ['MEM-JOIN', 'MEM-BRANCH', 'MEM-BUNDLE', 'MEM-CERT', 'MEM-BADGE', 'MEM-STICKER'];
   const lines = skus.map(s => line(null, s, s, 1000));
   const who = { type: 'staff', id: 'u', email: 'a.very.long.staff.address@guild.example' };
-  const r = await applyDiscounts(base({ lines, contactId: '' }), {
+  const r = await apply(base({ lines, contactId: '' }), {
     waivers: skus.map(sku => ({ sku, reason: 'Payment Problem' })),
     actor: who,
     store: fakeStore(),
@@ -467,37 +493,71 @@ test('the metadata value stays within Stripe’s 500 characters, dropping detail
 });
 
 test('the adapter keeps every CRM field name in one place and fails closed on the logs that do not exist yet', async () => {
+  // Shaped like the example record GR0001, with the expected Voucher_Code field added.
   const row = {
     id: '123',
     [FIELDS.code]: ' spring ',
-    [FIELDS.kind]: 'Percentage',
+    [FIELDS.type]: 'Bespoke Generic',
+    [FIELDS.method]: 'Percentage',
     [FIELDS.value]: '25',
-    [FIELDS.start]: '2026-10-01',
-    [FIELDS.end]: '',
-    [FIELDS.usageLimit]: '5',
+    [FIELDS.validFrom]: '2026-08-03T09:00:00+01:00',
+    [FIELDS.validTo]: '2026-08-31T15:00:00+01:00',
+    [FIELDS.maxUses]: '5',
     [FIELDS.used]: 2,
-    [FIELDS.restriction]: 'Members only',
-    [FIELDS.allowedItems]: 'MEM-BADGE, mem-cert',
+    [FIELDS.active]: true,
+    [FIELDS.onePerPerson]: true,
+    [FIELDS.memberTypes]: ['Associate', 'Full'],
+    [FIELDS.appliesTo]: ['Courses', 'Membership'],
     [FIELDS.contact]: { id: '555' },
-    [FIELDS.status]: 'Active',
   };
   assert.deepEqual(toVoucher(row), {
     id: '123',
     code: 'SPRING',
+    bespoke: true,
     kind: 'percent',
     value: 25,
-    startDate: '2026-10-01',
-    endDate: '',
+    validFrom: Date.parse('2026-08-03T09:00:00+01:00'),
+    validTo: Date.parse('2026-08-31T15:00:00+01:00'),
     usageLimit: 5,
     used: 2,
-    membersOnly: true,
-    allowedItems: ['MEM-BADGE', 'MEM-CERT'],
-    contactId: '555',
     active: true,
+    onePerPerson: true,
+    memberTypes: ['Associate', 'Full'],
+    allowedItems: ['MEM-JOIN'],
+    contactId: '555',
   });
-  assert.equal(toVoucher({ ...row, [FIELDS.kind]: 'Fixed', [FIELDS.value]: '12.50' }).value, 1250);
-  assert.equal(toVoucher({ ...row, [FIELDS.status]: 'Inactive' }).active, false);
+  const v = over => toVoucher({ ...row, ...over });
+  assert.equal(v({ [FIELDS.method]: 'Fixed Amount', [FIELDS.value]: '12.50' }).value, 1250);
+  assert.equal(v({ [FIELDS.active]: false }).active, false);
+  assert.equal(v({ [FIELDS.type]: 'Personal £25 GTI' }).bespoke, false);
+  assert.equal(v({ [FIELDS.validTo]: null }).validTo, null, 'empty means no end');
   assert.equal(toVoucher({ id: '1' }).value, 0, 'an unreadable voucher discounts nothing');
+  // Applies_To_Type: Membership is the joining fee only, Extension the five extras, Courses nothing.
+  assert.deepEqual(v({ [FIELDS.appliesTo]: ['Courses'] }).allowedItems, []);
+  assert.deepEqual(v({ [FIELDS.appliesTo]: ['Extension'] }).allowedItems, [
+    'MEM-BRANCH',
+    'MEM-BUNDLE',
+    'MEM-CERT',
+    'MEM-BADGE',
+    'MEM-STICKER',
+  ]);
+  assert.deepEqual(
+    v({ [FIELDS.appliesTo]: ['Membership', 'Extension'], [FIELDS.items]: ['MEM-JOIN', 'MEM-CERT', 'ACC-STD'] })
+      .allowedItems,
+    ['MEM-JOIN', 'MEM-CERT'],
+    'Applicable_Items narrows, and never widens',
+  );
+  assert.deepEqual(v({ [FIELDS.appliesTo]: [] }).allowedItems, []);
+  // Dates: an offset is exact; no offset is Europe/London wall-clock time (summer 15:00 is 14:00 UTC, winter 15:00 is 15:00 UTC).
+  assert.equal(v({ [FIELDS.validTo]: '2026-08-31 15:00:00' }).validTo, Date.parse('2026-08-31T14:00:00Z'));
+  assert.equal(v({ [FIELDS.validTo]: '2026-12-01 15:00:00' }).validTo, Date.parse('2026-12-01T15:00:00Z'));
+  assert.equal(validAt(v({}), Date.parse('2026-08-31T14:00:00Z')), '');
+  assert.equal(validAt(v({}), Date.parse('2026-08-31T14:00:01Z')), 'expired');
+  assert.equal(validAt(v({}), Date.parse('2026-08-03T07:59:59Z')), 'not_started');
+  assert.equal(memberTypeOf('full_salon'), 'Full');
+  assert.equal(memberTypeOf('full_non_salon'), 'Full');
+  assert.equal(memberTypeOf('associate'), 'Associate');
+  assert.equal(memberTypeOf('international'), 'International');
   const asked = [];
   const store = createCrmStore({
     req: {},
@@ -510,7 +570,11 @@ test('the adapter keeps every CRM field name in one place and fails closed on th
   assert.equal(await store.findVoucher('NOPE'), null);
   assert.equal(await store.findVoucher('x)or(y'), null, 'search syntax never reaches the CRM');
   assert.equal(asked.length, 2);
-  assert.ok(asked[0].startsWith('Discount_Voucher/search?criteria='));
+  assert.ok(
+    asked[0].startsWith(
+      'Discount_Voucher/search?criteria=' + encodeURIComponent('(' + FIELDS.code + ':equals:SPRING)'),
+    ),
+  );
   await assert.rejects(store.joiningWaivers('1'), e => e.code === 'DISCOUNT_LOG_UNAVAILABLE');
   await assert.rejects(store.redemptionsBy('1', '2'), e => e.code === 'DISCOUNT_LOG_UNAVAILABLE');
 });

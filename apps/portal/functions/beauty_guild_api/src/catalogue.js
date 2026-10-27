@@ -7,6 +7,7 @@
 const { HttpError } = require('./errors');
 const insurance = require('./insurance');
 const { joiningFeeDue, NOT_DUE, REJOIN_DAYS } = require('./discounts');
+const { memberTypeOf } = require('./voucherAdapter');
 
 const ID = /^\d{10,25}$/;
 // How far ahead a start date may be, per service (UAT AL-INS-001). The same limit is used by the date pickers.
@@ -568,9 +569,9 @@ SERVICES.membership = {
       fingerprint: ins?.fingerprint,
       // What the checkout needs to price, show and record the code (see checkout.js).
       joiningFee: discounts ? { due: feeDue } : null,
-      // For the discount engine: the day this joining fee began to apply (for the once-per-person waiver) and whether the person is a member.
+      // For the discount engine: the day this joining fee began to apply (for the once-per-person waiver) and the membership type being bought.
       joiningFeeSince: previous && previousExpiry ? addDays(previousExpiry, REJOIN_DAYS) : '',
-      member: Boolean(member || previous),
+      memberType: memberTypeOf(level),
       discount,
       codeResult,
       metadata: ({ lines: priced, total, insuranceIds, fees, discountsEntry, quoteReference }) => {

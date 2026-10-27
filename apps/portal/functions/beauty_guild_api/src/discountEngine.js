@@ -4,7 +4,7 @@
 // records to write. A staff route, the customer checkout and the payment link can all call it and price the same.
 //
 // applyDiscounts(basket, { referral, code, waivers, actor, store, now }) -> result
-//   basket   { lines, contactId, applicationId, member, joiningFeeSince, today }
+//   basket   { lines, contactId, applicationId, memberType, joiningFeeSince, today }
 //              lines: [{ item, sku, name, quantity, unitPence, totalPence, term, priceId, interval, ... }] already priced, BEFORE any
 //              monthly split (plans.splitMonthly), so a monthly plan spreads the discount over the first 12 payments exactly.
 //              joiningFeeSince: the day the current joining fee started to apply (previous expiry + 30 days), or '' for a new person.
@@ -15,6 +15,7 @@
 //   store    { findVoucher(code), redemptionsBy(voucherId, contactId), joiningWaivers(contactId) } (see voucherAdapter.js)
 // Throws DiscountError when anything is refused; nothing is partly applied.
 const { NOT_VALID } = require('./discounts');
+const { validAt } = require('./voucherAdapter');
 
 const JOIN = 'MEM-JOIN';
 const BRANCH = 'MEM-BRANCH';
@@ -90,14 +91,18 @@ async function applyDiscounts(basket, { referral = null, code = '', waivers = []
     const typed = String(code).trim().toUpperCase();
     const voucher = typed ? await store.findVoucher(typed) : null;
     if (!voucher) throw notValid('unknown');
+    // Only generic vouchers: the personal £25 GTi voucher is a GTi course voucher (phase 4) and never discounts a membership.
+    if (!voucher.bespoke) throw notValid('wrong_type');
     if (!voucher.active) throw notValid('inactive');
     if (!voucher.kind || !voucher.value) throw notValid('unusable');
-    if (voucher.startDate && today < voucher.startDate) throw notValid('not_started');
-    if (voucher.endDate && today > voucher.endDate) throw notValid('expired');
+    const outside = validAt(voucher, now());
+    if (outside) throw notValid(outside);
     if (voucher.usageLimit && voucher.used >= voucher.usageLimit) throw notValid('limit_reached');
-    if (voucher.membersOnly && !basket.member) throw notValid('members_only');
+    // Eligible member types: the level being bought or held. An empty list means anyone.
+    if (voucher.memberTypes.length && !voucher.memberTypes.includes(basket.memberType || ''))
+      throw notValid('member_type');
     if (voucher.contactId && voucher.contactId !== String(basket.contactId || '')) throw notValid('other_person');
-    if (basket.contactId && (await store.redemptionsBy(voucher.id, basket.contactId)) > 0)
+    if (voucher.onePerPerson && basket.contactId && (await store.redemptionsBy(voucher.id, basket.contactId)) > 0)
       throw notValid('already_used');
     // Percent: of each allowed line. Fixed: shared down the basket until it is used up. The joining fee comes first, as in the basket.
     const allowed = new Set(voucher.allowedItems);

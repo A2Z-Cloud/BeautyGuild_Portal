@@ -233,7 +233,7 @@ function registerCheckoutRoutes(
           {
             lines,
             contactId: contact?.id ? String(contact.id) : '',
-            member: Boolean(prepared.member),
+            memberType: prepared.memberType || '',
             joiningFeeSince: prepared.joiningFeeSince || '',
           },
           {

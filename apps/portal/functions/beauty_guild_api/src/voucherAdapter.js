@@ -2,56 +2,116 @@
 // The only place that knows the Guild CRM's names for bespoke vouchers, waivers and redemptions. The engine (discountEngine.js) works on
 // the plain shapes below and never sees a CRM field name.
 //
-// UNVERIFIED: the module is called Discount_Voucher (named by the user, 27 October) but its field names could not be read yet (neither A2Z
-// CRM connector reaches the Guild CRM, and the diagnostics route needs a signed-in allow-listed session on the deployed portal). Every name
-// in FIELDS is a guess. Read the real ones with GET /portal/diagnostics/fields?module=Discount_Voucher and correct them HERE only; the
-// tests build their rows from FIELDS, so they keep passing when a name changes.
+// Discount_Voucher names are the real API names (from the CRM field list and the example record GR0001, 27 October), EXCEPT:
+//  - `code`: the module's `Name` is an auto number (GR0001), an internal id nobody types. There is no customer-typed code field yet; A2Z is
+//    expected to add a unique text field `Voucher_Code` (case-insensitive). UNCONFIRMED until it exists.
+//  - Percentage: `Discount_Value` is assumed to be the percent itself (50 means 50%). UNCONFIRMED.
+//  - The log fields in toCrmWaiverLog and toCrmRedemption are guesses: those modules do not exist yet.
 const { HttpError } = require('./errors');
 
 const MODULE = 'Discount_Voucher';
 const FIELDS = Object.freeze({
-  code: 'Name', // the code the customer or staff member types
-  kind: 'Discount_Type', // 'Fixed' or 'Percentage'
-  value: 'Discount_Value', // pounds for Fixed, a whole number for Percentage
-  start: 'Valid_From', // yyyy-mm-dd
-  end: 'Valid_Until', // yyyy-mm-dd; empty means no end
-  usageLimit: 'Usage_Limit', // empty or 0 means unlimited
-  used: 'Times_Used', // redemptions so far
-  restriction: 'Restriction', // free text or picklist: contains "member" means members only
-  allowedItems: 'Allowed_Items', // price list codes (MEM-BADGE ...), comma separated or a multi select
-  contact: 'Contact', // lookup: set when the voucher was issued to one person
-  status: 'Status', // anything other than 'Active' (case-insensitive) is treated as switched off; empty counts as active
+  code: 'Voucher_Code', // the code staff type (to be added by A2Z)
+  type: 'Voucher_Type', // 'Bespoke Generic' or 'Personal £25 GTI'; only the first is accepted here
+  method: 'Discount_Method', // 'Fixed Amount' or 'Percentage'
+  value: 'Discount_Value', // Currency: pounds for Fixed Amount; the percent for Percentage
+  validFrom: 'Valid_From', // DateTime
+  validTo: 'Valid_To', // DateTime; empty means no end
+  maxUses: 'Maximum_Total_Uses', // empty or 0 means unlimited
+  used: 'Current_Usage_Count',
+  active: 'Active', // Boolean; false is switched off. "Used up" comes from the count, there is no used or void status
+  onePerPerson: 'One_Use_Per_Person', // Boolean
+  memberTypes: 'Eligible_Member_Types', // multiselect: Associate, International, Full, GTI Student. Empty means anyone
+  appliesTo: 'Applies_To_Type', // multiselect: Courses, Membership, Extension
+  items: 'Applicable_Items', // optional multiselect of price list codes that narrows appliesTo further (not in the CRM yet)
+  contact: 'Assigned_Contact', // lookup: set when the voucher was issued to one person
+});
+const BESPOKE = 'Bespoke Generic';
+// Applies_To_Type -> the price list codes it covers. Membership is the joining fee only, because the membership fee is never
+// discountable. Courses (GTi) is parked and covers nothing, so a voucher with only Courses discounts nothing and is refused.
+const APPLIES = Object.freeze({
+  MEMBERSHIP: ['MEM-JOIN'],
+  EXTENSION: ['MEM-BRANCH', 'MEM-BUNDLE', 'MEM-CERT', 'MEM-BADGE', 'MEM-STICKER'],
+  COURSES: [],
 });
 
 const pence = pounds => (Number.isFinite(Number(pounds)) ? Math.round(Number(pounds) * 100) : NaN);
 const text = v => String(v ?? '').trim();
-const day = v => (/^\d{4}-\d{2}-\d{2}/.test(text(v)) ? text(v).slice(0, 10) : '');
-const list = v =>
-  (Array.isArray(v) ? v : text(v).split(/[,;]/)).map(x => text(x?.value ?? x).toUpperCase()).filter(Boolean);
+const list = v => (Array.isArray(v) ? v : text(v).split(/[,;]/)).map(x => text(x?.value ?? x)).filter(Boolean);
+const same = (a, b) => text(a).toLowerCase() === text(b).toLowerCase();
 
-// A CRM row -> the plain voucher the engine uses. Anything unreadable stays unusable rather than guessed (no kind, no value or no items
-// means the voucher discounts nothing).
+// A CRM DateTime -> milliseconds. Zoho sends an offset ("2026-08-31T15:00:00+01:00"), which is exact. A value with no offset is read as
+// Europe/London wall-clock time.
+function londonOffsetMs(ms) {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Europe/London',
+      hourCycle: 'h23',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    })
+      .formatToParts(new Date(ms))
+      .map(p => [p.type, p.value]),
+  );
+  return (
+    Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second) -
+    Math.floor(ms / 1000) * 1000
+  );
+}
+function timestamp(v) {
+  const t = text(v);
+  if (!t) return null;
+  if (/(Z|[+-]\d\d:?\d\d)$/i.test(t)) return Number.isFinite(Date.parse(t)) ? Date.parse(t) : NaN;
+  const naive = Date.parse(t.replace(' ', 'T') + (t.length <= 10 ? 'T00:00:00Z' : 'Z'));
+  return Number.isFinite(naive) ? naive - londonOffsetMs(naive - londonOffsetMs(naive)) : NaN;
+}
+// Is the voucher inside its dates at this moment? The ONE place the date rule lives: exact timestamps today (a voucher ending "31 Aug
+// 15:00" stops at 15:00). If the Guild wants "to the end of that day", change validTo here.
+function validAt(voucher, nowMs) {
+  if (voucher.validFrom !== null && nowMs < voucher.validFrom) return 'not_started';
+  if (voucher.validTo !== null && nowMs > voucher.validTo) return 'expired';
+  return '';
+}
+
+// The portal's membership levels -> the CRM's Eligible_Member_Types values.
+const MEMBER_TYPE = Object.freeze({
+  associate: 'Associate',
+  full_non_salon: 'Full',
+  full_salon: 'Full',
+  international: 'International',
+});
+const memberTypeOf = level => MEMBER_TYPE[level] || '';
+
+// A CRM row -> the plain voucher the engine uses. Anything unreadable stays unusable rather than guessed (no method, no value or no
+// items means the voucher discounts nothing; an unreadable date refuses the voucher).
 function toVoucher(row, fields = FIELDS) {
-  const kind = /^percent/i.test(text(row[fields.kind]))
+  const kind = same(row[fields.method], 'Percentage')
     ? 'percent'
-    : /^fixed/i.test(text(row[fields.kind]))
+    : same(row[fields.method], 'Fixed Amount')
       ? 'fixed'
       : '';
   const value = kind === 'percent' ? Number(row[fields.value]) : pence(row[fields.value]);
-  const status = text(row[fields.status]);
+  const covered = new Set(list(row[fields.appliesTo]).flatMap(a => APPLIES[a.toUpperCase()] || []));
+  const narrow = list(row[fields.items]).map(c => c.toUpperCase());
   return {
     id: text(row.id),
     code: text(row[fields.code]).toUpperCase(),
+    bespoke: same(row[fields.type], BESPOKE),
     kind,
     value: Number.isFinite(value) && value > 0 ? value : 0,
-    startDate: day(row[fields.start]),
-    endDate: day(row[fields.end]),
-    usageLimit: Math.max(0, Math.floor(Number(row[fields.usageLimit]) || 0)),
+    validFrom: timestamp(row[fields.validFrom]),
+    validTo: timestamp(row[fields.validTo]),
+    usageLimit: Math.max(0, Math.floor(Number(row[fields.maxUses]) || 0)),
     used: Math.max(0, Math.floor(Number(row[fields.used]) || 0)),
-    membersOnly: /member/i.test(text(row[fields.restriction])),
-    allowedItems: list(row[fields.allowedItems]),
+    active: row[fields.active] === true || same(row[fields.active], 'true'),
+    onePerPerson: row[fields.onePerPerson] === true || same(row[fields.onePerPerson], 'true'),
+    memberTypes: list(row[fields.memberTypes]),
+    allowedItems: [...covered].filter(c => !narrow.length || narrow.includes(c)),
     contactId: text(row[fields.contact]?.id ?? ''),
-    active: !status || /^active$/i.test(status),
   };
 }
 
@@ -105,8 +165,8 @@ function createCrmStore({ crm, req, fields = FIELDS }) {
           '&fields=' +
           encodeURIComponent(['id', ...Object.values(fields)].join(',')),
       );
-      const same = rows.map(r => toVoucher(r, fields)).filter(v => v.code === safe.toUpperCase());
-      return same.length === 1 ? same[0] : null;
+      const hits = rows.map(r => toVoucher(r, fields)).filter(v => v.code === safe.toUpperCase());
+      return hits.length === 1 ? hits[0] : null;
     },
     async redemptionsBy() {
       throw unconfigured('voucher redemption');
@@ -117,4 +177,4 @@ function createCrmStore({ crm, req, fields = FIELDS }) {
   };
 }
 
-module.exports = { MODULE, FIELDS, toVoucher, toCrmWaiverLog, toCrmRedemption, createCrmStore };
+module.exports = { MODULE, FIELDS, validAt, memberTypeOf, toVoucher, toCrmWaiverLog, toCrmRedemption, createCrmStore };
