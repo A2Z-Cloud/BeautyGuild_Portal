@@ -54,6 +54,8 @@ const DESCRIPTIONS = {
   town: 'Correspondence town. Left out when blank.',
   county: 'Correspondence county. Left out when blank.',
   postcode: 'Correspondence postcode. Left out when blank.',
+  discounts:
+    'Only when a school referral code took the joining fee off (PORTAL_DISCOUNTS_ENABLED). JSON array with one entry: `{"type":"referral_code","code":"ACC-0140","school_id":"...","accreditation_id":"...","item":"MEM-JOIN","list_amount":"10.00","discount_amount":"10.00"}`. `code` is the school\'s Accreditation Reference. The joining fee is not a line on the invoice (`joining_fee_amount` is `0.00`), so book `list_amount` and `discount_amount` from here. Creator records the redemption from this entry when the first payment succeeds.',
   total_amount:
     'What is charged now, gross. The first payment on a monthly plan: the ongoing monthly payment plus the joining fee and any add-ons in full.',
   total_amount_net: '`total_amount` without VAT. Insurance premiums are VAT exempt, and IPT is not VAT.',
@@ -168,14 +170,14 @@ const INSURANCE_CORE = [
 
 // Keys per purchase type, on top of SESSION_COMMON. `required` is on every session of the type, `optional` only sometimes.
 const SESSION_TYPES = {
-  membership: { required: MEMBERSHIP_CORE, optional: [...JOIN_DETAILS, 'monthly_plan'] },
+  membership: { required: MEMBERSHIP_CORE, optional: [...JOIN_DETAILS, 'monthly_plan', 'discounts'] },
   membership_insurance: {
     required: [
       ...MEMBERSHIP_CORE.filter(k => k !== 'insurance_route'),
       ...INSURANCE_CORE.filter(k => !MEMBERSHIP_CORE.includes(k)),
       'insurance_route',
     ],
-    optional: [...JOIN_DETAILS, 'monthly_plan'],
+    optional: [...JOIN_DETAILS, 'monthly_plan', 'discounts'],
   },
   insurance: {
     required: [

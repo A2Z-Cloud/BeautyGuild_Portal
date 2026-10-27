@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { formatDate } from './format.js';
 import { isFuture } from './startDate.js';
-import { dueToday, planSummary, thenCharge } from './priceSummary.js';
+import { dueToday, planSummary, thenCharge, waivedLine } from './priceSummary.js';
 
 const money = pence => '£' + (pence / 100).toFixed(2);
 
@@ -21,6 +21,7 @@ export default function PricePanel({
   const [open, setOpen] = useState(() => typeof window === 'undefined' || window.innerWidth > 900);
   const then = thenCharge(quote),
     plan = planSummary(quote),
+    waived = waivedLine(quote),
     future = isFuture(start);
   return (
     <aside className="price-panel" aria-label="Your price" aria-live="polite">
@@ -60,6 +61,22 @@ export default function PricePanel({
             </p>
           ) : (
             <>
+              {waived && (
+                <div className="price-rows">
+                  <div className="price-row price-waived">
+                    <span>
+                      <s>{waived.name}</s>
+                    </span>
+                    <strong>
+                      <s>{money(waived.pence)}</s> Waived
+                    </strong>
+                  </div>
+                  <p className="price-then">
+                    {waived.label}
+                    {waived.indicative ? '. We check your code when you sign in.' : '.'}
+                  </p>
+                </div>
+              )}
               {quote.lines.length > 0 && (
                 <div className="price-rows">
                   {quote.lines.map(l => (

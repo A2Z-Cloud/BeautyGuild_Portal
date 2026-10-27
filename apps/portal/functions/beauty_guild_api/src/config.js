@@ -85,6 +85,11 @@ function loadConfig(env = process.env) {
     // Lets signed-out visitors price a membership (no account, no CRM access). Needs billing on as well.
     publicQuotesEnabled: env.PUBLIC_QUOTES_ENABLED === 'true',
     documentsEnabled: env.PORTAL_DOCUMENTS_ENABLED === 'true',
+    // School referral code online (£10 off the joining fee) and the 30 day joining fee rule. Off unless 'true'. Needs billing on as well.
+    discountsEnabled: env.PORTAL_DISCOUNTS_ENABLED === 'true',
+    // API name of the Accreditation Reference on Training_Centre_Accred, which is the school code: `Name` (the autonumber). Set it to an
+    // empty value to stop codes being checked.
+    discountReferenceField: String(env.PORTAL_DISCOUNT_REFERENCE_FIELD ?? 'Name').trim(),
     workdriveApiDomain: httpsUrl(env.WORKDRIVE_API_DOMAIN, 'https://www.zohoapis.eu', 'WORKDRIVE_API_DOMAIN'),
     workdriveConnectionName: String(env.WORKDRIVE_CONNECTION_NAME || 'zohoworkdrive'),
     stripeSecretKey: String(env.STRIPE_SECRET_KEY || ''),

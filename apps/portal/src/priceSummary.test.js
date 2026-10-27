@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { dueToday, planSummary, thenCharge } from './priceSummary.js';
+import { dueToday, planSummary, thenCharge, waivedLine, offersCode } from './priceSummary.js';
 
 const annual = {
   totalPence: 6500,
@@ -73,4 +73,27 @@ test('a monthly plan has its own summary: the first 12 payments, then the ongoin
 test('a purchase with nothing recurring has no later charge', () => {
   assert.equal(thenCharge(oneOff), null);
   assert.equal(thenCharge(null), null);
+});
+
+test('a waived joining fee is shown as a waived line, and the code box is offered only when a fee is due', () => {
+  const discount = {
+    code: 'ABC123',
+    label: 'Joining fee waived (code ABC123)',
+    amountPence: 1000,
+    line: 'joining_fee',
+    lineName: 'Membership joining fee',
+    indicative: true,
+  };
+  assert.deepEqual(waivedLine({ discount }), {
+    name: 'Membership joining fee',
+    pence: 1000,
+    label: 'Joining fee waived (code ABC123)',
+    indicative: true,
+  });
+  assert.equal(waivedLine(annual), null);
+  assert.equal(waivedLine(null), null);
+  assert.equal(offersCode({ joiningFee: { due: true } }), true);
+  assert.equal(offersCode({ joiningFee: { due: false } }), false);
+  assert.equal(offersCode(annual), false, 'discounts off: the server sends no joiningFee, so no box');
+  assert.equal(offersCode(null), false);
 });

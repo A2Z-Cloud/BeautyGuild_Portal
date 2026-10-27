@@ -10,7 +10,7 @@ import { useStoredState } from './storedState.js';
 import { referralFrom, sameAnswers } from './referral.js';
 import SaveApplication, { useSaveApplication } from './SaveApplication.jsx';
 import { joinDraft } from './savedDraft.js';
-import { dueToday } from './priceSummary.js';
+import { dueToday, offersCode } from './priceSummary.js';
 import { COUNTRY_OPTIONS } from './JourneyConfig.js';
 import { countryFor } from './prefill.js';
 import { START_WINDOW_DAYS, isFuture, startLimits } from './startDate.js';
@@ -84,6 +84,7 @@ export default function BuyMembership() {
       accepted: false,
       insurance: false,
       start: '',
+      code: '',
     },
     x => ({ ...x, accepted: false, start: x.start && x.start >= startLimits().min ? x.start : '' }),
   );
@@ -96,6 +97,8 @@ export default function BuyMembership() {
     [showMissing, setShowMissing] = useState(false);
   const missing = missingDetails(d),
     setDetail = patch => setD(o => ({ ...o, ...patch }));
+  const [codeText, setCodeText] = useState(f.code || ''),
+    [codeOpen, setCodeOpen] = useState(Boolean(f.code));
   const [iErrors, setIErrors] = useState({}),
     [countryError, setCountryError] = useState('');
   const saver = useSaveApplication({
@@ -155,7 +158,8 @@ export default function BuyMembership() {
     .filter(([, n]) => n > 0)
     .map(([k, n]) => k + ':' + n)
     .join(',');
-  const ready = f.level && f.branch;
+  const ready = f.level && f.branch,
+    branchKey = f.branches.join(',');
   const base = () => ({
     service: 'membership',
     level: f.level,
@@ -164,6 +168,7 @@ export default function BuyMembership() {
     ...(f.branches.length ? { branches: f.branches.join(',') } : {}),
     ...(f.start ? { start: f.start } : {}),
     ...(previousId ? { previousId, changeType } : {}),
+    ...(f.code && !previousId ? { code: f.code } : {}),
   });
   useEffect(() => {
     if (!INTEGRATIONS.stripeCheckout || (who.state !== 'in' && !guest) || !ready) {
@@ -181,7 +186,8 @@ export default function BuyMembership() {
     return () => {
       alive = false;
     };
-  }, [who.state, f.level, f.branch, f.billing, f.start, f.branches.join(','), addonText, previousId, f.insurance]); // eslint-disable-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [who.state, f.level, f.branch, f.billing, f.start, branchKey, addonText, previousId, f.insurance, f.code]);
   // With insurance the answers are too large for a query string, so the server prices them from a POST.
   const ins = toRequest(iv);
   // An insurance application the Insurance team now holds is kept with the answers it was for, so a refresh still shows it.
@@ -196,6 +202,7 @@ export default function BuyMembership() {
       previousId,
       country,
       ins,
+      f.code,
     ]),
     referral = f.insurance && sameAnswers(sent.outcome, answersKey) ? sent.outcome : null;
   const iq = useInsuranceQuote({
@@ -208,7 +215,18 @@ export default function BuyMembership() {
       (iv.insWorking || []).length > 0,
     send: guest ? portalApi.publicQuote : portalApi.checkoutQuotePost,
     request: () => ({ ...base(), addons: f.addons, country, insurance: toRequest(iv) }),
-    key: JSON.stringify([f.level, f.branch, f.billing, f.start, f.branches, f.addons, previousId, country, ins]),
+    key: JSON.stringify([
+      f.level,
+      f.branch,
+      f.billing,
+      f.start,
+      f.branches,
+      f.addons,
+      previousId,
+      country,
+      ins,
+      f.code,
+    ]),
   });
   const setI = (name, value) => {
     setIv(v => ({ ...v, [name]: value }));
@@ -261,6 +279,8 @@ export default function BuyMembership() {
   const priced = f.insurance ? iq.quote : q.quote,
     quote = priced || q.quote,
     shown = quote,
+    // The code box is for the Join page only (not a renewal) and only while a joining fee applies, or a code is already in.
+    showCode = !previousId && (offersCode(quote) || Boolean(f.code)),
     insuranceWaiting = f.insurance && !iq.quote;
   return (
     <div className="page buy-page membership-journey">
@@ -574,6 +594,69 @@ export default function BuyMembership() {
             )}
             <section className="surface padded buy-section">
               <h2>Review and pay</h2>
+              {showCode && (
+                <div className="code-box">
+                  {!codeOpen ? (
+                    <button type="button" className="text-button" onClick={() => setCodeOpen(true)}>
+                      Have a code?
+                    </button>
+                  ) : (
+                    <>
+                      <div className="field">
+                        <label htmlFor="school-code">School code</label>
+                        <input
+                          id="school-code"
+                          value={codeText}
+                          maxLength={40}
+                          autoComplete="off"
+                          onChange={e => setCodeText(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              set({ code: codeText.trim() });
+                            }
+                          }}
+                        />
+                        <small>
+                          If your school gave you its Accreditation Reference (for example ACC-0140), enter it to have
+                          your joining fee waived.
+                        </small>
+                      </div>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        disabled={!codeText.trim() || codeText.trim() === f.code}
+                        onClick={() => set({ code: codeText.trim() })}
+                      >
+                        Apply code
+                      </button>
+                      {f.code && (
+                        <button
+                          type="button"
+                          className="text-button"
+                          onClick={() => {
+                            setCodeText('');
+                            set({ code: '' });
+                          }}
+                        >
+                          Remove code
+                        </button>
+                      )}
+                      {f.code && quote?.discount && (
+                        <p className="muted" role="status">
+                          {quote.discount.label}.
+                          {quote.discount.indicative ? ' We check your code when you sign in.' : ''}
+                        </p>
+                      )}
+                      {f.code && quote?.codeResult && (
+                        <p className="error" role="alert">
+                          {quote.codeResult.message}
+                        </p>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
               {!ready ? (
                 <p className="muted">Choose a membership level and branch to see your price.</p>
               ) : insuranceWaiting ? (

@@ -59,6 +59,7 @@ Every session has: `email`, `name`, `currency`, `status`, `source`, `type`, `con
 | `county` | sometimes | Correspondence county. Left out when blank. |
 | `postcode` | sometimes | Correspondence postcode. Left out when blank. |
 | `monthly_plan` | sometimes | Monthly plans only, and only while there is room under Stripe's 50 key limit (it is also on the subscription): JSON of `payments`, `first_payment`, `later_payment`, `one_off_total` (the joining fee and add-ons charged in full with the first payment), `year_one_total` (what is paid over the first twelve months), `admin_fee` and `admin_fee_net`. |
+| `discounts` | sometimes | Only when a school referral code took the joining fee off (PORTAL_DISCOUNTS_ENABLED). JSON array with one entry: `{"type":"referral_code","code":"ACC-0140","school_id":"...","accreditation_id":"...","item":"MEM-JOIN","list_amount":"10.00","discount_amount":"10.00"}`. `code` is the school's Accreditation Reference. The joining fee is not a line on the invoice (`joining_fee_amount` is `0.00`), so book `list_amount` and `discount_amount` from here. Creator records the redemption from this entry when the first payment succeeds. |
 
 ### `membership_insurance`
 
@@ -113,6 +114,7 @@ Every session has: `email`, `name`, `currency`, `status`, `source`, `type`, `con
 | `county` | sometimes | Correspondence county. Left out when blank. |
 | `postcode` | sometimes | Correspondence postcode. Left out when blank. |
 | `monthly_plan` | sometimes | Monthly plans only, and only while there is room under Stripe's 50 key limit (it is also on the subscription): JSON of `payments`, `first_payment`, `later_payment`, `one_off_total` (the joining fee and add-ons charged in full with the first payment), `year_one_total` (what is paid over the first twelve months), `admin_fee` and `admin_fee_net`. |
+| `discounts` | sometimes | Only when a school referral code took the joining fee off (PORTAL_DISCOUNTS_ENABLED). JSON array with one entry: `{"type":"referral_code","code":"ACC-0140","school_id":"...","accreditation_id":"...","item":"MEM-JOIN","list_amount":"10.00","discount_amount":"10.00"}`. `code` is the school's Accreditation Reference. The joining fee is not a line on the invoice (`joining_fee_amount` is `0.00`), so book `list_amount` and `discount_amount` from here. Creator records the redemption from this entry when the first payment succeeds. |
 
 ### `insurance`
 

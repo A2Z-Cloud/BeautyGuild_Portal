@@ -330,3 +330,11 @@ test('damaged waiting data is removed and clearing removes it', () => {
     clearWaiting(blocked);
   });
 });
+
+test('a school code is saved with the other Join answers, and left out when there is none', () => {
+  assert.equal(
+    joinDraft({ f: { ...F, code: 'ABC123' }, d: D, iv: IV, country: 'England' }).answers.membership.f.code,
+    'ABC123',
+  );
+  assert.ok(!('code' in joinDraft({ f: { ...F, code: '' }, d: D, iv: IV, country: 'England' }).answers.membership.f));
+});

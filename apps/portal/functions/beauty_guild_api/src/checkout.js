@@ -12,6 +12,7 @@ const { ITEMS, SERVICES, pounds, netPounds, membershipChangeOptions } = require(
 const { prorate } = require('./prorata');
 const { saveRevision } = require('./insuranceRevisions');
 const plans = require('./plans');
+const { createDiscounts, discountsMetadata } = require('./discounts');
 const { fitToStripeLimit, filledCount, MAX_FILLED_KEYS } = require('./metadataContract');
 
 const STRIPE = 'https://api.stripe.com/v1';
@@ -25,6 +26,8 @@ function registerCheckoutRoutes(
   app,
   {
     publicQuotesEnabled = false,
+    discountsEnabled = false,
+    discountReferenceField = '',
     membershipChangesEnabled = false,
     insuranceChangesEnabled = false,
     insuranceChangesWritesEnabled = false,
@@ -43,6 +46,8 @@ function registerCheckoutRoutes(
 ) {
   const router = express.Router();
   const { call: crm } = createCrmClient({ getCrmHeaders, crmApiDomain, fetchImpl });
+  // School referral code and the 30 day joining fee rule: absent unless PORTAL_DISCOUNTS_ENABLED is 'true'.
+  const discounts = discountsEnabled ? createDiscounts({ crm, referenceField: discountReferenceField, now }) : null;
   const limiter = createRateLimiter({ limit: 20, windowMs: 60 * 1000, now });
   // Each insurance pay attempt writes 5 to 15 CRM records, so it has its own, lower limits.
   const insuranceMinute = createRateLimiter({ limit: 3, windowMs: 60 * 1000, now });
@@ -190,6 +195,7 @@ function registerCheckoutRoutes(
       input,
       user: guest ? null : req.portalUser,
       risk: guest ? null : riskChecks,
+      discounts,
     });
     if (prepared.alreadyPaid) return { service, contact, alreadyPaid: true };
     // An insurance change is payable only when the writes and the payment switches are both on (docs/delivery/mta-r3-plan.md, the gate).
@@ -240,6 +246,21 @@ function registerCheckoutRoutes(
         term: 'ongoing',
       });
     }
+    // A referral code that took the joining fee off: the amount is the fee's live price, so a price change is never out of step.
+    const joiningFeePence = prepared.joiningFee?.due ? (await priceFor('joining_fee')).unit : 0;
+    const discount = prepared.discount
+      ? {
+          code: prepared.discount.code,
+          school: prepared.discount.school,
+          indicative: prepared.discount.indicative,
+          item: 'joining_fee',
+          itemCode: ITEMS.joining_fee.code,
+          listPence: joiningFeePence,
+          amountPence: joiningFeePence,
+          label: 'Joining fee waived (code ' + prepared.discount.code + ')',
+          lineName: ITEMS.joining_fee.name,
+        }
+      : null;
     if (!lines.length && !prepared.blocked) throw new HttpError(422, 'INVALID_REQUEST', 'Choose something to pay for.');
     // What the yearly price is, before a monthly plan turns it into shares.
     const annualPence = lines.reduce((t, l) => t + l.totalPence, 0);
@@ -309,6 +330,8 @@ function registerCheckoutRoutes(
         service,
         contact,
         prepared,
+        discount,
+        joiningFeePence,
         lines: monthly,
         fees,
         plan,
@@ -321,6 +344,8 @@ function registerCheckoutRoutes(
       service,
       contact,
       prepared,
+      discount,
+      joiningFeePence,
       lines,
       fees,
       annualPence,
@@ -341,6 +366,26 @@ function registerCheckoutRoutes(
           ...(b.prepared.details ? { details: b.prepared.details } : {}),
           ...(b.prepared.revisionDetails ? { revisions: b.prepared.revisionDetails } : {}),
           ...(b.prepared.blocked ? { blocked: b.prepared.blocked } : {}),
+          // Only with discounts on, and only on the Join page's membership: whether a joining fee is due (so the page can offer a code box),
+          // the discount that applies (label, amount, which line), and the one message when a code was refused or is not needed.
+          ...(b.prepared.joiningFee
+            ? { joiningFee: { due: b.prepared.joiningFee.due, amountPence: b.joiningFeePence } }
+            : {}),
+          ...(b.discount
+            ? {
+                discount: {
+                  code: b.discount.code,
+                  label: b.discount.label,
+                  amountPence: b.discount.amountPence,
+                  line: b.discount.item,
+                  lineName: b.discount.lineName,
+                  indicative: Boolean(b.discount.indicative),
+                },
+              }
+            : {}),
+          ...(b.prepared.codeResult && b.prepared.codeResult.status !== 'applied'
+            ? { codeResult: { status: b.prepared.codeResult.status, message: b.prepared.codeResult.message } }
+            : {}),
           // A monthly plan: 12 payments a year, the first including the joining fee and any add-ons in full, every later one (and every renewal) the same ongoing amount.
           ...(b.plan
             ? {
@@ -366,6 +411,7 @@ function registerCheckoutRoutes(
     service: String(src.service || ''),
     recordId: String(src.recordId || ''),
     centreId: String(src.centreId || ''),
+    code: String(src.code || '').slice(0, 60),
     addons: src.addons && typeof src.addons === 'object' ? src.addons : parseAddons(src.addons),
     level: String(src.level || ''),
     branch: String(src.branch || ''),
@@ -633,6 +679,10 @@ function registerCheckoutRoutes(
       if (!b.alreadyPaid && !b.contact && b.service.allowNoContact && b.prepared?.blocked?.status !== 'INCOMPLETE')
         b = await build(req, input, { createContact: true });
       if (b.alreadyPaid) return res.json({ alreadyPaid: true });
+      // A code that is wrong is never ignored at payment: the customer would pay the fee they thought was waived.
+      const codeStatus = b.prepared.codeResult?.status;
+      if (codeStatus === 'invalid') throw new HttpError(422, 'CODE_INVALID', b.prepared.codeResult.message);
+      if (codeStatus === 'limited') throw new HttpError(429, 'RATE_LIMIT', b.prepared.codeResult.message);
       if (b.prepared.blocked) {
         const blocked = b.prepared.blocked;
         const recorded = blocked.status !== 'INCOMPLETE' && b.prepared.refer ? await recordReferral(req, b) : null;
@@ -679,6 +729,7 @@ function registerCheckoutRoutes(
               namePrefix: revisionNamePrefix,
             })
           : null;
+        const quoteReference = 'BGP-' + now().toString(36).toUpperCase();
         const catalogue = b.lines.filter(l => l.item);
         const amounts = {};
         for (const l of catalogue) amounts[l.item] = pounds(l.totalPence);
@@ -696,6 +747,8 @@ function registerCheckoutRoutes(
             insuranceIds,
             fees: b.fees,
             annualPence: b.annualPence,
+            quoteReference,
+            discountsEntry: b.discount ? discountsMetadata(b.discount) : '',
           }),
         };
         // Stripe allows 50 filled metadata keys. The plan is also on the subscription, so it is only added here while there is room.

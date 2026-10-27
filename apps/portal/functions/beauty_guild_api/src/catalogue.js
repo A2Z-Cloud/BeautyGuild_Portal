@@ -10,6 +10,7 @@ const { loadCover } = require('./cover');
 const insChange = require('./insuranceChange');
 const { saveRevision, markAwaitingPayment } = require('./insuranceRevisions');
 const insurance = require('./insurance');
+const { NOT_DUE } = require('./discounts');
 
 const ID = /^\d{10,25}$/;
 // How far ahead a start date may be, per service (UAT AL-INS-001). The same limit is used by the date pickers.
@@ -522,7 +523,7 @@ SERVICES.insurance = {
 SERVICES.membership = {
   title: 'Membership',
   allowNoContact: true,
-  async prepare({ req, crm, contact, input, user, risk }) {
+  async prepare({ req, crm, contact, input, user, risk, discounts }) {
     const level = String(input.level || ''),
       branch = String(input.branch || '');
     if (level === 'international')
@@ -573,8 +574,19 @@ SERVICES.membership = {
     // On a monthly plan the yearly price is divided by 12. The joining fee and the add-ons are spread over the first 12 payments only
     // (term year_one); the membership and any extra branches carry on (see plans.js).
     const lines = [{ item: 'membership_' + level + '_annual', quantity: 1, term: 'ongoing' }];
-    if (await joiningFeeDue(req, crm, contact?.id, start))
-      lines.push({ item: 'joining_fee', quantity: 1, term: 'year_one' });
+    // Whether a joining fee is due is decided by joiningFeeDue (a gap of more than a month since the last membership ended).
+    const feeDue = await joiningFeeDue(req, crm, contact?.id, start);
+    // A school referral code takes the joining fee off. The line is left out here, before plans.splitMonthly runs, so yearly and monthly are exact.
+    let discount = null,
+      codeResult = null;
+    if (discounts && feeDue && input.code) {
+      const checked = await discounts.check({ req, raw: input.code, userId: user?.id, guest: !user });
+      if (checked.status === 'ok') {
+        discount = { code: checked.code, school: checked.school, indicative: checked.indicative };
+        codeResult = { status: 'applied', code: checked.code, indicative: checked.indicative };
+      } else codeResult = { status: checked.status, message: checked.message };
+    } else if (discounts && !feeDue && input.code) codeResult = { status: 'not_due', message: NOT_DUE };
+    if (feeDue && !discount) lines.push({ item: 'joining_fee', quantity: 1, term: 'year_one' });
     if (secondary.length) lines.push({ item: 'membership_branch', quantity: secondary.length, term: 'ongoing' });
     for (const [key, quantity] of Object.entries(addons)) lines.push({ item: ADDONS[key], quantity, term: 'year_one' });
     if (input.insurance && level === 'associate') throw NEEDS_FULL();
@@ -592,7 +604,11 @@ SERVICES.membership = {
       beforePay: ins?.beforePay,
       refer: ins?.refer,
       fingerprint: ins?.fingerprint,
-      metadata: ({ lines: priced, total, insuranceIds, fees }) => {
+      // What the checkout needs to price, show and record the code (see checkout.js).
+      joiningFee: discounts ? { due: feeDue } : null,
+      discount,
+      codeResult,
+      metadata: ({ lines: priced, total, insuranceIds, fees, discountsEntry, quoteReference }) => {
         const by = item => priced.find(l => l.item === item);
         const gross = item => (by(item) ? pounds(by(item).totalPence) : '0.00');
         const netOf = l => netPounds(l.item, l.totalPence, l.origQuantity ?? l.quantity, l.scale ?? 1);
@@ -601,7 +617,7 @@ SERVICES.membership = {
         const totalNet = priced.reduce((t, l) => t + Number(netOf(l)), 0).toFixed(2);
         return {
           type: ins ? 'membership_insurance' : 'membership',
-          quote_reference: 'BGP-' + Date.now().toString(36).toUpperCase(),
+          quote_reference: quoteReference || 'BGP-' + Date.now().toString(36).toUpperCase(),
           entry_point: contact && !contact.createdNow ? 'member' : 'public',
           contact_id: contact?.id || '',
           membership_profile_id: member?.profileId || '',
@@ -652,6 +668,7 @@ SERVICES.membership = {
                 insurance_extension_ids: '',
                 insurance_declarations_id: '',
               }),
+          ...(discountsEntry ? { discounts: discountsEntry } : {}),
           total_amount: total,
           total_amount_net: (Number(totalNet) + (ins ? ins.quote.totalPence / 100 + fees.netPence / 100 : 0)).toFixed(
             2,

@@ -157,6 +157,8 @@ function createApp({
   });
   registerCheckoutRoutes(app, {
     publicQuotesEnabled: config.publicQuotesEnabled,
+    discountsEnabled: config.discountsEnabled,
+    discountReferenceField: config.discountReferenceField,
     membershipChangesEnabled: config.membershipChangesEnabled,
     insuranceChangesEnabled: config.insuranceChangesEnabled,
     insuranceChangesWritesEnabled: config.insuranceChangesWritesEnabled,
