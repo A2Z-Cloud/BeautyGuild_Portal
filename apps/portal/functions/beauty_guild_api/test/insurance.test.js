@@ -1,7 +1,15 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { clean, calculateQuote, evaluateRules, territory, TREATMENT_EXTENSIONS, IPT_RATE } = require('../src/insurance');
+const {
+  clean,
+  calculateQuote,
+  evaluateRules,
+  territory,
+  propertyRequired,
+  TREATMENT_EXTENSIONS,
+  IPT_RATE,
+} = require('../src/insurance');
 
 const DECL = ['no', 'no', 'no', 'no', 'no', 'yes', 'yes'];
 const CONFIRM = {
@@ -117,16 +125,20 @@ test('STOP rules: territory, wage roll, sums insured, declarations the customer 
   assert.ok(codes(rules({ insSalon: true, insWageRoll: 125001 })).includes('WAGE_ROLL_LIMIT'));
   assert.ok(codes(rules({ insSalon: true, insContents: true, insStock: 250001 })).includes('CONTENTS_LIMIT'));
   assert.ok(
-    codes(rules({ insSalon: true, insBuildingsCover: true, insBuildingsSI: 500001 })).includes('BUILDINGS_LIMIT'),
-  );
-  assert.ok(
-    codes(rules({ insSalon: true, insBuildingsCover: true, insBuildingsSubsidenceDeclaration: 'no' })).includes(
-      'BUILDINGS_SUBSIDENCE',
+    codes(rules({ insSalon: true, insContents: true, insBuildingsCover: true, insBuildingsSI: 500001 })).includes(
+      'BUILDINGS_LIMIT',
     ),
   );
-  assert.ok(codes(rules({ insSalon: true, insBiCover: true, insBiIncome: 300001 })).includes('BI_LIMIT'));
   assert.ok(
-    codes(rules({ insSalon: true, insPropertyAwayCover: true, insPropertyAwaySI: 25001 })).includes(
+    codes(
+      rules({ insSalon: true, insContents: true, insBuildingsCover: true, insBuildingsSubsidenceDeclaration: 'no' }),
+    ).includes('BUILDINGS_SUBSIDENCE'),
+  );
+  assert.ok(
+    codes(rules({ insSalon: true, insContents: true, insBiCover: true, insBiIncome: 300001 })).includes('BI_LIMIT'),
+  );
+  assert.ok(
+    codes(rules({ insSalon: true, insContents: true, insPropertyAwayCover: true, insPropertyAwaySI: 25001 })).includes(
       'PROPERTY_AWAY_LIMIT',
     ),
   );
@@ -254,7 +266,7 @@ test('the Employers Liability wage roll figure is still rated at 0.2%, minimum Â
   assert.ok(!codes(rules({ insSalon: true, insSalonEL: true, insWageRoll: 125000 })).includes('WAGE_ROLL_LIMIT'));
 });
 test('the Â£10,000 single property away item is a condition of cover in the journey, not a check on the quote (agreed 21 October)', () => {
-  const base = { insSalon: true, insPropertyAwayCover: true, insPropertyAwaySI: 20000 };
+  const base = { insSalon: true, insContents: true, insPropertyAwayCover: true, insPropertyAwaySI: 20000 };
   assert.ok(!codes(rules({ ...base, insPropertyAwayMaxItem: 50000 })).includes('PROPERTY_AWAY_ITEM_LIMIT'));
   assert.ok(
     codes(rules({ ...base, insPropertyAwaySI: 30000 })).includes('PROPERTY_AWAY_LIMIT'),
@@ -363,4 +375,38 @@ test('every quote row carries a price list code that exists in Books, whatever t
   // every Books insurance code except the staff-only adjustment and IPT (which is its own line) is reachable from the portal
   const unreachable = [...BOOKS_INSURANCE_SKUS].filter(c => !seen.has(c) && !['INS-ADJ', 'INS-IPT'].includes(c));
   assert.deepEqual(unreachable, []);
+});
+
+test('Money, Buildings, Business Interruption and Property Away need Contents cover (Guild, 26 October 2026)', () => {
+  const answers = {
+    insSalon: true,
+    insMoneyCover: true,
+    insBuildingsCover: true,
+    insBuildingsSI: 100000,
+    insBiCover: true,
+    insBiIncome: 10000,
+    insPropertyAwayCover: true,
+    insPropertyAwaySI: 4000,
+  };
+  const without = clean(answers);
+  assert.equal(without.insContents, false);
+  assert.deepEqual(
+    [without.insMoneyCover, without.insBuildingsCover, without.insBiCover, without.insPropertyAwayCover],
+    [false, false, false, false],
+  );
+  const codesOf = q => q.rows.map(r => r.code);
+  assert.deepEqual(
+    codesOf(calculateQuote(without)).filter(c =>
+      ['MONEY', 'BUILDINGS', 'BUSINESS_INTERRUPTION', 'PROPERTY_AWAY'].includes(c),
+    ),
+    [],
+  );
+  const withContents = clean({ ...answers, insContents: true, insComputers: 1000 });
+  assert.deepEqual(
+    codesOf(calculateQuote(withContents))
+      .filter(c => ['MONEY', 'BUILDINGS', 'BUSINESS_INTERRUPTION', 'PROPERTY_AWAY'].includes(c))
+      .sort(),
+    ['BUILDINGS', 'BUSINESS_INTERRUPTION', 'MONEY', 'PROPERTY_AWAY'],
+  );
+  assert.equal(propertyRequired(without), false);
 });

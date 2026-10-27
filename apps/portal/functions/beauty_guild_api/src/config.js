@@ -47,6 +47,18 @@ function loadConfig(env = process.env) {
       .split(',')
       .map(s => s.trim().toLowerCase().replace(/^@/, ''))
       .filter(d => /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(d)),
+    // MTA R2: pro-rated extra branch and flat items on a current membership. Off until Creator handles the membership_change payment.
+    // MTA R3: insurance change quotes (no writes, no payment yet). Off until the verification gate in docs/delivery/mta-r3-plan.md is cleared.
+    // MTA R3-2: saving a quoted change as a revision and draft rows in the CRM. Needs the new CRM fields (docs/api-contracts/pricing-payments.md).
+    // MTA R3-3: paying for a change (one checkout for the basket). Needs the writes switch too, Creator's handler and the FEE-MTA Stripe price.
+    insuranceChangesPaymentEnabled: env.PORTAL_INSURANCE_CHANGES_PAYMENT === 'true',
+    insuranceChangesWritesEnabled: env.PORTAL_INSURANCE_CHANGES_WRITES === 'true',
+    // Policy_Revisions.Name is mandatory and not auto-numbered: a revision is named this prefix, a space and its quote id (default MTA).
+    revisionNamePrefix: String(env.PORTAL_REVISION_NAME_PREFIX || 'MTA')
+      .trim()
+      .slice(0, 40),
+    insuranceChangesEnabled: env.PORTAL_INSURANCE_CHANGES_ENABLED === 'true',
+    membershipChangesEnabled: env.PORTAL_MEMBERSHIP_CHANGES_ENABLED === 'true',
     crmDraftsEnabled: env.PORTAL_CRM_DRAFTS_ENABLED === 'true',
     draftStatus: String(env.PORTAL_CRM_DRAFT_STATUS || 'Draft'),
     // A verified user with no CRM Contact gets one at first save. Set to 'false' to refuse instead.
@@ -76,8 +88,6 @@ function loadConfig(env = process.env) {
     workdriveApiDomain: httpsUrl(env.WORKDRIVE_API_DOMAIN, 'https://www.zohoapis.eu', 'WORKDRIVE_API_DOMAIN'),
     workdriveConnectionName: String(env.WORKDRIVE_CONNECTION_NAME || 'zohoworkdrive'),
     stripeSecretKey: String(env.STRIPE_SECRET_KEY || ''),
-    // Signing secret of the function's own Stripe webhook endpoint (monthly plan schedules). Not Creator's webhook secret.
-    stripeScheduleWebhookSecret: String(env.STRIPE_SCHEDULE_WEBHOOK_SECRET || '').trim(),
     portalPublicOrigin: String(env.PORTAL_PUBLIC_ORIGIN || ''),
     analyticsConnectionName: String(env.ANALYTICS_CONNECTION_NAME || 'analytics'),
     // Insurance risk checks (riskChecks.js). Each is off unless its switch is 'true', and a check that is on fails closed.

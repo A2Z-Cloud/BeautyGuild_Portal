@@ -1,6 +1,7 @@
 'use strict';
 const express = require('express');
 const { HttpError } = require('./errors');
+const { loadCover } = require('./cover');
 const ID = /^\d{10,25}$/;
 const DEFINITIONS = {
   membership: {
@@ -290,6 +291,22 @@ function registerRecordRoutes(
       if (!row || String(row.id) !== String(req.portalContact.id))
         throw new HttpError(404, 'NOT_FOUND', 'Details not found.');
       res.json({ details: mapDetails(row) });
+    }),
+  );
+  // The member's current cover for one of their memberships, read only (see cover.js).
+  router.get(
+    '/membership/:id/cover',
+    safe(async (req, res) => {
+      if (!ID.test(req.params.id)) throw new HttpError(404, 'NOT_FOUND', 'Membership not found.');
+      res.json({
+        cover: await loadCover({
+          call,
+          req,
+          contactId: req.portalContact.id,
+          dealId: req.params.id,
+          isDraft: row => isDraft(row, DEFINITIONS.membership),
+        }),
+      });
     }),
   );
   router.get(

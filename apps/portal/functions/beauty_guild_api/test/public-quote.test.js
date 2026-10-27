@@ -98,24 +98,25 @@ test('a signed-out visitor can price a membership: first charge with the joining
     );
   });
 });
-test('monthly guest pricing: the yearly price and the joining fee spread over 12 payments, rounded up, plus the admin fee', async () => {
+test('monthly guest pricing: the yearly price over 12 payments, rounded up, plus the admin fee, with the joining fee in full on the first payment', async () => {
   await withApp(async ({ quote }) => {
     const r = await quote({ ...BUY, billing: 'monthly' });
     assert.equal(r.status, 200);
-    // 55.00 a year is 4.59 a month (rounded up); the 10.00 joining fee adds 0.83; the admin fee is 1.50
-    assert.equal(r.body.quote.totalPence, 459 + 83 + 150);
+    // 55.00 a year is 4.59 a month (rounded up); the admin fee is 1.50; the 10.00 joining fee is charged once, in full, with the first payment
+    assert.equal(r.body.quote.totalPence, 459 + 150 + 1000);
     assert.deepEqual(r.body.quote.plan, {
       payments: 12,
-      firstPaymentPence: 692,
+      firstPaymentPence: 1609,
       laterPaymentPence: 609,
-      yearOneTotalPence: 692 * 12,
+      oneOffPence: 1000,
+      yearOneTotalPence: 609 * 12 + 1000,
       adminFeePence: 150,
     });
     assert.deepEqual(
       r.body.quote.lines.map(l => [l.name, l.totalPence, l.interval]),
       [
         ['Associate Member membership (monthly)', 459, 'month'],
-        ['Membership joining fee', 83, 'month'],
+        ['Membership joining fee', 1000, null],
         ['Monthly payment admin fee', 150, 'month'],
       ],
     );

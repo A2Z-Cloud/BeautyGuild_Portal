@@ -157,12 +157,16 @@ function createApp({
   });
   registerCheckoutRoutes(app, {
     publicQuotesEnabled: config.publicQuotesEnabled,
+    membershipChangesEnabled: config.membershipChangesEnabled,
+    insuranceChangesEnabled: config.insuranceChangesEnabled,
+    insuranceChangesWritesEnabled: config.insuranceChangesWritesEnabled,
+    insuranceChangesPaymentEnabled: config.insuranceChangesPaymentEnabled,
+    revisionNamePrefix: config.revisionNamePrefix,
     enabled: config.billingEnabled,
     getCurrentUser,
     getCrmHeaders,
     crmApiDomain: config.crmApiDomain,
     stripeKey: config.stripeSecretKey,
-    scheduleWebhookSecret: config.stripeScheduleWebhookSecret,
     publicOrigin: config.portalPublicOrigin,
     riskChecks,
     fetchImpl,

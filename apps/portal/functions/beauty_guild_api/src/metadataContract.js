@@ -13,7 +13,7 @@ const DESCRIPTIONS = {
   currency: 'Always GBP.',
   status: 'Always `pending` when the session is made; the real outcome arrives with the payment events.',
   source: 'Always `portal_v2`, so Creator can tell portal sessions from any other source.',
-  type: 'The purchase type: membership, membership_insurance, insurance, accreditation, additional_venue or membership_addon.',
+  type: 'The purchase type: membership, membership_insurance, insurance, accreditation, membership_change, additional_venue or membership_addon.',
   contact_id: 'The CRM Contact id. Always set when paying: the portal makes the Contact first if there is none.',
   // Membership
   quote_reference: 'A reference for this quote (`BGP-` and a time code). Not unique across retries.',
@@ -22,7 +22,7 @@ const DESCRIPTIONS = {
   existing_membership:
     'JSON of the current membership (type, start_date, expiry_date, deal_id) when renewing or upgrading. Empty for a new member.',
   previous_membership_id: 'The Deal being renewed or upgraded. Empty for a new membership.',
-  change_type: '`new`, `renewal` or `upgrade`.',
+  change_type: '`new`, `renewal` or `upgrade` for a purchase; `mta` for a change to a current membership.',
   membership_level: '`associate`, `full_non_salon` or `full_salon`.',
   primary_branch: 'The main branch: `beauty`, `holistic`, `nails` or `hair`.',
   secondary_branches: 'Comma separated additional branches. Empty if none.',
@@ -31,10 +31,12 @@ const DESCRIPTIONS = {
   subscription_type: '`annual` or `monthly`.',
   membership_start: 'The start of the membership term (yyyy-mm-dd).',
   membership_expiry: 'The end of the membership term (yyyy-mm-dd).',
-  base_membership_amount: 'Gross amount of the membership line on this payment. On a monthly plan, its monthly share.',
+  base_membership_amount:
+    'Gross amount of the membership line on this payment. On a monthly plan, its monthly share (the joining fee, add-ons and extra branches below follow the same rule: only what renews is a monthly share).',
   base_membership_amount_net:
     'The same without VAT. The zero-rated part of a membership is £38.00 a year (divided by 12 on a monthly plan).',
-  joining_fee_amount: 'Gross joining fee on this payment (`0.00` for a renewal).',
+  joining_fee_amount:
+    'Gross joining fee on this payment (`0.00` where it is not charged: a renewal, or a membership starting within a month of the last one ending). On a monthly plan it is the full fee, charged once with the first payment.',
   joining_fee_amount_net: 'Joining fee without VAT.',
   branch_addon_amount: 'Gross amount for extra branches on this payment (`0.00` if none).',
   branch_addon_amount_net: 'Extra branches without VAT.',
@@ -52,10 +54,28 @@ const DESCRIPTIONS = {
   town: 'Correspondence town. Left out when blank.',
   county: 'Correspondence county. Left out when blank.',
   postcode: 'Correspondence postcode. Left out when blank.',
-  total_amount: 'What is charged now, gross. The first payment on a monthly plan.',
+  total_amount:
+    'What is charged now, gross. The first payment on a monthly plan: the ongoing monthly payment plus the joining fee and any add-ons in full.',
   total_amount_net: '`total_amount` without VAT. Insurance premiums are VAT exempt, and IPT is not VAT.',
+  revision_count: 'Insurance changes: how many revisions (start dates) this payment is for, 1 to 3.',
+  revision_ids:
+    'Insurance changes: the Policy_Revisions ids paid for, comma separated, in start date order. Creator applies each once.',
+  effective_dates:
+    'Insurance changes: the start date of each revision (yyyy-mm-dd), comma separated, in the same order as `revision_ids`.',
+  quote_ids:
+    'Insurance changes: the quote reference of each revision (After_Quote_ID), comma separated, in the same order.',
+  mta_fee_amount:
+    'Insurance changes: the adjustment fees in this payment, gross (GBP 5.00 for each revision, including VAT). `0.00` if none.',
+  mta_scope: '`membership` for a change to the membership only (a branch or items), `policy` for an insurance change.',
+  effective_date:
+    'The day the change starts (yyyy-mm-dd): today, for a membership change. The pro-rata runs from this day to the end of the term.',
+  prorata_days: 'Days left in the term from `effective_date`, both end days counted.',
+  prorata_total_days:
+    'Days the whole term runs (365, or 366 if it spans 29 February). The pro-rata is `prorata_days` over this.',
+  branch_yearly_amount:
+    'The full yearly gross price of the extra branches bought, which they cost from the next renewal (what Creator should add to the renewal). `0.00` if none.',
   monthly_plan:
-    "Monthly plans only, and only while there is room under Stripe's 50 key limit (it is also on the subscription): JSON of `payments`, `first_payment`, `later_payment`, `year_one_total`, `admin_fee` and `admin_fee_net`.",
+    "Monthly plans only, and only while there is room under Stripe's 50 key limit (it is also on the subscription): JSON of `payments`, `first_payment`, `later_payment`, `one_off_total` (the joining fee and add-ons charged in full with the first payment), `year_one_total` (what is paid over the first twelve months), `admin_fee` and `admin_fee_net`.",
   // Insurance
   insurance_start_date: 'The policy start date (yyyy-mm-dd).',
   insurance_end_date: 'The policy end date (yyyy-mm-dd).',
@@ -184,6 +204,58 @@ const SESSION_TYPES = {
     optional: ['monthly_plan'],
   },
   additional_venue: { required: ['centre_id', 'accreditation_id'], optional: [] },
+  // Exercised by test/insurance-change-quote.test.js (it needs a fake policy and cover, which the shared scenarios do not have).
+  insurance_change: {
+    required: [
+      'quote_reference',
+      'membership_deal_id',
+      'insurance_policy_id',
+      'change_type',
+      'mta_scope',
+      'revision_count',
+      'revision_ids',
+      'effective_dates',
+      'quote_ids',
+      'insurance_amount',
+      'insurance_net_amount',
+      'insurance_ipt_amount',
+      'mta_fee_amount',
+      'named_employee_membership',
+      'total_amount',
+      'total_amount_net',
+    ],
+    optional: [],
+  },
+  membership_change: {
+    required: [
+      'quote_reference',
+      'membership_deal_id',
+      'membership_profile_id',
+      'change_type',
+      'mta_scope',
+      'effective_date',
+      'membership_start',
+      'membership_expiry',
+      'prorata_days',
+      'prorata_total_days',
+      'secondary_branches',
+      'branch_addon_amount',
+      'branch_addon_amount_net',
+      'branch_yearly_amount',
+      'addons',
+      'bundle_amount',
+      'bundle_amount_net',
+      'certificate_amount',
+      'certificate_amount_net',
+      'badge_amount',
+      'badge_amount_net',
+      'sticker_amount',
+      'sticker_amount_net',
+      'total_amount',
+      'total_amount_net',
+    ],
+    optional: [],
+  },
   membership_addon: {
     required: [
       'membership_deal_id',
@@ -202,15 +274,12 @@ const SESSION_TYPES = {
 const SUBSCRIPTION = {
   plan: '`annual` or `monthly`.',
   contact_id: 'The CRM Contact id, so a renewal can find the customer without the session.',
-  phased:
-    '`true` or `false`, monthly plans only: whether the plan has year-one lines that a schedule drops at payment 13.',
 };
 const SUBSCRIPTION_REQUIRED = ['plan', 'contact_id'];
 
 // Product metadata on inline Stripe lines (read by expanding `data.price.product` on the session's line items).
 const LINE_PRODUCT = {
   sku: "The price list code (the Books SKU). Catalogue lines have it as the price's `lookup_key` instead.",
-  phase: 'Monthly plans only: `ongoing`, or `year_one` for lines a schedule drops after 12 payments.',
 };
 
 const keysFor = type => {
@@ -273,7 +342,11 @@ function fitToStripeLimit(meta) {
   return out;
 }
 
+// Types whose keys are checked by their own test, not by the shared scenarios.
+const TESTED_ELSEWHERE = new Set(['insurance_change']);
+
 module.exports = {
+  TESTED_ELSEWHERE,
   MAX_FILLED_KEYS,
   filledCount,
   fitToStripeLimit,
