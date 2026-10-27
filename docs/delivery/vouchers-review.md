@@ -235,7 +235,7 @@ All four are answered (section 2.1, follow-up 1 to 4). A2Z proposes the waiver r
 **Proposed waiver reasons** (a CRM picklist the Guild can extend without a release, with an optional free-text note, required when the reason is Other): Goodwill Gesture, Complaint, Upgrade, Promotion, Payment Problem, Other. They are chosen in the CRM phone payment widget and on the payment link, and stored in the waiver log with the staff member.
 
 ### 4.2a Open, arising from the follow-up
-1. **The £25 GTi voucher today.** New joins, renewals and upgrades through the new portal need to keep issuing it. Where do the individual codes live today (Enki, the CRM or both), how are they generated and what format are they, and what happens to a member's code when their membership is cancelled? Please send the examples Qudsiya offered.
+1. **The £25 GTi voucher today.** New joins, renewals and upgrades through the new portal need to keep issuing it. The codes sit in the CRM `Discount_Voucher` module (27 October). Still to confirm from the examples Qudsiya offered: how a code is generated and its format, how the member is told, whether Enki also holds or reads the code, and what happens to a member's code when their membership is cancelled.
 
 ### 4.3 For us to confirm ourselves
 - What `Referral_Code_Active` means in the CRM (school current, or code on or off).
@@ -313,7 +313,7 @@ Each phase ships on its own, behind a switch (an environment flag such as `PORTA
 
 **How.**
 1. **Trigger.** Creator creates the voucher when the membership is verified and becomes Active, from the first paid invoice (a new membership, a renewal or an upgrade). One voucher per Contact per membership term: a retry finds the existing one and never creates a second.
-2. **Record.** A CRM voucher record (code, Contact, membership, value £25, valid until the membership expiry), in the format and place the Guild uses today (to confirm from Qudsiya's examples).
+2. **Record.** A record in the existing CRM module `Discount_Voucher` (named by the user on 27 October; the exact API name and field names are to be checked against the Guild CRM before building, for example with the portal's diagnostics route `fields?module=...`). It holds the code, Contact, membership, value £25 and valid-until date. The same module is where bespoke vouchers (3.5) can live, so the earlier `Voucher` module proposal becomes `Discount_Voucher` plus whatever fields it lacks.
 3. **Cancellation.** The voucher is voided when the membership is cancelled (it lasts until the membership expires or is cancelled). This is shared with the cancellations workstream.
 4. **Redemption.** Unchanged for now: GTi courses are redeemed where they are today (Enki) until GTi is rebuilt. If codes are held in Enki, the new system must write the voucher there too, or Enki must read it from the CRM: to confirm.
 5. **Telling the member.** The member needs to be told their code. How this happens today (email, the portal, or staff) is to confirm.
