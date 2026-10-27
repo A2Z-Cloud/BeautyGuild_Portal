@@ -1,6 +1,6 @@
 # Beauty Guild Staff Workspace | Functional and UX Specification
 
-**Document version:** 2.2 (shared staff/customer journey clarification, 20 October 2026)  
+**Document version:** 2.3 (adds portal mid-term adjustments, staff visibility only, 28 October 2026)  
 **Product:** Zoho CRM Staff Workspace widget  
 **Location:** BeautyGuild_Portal / widgets / crm / beauty-guild-staff-workspace  
 **Audience:** Solution architecture, CRM and Catalyst developers, design, QA, delivery and customer reviewers  
@@ -117,7 +117,7 @@ Apply consistently to processing queues, Customers/Accounts, general search, rel
 | Deals | Membership Application / Transaction | Join/renew/upgrade and payment/transaction stage |
 | Membership | Member Profile | Current membership-related state |
 | Insurance_Policy | Insurance Policy | Insurance application, underwriting, cover and payment |
-| Insurance_Extension, Insured_People, Insured_Premises, Declarations, Policy_Revisions | Policy-related records | Cover, named people/premises, declarations and revisions |
+| Insurance_Extension, Insured_People, Insured_Premises, Declarations, Policy_Revisions | Policy-related records | Cover, named people/premises, declarations and revisions (portal changes: see 5.8) |
 | Membership_Extension | Membership Add-ons | Purchased or linked extensions |
 | Training_Centre_Accred | Accreditation Application | Application processing stage and accreditation outcome |
 | Training_Centres, Accreditation_Centre_Link, Accreditation_Extensions | Training centres and linked centres | Centre and accreditation relationships |
@@ -214,6 +214,39 @@ The source-code review identifies the following **implementation risks**. They a
 - Show `Document_Status = Draft` and any draft schedule links as **Draft documents, not evidence of cover**. Missing links, error states or placeholder policy wordings must not render as completed/issued.
 - Restrict Manual Review Outcome, Policy Status, Payment Status, member insurance restrictions and screening dispositions to native verified CRM actions/authorised workflows until write contracts are approved.
 - For queues, use `Next_Action` and `Next_Action_Date` where populated, but distinguish blank values from 'no action required'. Do not invent workflow SLA counters or totals.
+
+### 5.8 Portal mid-term adjustments (Policy_Revisions): what staff see
+
+Customers can request mid-term changes to a policy in Portal V2 (see `requirements/mta/customer-portal-functional-spec.md` and `docs/delivery/mta-r3-plan.md`). The portal writes **new** records only and never edits live cover. The widget presents them read only and deep-links into the native CRM record. It does not create, price, approve, pay or apply a revision, and it does not change any revision status.
+
+**What the portal writes (all behind off-by-default switches until verified):**
+- A `Policy_Revisions` header named `MTA <quote id>` (or `MTA REQ-<random>` for a request with nothing to quote), with Requested_Effective_Date, After_Quote_ID, deltas and `Request_Details` (JSON: what was asked, the declarations, the quote items, and the live rows and people the change ends).
+- For a payable change, draft `Insurance_Extension` and `Insured_People` rows: Status Draft, linked by `Policy_Revision`, dated Effective_From to the policy end, with `Supersedes_Extension` where one replaces another.
+- `Stripe_Checkout_Session_ID` once a checkout exists.
+
+**Status vocabulary, and who sets it:**
+
+| Revision_Status | Meaning for staff | Set by |
+| --- | --- | --- |
+| Quoted | Member has a payable quote saved, not yet in checkout | Portal |
+| Under Review | Referred to the office (for example Employers' Liability, a monthly payer, a rule the portal will not quote). **Needs staff action** | Portal |
+| Awaiting Payment | A Stripe checkout is open for this revision | Portal |
+| Approved, Scheduled, Applied | Paid and verified, then queued or applied | Creator only |
+| Withdrawn | Abandoned or failed part way. Draft rows stay linked and are not cover | Portal |
+| Draft | Not used by the portal for revisions today | n/a |
+
+**Required display behaviour:**
+- Insurance detail adds a **Changes** group listing each revision with name, requested effective date, status badge, net premium delta, IPT, VAT and MTA fee where present, and a link to open the revision in CRM. Use explicit state mappings, a neutral fallback for unknown values, and never imply a revision is applied unless the status is Applied.
+- **Under Review** revisions appear as an attention state in the Insurance list and in the Changes group, with the reasons from `Request_Details` shown in plain words.
+- Draft `Insurance_Extension` and `Insured_People` rows with a Policy_Revision are labelled **Pending change, not current cover** and are kept out of the policy's current cover totals and counts. The same applies to Withdrawn revisions.
+- A policy with a revision in Awaiting Payment, Approved or Scheduled shows a **Change in progress** badge (the portal blocks a second change while one is in flight).
+- The Request_Details declarations and confirmations are shown as **customer-confirmed in the portal**, with the quote id and rules version, so staff can pick up a referral without asking again.
+- Documents, emails and the bordereau for a change remain CRM and Creator processes. The widget does not generate or send them and does not present draft documents as evidence of cover (INS-G09).
+
+**Guardrails:**
+- Draft rows and revision records must not trigger policy activation or alter the existing active cover. Activation (`a2z_ins_policy_activation`) and the other INS workflows must be checked against draft rows on a live policy before the portal writes are switched on (a gate in `docs/delivery/mta-r3-plan.md`).
+- Do not offer staff a Paid, Approved or Applied edit on a revision. Payment provenance is the verified Stripe webhook handled by Creator (INS-G07 applies to revisions too).
+- Employers' Liability and monthly-payer changes are handled on the office route: staff action in native CRM, not in the widget.
 
 ## 6. Assisted creation (staff acting on behalf of a customer)
 
@@ -337,7 +370,7 @@ Do not store API keys, tokens, Stripe secrets or unrestricted service credential
 - A new competing CRM workflow/approval engine.
 - Direct raw card capture in the widget.
 - Recreating Stripe, Creator webhooks, sanctions algorithms or rating tables in widget JavaScript.
-- Insurance MTA/endorsement servicing, renewals and policy issuance beyond existing verified CRM processes.
+- Staff-created or staff-edited insurance MTAs, applying a revision, ending cover rows, renewals and policy issuance beyond existing verified CRM processes. The widget only **shows** portal-originated revisions and deep-links to the native record (section 5.8); applying them belongs to the Creator payments app.
 - Replacing Portal V2 or changing its customer authentication architecture as a side effect.
 - Assumed deployment to Catalyst merely because widget files live in the same repository.
 
@@ -376,6 +409,13 @@ Do not store API keys, tokens, Stripe secrets or unrestricted service credential
 | A29 | Customer starts then staff resumes | Staff widget opens existing draft and linked records; no duplicate parent or loss of progress |
 | A30 | Alternate staff/customer edits | Latest saved answers and revision controls prevent silent overwrite and reconcile incomplete linked records |
 | A31 | Staff generates/copies checkout URL | Contact-specific session and Creator metadata; correct amount, idempotent reuse and expired/already-paid handling |
+| A32 | Open an Insurance policy with a Quoted revision | Changes group shows the revision with correct status, date and deltas; current cover totals exclude its draft rows |
+| A33 | Open a policy with an Under Review (referred) revision | Attention state in list and detail, plain-language reasons, link to the native record; no write action in the widget |
+| A34 | Policy with Awaiting Payment, Approved or Scheduled revision | Change in progress badge shown; nothing shown as applied until status is Applied |
+| A35 | Withdrawn revision | Shown as withdrawn; its draft rows are not counted as cover |
+| A36 | Basket of several dated revisions paid in one checkout | Each revision listed separately with the same session id; one MTA fee per effective date |
+| A37 | Draft revision rows on a live policy | No activation, status change, document generation or email fires from the draft rows |
+| A38 | Customer-confirmed declarations on a revision | Displayed as portal-confirmed with quote id and rules version; not editable in the widget |
 
 For unsupported/unfinished features, UAT must record **not ready**, rather than treating a browser preview, mock SDK test or source-code presence as a pass.
 
@@ -389,6 +429,8 @@ For unsupported/unfinished features, UAT must record **not ready**, rather than 
 - Implement the **confirmed shared staff/customer application hand-off** using current Portal V2 draft adapters (Accreditation linked records versus Membership/Insurance Journey ID + Note state). Test staff-start/customer-resume and customer-start/staff-resume, new Contact registration, account email matching, revision conflicts and deduplication. These are integration tests, not new business-process design decisions.
 - Agree the staff declaration attestation vs customer-confirmed evidence requirements with Guild/insurance stakeholders.
 - Implement a narrowly authorised CRM staff context for the **same existing** Catalyst pricing/quote/Checkout code, resolving the staff-selected customer Contact and keeping customer identifiers in Stripe/Creator metadata. Confirm existing Creator webhook compatibility and the existing Stripe payment-link configuration; **no separate MOTO integration**.
+- Confirm the Policy_Revisions fields the Changes group reads (Revision_Status, Requested_Effective_Date, Premium_Delta_Net, IPT_Delta, VAT_Delta, MTA_Fee, Request_Details, Stripe_Checkout_Session_ID) and the new Insured_People fields (Policy_Revision, Effective_From, Effective_To), including layout and role visibility.
+- Agree with the Guild how Under Review revisions are queued, owned and closed in native CRM (an owner, a Next_Action and a task), since the portal only creates them.
 - Confirm WorkDrive/CRM email/document access, record visibility and paging.
 - Resolve **INS-G01–INS-G12** against the new Insurance Deluge functions: explicit underwriting/sanctions/member eligibility clearance, verified payment provenance, quote version/reprice gate, reliable screening precedence, reviewer audit, document approval, and incomplete-quote schedule.
 - Agree whether a paid-but-not-activated policy may have a Payment_Status of Paid while blocked; show this as a processing exception without automatically reversing financial state.
