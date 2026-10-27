@@ -153,8 +153,6 @@ function createApp({
     crmApiDomain: config.crmApiDomain,
     fetchImpl,
     module: config.voucherModule,
-    fields: config.voucherFields,
-    activeStatus: config.voucherActiveStatus,
     now,
   });
   registerCheckoutRoutes(app, {

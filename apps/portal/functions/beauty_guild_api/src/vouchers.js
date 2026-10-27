@@ -1,39 +1,44 @@
 'use strict';
-// The signed-in member's own £25 GTi voucher(s), read from the CRM Discount_Voucher module. Read only: Creator
-// creates and voids the vouchers (docs/delivery/vouchers-phase-4-gti-voucher.md). Off unless PORTAL_VOUCHERS_ENABLED.
-// The module and field API names are NOT yet verified against the Guild CRM, so they are settings, not constants.
+// The signed-in member's own personal £25 GTi voucher(s), read from the CRM Discount_Voucher module. Read only:
+// Creator creates and voids them (docs/delivery/vouchers-phase-4-gti-voucher.md). Off unless PORTAL_VOUCHERS_ENABLED.
+// Field names are the real ones from the Guild CRM. Voucher_Code is a new unique text field A2Z adds to the module.
 const express = require('express');
 const { HttpError } = require('./errors');
 const { createCrmClient, resolveContact } = require('./records');
 
-const DEFAULT_FIELDS = Object.freeze({
-  code: 'Voucher_Code',
-  contact: 'Contact',
-  value: 'Value',
-  validUntil: 'Valid_Until',
-  status: 'Status',
-});
-// Status values that mean the code can still be spent. Anything else (Used, Void, Expired and so on) is shown as not usable.
-const DEFAULT_ACTIVE_STATUS = 'Active';
+const PERSONAL_TYPE = 'Personal £25 GTI';
+const FIELDS = [
+  'Voucher_Code',
+  'Voucher_Type',
+  'Assigned_Contact',
+  'Discount_Value',
+  'Valid_To',
+  'Active',
+  'Maximum_Total_Uses',
+  'Current_Usage_Count',
+];
 const uri = s => encodeURIComponent(String(s));
 const text = v => (v == null ? '' : String(v).trim());
 
-// A voucher is usable when its status is the active one and its valid-until date (a CRM date, yyyy-mm-dd) has not passed.
-function voucherState(status, validUntil, today, activeStatus = DEFAULT_ACTIVE_STATUS) {
-  if (text(status).toLowerCase() !== activeStatus.toLowerCase()) return text(status) || 'Unknown';
-  if (validUntil && String(validUntil).slice(0, 10) < today) return 'Expired';
+// Active is a Boolean (false once voided). Used is derived from the counts. Expired is Valid_To (a DateTime) in the past.
+function voucherState(row, nowMs) {
+  if (row.Active !== true) return 'Void';
+  const max = Number(row.Maximum_Total_Uses);
+  if (Number.isFinite(max) && max > 0 && Number(row.Current_Usage_Count || 0) >= max) return 'Used';
+  const end = row.Valid_To ? Date.parse(row.Valid_To) : NaN;
+  if (Number.isFinite(end) && end < nowMs) return 'Expired';
   return 'Active';
 }
 
-function mapVoucher(row, fields, today, activeStatus) {
-  const value = Number(row[fields.value]);
-  const state = voucherState(row[fields.status], row[fields.validUntil], today, activeStatus);
+function mapVoucher(row, nowMs) {
+  const value = Number(row.Discount_Value);
+  const state = voucherState(row, nowMs);
   return {
     id: String(row.id),
-    // The code is shown only while it can be spent; a spent, void or expired code is not useful to the member.
-    code: state === 'Active' ? text(row[fields.code]) : null,
+    // The code is shown only while it can be spent; a used, void or expired code is no use to the member.
+    code: state === 'Active' ? text(row.Voucher_Code) || null : null,
     value: Number.isFinite(value) ? value : null,
-    validUntil: row[fields.validUntil] ? String(row[fields.validUntil]).slice(0, 10) : null,
+    validUntil: row.Valid_To ? String(row.Valid_To).slice(0, 10) : null,
     status: state,
     usable: state === 'Active',
   };
@@ -41,19 +46,8 @@ function mapVoucher(row, fields, today, activeStatus) {
 
 function registerVoucherRoutes(
   app,
-  {
-    enabled,
-    getCurrentUser,
-    getCrmHeaders,
-    crmApiDomain,
-    fetchImpl = fetch,
-    module = 'Discount_Voucher',
-    fields = {},
-    activeStatus = DEFAULT_ACTIVE_STATUS,
-    now = Date.now,
-  },
+  { enabled, getCurrentUser, getCrmHeaders, crmApiDomain, fetchImpl = fetch, module = 'Discount_Voucher', now = Date.now },
 ) {
-  const f = { ...DEFAULT_FIELDS, ...fields };
   const router = express.Router();
   const { call } = createCrmClient({ getCrmHeaders, crmApiDomain, fetchImpl });
   router.use(async (req, res, next) => {
@@ -68,21 +62,25 @@ function registerVoucherRoutes(
   });
   router.get('/', async (req, res, next) => {
     try {
-      const criteria = '(' + f.contact + ':equals:' + req.portalContact.id + ')';
+      const criteria =
+        '((Assigned_Contact:equals:' +
+        req.portalContact.id +
+        ')and(Voucher_Type:equals:' +
+        PERSONAL_TYPE +
+        ')and(Active:equals:true))';
       const rows = await call(
         req,
-        module +
-          '/search?criteria=' +
-          uri(criteria) +
-          '&fields=' +
-          uri(['id', f.code, f.contact, f.value, f.validUntil, f.status].join(',')) +
-          '&per_page=50',
+        module + '/search?criteria=' + uri(criteria) + '&fields=' + uri(['id', ...FIELDS].join(',')) + '&per_page=50',
       );
-      const today = new Date(now()).toISOString().slice(0, 10);
-      // Never trust the search alone: only rows that name this Contact are returned.
-      const mine = rows.filter(r => String(r[f.contact]?.id ?? r[f.contact]) === String(req.portalContact.id));
-      const vouchers = mine
-        .map(r => mapVoucher(r, f, today, activeStatus))
+      // Never trust the search alone: only this Contact's active personal vouchers are returned.
+      const vouchers = rows
+        .filter(
+          r =>
+            String(r.Assigned_Contact?.id) === String(req.portalContact.id) &&
+            r.Voucher_Type === PERSONAL_TYPE &&
+            r.Active === true,
+        )
+        .map(r => mapVoucher(r, now()))
         .sort((a, b) => String(b.validUntil).localeCompare(String(a.validUntil)));
       res.json({ vouchers });
     } catch (e) {
@@ -92,4 +90,4 @@ function registerVoucherRoutes(
   app.use('/portal/vouchers', router);
 }
 
-module.exports = { registerVoucherRoutes, mapVoucher, voucherState, DEFAULT_FIELDS };
+module.exports = { registerVoucherRoutes, mapVoucher, voucherState, PERSONAL_TYPE };

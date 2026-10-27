@@ -1,4 +1,4 @@
-map Vouchers.process_voucher_for_invoice(string billing_reason, string change_type, list sku_list, string contact_id, string membership_id, string term_end, string stripe_invoice_id, string contact_email, string first_name)
+map Vouchers.process_voucher_for_invoice(string billing_reason, string change_type, list sku_list, string contact_id, string membership_profile_id, string term_end, string stripe_invoice_id, string contact_email, string first_name)
 {
 	// NOTE: The trigger. The Creator processor calls this AFTER it has marked the membership Active in the CRM
 	// and set the new expiry, for a paid invoice (invoice.paid, or the first paid invoice of a subscription).
@@ -12,7 +12,8 @@ map Vouchers.process_voucher_for_invoice(string billing_reason, string change_ty
 	// already issued for the term (same expiry), so only the payment that starts a new term creates one.
 	// GTi Student, insurance only, a mid-term add-on or a named-employee-only invoice has no qualifying line,
 	// or no new expiry, so it earns nothing.
-	eligible_skus = {"MEM-ASSOC-Y","MEM-INTL-Y","MEM-FULLNS-Y","MEM-FULLS-Y","ACC-ASSOC","ACC-INTL-MEM"};
+	// SKU to the CRM Eligible_Member_Types value. Full covers Non-Salon and Salon.
+	type_by_sku = {"MEM-ASSOC-Y":"Associate","ACC-ASSOC":"Associate","MEM-INTL-Y":"International","ACC-INTL-MEM":"International","MEM-FULLNS-Y":"Full","MEM-FULLS-Y":"Full"};
 	result = Map();
 	try 
 	{
@@ -20,15 +21,15 @@ map Vouchers.process_voucher_for_invoice(string billing_reason, string change_ty
 		{
 			return {"status":"skipped","message":"billing_reason " + billing_reason + " does not earn a voucher."};
 		}
-		qualifies = false;
+		member_type = "";
 		for each  sku in sku_list
 		{
-			if(eligible_skus.contains(sku))
+			if(type_by_sku.get(sku) != null)
 			{
-				qualifies = true;
+				member_type = type_by_sku.get(sku);
 			}
 		}
-		if(qualifies == false)
+		if(member_type == "")
 		{
 			return {"status":"skipped","message":"No qualifying membership line on the invoice."};
 		}
@@ -41,7 +42,7 @@ map Vouchers.process_voucher_for_invoice(string billing_reason, string change_ty
 		{
 			reason = "upgrade";
 		}
-		result = thisapp.Vouchers.issue_gti_voucher(contact_id,membership_id,term_end,stripe_invoice_id,reason);
+		result = thisapp.Vouchers.issue_gti_voucher(contact_id,membership_profile_id,member_type,term_end,stripe_invoice_id,reason);
 		// Tell the member only when this call created the voucher, so a retry never sends a second email.
 		if(result.get("status") == "created")
 		{

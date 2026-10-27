@@ -1,47 +1,49 @@
-map Vouchers.void_gti_vouchers(string contact_id, string membership_id, string reason, string source_ref)
+map Vouchers.void_gti_vouchers(string contact_id, string membership_profile_id, string reason, string source_ref)
 {
-	// NOTE: Voids the member's unspent GTi vouchers when their membership is CANCELLED. The cancellations workstream
-	// calls this from the place that marks the membership cancelled (not from every customer.subscription.deleted:
-	// a subscription that simply ends at the term end needs no void, because the voucher already expires with the
-	// membership). It only touches vouchers that are Active, so a Used voucher is never changed back.
+	// NOTE: Voids the member's unspent personal GTi vouchers when their membership is CANCELLED. The cancellations
+	// workstream calls this from the place that marks the membership cancelled (not from every
+	// customer.subscription.deleted: a subscription that simply ends at the term end needs nothing, because the
+	// voucher already expires with the membership). Voiding is Active = false plus Void_Reason. A voucher that is
+	// already used (Current_Usage_Count >= Maximum_Total_Uses) is left alone, and it is never reactivated.
 	// Safe to call twice: the second call finds nothing Active and reports 0 voided.
-	//   membership_id  CRM Deal id. If "" every Active voucher for the Contact is voided.
-	//   reason         free text for the log, for example "membership cancelled"
-	//   source_ref     Stripe subscription or event id
-	// Field names are the same unverified set as issue_gti_voucher.deluge: change them in both.
+	//   membership_profile_id  CRM Membership profile id. If "" every active personal voucher for the Contact is voided.
+	//   reason                 free text for the log, for example "membership cancelled"
+	//   source_ref             Stripe subscription or event id
 	crm_connection = "zoho_crm_connection";
 	module_name = "Discount_Voucher";
-	f_membership = "Membership";
-	f_status = "Status";
-	f_note = "Void_Reason";
-	status_active = "Active";
-	status_void = "Void";
 	try 
 	{
 		if(contact_id == null || contact_id.trim() == "")
 		{
 			return {"status":"error","message":"No Contact id."};
 		}
-		criteria = "((Contact:equals:" + contact_id.trim() + ")and(" + f_status + ":equals:" + status_active + "))";
+		criteria = "((Assigned_Contact:equals:" + contact_id.trim() + ")and(Voucher_Type:equals:Personal £25 GTI)and(Active:equals:true))";
 		vouchers = zoho.crm.searchRecords(module_name,criteria,1,50,crm_connection);
 		voided = 0;
+		skipped = 0;
 		failed = 0;
 		for each  voucher in vouchers
 		{
 			include_it = true;
-			if(membership_id != null && membership_id.trim() != "")
+			if(membership_profile_id != null && membership_profile_id.trim() != "")
 			{
-				linked = voucher.get(f_membership);
-				if(linked != null && linked.get("id") != membership_id.trim())
+				linked = voucher.get("Assigned_Member_Profile");
+				if(linked != null && linked.get("id") != membership_profile_id.trim())
 				{
 					include_it = false;
 				}
 			}
+			max_uses = ifnull(voucher.get("Maximum_Total_Uses"),1).toLong();
+			used = ifnull(voucher.get("Current_Usage_Count"),0).toLong();
+			if(used >= max_uses)
+			{
+				include_it = false;
+			}
 			if(include_it == true)
 			{
 				change = Map();
-				change.put(f_status,status_void);
-				change.put(f_note,reason + " (" + source_ref + ")");
+				change.put("Active",false);
+				change.put("Void_Reason",reason + " (" + source_ref + ")");
 				updated = zoho.crm.updateRecord(module_name,voucher.get("id"),change,Map(),crm_connection);
 				if(updated.get("id") != null)
 				{
@@ -52,9 +54,13 @@ map Vouchers.void_gti_vouchers(string contact_id, string membership_id, string r
 					failed = failed + 1;
 				}
 			}
+			else
+			{
+				skipped = skipped + 1;
+			}
 		}
-		info "Voided " + voided + " voucher(s) for Contact " + contact_id + ", " + failed + " failed (" + reason + ", " + source_ref + ")";
-		return {"status":if(failed == 0,"ok","partial"),"voided":voided,"failed":failed};
+		info "Voided " + voided + " voucher(s) for Contact " + contact_id + ", " + skipped + " skipped, " + failed + " failed (" + reason + ", " + source_ref + ")";
+		return {"status":if(failed == 0,"ok","partial"),"voided":voided,"skipped":skipped,"failed":failed};
 	}
 	catch (e)
 	{

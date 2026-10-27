@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createApp } = require('../src/app');
 const { loadConfig } = require('../src/config');
-const { voucherState, mapVoucher, DEFAULT_FIELDS } = require('../src/vouchers');
+const { voucherState, mapVoucher } = require('../src/vouchers');
 
 const ME = '1011174000000000001';
 const NOW = Date.parse('2026-11-01T10:00:00Z');
@@ -37,63 +37,69 @@ async function withApp(env, rows, fn) {
 }
 const row = o => ({
   id: '2',
-  Voucher_Code: 'GTI-ABCD-2345',
-  Contact: { id: ME },
-  Value: 25,
-  Valid_Until: '2027-10-31',
-  Status: 'Active',
+  Voucher_Code: 'GTI-ABCDE-FGHJK',
+  Voucher_Type: 'Personal £25 GTI',
+  Assigned_Contact: { id: ME },
+  Discount_Value: 25,
+  Valid_To: '2027-10-31T23:59:59+00:00',
+  Active: true,
+  Maximum_Total_Uses: 1,
+  Current_Usage_Count: 0,
   ...o,
 });
 
 test('the route is off unless switched on', async () => {
   await withApp({}, [], async get => assert.equal((await get()).status, 503));
 });
-test('an active voucher shows its code, value and date, and the search names this contact', async () => {
+test('an active voucher shows its code, value and date, and the search names this contact, type and Active', async () => {
   await withApp({ PORTAL_VOUCHERS_ENABLED: 'true' }, [row()], async (get, seen) => {
     const r = await get();
     assert.equal(r.status, 200);
     assert.deepEqual(r.body.vouchers, [
-      { id: '2', code: 'GTI-ABCD-2345', value: 25, validUntil: '2027-10-31', status: 'Active', usable: true },
+      { id: '2', code: 'GTI-ABCDE-FGHJK', value: 25, validUntil: '2027-10-31', status: 'Active', usable: true },
     ]);
-    assert.ok(seen.some(u => u.includes('Discount_Voucher/search?criteria=(Contact:equals:' + ME + ')')));
+    assert.ok(
+      seen.some(u =>
+        u.includes(
+          'Discount_Voucher/search?criteria=((Assigned_Contact:equals:' +
+            ME +
+            ')and(Voucher_Type:equals:Personal £25 GTI)and(Active:equals:true))',
+        ),
+      ),
+    );
   });
 });
-test('a void, used or expired voucher never exposes its code', async () => {
-  const rows = [
-    row({ id: '3', Status: 'Void' }),
-    row({ id: '4', Status: 'Used' }),
-    row({ id: '5', Valid_Until: '2026-10-31' }),
-  ];
+test('a used or expired voucher never exposes its code', async () => {
+  const rows = [row({ id: '4', Current_Usage_Count: 1 }), row({ id: '5', Valid_To: '2026-10-31T23:59:59+00:00' })];
   await withApp({ PORTAL_VOUCHERS_ENABLED: 'true' }, rows, async get => {
     const { vouchers } = (await get()).body;
-    assert.equal(vouchers.length, 3);
+    assert.deepEqual(vouchers.map(v => v.status).sort(), ['Expired', 'Used']);
     for (const v of vouchers) {
       assert.equal(v.code, null);
       assert.equal(v.usable, false);
     }
-    assert.deepEqual(vouchers.map(v => v.status).sort(), ['Expired', 'Used', 'Void']);
   });
 });
-test("another contact's voucher in the result is dropped", async () => {
-  await withApp({ PORTAL_VOUCHERS_ENABLED: 'true' }, [row({ Contact: { id: '999' } })], async get => {
+test('a voided, bespoke or other contact\'s voucher in the result is dropped', async () => {
+  const rows = [
+    row({ id: '6', Active: false }),
+    row({ id: '7', Voucher_Type: 'Bespoke Generic' }),
+    row({ id: '8', Assigned_Contact: { id: '999' } }),
+  ];
+  await withApp({ PORTAL_VOUCHERS_ENABLED: 'true' }, rows, async get => {
     assert.deepEqual((await get()).body.vouchers, []);
   });
 });
-test('field names and module can be set without code changes, and bad names are ignored', async () => {
-  const env = {
-    PORTAL_VOUCHERS_ENABLED: 'true',
-    PORTAL_VOUCHER_MODULE: 'Vouchers',
-    PORTAL_VOUCHER_FIELDS: JSON.stringify({ code: 'Name', status: 'bad name!' }),
-  };
-  await withApp(env, [row({ Name: 'XYZ' })], async (get, seen) => {
-    const r = await get();
-    assert.equal(r.body.vouchers[0].code, 'XYZ');
+test('the module name is a setting', async () => {
+  await withApp({ PORTAL_VOUCHERS_ENABLED: 'true', PORTAL_VOUCHER_MODULE: 'Vouchers' }, [row()], async (get, seen) => {
+    assert.equal((await get()).status, 200);
     assert.ok(seen.some(u => u.includes('Vouchers/search')));
   });
-  assert.equal(loadConfig({ PORTAL_VOUCHER_FIELDS: 'not json' }).voucherFields.code, undefined);
 });
 test('voucherState and mapVoucher handle missing values', () => {
-  assert.equal(voucherState('Active', null, '2026-11-01'), 'Active');
-  assert.equal(voucherState('', null, '2026-11-01'), 'Unknown');
-  assert.equal(mapVoucher({ id: 1 }, DEFAULT_FIELDS, '2026-11-01').value, null);
+  assert.equal(voucherState({ Active: true }, NOW), 'Active');
+  assert.equal(voucherState({}, NOW), 'Void');
+  const v = mapVoucher({ id: 1, Active: true }, NOW);
+  assert.equal(v.value, null);
+  assert.equal(v.code, null);
 });

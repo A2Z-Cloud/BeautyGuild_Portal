@@ -1,30 +1,20 @@
-map Vouchers.issue_gti_voucher(string contact_id, string membership_id, string term_end, string source_invoice_id, string reason)
+map Vouchers.issue_gti_voucher(string contact_id, string membership_profile_id, string member_type, string term_end, string source_invoice_id, string reason)
 {
-	// NOTE: Creates the member's individual £25 GTi voucher in the CRM module Discount_Voucher, once per
+	// NOTE: Creates the member's personal £25 GTi voucher in the CRM module Discount_Voucher, once per
 	// Contact per membership term. Safe to call again for the same term: it finds the existing voucher
 	// and returns it. It never creates a second one, never edits an existing one, and never throws.
-	//   contact_id         CRM Contact id (from the subscription snapshot)
-	//   membership_id      CRM Deal id of the membership, may be "" if not known yet
-	//   term_end           membership expiry AFTER this payment, as yyyy-MM-dd. The term is identified by it.
-	//   source_invoice_id  Stripe invoice id, stored on the voucher so staff can trace it
-	//   reason             "new", "renewal" or "upgrade" (for the log only)
-	// Returns {"status": "created" | "exists" | "error" | "skipped", "voucher_id", "code", "message"}.
+	//   contact_id             CRM Contact id (from the subscription snapshot)
+	//   membership_profile_id  CRM Membership profile id (NOT the Deal), may be "" if not known yet
+	//   member_type            "Associate", "International" or "Full" (Full covers Non-Salon and Salon)
+	//   term_end               membership expiry AFTER this payment, as yyyy-MM-dd. The term is identified by it.
+	//   source_invoice_id      Stripe invoice id, stored on the voucher so staff can trace it
+	//   reason                 "new", "renewal" or "upgrade" (for the log only)
+	// Returns {"status": "created" | "exists" | "error", "voucher_id", "code", "message"}.
 	//
-	// ALL CRM NAMES ARE UNVERIFIED. They are listed once here. Check them against
-	// GET /portal/diagnostics/fields?module=Discount_Voucher (see vouchers-phase-4-gti-voucher.md, section 2)
-	// and change only this block.
+	// CRM names are the real Discount_Voucher API names. Voucher_Code, Voucher_Key, Source_Invoice and Void_Reason
+	// are NEW fields A2Z must add first (Voucher_Code and Voucher_Key unique). Name is an Auto Number: never write to it.
 	crm_connection = "zoho_crm_connection";
 	module_name = "Discount_Voucher";
-	f_code = "Voucher_Code";
-	f_contact = "Contact";
-	f_membership = "Membership";
-	f_value = "Value";
-	f_valid_until = "Valid_Until";
-	f_status = "Status";
-	f_key = "Voucher_Key";
-	f_source = "Source_Invoice";
-	status_active = "Active";
-	voucher_value = 25;
 	max_code_attempts = 5;
 	try 
 	{
@@ -34,39 +24,52 @@ map Vouchers.issue_gti_voucher(string contact_id, string membership_id, string t
 		}
 		if(term_end == null || term_end.trim() == "")
 		{
-			return {"status":"error","message":"No membership expiry, so the voucher has no valid-until date."};
+			return {"status":"error","message":"No membership expiry, so the voucher has no valid-to date."};
+		}
+		if(member_type == null || member_type.trim() == "")
+		{
+			return {"status":"error","message":"No member type (Associate, International or Full)."};
 		}
 		// One voucher per Contact per term. The key is the idempotency key and must be a UNIQUE field in the CRM.
-		term_compact = term_end.trim().replaceAll("-","");
-		voucher_key = contact_id.trim() + "-" + term_compact;
-		existing = zoho.crm.searchRecords(module_name,"(" + f_key + ":equals:" + voucher_key + ")",1,5,crm_connection);
+		voucher_key = contact_id.trim() + "-" + term_end.trim().replaceAll("-","");
+		existing = zoho.crm.searchRecords(module_name,"(Voucher_Key:equals:" + voucher_key + ")",1,5,crm_connection);
 		if(existing.size() > 0)
 		{
 			found = existing.get(0);
 			info "Voucher already exists for key " + voucher_key + ": " + found.get("id");
-			return {"status":"exists","voucher_id":found.get("id"),"code":found.get(f_code),"message":"Already issued for this term."};
+			return {"status":"exists","voucher_id":found.get("id"),"code":found.get("Voucher_Code"),"message":"Already issued for this term."};
 		}
 		// First write wins. If two calls race, the unique key makes the second create fail, and the
 		// error branch below re-reads and returns the winner instead of reporting a failure.
-		attempts = {1,2,3,4,5};
-		for each  attempt in attempts
+		for each  attempt in {1,2,3,4,5}
 		{
 			code = thisapp.Vouchers.generate_voucher_code(voucher_key,attempt);
-			clash = zoho.crm.searchRecords(module_name,"(" + f_code + ":equals:" + code + ")",1,1,crm_connection);
+			clash = zoho.crm.searchRecords(module_name,"(Voucher_Code:equals:" + code + ")",1,1,crm_connection);
 			if(clash.size() == 0)
 			{
 				record = Map();
-				record.put(f_code,code);
-				record.put(f_contact,contact_id.trim());
-				if(membership_id != null && membership_id.trim() != "")
+				record.put("Voucher_Code",code);
+				record.put("Voucher_Type","Personal £25 GTI");
+				record.put("Discount_Method","Fixed Amount");
+				record.put("Discount_Value",25);
+				record.put("Applies_To_Type",{"Courses"});
+				record.put("Assigned_Contact",contact_id.trim());
+				if(membership_profile_id != null && membership_profile_id.trim() != "")
 				{
-					record.put(f_membership,membership_id.trim());
+					record.put("Assigned_Member_Profile",membership_profile_id.trim());
 				}
-				record.put(f_value,voucher_value);
-				record.put(f_valid_until,term_end.trim());
-				record.put(f_status,status_active);
-				record.put(f_key,voucher_key);
-				record.put(f_source,ifnull(source_invoice_id,""));
+				record.put("Eligible_Member_Types",{member_type.trim()});
+				record.put("Maximum_Total_Uses",1);
+				record.put("One_Use_Per_Person",true);
+				record.put("Expires_With_Membership",true);
+				// DateTime fields: ISO 8601 with an offset. CHECK on the Guild's org that the offset (+00:00 vs
+				// +01:00 in summer) gives the intended end of day; the date part is what matters for now.
+				record.put("Valid_From",zoho.currenttime.toString("yyyy-MM-dd'T'HH:mm:ss") + "+00:00");
+				record.put("Valid_To",term_end.trim() + "T23:59:59+00:00");
+				record.put("Active",true);
+				record.put("Voucher_Key",voucher_key);
+				record.put("Source_Invoice",ifnull(source_invoice_id,""));
+				// Current_Usage_Count is left alone: GTi redemption increments it, not this process.
 				created = zoho.crm.createRecord(module_name,record,Map(),crm_connection);
 				if(created.get("id") != null)
 				{
@@ -74,10 +77,10 @@ map Vouchers.issue_gti_voucher(string contact_id, string membership_id, string t
 					return {"status":"created","voucher_id":created.get("id"),"code":code,"message":"Issued (" + reason + ")."};
 				}
 				// Not created. If the key now exists, another call won the race: return that one.
-				raced = zoho.crm.searchRecords(module_name,"(" + f_key + ":equals:" + voucher_key + ")",1,5,crm_connection);
+				raced = zoho.crm.searchRecords(module_name,"(Voucher_Key:equals:" + voucher_key + ")",1,5,crm_connection);
 				if(raced.size() > 0)
 				{
-					return {"status":"exists","voucher_id":raced.get(0).get("id"),"code":raced.get(0).get(f_code),"message":"Issued by a concurrent call."};
+					return {"status":"exists","voucher_id":raced.get(0).get("id"),"code":raced.get(0).get("Voucher_Code"),"message":"Issued by a concurrent call."};
 				}
 				return {"status":"error","message":"CRM refused the voucher. Response: " + created.toString()};
 			}

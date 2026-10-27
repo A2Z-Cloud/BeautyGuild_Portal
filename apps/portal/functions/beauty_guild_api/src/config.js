@@ -26,19 +26,6 @@ function unitFloat(value, fallback) {
   return Number.isFinite(n) && n > 0 && n <= 1 ? n : fallback;
 }
 
-// Optional JSON object renaming the Discount_Voucher fields, e.g. {"code":"Name"}. Only known keys with safe names are kept.
-function voucherFields(value) {
-  try {
-    const o = JSON.parse(value || '{}');
-    const out = {};
-    for (const k of ['code', 'contact', 'value', 'validUntil', 'status'])
-      if (typeof o[k] === 'string' && /^[A-Za-z][A-Za-z0-9_]{0,49}$/.test(o[k])) out[k] = o[k];
-    return Object.freeze(out);
-  } catch {
-    return Object.freeze({});
-  }
-}
-
 function loadConfig(env = process.env) {
   return Object.freeze({
     crmApiDomain: httpsUrl(env.CRM_API_DOMAIN, 'https://www.zohoapis.eu', 'CRM_API_DOMAIN'),
@@ -50,8 +37,6 @@ function loadConfig(env = process.env) {
     recordsEnabled: env.PORTAL_RECORDS_ENABLED === 'true',
     vouchersEnabled: env.PORTAL_VOUCHERS_ENABLED === 'true',
     voucherModule: safeName(env.PORTAL_VOUCHER_MODULE, 'Discount_Voucher', 'PORTAL_VOUCHER_MODULE'),
-    voucherFields: voucherFields(env.PORTAL_VOUCHER_FIELDS),
-    voucherActiveStatus: String(env.PORTAL_VOUCHER_ACTIVE_STATUS || 'Active').trim(),
     diagnosticsEnabled: env.PORTAL_DIAGNOSTICS_ENABLED === 'true',
     diagnosticsEmails: String(env.PORTAL_DIAGNOSTICS_EMAILS || '')
       .split(',')
