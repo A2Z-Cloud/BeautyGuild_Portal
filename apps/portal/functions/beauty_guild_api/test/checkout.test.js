@@ -2039,3 +2039,78 @@ test('monthly accreditation with Associate membership: 409.00 a year is 35.59 a 
     assert.equal(p.get('metadata[product_yearly_amount]'), '409.00');
   });
 });
+
+// ---- Cover levels and payment frequency are saved at new business, so a later change can see what the member has (MTA R3) ----
+const policyAndRows = w => {
+  const posts = w.crmPosts || [];
+  const rows = posts.filter(c => c.module === 'Insurance_Extension').map(c => c.record);
+  return {
+    policy: posts.find(c => c.module === 'Insurance_Policy').record,
+    rows,
+    by: code => rows.find(r => r.Cover_Code === code),
+  };
+};
+test('a Non-Salon policy saves its equipment tier as the sum insured, and pays Annual', async () => {
+  const w = fullWorld();
+  await withApp(w, async ({ post }) => {
+    assert.equal((await post(INSURE)).status, 201);
+    const { policy, by } = policyAndRows(w);
+    assert.equal(policy.Payment_Frequency, 'Annual');
+    assert.equal(policy.Annual_Wage_Roll, undefined, 'a wage roll is only asked of a Salon with Employers Liability');
+    assert.equal(by('BUSINESS_EQUIPMENT').Sum_Insured, 5000);
+    assert.equal(by('MEDMAL').Sum_Insured, undefined, 'liability has no sum insured');
+  });
+});
+test('a Salon policy saves its turnover, wage roll and the total sum insured of each property cover', async () => {
+  const w = fullWorld();
+  await withApp(w, async ({ post }) => {
+    const salon = {
+      ...SALON_PREMISES,
+      insSalonEL: true,
+      insWageRoll: 60000,
+      insStock: 1000,
+      insMoneyCover: true,
+      insBuildingsCover: true,
+      insBuildingsSI: 100000,
+      insFixturesSI: 5000,
+      insBiCover: true,
+      insBiIncome: 40000,
+      insBiDebts: 10000,
+      insPropertyAwayCover: true,
+      insPropertyAwaySI: 4000,
+    };
+    assert.equal((await post({ ...INSURE, insurance: salon })).status, 201);
+    const { policy, by } = policyAndRows(w);
+    assert.equal(policy.Annual_Turnover, 90000);
+    assert.equal(policy.Annual_Wage_Roll, 60000);
+    assert.equal(by('CONTENTS').Sum_Insured, 2000 + 5000 + 1000, 'computers, equipment and stock');
+    assert.equal(by('BUILDINGS').Sum_Insured, 105000);
+    assert.equal(by('BUSINESS_INTERRUPTION').Sum_Insured, 50000);
+    assert.equal(by('PROPERTY_AWAY').Sum_Insured, 4000);
+    assert.equal(by('MONEY').Sum_Insured, undefined, 'money has a fixed limit, nothing to save');
+    assert.equal(by('EMPLOYERS_LIABILITY').Sum_Insured, undefined, 'the wage roll is on the policy');
+  });
+});
+test('a member who pays monthly has Payment_Frequency Monthly on the policy, a yearly payer Annual', async () => {
+  for (const [billing, frequency] of [
+    ['monthly', 'Monthly'],
+    ['annual', 'Annual'],
+  ]) {
+    const w = unlinked(world({ priceOverride: RECURRING }));
+    await withApp(
+      w,
+      async ({ post }) => {
+        const r = await post({
+          ...BUY,
+          level: 'full_non_salon',
+          billing,
+          insurance: INS_OK,
+          country: 'United Kingdom',
+        });
+        assert.equal(r.status, 201, JSON.stringify(r.body));
+        assert.equal(policyAndRows(w).policy.Payment_Frequency, frequency, billing);
+      },
+      MEM_ENV,
+    );
+  }
+});

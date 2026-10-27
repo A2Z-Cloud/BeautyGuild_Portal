@@ -297,7 +297,7 @@ async function activeMembership(req, crm, contactId) {
 // Insurance is rated here, not read from Stripe: each cover row and the IPT become inline price_data lines.
 // Nothing is created in the CRM until the member pays (beforePay runs on checkout only, never on a quote),
 // and a quote that needs the Insurance team (REFER) or cannot be offered online (STOP) is never payable.
-async function insuranceLines({ req, contact, input, member, risk, start, end }) {
+async function insuranceLines({ req, contact, input, member, risk, start, end, monthly = false }) {
   const country = String(input.country || '')
     .trim()
     .slice(0, 60);
@@ -360,6 +360,7 @@ async function insuranceLines({ req, contact, input, member, risk, start, end })
         entryRoute: contact && !contact.createdNow ? 'Existing Member' : 'Public Prospect',
         termsAccepted: input.accepted === 'yes',
         audits: screening.audits,
+        frequency: monthly ? 'Monthly' : 'Annual',
         ...extra,
       }),
     // A REFER or STOP is recorded in the CRM for the Insurance team, never sent to Stripe (INCOMPLETE is the member's to fix).
@@ -376,6 +377,7 @@ async function insuranceLines({ req, contact, input, member, risk, start, end })
               entryRoute: contact && !contact.createdNow ? 'Existing Member' : 'Public Prospect',
               termsAccepted: input.accepted === 'yes',
               audits: screening.audits,
+              frequency: monthly ? 'Monthly' : 'Annual',
               referral: { status: blocked.status === 'STOP' ? 'Stopped' : 'Referred', summary },
             })
         : null,
@@ -537,7 +539,7 @@ SERVICES.membership = {
     if (input.insurance && level === 'associate') throw NEEDS_FULL();
     // One date covers both: the membership and its insurance start together.
     const ins = input.insurance
-      ? await insuranceLines({ req, contact, input, member, risk, start, end: expiry })
+      ? await insuranceLines({ req, contact, input, member, risk, start, end: expiry, monthly: billing === 'monthly' })
       : null;
     return {
       lines,
