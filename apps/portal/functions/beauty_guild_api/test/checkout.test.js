@@ -562,6 +562,81 @@ test('renewal waives the joining fee, needs an owned previous membership, and li
     MEM_ENV,
   );
 });
+// The joining fee is charged again after a gap in cover of more than one month between any memberships, on a new purchase and on a
+// renewal alike (Guild, 26 October 2026).
+const lapsedDeal = (daysAgo, extra = {}) => ({
+  ...activeDeal,
+  Expiry_Date: new Date(Date.now() - daysAgo * 864e5).toISOString().slice(0, 10),
+  ...extra,
+});
+test('a membership that ended within a month: no joining fee, with or without the old one named', async () => {
+  const w = world({ deals: [lapsedDeal(20)], priceOverride: RECURRING });
+  await withApp(
+    w,
+    async ({ post }) => {
+      assert.equal((await post(BUY)).status, 201);
+      assert.equal(w.stripePosts[0].params.get('metadata[joining_fee_amount]'), '0.00');
+      assert.equal(w.stripePosts[0].params.get('line_items[1][price]'), null);
+      assert.equal((await post({ ...BUY, previousId: DEAL })).status, 201);
+      assert.equal(w.stripePosts[1].params.get('metadata[change_type]'), 'renewal');
+      assert.equal(w.stripePosts[1].params.get('metadata[joining_fee_amount]'), '0.00');
+    },
+    MEM_ENV,
+  );
+});
+test('a gap of more than a month pays the joining fee again, on a new purchase and on a renewal', async () => {
+  const w = world({ deals: [lapsedDeal(75)], priceOverride: RECURRING });
+  await withApp(
+    w,
+    async ({ post }) => {
+      assert.equal((await post(BUY)).status, 201);
+      assert.equal(w.stripePosts[0].params.get('metadata[joining_fee_amount]'), '10.00');
+      assert.equal((await post({ ...BUY, previousId: DEAL })).status, 201);
+      assert.equal(w.stripePosts[1].params.get('metadata[change_type]'), 'renewal');
+      assert.equal(w.stripePosts[1].params.get('metadata[joining_fee_amount]'), '10.00');
+    },
+    MEM_ENV,
+  );
+});
+test('the joining fee looks at the latest membership of any type, and a saved draft is not cover', async () => {
+  const w = world({
+    deals: [
+      lapsedDeal(400, { id: 'old', Membership_Type: 'Full Member (Salon)' }),
+      lapsedDeal(10, { id: 'recent', Membership_Type: 'Full Member (Non-Salon)' }),
+      // A draft that happens to run into the future is not a membership.
+      { ...activeDeal, id: 'draft', Stage: 'Draft', Expiry_Date: '2999-01-01' },
+    ],
+    priceOverride: RECURRING,
+  });
+  await withApp(
+    w,
+    async ({ post }) => {
+      assert.equal((await post(BUY)).status, 201);
+      assert.equal(w.stripePosts[0].params.get('metadata[joining_fee_amount]'), '0.00');
+    },
+    MEM_ENV,
+  );
+  const draftOnly = world({
+    deals: [{ ...activeDeal, id: 'draft', Stage: 'Draft', Expiry_Date: '2999-01-01' }],
+    priceOverride: RECURRING,
+  });
+  await withApp(
+    draftOnly,
+    async ({ post }) => {
+      assert.equal((await post(BUY)).status, 201);
+      assert.equal(draftOnly.stripePosts[0].params.get('metadata[joining_fee_amount]'), '10.00');
+    },
+    MEM_ENV,
+  );
+});
+test('one month on holds the day, and the end of a short month', () => {
+  const { oneMonthOn } = require('../src/catalogue');
+  assert.equal(oneMonthOn('2026-06-30'), '2026-07-30');
+  assert.equal(oneMonthOn('2026-12-15'), '2027-01-15');
+  assert.equal(oneMonthOn('2026-01-31'), '2026-02-28');
+  assert.equal(oneMonthOn('2028-01-31'), '2028-02-29');
+  assert.equal(oneMonthOn('2026-03-31'), '2026-04-30');
+});
 test('membership input is validated', async () => {
   const w = world({ priceOverride: RECURRING });
   await withApp(
