@@ -1,7 +1,7 @@
 # Beauty Guild Staff Workspace | Catalyst Slate Git Auto-Deploy Setup
 
 **Prepared:** 24 October 2026  
-**Status:** Git branch and static app entry prepared. **Not yet connected to Slate or deployed.**  
+**Status (updated 27 October 2026):** prepared on 24 October as `Not yet connected`. The later commits that bump the asset version and add cache busting (26 and 27 October) show it is now connected and deploying from this branch. Confirm the Slate app name, URL and the CRM Web Tab that points at it before relying on this page.  
 **Repo:** `A2Z-Cloud/BeautyGuild_Portal`
 
 ## Enter these values in Catalyst Slate
