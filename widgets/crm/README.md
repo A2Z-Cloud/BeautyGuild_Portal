@@ -1,11 +1,13 @@
-# CRM widgets
+# Zoho CRM widgets
 
-Create one directory per widget, such as `widgets/crm/accreditation-review/` once its workflow, UX and module placement are approved. Each widget is independently built and uploaded to CRM; it does not deploy through Catalyst.
+CRM widgets are independently packaged and deployed to Zoho CRM. They do **not** deploy automatically with the Catalyst member portal. Each widget owns its installation, SDK/permissions assumptions, API contracts, tests and release checklist.
 
-Record views, approval actions, insurance servicing, and other workstreams require individual specifications before code is added.
+## Beauty Guild Staff Workspace
 
-## Staff Workspace
+- [Widget README and current status](beauty-guild-staff-workspace/README.md)
+- [**Functional and UX specification (V2.4)**](beauty-guild-staff-workspace/SPECIFICATION.md)
+- [Staff API and identity design, including the API Gateway decision](beauty-guild-staff-workspace/STAFF-API-AND-IDENTITY.md)
 
-The [Beauty Guild Staff Workspace](beauty-guild-staff-workspace/README.md) is the current CRM widget workstream. Its documentation covers live CRM record viewing, related-record navigation, queue and list pagination, Guild-aligned visual design, native CRM processing actions, assisted draft creation, safety boundaries and outstanding deployment tests.
+**Implementation status (27 October 2026):** the widget source is in `beauty-guild-staff-workspace/app/` on the branch `feature/beauty-guild-staff-workspace-slate`, which is the source of truth for the widget. It is hosted on Catalyst Slate and embedded in CRM as an externally hosted Web Tab. It browses live CRM records and runs the Portal V2 Membership, Insurance and Accreditation question steps. The staff API, shared CRM drafts, live quotes and the payment link are **not** built. It has not been signed off in a live Beauty Guild CRM. Do not treat documentation as a deployed capability.
 
-**Status:** widget source and tests are supplied separately in the widget kit; only the README has been added to this repository so far. No Zoho CRM or Catalyst deployment is implied.
+Create a separate directory for each future CRM widget. Do not copy customer portal authentication or API credentials into CRM-hosted clients.
