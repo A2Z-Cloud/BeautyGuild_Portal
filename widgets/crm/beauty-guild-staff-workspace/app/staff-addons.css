@@ -11,3 +11,9 @@
 .staff-addon-details dt{color:#766b78}.staff-addon-details dd{margin:0;font-weight:650}
 .staff-addon-dialog>input{margin:8px 0 16px}.staff-addon-dialog .button:disabled{opacity:.65;cursor:not-allowed}
 #staff-discount-outcome{display:block;font-size:12px;font-weight:650;color:#734061}
+
+.staff-addon-dialog{max-height:min(92vh,920px);overflow:auto}.staff-addon-dialog>p{font-size:13px;line-height:1.6}.staff-addon-dialog>label{display:block;margin:12px 0 6px}
+.staff-addon-dialog select,.staff-addon-dialog textarea{display:block;width:100%;padding:10px 12px;border:1px solid #d9ccd4;border-radius:8px;background:#fff;font:inherit}
+.staff-addon-dialog .staff-addon-actions{display:flex;flex-wrap:wrap;gap:10px;margin:20px 0 12px}
+.staff-addon-result{border-radius:8px;background:#f7f4f6;border:1px solid #e7dfe5;padding:13px;white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.5 ui-monospace,monospace;max-height:330px;overflow:auto}
+.staff-addon-result.error{background:#fff2f4;border-color:#c65668;color:#912b3e}#staff-mta-specific{display:grid;gap:7px}
