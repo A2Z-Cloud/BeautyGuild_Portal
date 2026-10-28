@@ -1,0 +1,13 @@
+/* Staff MTA and voucher extension; accessible within CRM iframe. */
+.staff-addon-panel{border:1px solid #eadbe4;background:#fff;border-radius:12px;padding:18px;margin:18px 0;display:grid;gap:10px}
+.staff-addon-panel h3{font-size:17px;margin:0}.staff-addon-panel p{font-size:12px;color:#655967;margin:0}
+.staff-addon-panel label,.staff-addon-dialog label{font-size:12px;font-weight:700}
+.staff-addon-panel input,.staff-addon-panel select,.staff-addon-panel textarea,.staff-addon-dialog input{padding:10px 12px;border:1px solid #d9ccd4;border-radius:8px;max-width:100%;width:100%;font:inherit;background:#fff}
+.staff-addon-panel .staff-addon-info,.staff-addon-dialog .staff-addon-info{font-size:12px;color:#6e5361;background:#fcf4f8;padding:12px;border-radius:8px}
+.staff-addon-dialog{max-width:620px;width:calc(100% - 32px);border:1px solid #e4d7e0;border-radius:14px;box-shadow:0 24px 80px #1a0c2040;padding:24px;color:#29212c}
+.staff-addon-dialog::backdrop{background:#1a112c80}.staff-addon-head{display:flex;align-items:start;justify-content:space-between;gap:16px;margin-bottom:20px}
+.staff-addon-head h2{margin:4px 0 2px;font-size:23px}.staff-addon-head p{margin:0;color:#685965}.staff-addon-head small{color:#a03570}
+.staff-addon-details{display:grid;grid-template-columns:120px 1fr;gap:12px;padding:14px;border:1px solid #eee8ec;border-radius:9px}
+.staff-addon-details dt{color:#766b78}.staff-addon-details dd{margin:0;font-weight:650}
+.staff-addon-dialog>input{margin:8px 0 16px}.staff-addon-dialog .button:disabled{opacity:.65;cursor:not-allowed}
+#staff-discount-outcome{display:block;font-size:12px;font-weight:650;color:#734061}
