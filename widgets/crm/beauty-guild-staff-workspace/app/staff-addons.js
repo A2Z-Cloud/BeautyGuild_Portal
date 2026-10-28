@@ -40,8 +40,8 @@ function mtaFields(){
  field('staff-effective-date','Effective date','type="date"')+
  '<label for="staff-mta-type">Change type</label><select id="staff-mta-type"><option value="">Choose a change</option><option value="person">Add named person</option><option value="treatment">Add treatment</option><option value="teaching">Teaching cover</option><option value="equipment">Equipment cover increase</option><option value="el">Employers Liability change</option></select>'+
  '<div id="staff-mta-specific"></div>'+
- '<label for="staff-mta-details">Additional change fields (JSON, optional)</label><textarea id="staff-mta-details" rows="4" placeholder="Optional additional JSON"></textarea>'+
- note('Use the same portal declarations and customer-confirmation requirements. This form does not independently confirm declarations or provide cover.')+
+ '<fieldset class="staff-mta-declarations"><legend>Customer evidence</legend><label for="staff-mta-qualified">Qualified to perform the requested treatment or service</label><select id="staff-mta-qualified"><option value="">Select</option><option value="yes">Yes</option><option value="no">No</option></select><label for="staff-mta-patch">Patch testing where required</label><select id="staff-mta-patch"><option value="">Select</option><option value="yes">Yes</option><option value="no">No</option></select><label><input type="checkbox" id="staff-mta-information" /> Customer confirmed information is accurate</label><label><input type="checkbox" id="staff-mta-ethics" /> Customer confirmed Code of Ethics</label><label><input type="checkbox" id="staff-mta-demands" /> Customer confirmed demands and needs</label><label><input type="checkbox" id="staff-mta-nonadvised" /> Customer confirmed non-advised cover</label></fieldset>'+
+ note('Collect the required insurance declarations and qualified evidence in the existing portal journey. These checkboxes only record confirmation relayed by the customer; the backend determines referral or approval.')+
  '<div class="staff-addon-actions"><button class="button secondary" type="button" data-staff-addon="cover">Load current cover</button><button class="button primary" type="button" data-staff-addon="quote-mta">Get live quote</button><button class="button secondary" type="button" data-staff-addon="save-mta" disabled id="staff-mta-save">Save quoted revision</button></div>'+
  '<div class="staff-addon-result" id="staff-mta-result" role="status" aria-live="polite">No quote requested.</div>'+
  '<section class="staff-addon-panel" aria-label="MTA secure payment"><h3>Secure payment</h3><p>Available only after an eligible quotation and successful revision save. The customer pays through Stripe Checkout; CRM is updated by the existing payment processing.</p><label class="staff-payment-consent"><input type="checkbox" id="staff-mta-accepted" /> I confirm the customer explicitly accepted the Code of Ethics and Terms of Business.</label><button type="button" class="button primary" data-staff-addon="payment-mta" id="staff-mta-payment" disabled>Generate test payment link</button><div id="staff-mta-payment-result" role="status" aria-live="polite"></div></section>';
@@ -70,7 +70,7 @@ async function loadCover(){
  const recordId=String($('staff-mta-record')?.value||'').trim();
  if(!/^\d{10,25}$/.test(contact)||!/^\d{10,25}$/.test(recordId)){target.textContent='Enter the Contact and Membership IDs to load current cover.';return;}
  target.textContent='Loading authoritative existing cover…';
- try{const response=await global.BGStaffApi.call('cover',{contactId:contact,recordId});target.textContent=JSON.stringify(response?.cover||response,null,2);}
+ try{const response=await global.BGStaffApi.call('cover',{contactId:contact,recordId});state.cover=response?.cover||null;target.textContent=JSON.stringify(state.cover||response,null,2);}
  catch(e){target.textContent='Current cover could not be loaded: '+String(e.message||e);}
 }
 function payload(){
@@ -85,8 +85,12 @@ function payload(){
  if(type==='teaching')change.teaching=$('staff-teaching').value;
  if(type==='equipment')change.equipmentTier=Number($('staff-equipment').value);
  if(type==='el')change.elTier=Number($('staff-el').value);
- const extra=$('staff-mta-details')?.value.trim();
- if(extra){let more;try{more=JSON.parse(extra);}catch{throw Error('Additional change fields must be valid JSON.');}if(!more||Array.isArray(more)||typeof more!=='object')throw Error('Additional change fields must be a JSON object.');Object.assign(change,more);change.effectiveDate=date;}
+ change.qualified=$('staff-mta-qualified')?.value||'';
+ change.patchTesting=$('staff-mta-patch')?.value||'';
+ change.insInformationAccurate=$('staff-mta-information')?.checked?'yes':'';
+ change.insEthicsAccepted=$('staff-mta-ethics')?.checked?'yes':'';
+ change.insDemandsNeedsAccepted=$('staff-mta-demands')?.checked?'yes':'';
+ change.insNonAdvisedAccepted=$('staff-mta-nonadvised')?.checked?'yes':'';
  return {contactId:c,recordId,service:'insurance_change',change};
 }
 function result(message,error=false){
