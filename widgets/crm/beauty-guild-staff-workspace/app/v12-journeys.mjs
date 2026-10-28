@@ -1,7 +1,7 @@
 /* V1.2 staff questionnaire: reuses the exact Portal V2 insurance and accreditation definitions.
  * This is an application intake only. Without the staff-authorised Catalyst adapter it MUST NOT
  * create a quote, CRM application, payment link or imply that customer declarations were verified. */
-import {INSURANCE_STEPS,visibleSteps,stopMessages,toRequest as insuranceRequest} from './portal-defs/insuranceInputs.js';
+import {INSURANCE_STEPS,visibleSteps,stopMessages,TREATMENT_OPTIONS,toRequest as insuranceRequest} from './portal-defs/insuranceInputs.js';
 import {accreditationSteps,resolveFields,COPY_HOME_MAP} from './portal-defs/accreditationInputs.js';
 import {validate as validatePortal} from './portal-defs/logic.mjs';
 import {startLimits} from './portal-defs/startDate.js';
@@ -304,4 +304,4 @@ function apiRequest(j){
  if(kind==='membership'&&a.insurance==='yes')base.service='membership';
  return base;
 }
-window.BGJourney12={apiRequest,draftAnswers,restoreAnswers,config,prefill,render,advance,input,click,loadCourses,courseSource,INSURANCE_STEPS,accreditationSteps};
+window.BGJourney12={TREATMENT_OPTIONS,apiRequest,draftAnswers,restoreAnswers,config,prefill,render,advance,input,click,loadCourses,courseSource,INSURANCE_STEPS,accreditationSteps};
