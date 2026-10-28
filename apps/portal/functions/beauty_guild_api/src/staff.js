@@ -207,6 +207,16 @@ function registerStaffRoutes(
     }
   };
 
+  // The function's own clock, in whole seconds, with no sign-in: the CRM function signs with this time instead of its own clock, because
+  // Deluge's clock and time zone handling can be out by hours. It gives nothing away (anyone can read a clock) and weakens nothing: a
+  // request still needs the secret, the time window and a fresh nonce. Limited per caller like the rest.
+  const timeLimit = createRateLimiter({ limit: 300, windowMs: 60 * 1000, now });
+  router.get('/time', (req, res, next) =>
+    timeLimit(clientKey(req))
+      ? res.json({ serverTime: Math.floor(now() / 1000) })
+      : next(new HttpError(429, 'RATE_LIMIT', 'Too many requests. Please wait a moment and try again.')),
+  );
+
   // The channel only: proves the signing works end to end. Echoes the path this function saw, because that exact string is what
   // must be signed (the Catalyst mount prefix is not part of it).
   router.get('/ping', authenticate, (req, res) => {
