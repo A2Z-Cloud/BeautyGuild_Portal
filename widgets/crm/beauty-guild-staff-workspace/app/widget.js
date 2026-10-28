@@ -675,6 +675,7 @@
     }
     else if(action==='journey-payment'){
       const j=state.journey;if(!j?.contact?.id||!j.liveQuote||j.paymentBusy)return;
+      if(j.discountedQuote){j.paymentError='Discounted quotations cannot be converted into staff payment links. Obtain a new undiscounted quote.';render();return;}
       j.customerAccepted=Boolean(document.getElementById('staff-customer-accepted')?.checked);if(!j.customerAccepted){j.paymentError='Confirm the customer has explicitly accepted the Code of Ethics and terms.';render();return;}
       if(window.BGStaffAddons?.quoteInputs){const discounts=window.BGStaffAddons.quoteInputs();if(discounts.voucherCode||discounts.waivers?.length){j.paymentError='Discounted payment links are not supported. Remove all vouchers and waivers, then obtain a fresh quote.';render();return;}}
       if(!window.confirm('Create a test-mode Stripe Checkout link for this customer and the current application?'))return;
@@ -718,7 +719,7 @@
         if(window.BGStaffAddons?.quoteInputs&&kind==='membership')Object.assign(payload,window.BGStaffAddons.quoteInputs());
         const result=await window.BGStaffApi.call('quote',payload);
         if(result?.error||result?.ok===false||!result?.quote)throw Error(result?.message||result?.error||'No authoritative quote returned by the Staff API.');
-        j.liveQuote=result;j.lastQuoteInputs=JSON.stringify(base);
+        j.liveQuote=result;j.lastQuoteInputs=JSON.stringify(base);j.discountedQuote=Boolean(payload.voucherCode||payload.waivers?.length||result.quote?.discount||result.quote?.discounts?.length);
       }catch(error){j.quoteError=String(error?.message||error);}
       finally{j.quotePending=false;render();}
     }
