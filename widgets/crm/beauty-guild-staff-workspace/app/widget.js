@@ -598,6 +598,23 @@
     else if(action==='coming-soon'||action==='journey-start'){state.view='create';initJourney(el.dataset.kind);render();}
     else if(action==='journey-type'){state.journey.kind=el.dataset.kind;state.journey.step=-1;state.journey.answers={};render();if(el.dataset.kind==='accreditation'&&window.BGJourney12)window.BGJourney12.loadCourses(ZOHO.CRM,render).catch(e=>setNotice('Course catalogue could not load: '+String(e.message||e),'error'));}
     else if(action==='journey-next'){const j=state.journey;if(j?.step===-1&&j.contact&&window.BGJourney12){try{j.contact=await getRecord(M.CONTACT,j.contact.id);state.contact=j.contact;}catch(e){j.formError='Unable to load complete CRM Contact details: '+String(e.message||e);render();return;}window.BGJourney12.prefill(j);}advanceJourney(1);}
+    else if(action==='journey-quote'){
+      const j=state.journey;
+      if(!j?.contact?.id||!j.kind||j.quotePending)return;
+      j.quotePending=true;j.quoteError='';j.liveQuote=null;render();
+      try{
+        if(!window.BGStaffApi?.call)throw Error('Signed staff API integration unavailable.');
+        const kind=j.kind;
+        // The existing Portal V2 quote engine remains the authority; input keys are passed unchanged.
+        const payload={...j.answers,contactId:String(j.contact.id),service:kind};
+        if(payload.insurance==='yes'&&kind==='membership')payload.service='combined';
+        if(window.BGStaffAddons?.quoteInputs&&kind==='membership')Object.assign(payload,window.BGStaffAddons.quoteInputs());
+        const result=await window.BGStaffApi.call('quote',payload);
+        if(result?.error||result?.ok===false||!result?.quote)throw Error(result?.message||result?.error||'No authoritative quote returned by the Staff API.');
+        j.liveQuote=result;j.lastQuoteInputs=JSON.stringify(payload);
+      }catch(error){j.quoteError=String(error?.message||error);}
+      finally{j.quotePending=false;render();}
+    }
     else if(action==='journey-back'){advanceJourney(-1);}
     else if(action==='journey-reset'){state.journey=null;initJourney();render();}
     else if(action==='journey-search-customer'){await searchJourneyContacts();}
