@@ -149,6 +149,20 @@ function prefill(j){
  for(const [k,value]of Object.entries(src)){if(!nonblank(a[k])&&nonblank(value))a[k]=value;}
  j.answers=a;
 }
+const pounds=p=>Number.isFinite(Number(p))?'£'+(Number(p)/100).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2}):'Not provided';
+function quoteSummary(result){
+ const q=result?.quote;if(!q)return '';
+ const lines=Array.isArray(q.lines)?q.lines:[];
+ return '<section class="v12-payment-panel"><h4>'+esc(q.service||'')+' quotation</h4>'+
+ '<p><strong>'+esc(q.alreadyPaid?'Already paid':q.payable?'Payable quotation':'Review required')+'</strong></p>'+
+ (q.blocked?'<p class="v12-warning">'+esc(q.blocked.riskMessage||q.blocked.message||q.blocked.reasons?.join(' ')||'Referral or assessment required before payment.')+'</p>':'')+
+ '<div class="v12-quote-lines">'+lines.map(l=>'<div><span>'+esc(l.name)+' × '+esc(l.quantity||1)+'</span><strong>'+esc(pounds(l.totalPence))+'</strong></div>').join('')+'</div>'+
+ '<p><strong>Quoted total: '+esc(pounds(q.totalPence))+'</strong></p>'+
+ (q.plan?'<p>First payment '+esc(pounds(q.plan.firstPaymentPence))+'; later payments '+esc(pounds(q.plan.laterPaymentPence))+'; year-one total '+esc(pounds(q.plan.yearOneTotalPence))+'</p>':'')+
+ (q.discounts?.length?'<p>Discounts: '+q.discounts.map(d=>esc(d.label||d.name||'Applied discount')).join(', ')+'</p>':'')+
+ (q.codeResult?.message?'<p class="v12-warning">'+esc(q.codeResult.message)+'</p>':'')+
+ '</section>';
+}
 function render(j){
  if(!j?.kind||j.step<0)return '';
  const steps=config(j.kind,j.answers).filter(s=>show(s,j.answers));
@@ -164,9 +178,9 @@ function render(j){
      '<div class="v12-quote-actions"><button type="button" class="button primary" data-action="journey-quote" '+(j.quotePending?'disabled':'')+'>Calculate live quotation</button></div>'+
      (j.quotePending?'<p class="v12-muted">Requesting current pricing and assessment…</p>':'')+
      (j.quoteError?'<p class="v12-warning" role="alert">'+esc(j.quoteError)+'</p>':'')+
-     (j.liveQuote?'<h4>Authoritative quote / assessment response</h4><pre class="v12-quote-output">'+esc(JSON.stringify(j.liveQuote,null,2))+'</pre>':'')+
+     (j.liveQuote?quoteSummary(j.liveQuote):'')+
      (j.kind==='accreditation'&&j.remote?.id?'<p><button class="button secondary" type="button" data-action="journey-accreditation-submit">Submit saved Accreditation application</button></p>':'')+
-     (j.liveQuote?'<div class="v12-payment-panel"><h4>Secure customer payment</h4><label class="v12-choice"><input type="checkbox" id="staff-customer-accepted" '+(j.customerAccepted?'checked':'')+' /><span>I confirm that the customer explicitly agreed to the Code of Ethics and Terms of Business.</span></label><p class="v12-muted">Payment is completed by the customer in Stripe Checkout. Payment status comes from CRM after the existing processing integration updates it.</p><button class="button primary" type="button" data-action="journey-payment" '+(j.paymentBusy?'disabled':'')+'>Generate test payment link</button>'+(j.paymentError?'<p class="v12-warning">'+esc(j.paymentError)+'</p>':'')+(j.paymentAlreadyPaid?'<p>Already paid according to the checkout service. Refresh the CRM record to view the authoritative payment status.</p>':'')+(j.paymentLink?'<p><button type="button" class="button secondary" data-action="journey-copy-payment">Copy payment link</button> <button type="button" class="button secondary" data-action="journey-open-payment">Open Stripe Checkout</button></p>':'')+'</div>':'<p class="v12-muted">Obtain a successful quotation before initiating payment.</p>');
+     (j.liveQuote?.quote?.payable&&!j.liveQuote?.quote?.alreadyPaid?'<div class="v12-payment-panel"><h4>Secure customer payment</h4><label class="v12-choice"><input type="checkbox" id="staff-customer-accepted" '+(j.customerAccepted?'checked':'')+' /><span>I confirm that the customer explicitly agreed to the Code of Ethics and Terms of Business.</span></label><p class="v12-muted">Payment is completed by the customer in Stripe Checkout. Payment status comes from CRM after the existing processing integration updates it.</p><button class="button primary" type="button" data-action="journey-payment" '+(j.paymentBusy?'disabled':'')+'>Generate test payment link</button>'+(j.paymentError?'<p class="v12-warning">'+esc(j.paymentError)+'</p>':'')+(j.paymentAlreadyPaid?'<p>Already paid according to the checkout service. Refresh the CRM record to view the authoritative payment status.</p>':'')+(j.paymentLink?'<p><button type="button" class="button secondary" data-action="journey-copy-payment">Copy payment link</button> <button type="button" class="button secondary" data-action="journey-open-payment">Open Stripe Checkout</button></p>':'')+'</div>':'<p class="v12-muted">Obtain a successful quotation before initiating payment.</p>');
  }else{
    const errors=j.v12Errors||{};
    const intro=typeof step.intro==='function'?step.intro(j.answers):step.intro;
