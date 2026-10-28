@@ -161,8 +161,12 @@ function render(j){
    const all=steps.flatMap(s=>s.fields||[]).filter(f=>show(f,j.answers)&&nonblank(j.answers[f.name]));
    body='<h3>Application review and quotation</h3><p>Confirm the information supplied by the customer. The signed Catalyst API determines eligibility and prices; staff entries are not independent customer declarations.</p>'+
      '<dl class="v12-review">'+all.map(f=>'<div><dt>'+esc(f.label)+'</dt><dd>'+esc(Array.isArray(j.answers[f.name])?j.answers[f.name].map(x=>typeof x==='object'?JSON.stringify(x):x).join(', '):j.answers[f.name])+'</dd></div>').join('')+'</dl>'+
-     '<div class="v12-warning"><strong>Not yet connected:</strong> staff-authorised Catalyst quote, risk checks, persistent shared CRM draft and Stripe/Creator fulfilment. No cover or accreditation is active.</div>'+
-     '<button class="button primary" type="button" disabled>Generate payment link · Not enabled</button>';
+     '<div class="v12-quote-actions"><button type="button" class="button primary" data-action="journey-quote">Calculate live quotation</button></div>'+
+     (j.quotePending?'<p class="v12-muted">Requesting current pricing and assessment…</p>':'')+
+     (j.quoteError?'<p class="v12-warning" role="alert">'+esc(j.quoteError)+'</p>':'')+
+     (j.liveQuote?'<h4>Authoritative quote / assessment response</h4><pre class="v12-quote-output">'+esc(JSON.stringify(j.liveQuote,null,2))+'</pre>':'')+
+     '<p class="v12-warning">Shared CRM drafts and staff payment-link actions remain unavailable until the corresponding signed backend routes are published. No policy is issued or payment taken here.</p>'+
+     '<button class="button secondary" type="button" disabled title="Staff checkout route is not available yet">Generate payment link · API required</button>';
  }else{
    const errors=j.v12Errors||{};
    const intro=typeof step.intro==='function'?step.intro(j.answers):step.intro;
