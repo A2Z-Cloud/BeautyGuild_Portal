@@ -11,6 +11,7 @@ const { createRateLimiter, clientKey } = require('./rateLimit');
 const { ITEMS, SERVICES, pounds, netPounds, membershipChangeOptions } = require('./catalogue');
 const { prorate } = require('./prorata');
 const { saveRevision } = require('./insuranceRevisions');
+const { loadCover } = require('./cover');
 const plans = require('./plans');
 const { createDiscounts } = require('./discounts');
 const { createCrmStore } = require('./voucherAdapter');
@@ -1008,12 +1009,17 @@ function registerCheckoutRoutes(
 
   // Entry points for the staff API (staff.js). They never read a portal user: the Contact is the one the staff member chose, looked up
   // here by id, and the actor is the staff member the CRM vouched for. Nothing is charged and no Stripe session is made.
-  async function staffBuild(req, { contactId, body, voucherCode, waivers, applicationId, actor, service }) {
+  // The Contact the staff member chose, by id. 422 if it is not an id, 404 if there is no such Contact.
+  async function staffContact(req, contactId) {
     if (!ID.test(String(contactId || ''))) throw new HttpError(422, 'INVALID_REQUEST', 'Choose a customer.');
     const row = (
       await crm(req, 'Contacts/' + contactId + '?fields=' + encodeURIComponent('Email,First_Name,Last_Name'))
     )[0];
     if (!row || String(row.id) !== String(contactId)) throw new HttpError(404, 'NOT_FOUND', 'Customer not found.');
+    return row;
+  }
+  async function staffBuild(req, { contactId, body, voucherCode, waivers, applicationId, actor, service }) {
+    const row = await staffContact(req, contactId);
     if ((voucherCode || waivers.length) && !discountsEnabled)
       throw new HttpError(503, 'DISCOUNTS_DISABLED', 'Vouchers and waivers are not switched on.');
     // No Creator reader is wired yet, so a voucher's use history cannot be read and a voucher fails closed (waivers need only the CRM).
@@ -1026,6 +1032,27 @@ function registerCheckoutRoutes(
     return { b, contact: { id: String(row.id), name: [row.First_Name, row.Last_Name].filter(Boolean).join(' ') } };
   }
   return {
+    staffContact,
+    // What a customer can choose when changing a membership: each branch and whether they already hold it (read only).
+    async staffMembershipOptions(req, { contactId, recordId }) {
+      if (!membershipChangesEnabled)
+        throw new HttpError(503, 'NOT_AVAILABLE', 'Membership changes are not available online yet.');
+      const contact = await staffContact(req, contactId);
+      if (!ID.test(String(recordId || ''))) throw new HttpError(422, 'INVALID_REQUEST', 'Choose a membership.');
+      return {
+        contact: { id: String(contact.id) },
+        options: await membershipChangeOptions(req, crm, contact.id, recordId),
+      };
+    },
+    // The customer's current cover for one of their memberships, with the change history (read only, see cover.js).
+    async staffCover(req, { contactId, recordId }) {
+      const contact = await staffContact(req, contactId);
+      if (!ID.test(String(recordId || ''))) throw new HttpError(422, 'INVALID_REQUEST', 'Choose a membership.');
+      return {
+        contact: { id: String(contact.id) },
+        cover: await loadCover({ call: crm, req, contactId: contact.id, dealId: recordId, isDraft: undefined }),
+      };
+    },
     async staffQuote(req, args) {
       const { b, contact } = await staffBuild(req, args);
       return { contact, quote: view(b) };

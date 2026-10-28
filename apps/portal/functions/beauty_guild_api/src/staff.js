@@ -119,6 +119,7 @@ function registerStaffRoutes(
     secrets = [],
     roles = [],
     actions = null,
+    draftsRouter = null,
     windowSeconds = 300,
     getCrmHeaders,
     crmApiDomain,
@@ -330,6 +331,72 @@ function registerStaffRoutes(
       next(err);
     }
   };
+  // Read-only lookups for a Contact the staff member chose. The Contact and record ids come in the (signed) query string.
+  const reads = (route, action) => async (req, res, next) => {
+    try {
+      if (!actions || typeof actions[action] !== 'function')
+        throw new HttpError(503, 'NOT_AVAILABLE', 'This is not available yet.');
+      if (!writes(req.staff.id))
+        throw new HttpError(429, 'RATE_LIMIT', 'Too many requests. Please wait a moment and try again.');
+      const result = await actions[action](req, {
+        contactId: String(req.query.contactId || ''),
+        recordId: String(req.query.recordId || ''),
+      });
+      audit({
+        route,
+        requestId: req.staffCall.requestId,
+        staffUserId: req.staff.id,
+        contactId: result.contact?.id,
+        outcome: 'ok',
+      });
+      res.json({ requestId: req.staffCall.requestId, ...result });
+    } catch (err) {
+      audit({
+        route,
+        requestId: req.staffCall.requestId,
+        staffUserId: req.staff?.id,
+        outcome: 'error',
+        code: err.code,
+      });
+      next(err);
+    }
+  };
+  router.get('/membership-options', authenticate, requireStaff, reads('/membership-options', 'staffMembershipOptions'));
+  router.get('/cover', authenticate, requireStaff, reads('/cover', 'staffCover'));
+
+  // The portal's draft services (save, resume, list, discard, accreditation) for a Contact the staff member chose, so a draft started by staff
+  // is the customer's own draft in Portal V2 and the other way round. The router is the customer's own; this only supplies the Contact.
+  const withStaffContact = async (req, res, next) => {
+    try {
+      if (!actions || typeof actions.staffContact !== 'function')
+        throw new HttpError(503, 'NOT_AVAILABLE', 'This is not available yet.');
+      if (!writes(req.staff.id))
+        throw new HttpError(429, 'RATE_LIMIT', 'Too many requests. Please wait a moment and try again.');
+      const hasBody = req.method === 'POST' || req.method === 'PUT';
+      const body = hasBody ? bodyOf(req) : {};
+      if (!body) throw new HttpError(400, 'INVALID_REQUEST', 'Send the request as a JSON object.');
+      // The body was read raw so the signature could cover it; hand the parsed object on and mark it read so the router does not parse again.
+      req.body = body;
+      req._body = true;
+      req.staffContact = await actions.staffContact(req, String(hasBody ? body.contactId : req.query.contactId || ''));
+      res.on('finish', () =>
+        audit({
+          route: '/drafts' + req.path,
+          method: req.method,
+          requestId: req.staffCall.requestId,
+          staffUserId: req.staff.id,
+          contactId: String(req.staffContact.id),
+          status: res.statusCode,
+          outcome: res.statusCode < 400 ? 'ok' : 'error',
+        }),
+      );
+      next();
+    } catch (err) {
+      next(err);
+    }
+  };
+  if (draftsRouter) router.use('/drafts', authenticate, requireStaff, withStaffContact, draftsRouter);
+
   // Prices only: nothing is charged, saved or sent. Also the assessment: insurance answers come back as a decision or a referral.
   router.post('/quote', authenticate, requireStaff, priced('/quote', 'staffQuote'));
   // Saves a quoted insurance change as a revision (no payment), recording the staff member. Safe to repeat: the same change saves once.

@@ -121,6 +121,26 @@ Saves a quoted insurance change as a revision for the Contact, as the customer's
 
 Both routes limit each staff user to 60 calls a minute (best effort).
 
+### `GET /staff/membership-options?contactId=...&recordId=...`
+Read only. What the customer can choose when changing a membership: each branch and whether they already hold it. `recordId` is the membership (Deal) id. `503 NOT_AVAILABLE` until `PORTAL_MEMBERSHIP_CHANGES_ENABLED` is on. Returns `{ requestId, contact: { id }, options }`, the same `options` as the customer's `GET /portal/checkout/membership-options`.
+
+### `GET /staff/cover?contactId=...&recordId=...`
+Read only. The customer's current cover for one membership, with the change (revision) history, as `{ requestId, contact: { id }, cover }`. The same `cover` as the customer's `GET /portal/records/membership/:id/cover`. The membership must belong to the Contact (404 otherwise).
+
+### `/staff/drafts` (the portal's draft services for a Contact the staff member chose)
+The customer's own draft router, mounted behind the signed channel and the role check, so **a draft started by staff is the customer's own draft in Portal V2, and the other way round**. The Contact comes from `contactId` (in the **body** for `POST` and `PUT`, in the **query string** for `GET` and `DELETE`); it must be an existing Contact (422 if it is not an id, 404 if there is none). **A staff draft never creates a Contact.** The body is signed JSON and is otherwise identical to the customer's.
+
+| Method and path | Same as the customer's |
+| --- | --- |
+| `POST /staff/drafts` | `POST /portal/drafts` (save a new draft; 201) |
+| `GET /staff/drafts?contactId=...` | `GET /portal/drafts` (list the Contact's drafts) |
+| `GET /staff/drafts/:service/:id?contactId=...` | `GET /portal/drafts/:service/:id` (resume) |
+| `PUT /staff/drafts/:service/:id` | `PUT /portal/drafts/:service/:id` (save with the current `revision`) |
+| `DELETE /staff/drafts/:service/:id?contactId=...` | `DELETE /portal/drafts/:service/:id` (discard) |
+| `POST /staff/drafts/accreditation/submit` | `POST /portal/drafts/accreditation/submit` |
+
+`service` is `membership`, `insurance` or `accreditation`. `503 DRAFTS_DISABLED` while `PORTAL_CRM_DRAFTS_ENABLED` is off, and accreditation needs its own switch as for customers. Every call writes a `staff_request` log line with the method, status and Contact.
+
 ## Responses
 
 | Status | Code | When |

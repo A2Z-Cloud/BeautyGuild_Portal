@@ -9,7 +9,7 @@
 | Signature check (hex or base64), time window, nonce check | The CRM custom function that signs requests |
 | CRM user lookup, active check and role allow-list | A staff payment link route (charging) |
 | `GET /staff/ping` and `GET /staff/me` | A deployed, switched-on Development endpoint |
-| `POST /staff/quote` (also the assessment), `POST /staff/insurance-change/revision` | Vouchers (needs a Creator reader for use history) |
+| `POST /staff/quote` (also the assessment), `POST /staff/insurance-change/revision`, `GET /staff/membership-options`, `GET /staff/cover`, and the shared drafts under `/staff/drafts` | Vouchers (needs a Creator reader for use history) |
 | `POST /staff/quote` (also the assessment) and `POST /staff/insurance-change/revision` | A staff payment link or any charge |
 | Staff waivers on the quote (joining fee, once per person) | Vouchers (needs a Creator reader for use history) |
 | Tests and two checked test vectors | CRM-visible audit records beyond an optional text field |

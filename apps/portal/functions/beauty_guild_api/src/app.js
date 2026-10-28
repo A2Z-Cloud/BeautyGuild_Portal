@@ -182,7 +182,7 @@ function createApp({
     fetchImpl,
     now,
   });
-  registerDraftRoutes(app, {
+  const drafts = registerDraftRoutes(app, {
     enabled: config.crmDraftsEnabled,
     getCurrentUser,
     getCrmHeaders,
@@ -197,6 +197,7 @@ function createApp({
     secrets: config.staffApiSecrets,
     roles: config.staffApiRoles,
     actions: checkout,
+    draftsRouter: drafts.router,
     windowSeconds: config.staffApiWindowSeconds,
     getCrmHeaders,
     crmApiDomain: config.crmApiDomain,
