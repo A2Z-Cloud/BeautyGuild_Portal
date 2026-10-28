@@ -105,7 +105,7 @@ async function quote(){
    if(response?.error||response?.code||response?.ok===false)throw Error(response.message||response.error||response.code);
    if(!response?.quote)throw Error('Backend returned no quote. Check the response contract.');
    state.quote=response;state.payload=p;state.savedRevision=null;state.checkoutUrl='';
-   result(response);const b=$('staff-mta-save');if(b)b.disabled=response.quote.payable!==true;
+   result(response);const button=$('staff-mta-save');if(button)button.disabled=false; // Referred changes must also be saved for staff review; only payment is blocked.
  }catch(e){state.quote=null;state.payload=null;result(e.message||String(e),true);const b=$('staff-mta-save');if(b)b.disabled=true;}
  finally{state.busy=false;}
 }
