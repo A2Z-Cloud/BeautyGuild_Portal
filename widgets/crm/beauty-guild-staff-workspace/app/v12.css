@@ -91,3 +91,10 @@
 .wf-confirm-text span{color:#6f6470;font-size:12px}
 .wf-confirm-actions{display:flex;gap:8px;flex-shrink:0}
 @media(max-width:560px){.wf-confirm{flex-direction:column;align-items:stretch}.wf-confirm-actions{justify-content:flex-end}}
+
+
+.v12-quote-actions,.v12-payment-panel,.v12-journey-tools{margin:16px 0;padding:16px;border:1px solid #e5dce2;border-radius:10px;background:#fff}
+.v12-quote-output{white-space:pre-wrap;overflow-wrap:anywhere;max-height:320px;overflow:auto;font:12px/1.6 ui-monospace,SFMono-Regular,Consolas,monospace;background:#faf7f9;border-radius:8px;padding:12px;margin:12px 0}
+.v12-payment-panel button,.v12-journey-tools button{margin:8px 8px 8px 0}
+.v12-journey-tools input{display:block;width:100%;max-width:380px;margin:10px 0;padding:10px;border:1px solid #d7cbd2;border-radius:8px}
+.v12-payment-panel .v12-choice{display:flex;align-items:flex-start;gap:10px;padding:10px 0}.v12-payment-panel .v12-choice input{margin-top:4px}
