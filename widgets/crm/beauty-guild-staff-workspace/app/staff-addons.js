@@ -40,7 +40,7 @@ function mtaFields(){
  field('staff-effective-date','Effective date','type="date"')+
  '<label for="staff-mta-type">Change type</label><select id="staff-mta-type"><option value="">Choose a change</option><option value="person">Add named person</option><option value="treatment">Add treatment</option><option value="teaching">Teaching cover</option><option value="equipment">Equipment cover increase</option><option value="el">Employers Liability change</option></select>'+
  '<div id="staff-mta-specific"></div>'+
- '<label for="staff-mta-details">Additional change fields (JSON, optional)</label><textarea id="staff-mta-details" rows="4" placeholder='{"declarations":[],"qualified":"yes"}'></textarea>'+
+ '<label for="staff-mta-details">Additional change fields (JSON, optional)</label><textarea id="staff-mta-details" rows="4" placeholder="Optional additional JSON"></textarea>'+
  note('Use the same portal declarations and customer-confirmation requirements. This form does not independently confirm declarations or provide cover.')+
  '<div class="staff-addon-actions"><button class="button secondary" type="button" data-staff-addon="cover">Load current cover</button><button class="button primary" type="button" data-staff-addon="quote-mta">Get live quote</button><button class="button secondary" type="button" data-staff-addon="save-mta" disabled id="staff-mta-save">Save quoted revision</button></div>'+
  '<div class="staff-addon-result" id="staff-mta-result" role="status" aria-live="polite">No quote requested.</div>';
@@ -67,7 +67,7 @@ async function loadCover(){
  const target=$('staff-mta-result');if(!target)return;
  const contact=String($('staff-mta-contact')?.value||'').trim();
  const recordId=String($('staff-mta-record')?.value||'').trim();
- if(!/^\\d{10,25}$/.test(contact)||!/^\\d{10,25}$/.test(recordId)){target.textContent='Enter the Contact and Membership IDs to load current cover.';return;}
+ if(!/^\d{10,25}$/.test(contact)||!/^\d{10,25}$/.test(recordId)){target.textContent='Enter the Contact and Membership IDs to load current cover.';return;}
  target.textContent='Loading authoritative existing cover…';
  try{const response=await global.BGStaffApi.call('cover',{contactId:contact,recordId});target.textContent=JSON.stringify(response?.cover||response,null,2);}
  catch(e){target.textContent='Current cover could not be loaded: '+String(e.message||e);}
