@@ -81,6 +81,9 @@ function createNonceStore({ ttlMs, now = Date.now }) {
   };
 }
 
+// The actor the pricing and discount code takes. Every approved role may waive (Guild answer, 26 October 2026).
+const actorOf = ({ id, name, email }) => ({ type: 'staff', id, name, email, canWaive: true });
+
 const lower = v =>
   String(v || '')
     .trim()
@@ -99,6 +102,7 @@ function registerStaffRoutes(
     enabled,
     secrets = [],
     roles = [],
+    actions = null,
     windowSeconds = 300,
     getCrmHeaders,
     crmApiDomain,
@@ -224,9 +228,68 @@ function registerStaffRoutes(
     res.json({
       requestId: req.staffCall.requestId,
       staff: { id, name, email, profile, role },
-      actor: { kind: 'staff', id, name, canWaive: true },
+      actor: actorOf(req.staff),
     });
   });
+
+  // The routes that price and save for a customer the staff member chose. The body is signed JSON; the Contact comes from `contactId`.
+  const writes = createRateLimiter({ limit: 60, windowMs: 60 * 1000, now });
+  const bodyOf = req => {
+    try {
+      const parsed = JSON.parse(Buffer.isBuffer(req.body) ? req.body.toString('utf8') : '');
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+    } catch {
+      return null;
+    }
+  };
+  const priced = (route, action) => async (req, res, next) => {
+    try {
+      if (!actions || typeof actions[action] !== 'function')
+        throw new HttpError(503, 'NOT_AVAILABLE', 'This is not available yet.');
+      if (!writes(req.staff.id))
+        throw new HttpError(429, 'RATE_LIMIT', 'Too many requests. Please wait a moment and try again.');
+      const body = bodyOf(req);
+      if (!body) throw new HttpError(400, 'INVALID_REQUEST', 'Send the request as a JSON object.');
+      const waivers = Array.isArray(body.waivers)
+        ? body.waivers.filter(w => w && typeof w === 'object').slice(0, 6)
+        : [];
+      const result = await actions[action](req, {
+        contactId: String(body.contactId || ''),
+        body,
+        voucherCode: String(body.voucherCode || '').slice(0, 60),
+        waivers,
+        applicationId: String(body.applicationId || ''),
+        actor: actorOf(req.staff),
+      });
+      audit({
+        route,
+        requestId: req.staffCall.requestId,
+        staffUserId: req.staff.id,
+        contactId: result.contact?.id,
+        service: String(body.service || ''),
+        outcome: 'ok',
+      });
+      res.status(result.created === true ? 201 : 200).json({ requestId: req.staffCall.requestId, ...result });
+    } catch (err) {
+      audit({
+        route,
+        requestId: req.staffCall.requestId,
+        staffUserId: req.staff?.id,
+        outcome: 'error',
+        code: err.code,
+      });
+      next(err);
+    }
+  };
+  // Prices only: nothing is charged, saved or sent. Also the assessment: insurance answers come back as a decision or a referral.
+  router.post('/quote', authenticate, requireStaff, priced('/quote', 'staffQuote'));
+  // Saves a quoted insurance change as a revision (no payment), recording the staff member. Safe to repeat: the same change saves once.
+  router.post(
+    '/insurance-change/revision',
+    authenticate,
+    requireStaff,
+    priced('/insurance-change/revision', 'staffSaveRevision'),
+  );
 
   app.use('/staff', router);
 }

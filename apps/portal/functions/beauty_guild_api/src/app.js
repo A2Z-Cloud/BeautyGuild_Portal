@@ -158,7 +158,7 @@ function createApp({
     module: config.voucherModule,
     now,
   });
-  registerCheckoutRoutes(app, {
+  const checkout = registerCheckoutRoutes(app, {
     publicQuotesEnabled: config.publicQuotesEnabled,
     discountsEnabled: config.discountsEnabled,
     voucherRedemptionEnabled: config.voucherRedemptionEnabled,
@@ -169,6 +169,7 @@ function createApp({
     insuranceChangesWritesEnabled: config.insuranceChangesWritesEnabled,
     insuranceChangesPaymentEnabled: config.insuranceChangesPaymentEnabled,
     revisionNamePrefix: config.revisionNamePrefix,
+    staffAuditField: config.staffAuditField,
     enabled: config.billingEnabled,
     getCurrentUser,
     getCrmHeaders,
@@ -193,6 +194,7 @@ function createApp({
     enabled: config.staffApiEnabled,
     secrets: config.staffApiSecrets,
     roles: config.staffApiRoles,
+    actions: checkout,
     windowSeconds: config.staffApiWindowSeconds,
     getCrmHeaders,
     crmApiDomain: config.crmApiDomain,
