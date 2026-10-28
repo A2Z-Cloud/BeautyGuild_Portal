@@ -598,6 +598,58 @@
     else if(action==='coming-soon'||action==='journey-start'){state.view='create';initJourney(el.dataset.kind);render();}
     else if(action==='journey-type'){state.journey.kind=el.dataset.kind;state.journey.step=-1;state.journey.answers={};render();if(el.dataset.kind==='accreditation'&&window.BGJourney12)window.BGJourney12.loadCourses(ZOHO.CRM,render).catch(e=>setNotice('Course catalogue could not load: '+String(e.message||e),'error'));}
     else if(action==='journey-next'){const j=state.journey;if(j?.step===-1&&j.contact&&window.BGJourney12){try{j.contact=await getRecord(M.CONTACT,j.contact.id);state.contact=j.contact;}catch(e){j.formError='Unable to load complete CRM Contact details: '+String(e.message||e);render();return;}window.BGJourney12.prefill(j);}advanceJourney(1);}
+    else if(action==='journey-drafts'){
+      const j=state.journey;if(!j?.contact?.id)return;
+      j.draftsBusy=true;j.draftsError='';render();
+      try{const out=await window.BGStaffApi.call('drafts_list',{contactId:String(j.contact.id)});j.availableDrafts=out?.drafts||out?.items||[];}
+      catch(e){j.draftsError=String(e.message||e);}
+      finally{j.draftsBusy=false;render();}
+    }
+    else if(action==='journey-load-draft'){
+      const j=state.journey;if(!j?.contact?.id)return;
+      const id=el.dataset.id,service=el.dataset.service;
+      if(!/^[a-z_]+$/.test(service||'')||!/^\\d{10,25}$/.test(id||''))return;
+      j.draftsBusy=true;j.draftsError='';render();
+      try{
+        const out=await window.BGStaffApi.call('drafts_get',{contactId:String(j.contact.id),service,id});
+        const d=out?.draft;if(!d?.answers||!d?.journeyId)throw Error('The draft response cannot be restored.');
+        j.kind=d.service==='combined'?'membership':d.service;j.answers={...d.answers};
+        j.step=Math.max(0,Number(d.step)||0);j.remote={id:String(d.id),service:d.service,journeyId:d.journeyId,revision:d.revision};
+      }catch(e){j.draftsError=String(e.message||e);}
+      finally{j.draftsBusy=false;render();}
+    }
+    else if(action==='journey-save'){
+      const j=state.journey;if(!j?.contact?.id||!j.kind||j.draftsBusy)return;
+      j.draftsBusy=true;j.draftsError='';j.draftsMessage='';render();
+      try{
+        const service=j.kind==='membership'&&j.answers.insurance==='yes'?'combined':j.kind;
+        const request={contactId:String(j.contact.id),service,answers:j.answers,step:Math.max(0,j.step),journeyId:j.remote?.journeyId||window.crypto?.randomUUID?.()};
+        if(!request.journeyId)throw Error('Secure journey ID generation is unavailable.');
+        if(j.remote){request.id=j.remote.id;request.revision=j.remote.revision;}
+        const out=await window.BGStaffApi.call(j.remote?'drafts_update':'drafts_save',request);
+        const d=out?.draft;if(!d?.id||!d?.revision)throw Error('Draft save was not confirmed by the server.');
+        j.remote={id:String(d.id),service:d.service||service,journeyId:d.journeyId||request.journeyId,revision:d.revision};
+        j.draftsMessage='CRM draft saved. The customer can resume this application in Portal V2.';
+      }catch(e){j.draftsError=String(e.message||e);}
+      finally{j.draftsBusy=false;render();}
+    }
+    else if(action==='journey-payment'){
+      const j=state.journey;if(!j?.contact?.id||!j.liveQuote||j.paymentBusy)return;
+      if(!document.getElementById('staff-customer-accepted')?.checked){j.paymentError='Confirm the customer has explicitly accepted the Code of Ethics and terms.';render();return;}
+      if(window.BGStaffAddons?.quoteInputs){const discounts=window.BGStaffAddons.quoteInputs();if(discounts.voucherCode||discounts.waivers?.length){j.paymentError='Discounted payment links are not supported. Remove all vouchers and waivers, then obtain a fresh quote.';render();return;}}
+      if(!window.confirm('Create a test-mode Stripe Checkout link for this customer and the current application?'))return;
+      j.paymentBusy=true;j.paymentError='';render();
+      try{
+        const body={...j.answers,contactId:String(j.contact.id),service:j.kind==='membership'&&j.answers.insurance==='yes'?'combined':j.kind,accepted:'yes'};
+        const response=await window.BGStaffApi.call('payment_link',body);
+        if(response?.alreadyPaid){j.paymentAlreadyPaid=true;j.paymentLink='';}
+        else if(/^https:\\/\\/checkout\\.stripe\\.com\\//.test(response?.checkoutUrl||''))j.paymentLink=response.checkoutUrl;
+        else throw Error('The server did not return a valid Stripe Checkout URL.');
+      }catch(e){j.paymentError=String(e.message||e);}
+      finally{j.paymentBusy=false;render();}
+    }
+    else if(action==='journey-copy-payment'){const url=state.journey?.paymentLink;if(url)navigator.clipboard?.writeText(url).catch(()=>setNotice('Copy failed. Open the payment link and copy it from your browser.','error'));}
+    else if(action==='journey-open-payment'){const url=state.journey?.paymentLink;if(url&&/^https:\\/\\/checkout\\.stripe\\.com\\//.test(url))window.open(url,'_blank','noopener,noreferrer');}
     else if(action==='journey-quote'){
       const j=state.journey;
       if(!j?.contact?.id||!j.kind||j.quotePending)return;
