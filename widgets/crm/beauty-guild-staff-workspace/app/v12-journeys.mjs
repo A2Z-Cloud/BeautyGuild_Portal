@@ -175,6 +175,7 @@ function render(j){
   '<p class="v12-warning">Working questionnaire only: answers are currently held in this browser session. CRM shared-draft persistence, live checks and quotations require the protected Catalyst staff adapter.</p>'+
   ctx+crumb+'<div class="v12-journey-body">'+body+'</div>'+
   (j.formError?'<div class="v12-form-error" role="alert">'+esc(j.formError)+'</div>':'')+
+  (review&&j.kind==='membership'?(window.BGStaffAddons?.journeyPanel('membership')||''):'')+
   '<footer class="journey-footer"><button class="button secondary" type="button" data-action="journey-back">Back</button>'+
    (!review?'<button class="button primary" type="button" data-action="journey-next">Continue</button>':'')+
    '<button class="button secondary" type="button" disabled title="Shared CRM draft API not yet connected">Save to CRM · Pending integration</button>'+
