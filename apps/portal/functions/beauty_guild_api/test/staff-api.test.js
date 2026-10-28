@@ -253,6 +253,44 @@ test('every way of failing the signature gets the same 401 and tells the caller 
   });
 });
 
+test('a bad signature logs what was expected to be signed (lengths and a short hash), and tells the caller nothing', async () => {
+  await withStaffApp({}, async ({ call, logs }) => {
+    const wrong = 'x'.repeat(40);
+    const r = await call('/staff/ping', { secret: wrong });
+    assert.equal(r.status, 401);
+    assert.deepEqual(r.body, { error: 'Not authorised.', code: 'STAFF_AUTH_FAILED' });
+    const entry = JSON.parse(logs.find(l => l.includes('bad_signature')));
+    const canonical = canonicalString({
+      method: 'GET',
+      path: '/staff/ping',
+      body: '',
+      time: String(NOW_S),
+      nonce: NONCE,
+      userId: USER,
+    });
+    assert.deepEqual(entry.lineLengths, [3, 11, 64, 10, 32, 19]);
+    assert.equal(entry.pathSeen, '/staff/ping');
+    assert.equal(
+      entry.messageSha256,
+      require('node:crypto').createHash('sha256').update(canonical).digest('hex').slice(0, 16),
+    );
+    assert.deepEqual(entry.secretLengths, [SECRET.length]);
+    assert.equal(entry.receivedForm, 'hex');
+    // Nothing secret or reusable is in the log: not either secret, not the expected signature, not the one sent.
+    const text = logs.join('\n');
+    const sent = signStaffRequest({
+      secret: wrong,
+      method: 'GET',
+      path: '/staff/ping',
+      body: '',
+      time: String(NOW_S),
+      nonce: NONCE,
+      userId: USER,
+    });
+    for (const hidden of [SECRET, wrong, VECTOR_GET, sent]) assert.equal(text.includes(hidden), false);
+  });
+});
+
 test('a captured request cannot be sent twice, but a bad one does not use up its nonce', async () => {
   await withStaffApp({}, async ({ call }) => {
     assert.equal((await call('/staff/ping', { secret: 'x'.repeat(40) })).status, 401);

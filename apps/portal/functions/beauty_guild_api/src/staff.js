@@ -64,7 +64,23 @@ function verifyStaffRequest({ secrets, method, path, body, headers, nowMs, windo
   // Every secret is tried, with no early exit, so the time taken does not say which one matched.
   let matched = false;
   for (const secret of secrets) if (sameHex(signStaffRequest({ secret, ...parts }), signature)) matched = true;
-  return matched ? { ok: true, userId, nonce } : { ok: false, reason: 'bad_signature' };
+  if (matched) return { ok: true, userId, nonce };
+  // For the log only, never the caller: what this function expected to sign, as lengths and a short hash of the message (no secret and
+  // no signature), so the CRM function's author can find the line that differs. Compare messageSha256 with the first 16 characters of the
+  // SHA-256 of the string the CRM function signed.
+  const canonical = canonicalString(parts);
+  const lines = canonical.split('\n');
+  return {
+    ok: false,
+    reason: 'bad_signature',
+    detail: {
+      lineLengths: lines.map(l => l.length),
+      pathSeen: String(path).slice(0, 200),
+      messageSha256: sha256Hex(Buffer.from(canonical)).slice(0, 16),
+      receivedForm: /^[0-9a-fA-F]{64}$/.test(rawSignature) ? 'hex' : 'base64',
+      secretLengths: secrets.map(x => x.length),
+    },
+  };
 }
 
 // Remembers nonces for a while so a captured request cannot be sent again. It lives in this instance's memory, like the other limiters,
@@ -139,15 +155,15 @@ function registerStaffRoutes(
       nowMs: now(),
       windowSeconds,
     });
-    const reject = reason => {
-      audit({ route: req.path, outcome: 'refused', reason });
+    const reject = (reason, detail = {}) => {
+      audit({ route: req.path, outcome: 'refused', reason, ...detail });
       return next(
         failures(key)
           ? notAuthorised()
           : new HttpError(429, 'RATE_LIMIT', 'Too many requests. Please wait a moment and try again.'),
       );
     };
-    if (!checked.ok) return reject(checked.reason);
+    if (!checked.ok) return reject(checked.reason, checked.detail);
     if (!useNonce(checked.nonce)) return reject('replay');
     req.staffCall = { userId: checked.userId, requestId: crypto.randomUUID() };
     return next();

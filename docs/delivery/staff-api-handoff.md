@@ -128,7 +128,26 @@ echo
 
 Expected for `/staff/ping`: `{"ok":true,"serverTime":…,"seenPath":"/staff/ping","staffUserId":"…","requestId":"…"}`. Check that `seenPath` is exactly what you signed. Use a real CRM user id for `/staff/me`.
 
-## 6. Turning it on in Development (someone with deploy access)
+## 5a. Reading the function log when a signed request is refused
+
+The caller always gets the same `401`. The function log has the reason (`staff_request` lines, `outcome: refused`):
+
+| `reason` | Meaning |
+| --- | --- |
+| `missing_header` | One of the four `X-Staff-...` headers is absent or empty |
+| `bad_user`, `bad_time`, `bad_nonce` | The value is not in the right format (time is 10 digit seconds; nonce 32 to 128 lower case hex; user a CRM id) |
+| `bad_signature_format` | The signature is neither 64 hex characters nor base64 |
+| `stale` | Format fine, but the time is more than the window (5 minutes) from the function's clock. Sign with `GET /staff/time` |
+| `bad_signature` | The signature does not match what the function expected |
+| `replay` | The nonce was already used |
+
+For `bad_signature` the log line also carries, with **no secret and no signature in it**:
+- `lineLengths`: the length of each of the six signed lines, in order (method, path, body hash, time, nonce, user id). For `GET /staff/ping` with a 19 digit user id: `[3, 11, 64, 10, 32, 19]`. A line with a different length is the one that differs (a path with the `/server/beauty_guild_api` prefix, a `\n` written as two characters, an empty or upper case body hash).
+- `pathSeen`: the path the function saw. This is the exact string to sign.
+- `messageSha256`: the first 16 characters of the SHA-256 of the string the function expected to be signed. In the CRM function, print `zoho.encryption.sha256(to_sign).subString(0,16)` (lower case) and compare: if they match, the message is right and the fault is the secret or the HMAC step; if not, the message differs.
+- `receivedForm` (`hex` or `base64`) and `secretLengths` (the length of each secret the function holds; yours should be 64).
+
+ (someone with deploy access)
 
 1. Put `STAFF_API_SECRET` in the Development env file, and `PORTAL_STAFF_API_ENABLED=true` and `PORTAL_STAFF_API_ROLES=...` in the flags file. The deploy script already allows these names.
 2. Deploy the function. **Do not do this during customer UAT**: the function is the portal's backend. With the switch off, nothing changes for anyone.
