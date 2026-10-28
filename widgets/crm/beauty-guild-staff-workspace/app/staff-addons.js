@@ -42,7 +42,7 @@ function mtaFields(){
  '<div id="staff-mta-specific"></div>'+
  '<label for="staff-mta-details">Additional change fields (JSON, optional)</label><textarea id="staff-mta-details" rows="4" placeholder='{"declarations":[],"qualified":"yes"}'></textarea>'+
  note('Use the same portal declarations and customer-confirmation requirements. This form does not independently confirm declarations or provide cover.')+
- '<div class="staff-addon-actions"><button class="button primary" type="button" data-staff-addon="quote-mta">Get live quote</button><button class="button secondary" type="button" data-staff-addon="save-mta" disabled id="staff-mta-save">Save quoted revision</button></div>'+
+ '<div class="staff-addon-actions"><button class="button secondary" type="button" data-staff-addon="cover">Load current cover</button><button class="button primary" type="button" data-staff-addon="quote-mta">Get live quote</button><button class="button secondary" type="button" data-staff-addon="save-mta" disabled id="staff-mta-save">Save quoted revision</button></div>'+
  '<div class="staff-addon-result" id="staff-mta-result" role="status" aria-live="polite">No quote requested.</div>';
 }
 function specific(){
@@ -61,6 +61,16 @@ function open(mode,record,entity){
  d.innerHTML='<div class="staff-addon-head"><div><small>STAFF WORKSPACE</small><h2>'+(mode==='mta'?'Mid-term adjustment':'Voucher / waiver')+'</h2><p>'+esc(record?.Name||record?.Policy_Number||record?.Deal_Name||'Selected record')+'</p></div><button type="button" class="button secondary" data-staff-addon="close">Close</button></div>'+
  (mode==='mta'?mtaFields():discountFields()+note('Referral and waiver inputs are ready for a membership quote. No discount is applied without a signed quote response.')+'<output id="staff-discount-outcome"></output>');
  if(d.showModal)d.showModal();else d.setAttribute('open','');
+ if(mode==='mta')loadCover();
+}
+async function loadCover(){
+ const target=$('staff-mta-result');if(!target)return;
+ const contact=String($('staff-mta-contact')?.value||'').trim();
+ const recordId=String($('staff-mta-record')?.value||'').trim();
+ if(!/^\\d{10,25}$/.test(contact)||!/^\\d{10,25}$/.test(recordId)){target.textContent='Enter the Contact and Membership IDs to load current cover.';return;}
+ target.textContent='Loading authoritative existing cover…';
+ try{const response=await global.BGStaffApi.call('cover',{contactId:contact,recordId});target.textContent=JSON.stringify(response?.cover||response,null,2);}
+ catch(e){target.textContent='Current cover could not be loaded: '+String(e.message||e);}
 }
 function payload(){
  const c=String($('staff-mta-contact')?.value||'').trim(),recordId=String($('staff-mta-record')?.value||'').trim(),date=$('staff-effective-date')?.value,type=$('staff-mta-type')?.value;
@@ -115,6 +125,7 @@ document.addEventListener('click',event=>{
  const a=b.dataset.staffAddon;
  if(a==='close'){$('staff-addon-dialog')?.close?.();return;}
  if(a==='validate-discount'){validate();return;}
+ if(a==='cover'){loadCover();return;}
  if(a==='quote-mta'){quote();return;}
  if(a==='save-mta'){save();return;}
  if(a==='mta'||a==='discount'){const focus=global.BGCRM12?.getFocusedRecord?.();const record=focus?.record&&String(focus.record.id)===String(b.dataset.staffId)?focus.record:{id:b.dataset.staffId,Name:document.querySelector('.v12-record-head h2')?.textContent||'Selected record'};open(a,record,focus?.entity);}
