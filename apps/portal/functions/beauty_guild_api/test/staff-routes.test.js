@@ -7,6 +7,7 @@ const { loadConfig } = require('../src/config');
 const { signStaffRequest } = require('../src/staff');
 const { world, IDS } = require('./helpers/world');
 const { fixture, ASK, SUB, ANSWERS, WRITES, posts } = require('./helpers/insurance-fixture');
+const { fakeCrm, JOURNEY, env: DRAFT_ENV } = require('./helpers/drafts-fixture');
 
 const SECRET = 'staff-test-secret-0123456789-abcdefghijklmnop';
 const STAFF = '1011174000000000042';
@@ -62,21 +63,25 @@ async function withStaff(w, fn, env = {}) {
   });
   try {
     // Signed the way the CRM function signs it, as the CRM user STAFF.
-    const call = async (path, body, { secret = SECRET, user = STAFF } = {}) => {
-      const text = JSON.stringify(body);
+    const call = async (
+      path,
+      body,
+      { secret = SECRET, user = STAFF, method = body === undefined ? 'GET' : 'POST' } = {},
+    ) => {
+      const text = body === undefined ? '' : JSON.stringify(body);
       const time = String(Math.floor(Date.now() / 1000));
       const nonce = (++counter).toString(16).padStart(32, '0');
-      const signature = signStaffRequest({ secret, method: 'POST', path, body: text, time, nonce, userId: user });
+      const signature = signStaffRequest({ secret, method, path, body: text, time, nonce, userId: user });
       const r = await fetch('http://127.0.0.1:' + server.address().port + path, {
-        method: 'POST',
+        method,
         headers: {
-          'Content-Type': 'application/json',
+          ...(text ? { 'Content-Type': 'application/json' } : {}),
           'X-Staff-User': user,
           'X-Staff-Time': time,
           'X-Staff-Nonce': nonce,
           'X-Staff-Signature': Buffer.from(signature, 'hex').toString('base64'),
         },
-        body: text,
+        ...(text ? { body: text } : {}),
       });
       return { status: r.status, body: await r.json() };
     };
@@ -207,4 +212,226 @@ test('saving is refused while the writes switch is off, and writes nothing', asy
     assert.equal(r.status, 503);
   });
   assert.equal(w.crmPosts.length, 0);
+});
+
+// ---- Staff reads and the shared drafts ----
+const draftBody = (extra = {}) => ({
+  service: 'insurance',
+  journeyId: JOURNEY,
+  step: 2,
+  answers: { a: 1 },
+  contactId: '1000000000101',
+  ...extra,
+});
+// The drafts CRM, plus the CRM user behind a signed request.
+function draftsWorld() {
+  const crm = fakeCrm();
+  const base = crm.fetchImpl;
+  crm.fetchImpl = async (url, init = {}) => {
+    if (String(url).includes('/crm/v3/users/'))
+      return json({
+        users: [
+          {
+            id: STAFF,
+            full_name: 'Sam Staff',
+            email: 'sam@beautyguild.com',
+            status: 'active',
+            profile: { name: 'Standard' },
+            role: { name: 'Processing' },
+          },
+        ],
+      });
+    return base(url, init);
+  };
+  return crm;
+}
+const WITH_DRAFTS = { ...DRAFT_ENV };
+
+test("staff save a draft for the chosen Contact: it is the Contact's own draft, no Contact is made, and staff can list and resume it", async () => {
+  const w = draftsWorld();
+  await withStaff(
+    w,
+    async ({ call }) => {
+      const saved = await call('/staff/drafts', draftBody());
+      assert.equal(saved.status, 201, JSON.stringify(saved.body));
+      const row = w.store.Insurance_Policy[0];
+      assert.equal(String(row.Contact.id), '1000000000101', 'owned by the customer, not the staff member');
+      const list = await call('/staff/drafts?contactId=1000000000101');
+      assert.equal(list.status, 200, JSON.stringify(list.body));
+      assert.equal(list.body.drafts.length, 1);
+      const got = await call('/staff/drafts/insurance/' + row.id + '?contactId=1000000000101');
+      assert.equal(got.status, 200, JSON.stringify(got.body));
+      assert.equal(got.body.draft.journeyId, JOURNEY);
+    },
+    WITH_DRAFTS,
+  );
+  assert.equal(
+    w.calls.some(c => c.method === 'POST' && /\/crm\/v3\/Contacts$/.test(c.u)),
+    false,
+    'a staff draft never creates a Contact',
+  );
+});
+
+test('a staff draft needs a real Contact id and a JSON object, and is refused without a valid signed staff user', async () => {
+  const w = draftsWorld();
+  await withStaff(
+    w,
+    async ({ call }) => {
+      assert.equal((await call('/staff/drafts', draftBody({ contactId: undefined }))).status, 422);
+      assert.equal((await call('/staff/drafts', draftBody({ contactId: 'abc' }))).status, 422);
+      assert.equal((await call('/staff/drafts', draftBody({ contactId: '1999999999999' }))).status, 404);
+      assert.equal((await call('/staff/drafts', [1])).status, 400);
+      assert.equal(
+        (await call('/staff/drafts?contactId=1000000000101', undefined, { secret: 'x'.repeat(40) })).status,
+        401,
+      );
+    },
+    WITH_DRAFTS,
+  );
+  assert.equal(w.store.Insurance_Policy.length, 0, 'nothing was saved');
+});
+
+test('the draft routes are not there with the drafts switch off', async () => {
+  const w = draftsWorld();
+  await withStaff(
+    w,
+    async ({ call }) => {
+      const r = await call('/staff/drafts', draftBody());
+      assert.equal(r.status, 503);
+      assert.equal(r.body.code, 'DRAFTS_DISABLED');
+    },
+    {},
+  );
+});
+
+test('staff read membership options and cover for a Contact, and both are read only', async () => {
+  const w = fixture();
+  await withStaff(
+    w,
+    async ({ call }) => {
+      const cover = await call('/staff/cover?contactId=' + IDS.me + '&recordId=' + IDS.deal);
+      assert.equal(cover.status, 200, JSON.stringify(cover.body));
+      assert.ok(cover.body.cover, 'the cover and its history');
+      assert.equal((await call('/staff/cover?contactId=' + IDS.me)).status, 422, 'a membership id is needed');
+      assert.equal((await call('/staff/cover?recordId=' + IDS.deal)).status, 422, 'a Contact id is needed');
+      const options = await call('/staff/membership-options?contactId=' + IDS.me + '&recordId=' + IDS.deal);
+      assert.equal(options.status, 503, 'off until membership changes are switched on');
+    },
+    {},
+  );
+  assert.equal(w.crmPosts.length, 0);
+  await withStaff(
+    w,
+    async ({ call }) => {
+      const options = await call('/staff/membership-options?contactId=' + IDS.me + '&recordId=' + IDS.deal);
+      assert.equal(options.status, 200, JSON.stringify(options.body));
+      assert.ok(options.body.options);
+    },
+    { PORTAL_MEMBERSHIP_CHANGES_ENABLED: 'true' },
+  );
+  assert.equal(w.crmPosts.length, 0, 'reads write nothing');
+});
+
+// ---- Staff payment link ----
+const LINKS = { PORTAL_STAFF_PAYMENT_LINKS_ENABLED: 'true' };
+// Paying needs the customer's acceptance of the Code of Ethics and terms (the checkout rule), which the widget captures from the customer.
+const PAY = { ...MEMBERSHIP, accepted: 'yes' };
+
+test("a staff payment link is the customer's own checkout: the Checkout email and references are the customer, never the staff member", async () => {
+  const w = newCustomer();
+  await withStaff(
+    w,
+    async ({ call }) => {
+      const r = await call('/staff/payment-link', PAY);
+      assert.equal(r.status, 201, JSON.stringify(r.body));
+      assert.match(r.body.checkoutUrl, /^https:\/\/checkout\.stripe\.com\//);
+      assert.equal(r.body.contact.id, IDS.me);
+    },
+    LINKS,
+  );
+  assert.equal(w.stripePosts.length, 1, 'one Checkout Session');
+  const text = w.stripePosts[0].params.toString();
+  assert.equal(w.stripePosts[0].params.get('customer_email'), 'alice@example.test');
+  assert.equal(w.stripePosts[0].params.get('client_reference_id'), IDS.me);
+  assert.equal(w.stripePosts[0].params.get('metadata[email]'), 'alice@example.test');
+  for (const staff of [STAFF, 'Sam Staff', 'sam@beautyguild.com', 'staff%3A'])
+    assert.equal(text.includes(staff), false, 'the staff member is not in the Stripe request: ' + staff);
+});
+
+test('a staff payment link is off by default, needs the customer email, and keeps every checkout rule', async () => {
+  const w = newCustomer();
+  await withStaff(w, async ({ call }) => {
+    const off = await call('/staff/payment-link', PAY);
+    assert.equal(off.status, 503);
+    assert.equal(off.body.code, 'NOT_AVAILABLE');
+  });
+  assert.equal(w.stripePosts.length, 0);
+  // Test mode only, as for every checkout.
+  await withStaff(
+    w,
+    async ({ call }) => {
+      assert.equal((await call('/staff/payment-link', PAY)).status, 503);
+    },
+    { ...LINKS, STRIPE_SECRET_KEY: 'sk_live_not_allowed' },
+  );
+  assert.equal(w.stripePosts.length, 0);
+  // A Contact with no email cannot be sent a link.
+  const noEmail = newCustomer();
+  const base = noEmail.fetchImpl;
+  noEmail.fetchImpl = async (url, init = {}) =>
+    String(url).match(/Contacts\/\d+\?fields=/)
+      ? json({ data: [{ id: IDS.me, First_Name: 'Alice', Last_Name: 'Test' }] })
+      : base(url, init);
+  await withStaff(
+    noEmail,
+    async ({ call }) => {
+      const r = await call('/staff/payment-link', PAY);
+      assert.equal(r.status, 422);
+      assert.equal(r.body.code, 'NO_EMAIL');
+    },
+    LINKS,
+  );
+  assert.equal(noEmail.stripePosts.length, 0);
+  // The same rules as a customer: a membership the Contact already holds is not sold again.
+  await withStaff(
+    fixture(),
+    async ({ call }) => {
+      const r = await call('/staff/payment-link', PAY);
+      assert.equal(r.status, 409);
+      assert.equal(r.body.code, 'MEMBERSHIP_EXISTS');
+    },
+    LINKS,
+  );
+  // A voucher or waiver is refused on a link until its records and reservation exist, so none can be used twice.
+  const discounted = newCustomer();
+  await withStaff(
+    discounted,
+    async ({ call }) => {
+      const waiver = await call('/staff/payment-link', {
+        ...PAY,
+        waivers: [{ sku: 'MEM-JOIN', reason: 'Goodwill Gesture' }],
+      });
+      assert.equal(waiver.status, 422);
+      assert.equal(waiver.body.code, 'DISCOUNTS_NOT_ON_LINKS');
+      assert.equal((await call('/staff/payment-link', { ...PAY, voucherCode: 'WELCOME' })).status, 422);
+    },
+    { ...LINKS, PORTAL_DISCOUNTS_ENABLED: 'true' },
+  );
+  assert.equal(discounted.stripePosts.length, 0);
+  // The customer's acceptance is required, as for any payment.
+  await withStaff(
+    newCustomer(),
+    async ({ call }) => {
+      assert.equal((await call('/staff/payment-link', MEMBERSHIP)).status, 422);
+    },
+    LINKS,
+  );
+  // Unsigned.
+  await withStaff(
+    newCustomer(),
+    async ({ call }) => {
+      assert.equal((await call('/staff/payment-link', PAY, { secret: 'x'.repeat(40) })).status, 401);
+    },
+    LINKS,
+  );
 });

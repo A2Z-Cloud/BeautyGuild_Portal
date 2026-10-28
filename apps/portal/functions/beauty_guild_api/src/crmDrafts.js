@@ -164,6 +164,9 @@ function registerDraftRoutes(
       .trim()
       .slice(0, 80);
   const contact = async (req, { create = false, names } = {}) => {
+    // A staff request (mounted by staff.js after the signed-request and role checks) names the customer's Contact itself. It never reads a
+    // portal user, and it never creates a Contact: the staff member picks one that exists.
+    if (req.staffContact) return req.staffContact;
     const user = await getCurrentUser(req);
     try {
       return await resolveContact(req, async (r, path) => (await request(r, 'GET', path)).data || [], user);
@@ -553,5 +556,7 @@ function registerDraftRoutes(
     }),
   );
   app.use('/portal/drafts', router);
+  // The same router, for the staff API to mount behind its own authentication (see staff.js).
+  return { router };
 }
 module.exports = { registerDraftRoutes, validateDraft, pack, unpack, ensureOwnership, checkMetadata };

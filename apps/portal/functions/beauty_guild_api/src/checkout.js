@@ -11,6 +11,7 @@ const { createRateLimiter, clientKey } = require('./rateLimit');
 const { ITEMS, SERVICES, pounds, netPounds, membershipChangeOptions } = require('./catalogue');
 const { prorate } = require('./prorata');
 const { saveRevision } = require('./insuranceRevisions');
+const { loadCover } = require('./cover');
 const plans = require('./plans');
 const { createDiscounts } = require('./discounts');
 const { createCrmStore } = require('./voucherAdapter');
@@ -41,6 +42,9 @@ function registerCheckoutRoutes(
     insuranceChangesWritesEnabled = false,
     insuranceChangesPaymentEnabled = false,
     revisionNamePrefix = '',
+    staffPaymentLinksEnabled = false,
+    // Reads voucher use history from Creator (creatorReports.js). Without it a voucher fails closed, as the use history cannot be checked.
+    creatorReader = undefined,
     enabled,
     getCurrentUser,
     getCrmHeaders,
@@ -594,14 +598,14 @@ function registerCheckoutRoutes(
 
   // A REFER or STOP application is recorded in the CRM for the Insurance team (nothing goes to Stripe). The same
   // application within a few minutes is recorded once, and a recording that fails is an error, never a silent skip.
-  async function recordReferral(req, b) {
+  async function recordReferral(req, b, payer) {
     const key = crypto
       .createHash('sha256')
-      .update([req.portalUser.id, b.prepared.fingerprint || '', b.prepared.blocked.status].join('|'))
+      .update([payer.id, b.prepared.fingerprint || '', b.prepared.blocked.status].join('|'))
       .digest('hex');
     const hit = referrals.get(key);
     if (hit && now() - hit.at < ATTEMPT_TTL) return hit.promise;
-    if (!insuranceMinute(req.portalUser.id) || !insuranceHour(req.portalUser.id))
+    if (!insuranceMinute(payer.id) || !insuranceHour(payer.id))
       throw new HttpError(429, 'RATE_LIMIT', 'Too many insurance attempts. Please wait a few minutes and try again.');
     const promise = b.prepared.refer((module, record) => crmCreate(req, module, record));
     referrals.set(key, { at: now(), promise });
@@ -754,270 +758,263 @@ function registerCheckoutRoutes(
       throw new HttpError(409, 'QUOTE_EXPIRED', EXPIRED);
     }),
   );
-  router.post(
-    '/',
-    send(async (req, res) => {
-      if (!stripeKey.startsWith('sk_test_') || !/^https:\/\/[a-z0-9.-]+$/i.test(publicOrigin || ''))
-        throw unavailable();
-      if (!limiter(req.portalUser.id))
-        throw new HttpError(429, 'RATE_LIMIT', 'Too many requests. Please wait a moment and try again.');
-      const input = inputFrom(req.body || {});
-      // Paying for an insurance change needs the revision records, the payment switch and Creator (the gate in docs/delivery/mta-r3-plan.md).
+  // Pays for what the request describes: creates the Stripe Checkout Session and returns its URL. `staff` is set only by the staff payment link
+  // (below): the payer is then the customer's Contact (their email is the Checkout email, so the session and the metadata Creator reads
+  // identify the customer, never the staff member) and the Contact comes from staff, not from a portal user.
+  const payForRequest = async (req, res, staff = null) => {
+    const payer = staff ? staff.payer : req.portalUser;
+    if (!stripeKey.startsWith('sk_test_') || !/^https:\/\/[a-z0-9.-]+$/i.test(publicOrigin || '')) throw unavailable();
+    if (!limiter(payer.id))
+      throw new HttpError(429, 'RATE_LIMIT', 'Too many requests. Please wait a moment and try again.');
+    const input = inputFrom(req.body || {});
+    // Paying for an insurance change needs the revision records, the payment switch and Creator (the gate in docs/delivery/mta-r3-plan.md).
+    if (
+      input.service === 'insurance_change' &&
+      !(insuranceChangesEnabled && insuranceChangesWritesEnabled && insuranceChangesPaymentEnabled)
+    )
+      throw new HttpError(503, 'PAYMENT_NOT_AVAILABLE', 'Paying for an insurance change is not available online yet.');
+    let b = await build(req, input, staff ? { staff } : {});
+    // Rules that stop the purchase outright, or answers still missing, record nothing and make no Contact. Anything else
+    // (a payment or a referral for the Insurance team) needs the customer to exist in the CRM first.
+    if (!b.alreadyPaid && !b.contact && b.service.allowNoContact && b.prepared?.blocked?.status !== 'INCOMPLETE')
+      b = await build(req, input, { createContact: true });
+    if (b.alreadyPaid) return res.json({ alreadyPaid: true });
+    // A code that is wrong is never ignored at payment: the customer would pay the fee they thought was waived.
+    const codeStatus = b.prepared.codeResult?.status;
+    if (codeStatus === 'invalid') throw new HttpError(422, 'CODE_INVALID', b.prepared.codeResult.message);
+    if (codeStatus === 'limited') throw new HttpError(429, 'RATE_LIMIT', b.prepared.codeResult.message);
+    if (b.prepared.blocked) {
+      const blocked = b.prepared.blocked;
+      const recorded = blocked.status !== 'INCOMPLETE' && b.prepared.refer ? await recordReferral(req, b, payer) : null;
+      // What was recorded is returned so the portal can confirm it; only the id and the status, never CRM text.
+      const details = recorded?.policyId
+        ? { reference: String(recorded.policyId), status: blocked.status === 'STOP' ? 'Stopped' : 'Referred' }
+        : undefined;
+      throw new HttpError(
+        422,
+        'REFERRAL_REQUIRED',
+        blocked.status === 'INCOMPLETE'
+          ? blocked.reasons.join(' ')
+          : blocked.riskMessage ||
+              'This insurance quote needs a review by the Insurance team, so it cannot be paid for online. We will be in touch.',
+        details,
+      );
+    }
+    // Reuse a session already started for this record rather than create a second charge.
+    if (b.prepared.existingSessionId) {
+      const old = await stripe('GET', '/checkout/sessions/' + encodeURIComponent(b.prepared.existingSessionId)).catch(
+        () => null,
+      );
+      if (old?.payment_status === 'paid') return res.json({ alreadyPaid: true });
+      // Reused only if it is for the same plan: a session opened for yearly payment is not handed back to someone who now chose monthly.
       if (
-        input.service === 'insurance_change' &&
-        !(insuranceChangesEnabled && insuranceChangesWritesEnabled && insuranceChangesPaymentEnabled)
+        old?.status === 'open' &&
+        typeof old.url === 'string' &&
+        old.url.startsWith('https://checkout.stripe.com/') &&
+        (old.metadata?.subscription_type || '') === (b.prepared.billing || '')
       )
-        throw new HttpError(
-          503,
-          'PAYMENT_NOT_AVAILABLE',
-          'Paying for an insurance change is not available online yet.',
-        );
-      let b = await build(req, input);
-      // Rules that stop the purchase outright, or answers still missing, record nothing and make no Contact. Anything else
-      // (a payment or a referral for the Insurance team) needs the customer to exist in the CRM first.
-      if (!b.alreadyPaid && !b.contact && b.service.allowNoContact && b.prepared?.blocked?.status !== 'INCOMPLETE')
-        b = await build(req, input, { createContact: true });
-      if (b.alreadyPaid) return res.json({ alreadyPaid: true });
-      // A code that is wrong is never ignored at payment: the customer would pay the fee they thought was waived.
-      const codeStatus = b.prepared.codeResult?.status;
-      if (codeStatus === 'invalid') throw new HttpError(422, 'CODE_INVALID', b.prepared.codeResult.message);
-      if (codeStatus === 'limited') throw new HttpError(429, 'RATE_LIMIT', b.prepared.codeResult.message);
-      if (b.prepared.blocked) {
-        const blocked = b.prepared.blocked;
-        const recorded = blocked.status !== 'INCOMPLETE' && b.prepared.refer ? await recordReferral(req, b) : null;
-        // What was recorded is returned so the portal can confirm it; only the id and the status, never CRM text.
-        const details = recorded?.policyId
-          ? { reference: String(recorded.policyId), status: blocked.status === 'STOP' ? 'Stopped' : 'Referred' }
-          : undefined;
-        throw new HttpError(
-          422,
-          'REFERRAL_REQUIRED',
-          blocked.status === 'INCOMPLETE'
-            ? blocked.reasons.join(' ')
-            : blocked.riskMessage ||
-                'This insurance quote needs a review by the Insurance team, so it cannot be paid for online. We will be in touch.',
-          details,
-        );
-      }
-      // Reuse a session already started for this record rather than create a second charge.
-      if (b.prepared.existingSessionId) {
-        const old = await stripe('GET', '/checkout/sessions/' + encodeURIComponent(b.prepared.existingSessionId)).catch(
-          () => null,
-        );
-        if (old?.payment_status === 'paid') return res.json({ alreadyPaid: true });
-        // Reused only if it is for the same plan: a session opened for yearly payment is not handed back to someone who now chose monthly.
-        if (
-          old?.status === 'open' &&
-          typeof old.url === 'string' &&
-          old.url.startsWith('https://checkout.stripe.com/') &&
-          (old.metadata?.subscription_type || '') === (b.prepared.billing || '')
-        )
-          return res.json({ checkoutUrl: old.url, reused: true });
-      }
+        return res.json({ checkoutUrl: old.url, reused: true });
+    }
+    // Insurance CRM records are created now, before payment, as V1 does: Creator's webhook reads their ids from the metadata.
+    const startSession = async () => {
       // Insurance CRM records are created now, before payment, as V1 does: Creator's webhook reads their ids from the metadata.
-      const startSession = async () => {
-        // Insurance CRM records are created now, before payment, as V1 does: Creator's webhook reads their ids from the metadata.
-        // A payable insurance quote lives as long as its Stripe session: 23 hours 50 minutes (Stripe's limit is 24 hours).
-        const expiresAt = b.prepared.beforePay ? new Date(now() + QUOTE_LIFE_MS) : null;
-        const insuranceIds = b.prepared.beforePay
-          ? await b.prepared.beforePay((module, record) => crmCreate(req, module, record, b.prepared.createFailure), {
-              expiresAt,
-              feesPence: b.fees.grossPence,
-              update: (module, id, fields) => crmUpdate(req, module, id, fields),
-              lines: b.lines,
-              namePrefix: revisionNamePrefix,
-            })
-          : null;
-        // The branch discount's coupon is made first so its id goes into the `discounts` metadata with the other entries.
-        let couponId = '';
-        if (b.branchCoupon) {
-          const couponKey = crypto
-            .createHash('sha256')
-            .update(
-              [
-                b.contact?.id || req.portalUser.id,
-                input.service,
-                JSON.stringify(b.branchCoupon),
-                Math.floor(now() / 120000),
-              ].join('|'),
-            )
-            .digest('hex')
-            .slice(0, 40);
-          couponId = await createBranchCoupon(stripe, b.branchCoupon, {
-            entries: b.entries.filter(e => e.sku === BRANCH),
-            key: 'portal-v2-coupon-' + couponKey,
-          });
-        }
-        const discountsEntry = () =>
-          discountsMetadata(
-            b.entries.map(e => (couponId && e.sku === BRANCH ? { ...e, stripe_coupon_id: couponId } : e)),
-          );
-        const quoteReference = 'BGP-' + now().toString(36).toUpperCase();
-        const catalogue = b.lines.filter(l => l.item);
-        const amounts = {};
-        for (const l of catalogue) amounts[l.item] = pounds(l.totalPence);
-        let meta = {
-          email: req.portalUser.email,
-          name: b.contact ? [b.contact.First_Name, b.contact.Last_Name].filter(Boolean).join(' ') : '',
-          currency: 'GBP',
-          status: 'pending',
-          source: 'portal_v2',
-          ...b.prepared.metadata({
-            amounts,
-            total: pounds(b.totalPence),
-            lines: catalogue,
-            inline: b.lines.filter(l => !l.item),
-            insuranceIds,
-            fees: b.fees,
-            annualPence: b.annualPence,
-            quoteReference,
-            discountsEntry: discountsEntry(),
-          }),
-        };
-        // Stripe allows 50 filled metadata keys. The plan is also on the subscription, so it is only added here while there is room.
-        if (b.plan && filledCount(meta) < MAX_FILLED_KEYS)
-          meta.monthly_plan = JSON.stringify({
-            payments: plans.PAYMENTS,
-            first_payment: pounds(b.plan.firstPaymentPence),
-            later_payment: pounds(b.plan.laterPaymentPence),
-            one_off_total: pounds(b.plan.oneOffPence),
-            year_one_total: pounds(b.plan.yearOneTotalPence),
-            admin_fee: pounds(b.plan.adminPence),
-            admin_fee_net: (b.plan.adminPence / 120).toFixed(2),
-          });
-        meta = fitToStripeLimit(meta);
-        const params = new URLSearchParams({
-          mode: b.mode,
-          customer_email: req.portalUser.email,
-          ...(expiresAt ? { expires_at: String(Math.floor(expiresAt.getTime() / 1000)) } : {}),
-          success_url:
-            publicOrigin + '/app/#/payment-return?result=success&service=' + encodeURIComponent(input.service),
-          cancel_url:
-            publicOrigin + '/app/#/payment-return?result=cancelled&service=' + encodeURIComponent(input.service),
-          ...(b.contact ? { client_reference_id: String(b.contact.id) } : {}),
-        });
-        b.lines.forEach((l, i) => {
-          if (l.priceId) params.set('line_items[' + i + '][price]', l.priceId);
-          else {
-            params.set('line_items[' + i + '][price_data][currency]', 'gbp');
-            params.set('line_items[' + i + '][price_data][product_data][name]', l.name);
-            params.set('line_items[' + i + '][price_data][unit_amount]', String(l.unitPence));
-            // The price list code (the item's SKU in Books) travels on the line's product, so Creator can find the Books item by code, not by name.
-            if (l.sku) params.set('line_items[' + i + '][price_data][product_data][metadata][sku]', l.sku);
-            // A line that renews recurs.
-            if (l.interval) params.set('line_items[' + i + '][price_data][recurring][interval]', l.interval);
-          }
-          params.set('line_items[' + i + '][quantity]', String(l.quantity));
-        });
-        if (b.mode === 'subscription' && !b.plan && b.prepared.renews) {
-          params.set('subscription_data[metadata][plan]', 'annual');
-          params.set('subscription_data[metadata][contact_id]', String(b.contact?.id || ''));
-        }
-        if (b.plan) {
-          params.set('subscription_data[metadata][plan]', 'monthly');
-          params.set('subscription_data[metadata][contact_id]', String(b.contact?.id || ''));
-        }
-        if (couponId) params.set('discounts[0][coupon]', couponId);
-        for (const [k, v] of Object.entries(meta)) params.set('metadata[' + k + ']', String(v).slice(0, 500));
-        const key = crypto
+      // A payable insurance quote lives as long as its Stripe session: 23 hours 50 minutes (Stripe's limit is 24 hours).
+      const expiresAt = b.prepared.beforePay ? new Date(now() + QUOTE_LIFE_MS) : null;
+      const insuranceIds = b.prepared.beforePay
+        ? await b.prepared.beforePay((module, record) => crmCreate(req, module, record, b.prepared.createFailure), {
+            expiresAt,
+            feesPence: b.fees.grossPence,
+            update: (module, id, fields) => crmUpdate(req, module, id, fields),
+            lines: b.lines,
+            namePrefix: revisionNamePrefix,
+          })
+        : null;
+      // The branch discount's coupon is made first so its id goes into the `discounts` metadata with the other entries.
+      let couponId = '';
+      if (b.branchCoupon) {
+        const couponKey = crypto
           .createHash('sha256')
           .update(
-            [
-              b.contact?.id || req.portalUser.id,
-              input.service,
-              input.recordId,
-              input.centreId,
-              JSON.stringify(b.lines.map(l => [l.priceId || l.name + ':' + l.unitPence, l.quantity])),
-              b.prepared.fingerprint || '',
-              Math.floor(now() / 120000),
-              // Stripe refuses a repeated key whose request differs in any way. The request carries a fresh quote reference, expiry and the
-              // member's details, so a second click, or a change of branch within two minutes, must get its own key or checkout fails (502).
-              params.toString(),
-            ].join('|'),
+            [b.contact?.id || payer.id, input.service, JSON.stringify(b.branchCoupon), Math.floor(now() / 120000)].join(
+              '|',
+            ),
           )
           .digest('hex')
           .slice(0, 40);
-        const session = await stripe('POST', '/checkout/sessions', { body: params, key: 'portal-v2-' + key });
-        if (!session.id || typeof session.url !== 'string' || !session.url.startsWith('https://checkout.stripe.com/'))
-          throw new HttpError(502, 'PAYMENT_UNAVAILABLE', 'Secure checkout is unavailable.');
-        if (insuranceIds?.policyId)
-          await crmUpdate(req, 'Insurance_Policy', insuranceIds.policyId, { Stripe_Checkout_Session_ID: session.id });
-        if (b.prepared.record)
-          await crmUpdate(req, b.prepared.record.module, b.prepared.record.id, b.prepared.record.update(session.id));
-        // A change's revisions are marked Awaiting Payment with the session id. If that fails the session is expired, so no one can pay
-        // for a change the CRM does not know is waiting.
-        if (b.prepared.afterSession) {
-          try {
-            await b.prepared.afterSession(session.id, insuranceIds, (module, id, fields) =>
-              crmUpdateStrict(req, module, id, fields),
-            );
-          } catch (e) {
-            await stripe('POST', '/checkout/sessions/' + encodeURIComponent(session.id) + '/expire', {
-              body: new URLSearchParams(),
-              key: 'portal-v2-expire-' + session.id,
-            }).catch(() => {});
-            throw e;
-          }
-        }
-        return session;
-      };
-      if (b.prepared.beforePay) {
-        const attemptKey = crypto
-          .createHash('sha256')
-          .update(
-            [
-              req.portalUser.id,
-              JSON.stringify({ ...input, insurance: undefined }),
-              b.prepared.fingerprint || '',
-              JSON.stringify(b.lines.map(l => [l.priceId || l.name + ':' + l.unitPence, l.quantity])),
-            ].join('|'),
-          )
-          .digest('hex');
-        const hit = attempts.get(attemptKey);
-        if (hit && now() - hit.at < ATTEMPT_TTL) {
-          const earlier = await hit.promise.catch(() => null);
-          const old =
-            earlier && (await stripe('GET', '/checkout/sessions/' + encodeURIComponent(earlier.id)).catch(() => null));
-          if (old?.payment_status === 'paid') return res.json({ alreadyPaid: true });
-          if (
-            old?.status === 'open' &&
-            typeof old.url === 'string' &&
-            old.url.startsWith('https://checkout.stripe.com/')
-          )
-            return res.json({ checkoutUrl: old.url, reused: true });
-          attempts.delete(attemptKey);
-        }
-        if (!insuranceMinute(req.portalUser.id) || !insuranceHour(req.portalUser.id))
-          throw new HttpError(
-            429,
-            'RATE_LIMIT',
-            'Too many insurance attempts. Please wait a few minutes and try again.',
-          );
-        const promise = startSession();
-        attempts.set(attemptKey, { at: now(), promise });
-        promise.catch(() => {
-          if (attempts.get(attemptKey)?.promise === promise) attempts.delete(attemptKey);
+        couponId = await createBranchCoupon(stripe, b.branchCoupon, {
+          entries: b.entries.filter(e => e.sku === BRANCH),
+          key: 'portal-v2-coupon-' + couponKey,
         });
-        return res.status(201).json({ checkoutUrl: (await promise).url });
       }
-      const session = await startSession();
-      res.status(201).json({ checkoutUrl: session.url });
-    }),
+      const discountsEntry = () =>
+        discountsMetadata(
+          b.entries.map(e => (couponId && e.sku === BRANCH ? { ...e, stripe_coupon_id: couponId } : e)),
+        );
+      const quoteReference = 'BGP-' + now().toString(36).toUpperCase();
+      const catalogue = b.lines.filter(l => l.item);
+      const amounts = {};
+      for (const l of catalogue) amounts[l.item] = pounds(l.totalPence);
+      let meta = {
+        email: payer.email,
+        name: b.contact ? [b.contact.First_Name, b.contact.Last_Name].filter(Boolean).join(' ') : '',
+        currency: 'GBP',
+        status: 'pending',
+        source: 'portal_v2',
+        ...b.prepared.metadata({
+          amounts,
+          total: pounds(b.totalPence),
+          lines: catalogue,
+          inline: b.lines.filter(l => !l.item),
+          insuranceIds,
+          fees: b.fees,
+          annualPence: b.annualPence,
+          quoteReference,
+          discountsEntry: discountsEntry(),
+        }),
+      };
+      // Stripe allows 50 filled metadata keys. The plan is also on the subscription, so it is only added here while there is room.
+      if (b.plan && filledCount(meta) < MAX_FILLED_KEYS)
+        meta.monthly_plan = JSON.stringify({
+          payments: plans.PAYMENTS,
+          first_payment: pounds(b.plan.firstPaymentPence),
+          later_payment: pounds(b.plan.laterPaymentPence),
+          one_off_total: pounds(b.plan.oneOffPence),
+          year_one_total: pounds(b.plan.yearOneTotalPence),
+          admin_fee: pounds(b.plan.adminPence),
+          admin_fee_net: (b.plan.adminPence / 120).toFixed(2),
+        });
+      meta = fitToStripeLimit(meta);
+      const params = new URLSearchParams({
+        mode: b.mode,
+        customer_email: payer.email,
+        ...(expiresAt ? { expires_at: String(Math.floor(expiresAt.getTime() / 1000)) } : {}),
+        success_url: publicOrigin + '/app/#/payment-return?result=success&service=' + encodeURIComponent(input.service),
+        cancel_url:
+          publicOrigin + '/app/#/payment-return?result=cancelled&service=' + encodeURIComponent(input.service),
+        ...(b.contact ? { client_reference_id: String(b.contact.id) } : {}),
+      });
+      b.lines.forEach((l, i) => {
+        if (l.priceId) params.set('line_items[' + i + '][price]', l.priceId);
+        else {
+          params.set('line_items[' + i + '][price_data][currency]', 'gbp');
+          params.set('line_items[' + i + '][price_data][product_data][name]', l.name);
+          params.set('line_items[' + i + '][price_data][unit_amount]', String(l.unitPence));
+          // The price list code (the item's SKU in Books) travels on the line's product, so Creator can find the Books item by code, not by name.
+          if (l.sku) params.set('line_items[' + i + '][price_data][product_data][metadata][sku]', l.sku);
+          // A line that renews recurs.
+          if (l.interval) params.set('line_items[' + i + '][price_data][recurring][interval]', l.interval);
+        }
+        params.set('line_items[' + i + '][quantity]', String(l.quantity));
+      });
+      if (b.mode === 'subscription' && !b.plan && b.prepared.renews) {
+        params.set('subscription_data[metadata][plan]', 'annual');
+        params.set('subscription_data[metadata][contact_id]', String(b.contact?.id || ''));
+      }
+      if (b.plan) {
+        params.set('subscription_data[metadata][plan]', 'monthly');
+        params.set('subscription_data[metadata][contact_id]', String(b.contact?.id || ''));
+      }
+      if (couponId) params.set('discounts[0][coupon]', couponId);
+      for (const [k, v] of Object.entries(meta)) params.set('metadata[' + k + ']', String(v).slice(0, 500));
+      const key = crypto
+        .createHash('sha256')
+        .update(
+          [
+            b.contact?.id || payer.id,
+            input.service,
+            input.recordId,
+            input.centreId,
+            JSON.stringify(b.lines.map(l => [l.priceId || l.name + ':' + l.unitPence, l.quantity])),
+            b.prepared.fingerprint || '',
+            Math.floor(now() / 120000),
+            // Stripe refuses a repeated key whose request differs in any way. The request carries a fresh quote reference, expiry and the
+            // member's details, so a second click, or a change of branch within two minutes, must get its own key or checkout fails (502).
+            params.toString(),
+          ].join('|'),
+        )
+        .digest('hex')
+        .slice(0, 40);
+      const session = await stripe('POST', '/checkout/sessions', { body: params, key: 'portal-v2-' + key });
+      if (!session.id || typeof session.url !== 'string' || !session.url.startsWith('https://checkout.stripe.com/'))
+        throw new HttpError(502, 'PAYMENT_UNAVAILABLE', 'Secure checkout is unavailable.');
+      if (insuranceIds?.policyId)
+        await crmUpdate(req, 'Insurance_Policy', insuranceIds.policyId, { Stripe_Checkout_Session_ID: session.id });
+      if (b.prepared.record)
+        await crmUpdate(req, b.prepared.record.module, b.prepared.record.id, b.prepared.record.update(session.id));
+      // A change's revisions are marked Awaiting Payment with the session id. If that fails the session is expired, so no one can pay
+      // for a change the CRM does not know is waiting.
+      if (b.prepared.afterSession) {
+        try {
+          await b.prepared.afterSession(session.id, insuranceIds, (module, id, fields) =>
+            crmUpdateStrict(req, module, id, fields),
+          );
+        } catch (e) {
+          await stripe('POST', '/checkout/sessions/' + encodeURIComponent(session.id) + '/expire', {
+            body: new URLSearchParams(),
+            key: 'portal-v2-expire-' + session.id,
+          }).catch(() => {});
+          throw e;
+        }
+      }
+      return session;
+    };
+    if (b.prepared.beforePay) {
+      const attemptKey = crypto
+        .createHash('sha256')
+        .update(
+          [
+            payer.id,
+            JSON.stringify({ ...input, insurance: undefined }),
+            b.prepared.fingerprint || '',
+            JSON.stringify(b.lines.map(l => [l.priceId || l.name + ':' + l.unitPence, l.quantity])),
+          ].join('|'),
+        )
+        .digest('hex');
+      const hit = attempts.get(attemptKey);
+      if (hit && now() - hit.at < ATTEMPT_TTL) {
+        const earlier = await hit.promise.catch(() => null);
+        const old =
+          earlier && (await stripe('GET', '/checkout/sessions/' + encodeURIComponent(earlier.id)).catch(() => null));
+        if (old?.payment_status === 'paid') return res.json({ alreadyPaid: true });
+        if (old?.status === 'open' && typeof old.url === 'string' && old.url.startsWith('https://checkout.stripe.com/'))
+          return res.json({ checkoutUrl: old.url, reused: true });
+        attempts.delete(attemptKey);
+      }
+      if (!insuranceMinute(payer.id) || !insuranceHour(payer.id))
+        throw new HttpError(429, 'RATE_LIMIT', 'Too many insurance attempts. Please wait a few minutes and try again.');
+      const promise = startSession();
+      attempts.set(attemptKey, { at: now(), promise });
+      promise.catch(() => {
+        if (attempts.get(attemptKey)?.promise === promise) attempts.delete(attemptKey);
+      });
+      return res.status(201).json({ checkoutUrl: (await promise).url });
+    }
+    const session = await startSession();
+    res.status(201).json({ checkoutUrl: session.url });
+  };
+  router.post(
+    '/',
+    send((req, res) => payForRequest(req, res)),
   );
   app.use('/portal/checkout', router);
 
   // Entry points for the staff API (staff.js). They never read a portal user: the Contact is the one the staff member chose, looked up
   // here by id, and the actor is the staff member the CRM vouched for. Nothing is charged and no Stripe session is made.
-  async function staffBuild(req, { contactId, body, voucherCode, waivers, applicationId, actor, service }) {
+  // The Contact the staff member chose, by id. 422 if it is not an id, 404 if there is no such Contact.
+  async function staffContact(req, contactId) {
     if (!ID.test(String(contactId || ''))) throw new HttpError(422, 'INVALID_REQUEST', 'Choose a customer.');
     const row = (
       await crm(req, 'Contacts/' + contactId + '?fields=' + encodeURIComponent('Email,First_Name,Last_Name'))
     )[0];
     if (!row || String(row.id) !== String(contactId)) throw new HttpError(404, 'NOT_FOUND', 'Customer not found.');
+    return row;
+  }
+  async function staffBuild(req, { contactId, body, voucherCode, waivers, applicationId, actor, service }) {
+    const row = await staffContact(req, contactId);
     if ((voucherCode || waivers.length) && !discountsEnabled)
       throw new HttpError(503, 'DISCOUNTS_DISABLED', 'Vouchers and waivers are not switched on.');
-    // No Creator reader is wired yet, so a voucher's use history cannot be read and a voucher fails closed (waivers need only the CRM).
-    const store = discountsEnabled ? createCrmStore({ crm, creator: undefined, req }) : undefined;
+    // A voucher's use history is read from Creator; if that cannot be read a voucher fails closed (waivers need only the CRM).
+    const store = discountsEnabled ? createCrmStore({ crm, creator: creatorReader, req }) : undefined;
     const b = await build(
       req,
       { ...inputFrom(body), ...(service ? { service } : {}), quote: true },
@@ -1026,11 +1023,86 @@ function registerCheckoutRoutes(
     return { b, contact: { id: String(row.id), name: [row.First_Name, row.Last_Name].filter(Boolean).join(' ') } };
   }
   return {
+    staffContact,
+    // What a customer can choose when changing a membership: each branch and whether they already hold it (read only).
+    async staffMembershipOptions(req, { contactId, recordId }) {
+      if (!membershipChangesEnabled)
+        throw new HttpError(503, 'NOT_AVAILABLE', 'Membership changes are not available online yet.');
+      const contact = await staffContact(req, contactId);
+      if (!ID.test(String(recordId || ''))) throw new HttpError(422, 'INVALID_REQUEST', 'Choose a membership.');
+      return {
+        contact: { id: String(contact.id) },
+        options: await membershipChangeOptions(req, crm, contact.id, recordId),
+      };
+    },
+    // The customer's current cover for one of their memberships, with the change history (read only, see cover.js).
+    async staffCover(req, { contactId, recordId }) {
+      const contact = await staffContact(req, contactId);
+      if (!ID.test(String(recordId || ''))) throw new HttpError(422, 'INVALID_REQUEST', 'Choose a membership.');
+      return {
+        contact: { id: String(contact.id) },
+        cover: await loadCover({ call: crm, req, contactId: contact.id, dealId: recordId, isDraft: undefined }),
+      };
+    },
     async staffQuote(req, args) {
       const { b, contact } = await staffBuild(req, args);
       return { contact, quote: view(b) };
     },
     // Saves a quoted insurance change as a revision on behalf of the customer, as the customer's own route does, recording who saved it.
+    // A Stripe Checkout link for the customer, made by staff. It is the portal's own checkout (same rules, prices, risk checks, CRM records and
+    // metadata), so Creator handles the payment as for a customer who paid online. The Checkout email, `client_reference_id` and metadata
+    // identify the CUSTOMER (the Contact's CRM email), never the staff member, whose id is in the log only. Test mode only (the checkout refuses
+    // any other key). The link is returned to the staff member to send; nothing is sent from here.
+    async staffPaymentLink(req, args) {
+      if (!staffPaymentLinksEnabled)
+        throw new HttpError(503, 'NOT_AVAILABLE', 'Payment links are not switched on yet.');
+      const contact = await staffContact(req, args.contactId);
+      const email = String(contact.Email || '')
+        .trim()
+        .toLowerCase();
+      if (!email)
+        throw new HttpError(
+          422,
+          'NO_EMAIL',
+          'This customer has no email address in the CRM, so a payment link cannot be made.',
+        );
+      // A waiver or voucher reduces the charge, and its use must be recorded and reserved when the link is made (the Waive_Logs row and the voucher
+      // reservation, docs/delivery/vouchers-staff-route-spec.md). That is not built, so a link that carried one could be used twice. Quote it
+      // with /staff/quote to show the price; the link is for the undiscounted checkout until the records exist.
+      if (args.voucherCode || args.waivers.length)
+        throw new HttpError(
+          422,
+          'DISCOUNTS_NOT_ON_LINKS',
+          'A voucher or waiver cannot be applied to a payment link yet.',
+        );
+      const store = discountsEnabled ? createCrmStore({ crm, creator: creatorReader, req }) : undefined;
+      const out = { status: 200, body: null };
+      const res = {
+        status(code) {
+          out.status = code;
+          return this;
+        },
+        json(body) {
+          out.body = body;
+          return this;
+        },
+      };
+      const payReq = Object.assign(Object.create(req), { body: args.body });
+      await payForRequest(payReq, res, {
+        payer: { id: 'staff:' + args.actor.id, email },
+        contact,
+        actor: args.actor,
+        code: args.voucherCode,
+        waivers: args.waivers,
+        applicationId: args.applicationId,
+        store,
+      });
+      return {
+        contact: { id: String(contact.id), name: [contact.First_Name, contact.Last_Name].filter(Boolean).join(' ') },
+        ...out.body,
+        created: out.status === 201,
+      };
+    },
     async staffSaveRevision(req, args) {
       // The same gates as the customer's route: nothing is saved until insurance changes and their writes are switched on.
       if (!insuranceChangesEnabled || !insuranceChangesWritesEnabled)

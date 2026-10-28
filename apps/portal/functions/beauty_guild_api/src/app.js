@@ -14,6 +14,7 @@ const { registerDraftRoutes } = require('./crmDrafts');
 const { registerSchoolRoutes } = require('./schoolServices');
 const { registerStaffRoutes } = require('./staff');
 const { createRiskChecks } = require('./riskChecks');
+const { createCreatorReader } = require('./creatorReports');
 const { readBuildInfo } = require('./buildInfo');
 
 const TEXT_MIN = 3;
@@ -172,6 +173,14 @@ function createApp({
     insuranceChangesWritesEnabled: config.insuranceChangesWritesEnabled,
     insuranceChangesPaymentEnabled: config.insuranceChangesPaymentEnabled,
     revisionNamePrefix: config.revisionNamePrefix,
+    staffPaymentLinksEnabled: config.staffPaymentLinksEnabled,
+    creatorReader: createCreatorReader({
+      getCreatorHeaders,
+      creatorApiDomain: config.creatorApiDomain,
+      creatorAccountOwner: config.creatorAccountOwner,
+      creatorAppLinkName: config.creatorAppLinkName,
+      fetchImpl,
+    }),
     enabled: config.billingEnabled,
     getCurrentUser,
     getCrmHeaders,
@@ -182,7 +191,7 @@ function createApp({
     fetchImpl,
     now,
   });
-  registerDraftRoutes(app, {
+  const drafts = registerDraftRoutes(app, {
     enabled: config.crmDraftsEnabled,
     getCurrentUser,
     getCrmHeaders,
@@ -197,6 +206,7 @@ function createApp({
     secrets: config.staffApiSecrets,
     roles: config.staffApiRoles,
     actions: checkout,
+    draftsRouter: drafts.router,
     windowSeconds: config.staffApiWindowSeconds,
     getCrmHeaders,
     crmApiDomain: config.crmApiDomain,

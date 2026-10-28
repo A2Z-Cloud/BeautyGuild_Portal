@@ -7,9 +7,9 @@
 | Exists (in the portal function, off by default) | Does not exist yet |
 | --- | --- |
 | Signature check (hex or base64), time window, nonce check | The CRM custom function that signs requests |
-| CRM user lookup, active check and role allow-list | A staff payment link route (charging) |
+| CRM user lookup, active check and role allow-list | Assessment history (see below), vouchers on payment links |
 | `GET /staff/ping` and `GET /staff/me` | A deployed, switched-on Development endpoint |
-| `POST /staff/quote` (also the assessment), `POST /staff/insurance-change/revision` | Vouchers (needs a Creator reader for use history) |
+| `POST /staff/quote` (also the assessment), `POST /staff/insurance-change/revision`, `GET /staff/membership-options`, `GET /staff/cover`, the shared drafts under `/staff/drafts`, and `POST /staff/payment-link` (own switch, test mode, no discounts yet) | Vouchers (needs a Creator reader for use history) |
 | `POST /staff/quote` (also the assessment) and `POST /staff/insurance-change/revision` | A staff payment link or any charge |
 | Staff waivers on the quote (joining fee, once per person) | Vouchers (needs a Creator reader for use history) |
 | Tests and two checked test vectors | CRM-visible audit records beyond an optional text field |
@@ -170,6 +170,10 @@ For `bad_signature` the log line also carries, with **no secret and no signature
 - The widget never prices, rates or decides eligibility.
 - Every route that writes must be safe to repeat, because replay protection is per instance.
 - Keep the Development and Production secrets and allowed roles separate.
+
+## 7a. What is deliberately not an API here
+
+- **Assessment history and policy, membership and revision retrieval.** The widget runs inside the CRM, so it can read these records itself through the CRM SDK (`ZOHO.CRM.API`), and the CRM then applies the **staff member's own permissions, including field-level permissions** (so restricted sanctions detail stays restricted). A Catalyst route would use the function's own all-seeing connection and would have to re-implement those permissions. The two things the CRM cannot supply are built: `GET /staff/cover` (the computed cover and change history) and `GET /staff/membership-options`. If the Guild later wants assessment history redacted on the server, that is a small addition.
 
 ## 8. Decisions and open questions
 

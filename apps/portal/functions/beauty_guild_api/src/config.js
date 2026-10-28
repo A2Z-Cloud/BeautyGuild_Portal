@@ -57,6 +57,8 @@ function loadConfig(env = process.env) {
       .split(',')
       .map(s => s.trim())
       .filter(Boolean),
+    // Staff can create a Stripe Checkout link for a customer (POST /staff/payment-link). Off unless 'true'. Test mode only, like all checkout.
+    staffPaymentLinksEnabled: env.PORTAL_STAFF_PAYMENT_LINKS_ENABLED === 'true',
     staffApiWindowSeconds: boundedInt(env.PORTAL_STAFF_API_WINDOW_SECONDS, 300, 30, 600),
     diagnosticsEnabled: env.PORTAL_DIAGNOSTICS_ENABLED === 'true',
     diagnosticsEmails: String(env.PORTAL_DIAGNOSTICS_EMAILS || '')
