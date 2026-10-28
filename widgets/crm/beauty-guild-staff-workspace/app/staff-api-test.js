@@ -23,7 +23,7 @@ async function call(action,body){
  const args={action,body:action==='ping'||action==='me'?'':JSON.stringify(body||{})};
  const raw=await ZOHO.CRM.FUNCTIONS.execute('staff_api_call',{arguments:JSON.stringify(args)});
  const value=parseResponse(raw);
- if(value?.status==='error'||value?.ok===false||value?.code==='NOT_ACTIVE')throw Error(errorMessage(value));
+ if(value?.status==='error'||value?.ok===false||value?.error||value?.code==='NOT_ACTIVE')throw Error(errorMessage(value));
  return value;
 }
 function renderResult(value,error=false){
