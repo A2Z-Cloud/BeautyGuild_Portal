@@ -159,7 +159,7 @@ function render(j){
  let body='';
  if(review){
    const all=steps.flatMap(s=>s.fields||[]).filter(f=>show(f,j.answers)&&nonblank(j.answers[f.name]));
-   body='<h3>Application review and payment boundary</h3><p>Review answers with the customer. This screen is an intake preview, not a saved policy, cleared check or payable quote.</p>'+
+   body='<h3>Application review and quotation</h3><p>Confirm the information supplied by the customer. The signed Catalyst API determines eligibility and prices; staff entries are not independent customer declarations.</p>'+
      '<dl class="v12-review">'+all.map(f=>'<div><dt>'+esc(f.label)+'</dt><dd>'+esc(Array.isArray(j.answers[f.name])?j.answers[f.name].map(x=>typeof x==='object'?JSON.stringify(x):x).join(', '):j.answers[f.name])+'</dd></div>').join('')+'</dl>'+
      '<div class="v12-warning"><strong>Not yet connected:</strong> staff-authorised Catalyst quote, risk checks, persistent shared CRM draft and Stripe/Creator fulfilment. No cover or accreditation is active.</div>'+
      '<button class="button primary" type="button" disabled>Generate payment link · Not enabled</button>';
@@ -172,13 +172,13 @@ function render(j){
      (step.demands?'<p class="v12-warning">Staff must obtain and record the customer’s actual confirmation of the demands-and-needs information.</p>':'');
  }
  return '<section class="v12-journey"><header><span class="process-kicker">STAFF-ASSISTED APPLICATION · PORTAL V2 QUESTIONS</span><h2>'+esc(j.kind[0].toUpperCase()+j.kind.slice(1))+'</h2></header>'+
-  '<p class="v12-warning">Working questionnaire only: answers are currently held in this browser session. CRM shared-draft persistence, live checks and quotations require the protected Catalyst staff adapter.</p>'+
+  '<p class="v12-muted">Staff-assisted application. CRM draft saving is not available until the staff applications API is deployed.</p>'+
   ctx+crumb+'<div class="v12-journey-body">'+body+'</div>'+
   (j.formError?'<div class="v12-form-error" role="alert">'+esc(j.formError)+'</div>':'')+
   (review&&j.kind==='membership'?(window.BGStaffAddons?.journeyPanel('membership')||''):'')+
   '<footer class="journey-footer"><button class="button secondary" type="button" data-action="journey-back">Back</button>'+
    (!review?'<button class="button primary" type="button" data-action="journey-next">Continue</button>':'')+
-   '<button class="button secondary" type="button" disabled title="Shared CRM draft API not yet connected">Save to CRM · Pending integration</button>'+
+   '<button class="button secondary" type="button" disabled title="Requires staff applications save contract">Save to CRM · API required</button>'+
    '<button class="linklike" type="button" data-action="journey-reset">Start again</button></footer></section>';
 }
 function setField(j,el){
