@@ -57,10 +57,6 @@ function loadConfig(env = process.env) {
       .split(',')
       .map(s => s.trim())
       .filter(Boolean),
-    // Text field on Policy_Revisions that records which staff member saved a revision. Unset: only the function log records it.
-    staffAuditField: /^[A-Za-z][A-Za-z0-9_]{0,60}$/.test(String(env.PORTAL_STAFF_AUDIT_FIELD || ''))
-      ? String(env.PORTAL_STAFF_AUDIT_FIELD)
-      : '',
     staffApiWindowSeconds: boundedInt(env.PORTAL_STAFF_API_WINDOW_SECONDS, 300, 30, 600),
     diagnosticsEnabled: env.PORTAL_DIAGNOSTICS_ENABLED === 'true',
     diagnosticsEmails: String(env.PORTAL_DIAGNOSTICS_EMAILS || '')

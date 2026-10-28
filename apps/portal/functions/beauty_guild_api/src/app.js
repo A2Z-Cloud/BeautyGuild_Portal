@@ -169,7 +169,6 @@ function createApp({
     insuranceChangesWritesEnabled: config.insuranceChangesWritesEnabled,
     insuranceChangesPaymentEnabled: config.insuranceChangesPaymentEnabled,
     revisionNamePrefix: config.revisionNamePrefix,
-    staffAuditField: config.staffAuditField,
     enabled: config.billingEnabled,
     getCurrentUser,
     getCrmHeaders,

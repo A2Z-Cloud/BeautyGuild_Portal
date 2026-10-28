@@ -38,7 +38,7 @@ You can test the Catalyst side **without the CRM at all** using the script in se
 ## 3. CRM setup
 
 - **Catalyst connection:** no new connection. The function already uses the project's Zoho CRM connection named `zohocrm` (`CRM_CONNECTION_NAME`). The staff routes add one need: it must be allowed to **read users** (scope `ZohoCRM.users.READ`), alongside the module scopes it already has (`ZohoCRM.modules.ALL`, or the narrower ones for Contacts, Deals and the insurance modules). If the connection was made without the users scope, `/staff/me` returns `503 STAFF_LOOKUP_UNAVAILABLE`; add the scope to the connection in the Catalyst console and authorise it again.
-- **Who the audit field names:** the Catalyst connection writes the records, so the CRM's `Modified_By` is the connection's user, not the staff member. Create a single line text field on `Policy_Revisions` (suggested API name `Staff_Actor`) and set `PORTAL_STAFF_AUDIT_FIELD=Staff_Actor`.
+- **Who saved it:** the Catalyst connection writes the records, so the CRM's `Modified_By` is the connection's user, not the staff member. Each staff save therefore adds a CRM **Note** on the revision naming the staff member. The connection needs permission to create notes (`ZohoCRM.modules.ALL` covers it). No new field is needed.
 
 - **Secret:** generate 32 random bytes (`openssl rand -hex 32`). Store it in the CRM where only admins can read it (spike item 3). Use a **different** secret for Development and Production.
 - **Allowed roles:** agree which CRM profiles or roles may use the staff routes. They go in `PORTAL_STAFF_API_ROLES`, agreed on 28 October 2026: `Administrator, Standard` (CRM profile names). Empty means nobody.
@@ -51,35 +51,54 @@ You can test the Catalyst side **without the CRM at all** using the script in se
 
 ```deluge
 // UNVERIFIED SKETCH: check each marked line in CRM Development before relying on it.
-map staff_api_call(string route, string method, string body)
+// The widget sends an ACTION NAME, never a path. The function maps it to one fixed route, so it can only ever sign routes we built.
+map staff_api_call(string action, string body)
 {
-	// route: the path exactly as the Catalyst function receives it, e.g. "/staff/me". No "/server/beauty_guild_api".
-	base_url = "https://beautyguildportal-20117268527.development.catalystserverless.eu/server/beauty_guild_api";
+	// action -> method and route (the route is exactly what the Catalyst function receives, no "/server/beauty_guild_api")
+	routes = Map();
+	routes.put("me",            {"method":"GET",  "route":"/staff/me"});
+	routes.put("quote",         {"method":"POST", "route":"/staff/quote"});
+	routes.put("save_revision", {"method":"POST", "route":"/staff/insurance-change/revision"});
+	if(!routes.containKey(action))
+	{
+		return {"ok":false,"error":"Unknown action"};
+	}
+	method = routes.get(action).get("method");
+	route = routes.get(action).get("route");
+	if(method == "GET")
+	{
+		body = "";                                               // a GET is signed with an empty body
+	}
 
-	secret = zoho.crm.getOrgVariable("staff_api_secret");        // VERIFY: how a function reads a CRM variable or secret
-	user_id = zoho.loginuserid.toString();                       // VERIFY: which user the function runs as (spike item 1)
+	base_url = zoho.crm.getOrgVariable("staff_api_base_url");
+	secret = zoho.crm.getOrgVariable("staff_api_secret");        // never log this
+	user_id = zoho.loginuserid.toString();                       // VERIFY (spike item 1): the real logged-in user, not an argument
 
-	time = (zoho.currenttime.toLong() / 1000).toString();        // VERIFY: must be seconds, 10 digits (not milliseconds)
+	time = (zoho.currenttime.toLong() / 1000).toString();        // VERIFY: seconds, 10 digits (not milliseconds)
 	nonce = zoho.encryption.sha256(zoho.currenttime.toString() + user_id + zoho.currenttime.toLong().toString()).subString(0,32);
-	                                                             // VERIFY: any fresh, unique 32+ hex characters will do
+	                                                             // VERIFY: any fresh 32+ hex characters will do
 
-	body_hash = zoho.encryption.sha256(body);                    // VERIFY: lower case hex? Empty body must give e3b0c442...b855
-	to_sign = method.toUpperCase() + "\n" + route + "\n" + body_hash + "\n" + time + "\n" + nonce + "\n" + user_id;
-	                                                             // VERIFY: "\n" is a real newline; no newline at the end
-	signature = zoho.encryption.hmacsha256(secret, to_sign);     // VERIFY: Deluge returns base64, which the function accepts as it is (spike item 2)
+	nl = zoho.encryption.urlDecode("%0A");                       // VERIFY: a REAL newline ("\n" stays two characters in Deluge)
+	body_hash = zoho.encryption.sha256(body);                    // VERIFY: lower case hex; empty body gives e3b0c442...b855
+	to_sign = method + nl + route + nl + body_hash + nl + time + nl + nonce + nl + user_id;
+	signature = zoho.encryption.hmacsha256(secret, to_sign);     // base64 is fine: the function accepts hex or base64
 
 	headers = Map();
 	headers.put("X-Staff-User", user_id);
 	headers.put("X-Staff-Time", time);
 	headers.put("X-Staff-Nonce", nonce);
 	headers.put("X-Staff-Signature", signature);
+	headers.put("Content-Type", "application/json");
 
-	response = invokeurl
-	[
-		url :base_url + route
-		type :GET                                                // VERIFY: POST with a raw body when the write routes exist
-		headers :headers
-	];
+	// VERIFY: the body must be sent as exactly the same text that was hashed (no re-formatting). For POST use parameters :body.
+	if(method == "GET")
+	{
+		response = invokeurl [ url :base_url + route  type :GET  headers :headers ];
+	}
+	else
+	{
+		response = invokeurl [ url :base_url + route  type :POST  parameters :body  headers :headers ];
+	}
 	return response;
 }
 ```
@@ -132,6 +151,6 @@ Decided on 28 October 2026:
 - **API Gateway:** not needed for any of this.
 
 Still open:
-1. **The audit field.** `Modified_By` was suggested, but it records the connection's user, so a text field such as `Staff_Actor` is needed (section 3).
+1. **The Note payload** (`Parent_Id` with the module's API name) is unverified against the CRM: check the first Note in Development.
 2. **Vouchers** need a Creator reader for use history before `voucherCode` can work.
 3. **Staff payment links** (charging a customer from the widget) are not built. They create a Stripe session and touch the Creator contract, so they need their own design and approval.
