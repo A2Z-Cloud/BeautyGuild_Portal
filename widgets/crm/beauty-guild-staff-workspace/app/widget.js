@@ -635,7 +635,7 @@
     }
     else if(action==='journey-payment'){
       const j=state.journey;if(!j?.contact?.id||!j.liveQuote||j.paymentBusy)return;
-      if(!document.getElementById('staff-customer-accepted')?.checked){j.paymentError='Confirm the customer has explicitly accepted the Code of Ethics and terms.';render();return;}
+      j.customerAccepted=Boolean(document.getElementById('staff-customer-accepted')?.checked);if(!j.customerAccepted){j.paymentError='Confirm the customer has explicitly accepted the Code of Ethics and terms.';render();return;}
       if(window.BGStaffAddons?.quoteInputs){const discounts=window.BGStaffAddons.quoteInputs();if(discounts.voucherCode||discounts.waivers?.length){j.paymentError='Discounted payment links are not supported. Remove all vouchers and waivers, then obtain a fresh quote.';render();return;}}
       if(!window.confirm('Create a test-mode Stripe Checkout link for this customer and the current application?'))return;
       j.paymentBusy=true;j.paymentError='';render();
