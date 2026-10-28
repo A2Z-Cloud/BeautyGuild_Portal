@@ -1,7 +1,7 @@
 /* V1.2 staff questionnaire: reuses the exact Portal V2 insurance and accreditation definitions.
  * This is an application intake only. Without the staff-authorised Catalyst adapter it MUST NOT
  * create a quote, CRM application, payment link or imply that customer declarations were verified. */
-import {INSURANCE_STEPS,visibleSteps,stopMessages} from './portal-defs/insuranceInputs.js';
+import {INSURANCE_STEPS,visibleSteps,stopMessages,toRequest as insuranceRequest} from './portal-defs/insuranceInputs.js';
 import {accreditationSteps,resolveFields,COPY_HOME_MAP} from './portal-defs/accreditationInputs.js';
 import {validate as validatePortal} from './portal-defs/logic.mjs';
 import {startLimits} from './portal-defs/startDate.js';
@@ -240,4 +240,25 @@ function advance(j,delta){
  if(stops.length)return false;
  j.v12Errors={};j.formError='';j.step=Math.min(steps.length,j.step+1);return true;
 }
-window.BGJourney12={config,prefill,render,advance,input,click,loadCourses,courseSource,INSURANCE_STEPS,accreditationSteps};
+function apiRequest(j){
+ const a=j?.answers||{},kind=j?.kind;
+ if(!j?.contact?.id)throw Error('Select a CRM customer first.');
+ const service=kind==='membership'&&a.insurance==='yes'?'membership':kind;
+ const addons={};
+ for(const x of ['bundle','certificate','badge','sticker']){
+   const quantity=Number(a['addon_'+x]||0);
+   if(Number.isInteger(quantity)&&quantity>0)addons[x]=quantity;
+ }
+ const base={contactId:String(j.contact.id),service,level:String(a.level||''),branch:String(a.branch||''),
+   branches:Array.isArray(a.branches)?a.branches.join(','):(a.branches||''),
+   billing:String(a.billing||'annual'),addons,start:String(a.start||''),firstName:String(a.firstName||j.contact.First_Name||''),
+   lastName:String(a.lastName||j.contact.Last_Name||''),country:String(a.country||''),
+   businessName:String(a.tradingName||a.businessName||''),address1:String(a.address1||''),address2:String(a.address2||''),
+   town:String(a.town||''),county:String(a.county||''),postcode:String(a.postcode||''),code:String(a.code||''),
+   previousId:String(a.previousId||''),changeType:String(a.changeType||''),
+   centreId:String(a.centreId||'')};
+ if(kind==='insurance'||kind==='membership'&&a.insurance==='yes')base.insurance=insuranceRequest(a);
+ if(kind==='membership'&&a.insurance==='yes')base.service='membership';
+ return base;
+}
+window.BGJourney12={apiRequest,config,prefill,render,advance,input,click,loadCourses,courseSource,INSURANCE_STEPS,accreditationSteps};
