@@ -161,12 +161,11 @@ function render(j){
    const all=steps.flatMap(s=>s.fields||[]).filter(f=>show(f,j.answers)&&nonblank(j.answers[f.name]));
    body='<h3>Application review and quotation</h3><p>Confirm the information supplied by the customer. The signed Catalyst API determines eligibility and prices; staff entries are not independent customer declarations.</p>'+
      '<dl class="v12-review">'+all.map(f=>'<div><dt>'+esc(f.label)+'</dt><dd>'+esc(Array.isArray(j.answers[f.name])?j.answers[f.name].map(x=>typeof x==='object'?JSON.stringify(x):x).join(', '):j.answers[f.name])+'</dd></div>').join('')+'</dl>'+
-     '<div class="v12-quote-actions"><button type="button" class="button primary" data-action="journey-quote">Calculate live quotation</button></div>'+
+     '<div class="v12-quote-actions"><button type="button" class="button primary" data-action="journey-quote" '+(j.quotePending?'disabled':'')+'>Calculate live quotation</button></div>'+
      (j.quotePending?'<p class="v12-muted">Requesting current pricing and assessment…</p>':'')+
      (j.quoteError?'<p class="v12-warning" role="alert">'+esc(j.quoteError)+'</p>':'')+
      (j.liveQuote?'<h4>Authoritative quote / assessment response</h4><pre class="v12-quote-output">'+esc(JSON.stringify(j.liveQuote,null,2))+'</pre>':'')+
-     '<p class="v12-warning">Shared CRM drafts and staff payment-link actions remain unavailable until the corresponding signed backend routes are published. No policy is issued or payment taken here.</p>'+
-     '<button class="button secondary" type="button" disabled title="Staff checkout route is not available yet">Generate payment link · API required</button>';
+     (j.liveQuote?'<div class="v12-payment-panel"><h4>Secure customer payment</h4><label class="v12-choice"><input type="checkbox" id="staff-customer-accepted" /><span>I confirm that the customer explicitly agreed to the Code of Ethics and Terms of Business.</span></label><p class="v12-muted">Payment is completed by the customer in Stripe Checkout. Payment status comes from CRM after the existing processing integration updates it.</p><button class="button primary" type="button" data-action="journey-payment" '+(j.paymentBusy?'disabled':'')+'>Generate test payment link</button>'+(j.paymentError?'<p class="v12-warning">'+esc(j.paymentError)+'</p>':'')+(j.paymentAlreadyPaid?'<p>Already paid according to the checkout service. Refresh the CRM record to view the authoritative payment status.</p>':'')+(j.paymentLink?'<p><button type="button" class="button secondary" data-action="journey-copy-payment">Copy payment link</button> <button type="button" class="button secondary" data-action="journey-open-payment">Open Stripe Checkout</button></p>':'')+'</div>':'<p class="v12-muted">Obtain a successful quotation before initiating payment.</p>');
  }else{
    const errors=j.v12Errors||{};
    const intro=typeof step.intro==='function'?step.intro(j.answers):step.intro;
@@ -178,11 +177,14 @@ function render(j){
  return '<section class="v12-journey"><header><span class="process-kicker">STAFF-ASSISTED APPLICATION · PORTAL V2 QUESTIONS</span><h2>'+esc(j.kind[0].toUpperCase()+j.kind.slice(1))+'</h2></header>'+
   '<p class="v12-muted">Staff-assisted application. CRM draft saving is not available until the staff applications API is deployed.</p>'+
   ctx+crumb+'<div class="v12-journey-body">'+body+'</div>'+
+  (j.draftsMessage?'<p role="status" class="v12-muted">'+esc(j.draftsMessage)+'</p>':'')+
+  (j.draftsError?'<p role="alert" class="v12-warning">'+esc(j.draftsError)+'</p>':'')+
+  (Array.isArray(j.availableDrafts)&&j.availableDrafts.length?'<section class="v12-detail-section"><h3>Saved customer drafts</h3>'+j.availableDrafts.map(d=>'<button type="button" class="button secondary" data-action="journey-load-draft" data-id="'+esc(d.id)+'" data-service="'+esc(d.service)+'">Resume '+esc(d.service)+' · '+esc(d.id)+'</button>').join('')+'</section>':'')+
   (j.formError?'<div class="v12-form-error" role="alert">'+esc(j.formError)+'</div>':'')+
   (review&&j.kind==='membership'?(window.BGStaffAddons?.journeyPanel('membership')||''):'')+
   '<footer class="journey-footer"><button class="button secondary" type="button" data-action="journey-back">Back</button>'+
    (!review?'<button class="button primary" type="button" data-action="journey-next">Continue</button>':'')+
-   '<button class="button secondary" type="button" disabled title="Requires staff applications save contract">Save to CRM · API required</button>'+
+   '<button class="button secondary" type="button" data-action="journey-save" '+(j.draftsBusy?'disabled':'')+'>Save to CRM</button><button class="button secondary" type="button" data-action="journey-drafts">Resume draft</button>'+
    '<button class="linklike" type="button" data-action="journey-reset">Start again</button></footer></section>';
 }
 function setField(j,el){
