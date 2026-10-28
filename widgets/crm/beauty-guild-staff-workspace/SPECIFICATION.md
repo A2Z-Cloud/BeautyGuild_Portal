@@ -1,6 +1,6 @@
 # Beauty Guild Staff Workspace | Functional and UX Specification
 
-**Document version:** 2.4 (consolidated with the Slate implementation: workflow-field governance, staff API and identity, API Gateway decision, vouchers staff route, Creator status ownership, 27 October 2026). Version 2.3 added portal mid-term adjustments, staff visibility only.  
+**Document version:** 2.5 (28 October 2026: staff API backend built on `main`, decisions on roles, audit and replay recorded). Version 2.4 (consolidated with the Slate implementation: workflow-field governance, staff API and identity, API Gateway decision, vouchers staff route, Creator status ownership, 27 October 2026). Version 2.3 added portal mid-term adjustments, staff visibility only.  
 **Product:** Zoho CRM Staff Workspace widget  
 **Location:** BeautyGuild_Portal / widgets / crm / beauty-guild-staff-workspace  
 **Audience:** Solution architecture, CRM and Catalyst developers, design, QA, delivery and customer reviewers  
@@ -379,6 +379,8 @@ Do not store API keys, tokens, Stripe secrets or unrestricted service credential
 
 **Staff API and identity (decision, 27 October 2026).** Staff routes (`/staff/...`) on the existing `beauty_guild_api` function authenticate each request with a **signed request from a CRM-side function** that holds the secret, and the function then checks the staff user in the CRM before acting. This works on the platform as it is today and does not depend on Catalyst API Gateway, which is disabled and must not be enabled casually (enabling it makes existing function and web client URLs inaccessible until APIs exist). API Gateway is a separate later hardening step. Full design, route table, vouchers and waivers routes, and the Gateway enablement checklist are in [STAFF-API-AND-IDENTITY.md](STAFF-API-AND-IDENTITY.md).
 
+**Update, 28 October 2026.** The signed channel and four routes are built and tested on `main` (not deployed): `GET /staff/ping`, `GET /staff/me`, `POST /staff/quote` (also the assessment) and `POST /staff/insurance-change/revision`. Decided: approved CRM profiles are `Administrator` and `Standard`; approved staff may act for any Contact; replay protection is a short window plus repeat-safe routes; the widget calls a CRM function by **action name**; a staff save is audited with a CRM Note on the revision. The built routes take `contactId` in the body and differ from the `/staff/applications/:id/...` shapes in section 5.1 of the brief: build the widget against the contract in `docs/api-contracts/staff-api.md` on `main`.
+
 ## 10. Delivery approach and non-goals
 
 ### Build sequence
@@ -462,7 +464,7 @@ For unsupported/unfinished features, UAT must record **not ready**, rather than 
 - Agree whether a paid-but-not-activated policy may have a Payment_Status of Paid while blocked; show this as a processing exception without automatically reversing financial state.
 - Validate WorkDrive document templates and issuance terminology; current generated schedule and Statement of Fact are draft placeholders despite an Active policy status.
 - Approve WORKFLOW-FIELD-EDITING.md: which workflow fields staff may edit in the widget, the reason requirement, and the Creator-owned fields the widget must not set. Until then the editor is Development only.
-- Approve STAFF-API-AND-IDENTITY.md and agree the approved staff roles (view, screening detail, manual decisions, save, waive, payment link).
+- STAFF-API-AND-IDENTITY.md: roles (`Administrator`, `Standard`), any-Contact access, replay protection and the audit Note are **decided (28 October)**. Still to agree: whether roles differ per action, and the payment-link design.
 - Replace the copied `portal-defs/` with a generated copy and a CI drift check (PORTAL-DEFS-SYNC.md). The copy already differs from the portal (Salon contents-cover rule, 27 October).
 - Decide when and how to enable API Gateway (checklist in STAFF-API-AND-IDENTITY.md section 8), and not during customer UAT.
 - Official package, live CRM deployment, UAT and end-to-end tests remain separate tasks.
