@@ -23,3 +23,12 @@ Branch: feature/beauty-guild-staff-workspace-slate
 
 ## Current test status
 The five updated files have been verified present on GitHub. Automated JavaScript tests, CRM iframe verification and Slate deployment verification have **not** been completed. This is a safe UI integration increment, not a ready-to-transact MTA or voucher release.
+
+## Widget implementation update (28 October 2026)
+- The Insurance Policy **Manage changes (MTA)** dialogue now accepts a Contact ID, Membership/Deal ID, effective date and supported change types (named people, treatments, teaching, equipment and Employers Liability), plus advanced Portal V2 change fields in JSON.
+- **Get live quote** calls `BGStaffApi.call('quote', payload)` via `ZOHO.CRM.FUNCTIONS.execute('staff_api_call', ...)`. The server quote response is displayed; the widget does not calculate prices or claim eligibility.
+- **Save quoted revision** calls `save_revision` only after a successful quote, an unchanged request body and an explicit Development confirmation. A failed Note response is surfaced.
+- Current Contact and membership lookup values are populated only when they can be identified in the focused CRM record. They must be confirmed against the actual CRM layout; no invented relationship is assumed.
+- The membership voucher panel remains an input UI, not a redemption workflow. Its quote integration depends on the approved membership request mapping and Creator reader. No fake successful discounts are displayed.
+- Dynamic reference catalogues for treatment IDs and current cover are still required for an end-user-ready MTA workflow. The available API contract supports quote/save but does not provide an authoritative staff current-cover reader.
+- Live testing is blocked until `ping` and `me` authenticate in the user's CRM Development environment. Do not enable payment links or production use until that and CRM/Creator end-to-end tests pass.
