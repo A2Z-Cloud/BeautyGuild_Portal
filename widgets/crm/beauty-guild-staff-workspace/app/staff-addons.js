@@ -50,7 +50,7 @@ function specific(){
  const t=$('staff-mta-type')?.value||'';
  const target=$('staff-mta-specific');if(!target)return;
  target.innerHTML=t==='person'?field('staff-person-first','First name')+field('staff-person-last','Last name')+'<label for="staff-person-type">Person type</label><select id="staff-person-type"><option value="employee">Employee</option><option value="subcontractor">Subcontractor</option></select>':
- t==='treatment'?field('staff-treatment','Treatment ID','placeholder="Portal V2 treatment catalogue ID"'):
+ t==='treatment'?'<label for="staff-treatment">Treatment extension</label><select id="staff-treatment"><option value="">Choose an extension</option>'+(global.BGJourney12?.TREATMENT_OPTIONS||[]).map(o=>'<option value="'+esc(o.value)+'">'+esc(o.label)+'</option>').join('')+'</select>':
  t==='teaching'?'<label for="staff-teaching">Teaching cover</label><select id="staff-teaching"><option value="standard">Standard</option><option value="additional">Additional</option></select>':
  t==='equipment'?'<label for="staff-equipment">Equipment cover limit</label><select id="staff-equipment">'+[5000,10000,15000,20000].map(x=>'<option value="'+x+'">£'+x.toLocaleString('en-GB')+'</option>').join('')+'</select>':
  t==='el'?'<label for="staff-el">Employers Liability tier</label><select id="staff-el">'+[1,3,5].map(x=>'<option value="'+x+'">'+x+'</option>').join('')+'</select>':'';
@@ -81,7 +81,7 @@ function payload(){
  if(!type)throw Error('Choose the change type.');
  const change={effectiveDate:date};
  if(type==='person'){const first=$('staff-person-first')?.value.trim(),last=$('staff-person-last')?.value.trim();if(!first||!last)throw Error('Enter the named person’s first and last name.');change.addPeople=[{firstName:first,lastName:last,type:$('staff-person-type').value}];}
- if(type==='treatment'){const id=$('staff-treatment')?.value.trim();if(!id)throw Error('Enter a Portal V2 treatment catalogue ID.');change.treatments=[id];}
+ if(type==='treatment'){const id=$('staff-treatment')?.value.trim();if(!id)throw Error('Select an available treatment extension.');change.treatments=[id];}
  if(type==='teaching')change.teaching=$('staff-teaching').value;
  if(type==='equipment')change.equipmentTier=Number($('staff-equipment').value);
  if(type==='el')change.elTier=Number($('staff-el').value);
