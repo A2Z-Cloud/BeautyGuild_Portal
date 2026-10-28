@@ -78,6 +78,9 @@ user   : 1011174000000000042
 
 ## Routes
 
+### `GET /staff/time`
+**No signature needed.** Returns the function's own clock: `{ "serverTime": 1793199782 }` (Unix time in whole seconds, 10 digits). The CRM function should **sign with this time** instead of its own clock, because Deluge's clock and time zone handling can be out by hours (seen on 28 October 2026: an hour behind, with the CRM time zone set to GMT). It reveals nothing secret and weakens nothing: a request still needs the secret, a time within the window and a fresh nonce. Limited to 300 requests a minute per caller; 404 while the switch is off.
+
 ### `GET /staff/ping`
 Proves the channel and the signing. Does not call the CRM.
 

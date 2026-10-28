@@ -74,7 +74,9 @@ map staff_api_call(string action, string body)
 	secret = zoho.crm.getOrgVariable("staff_api_secret");        // never log this
 	user_id = zoho.loginuserid.toString();                       // VERIFY (spike item 1): the real logged-in user, not an argument
 
-	time = (zoho.currenttime.toLong() / 1000).toString();        // VERIFY: seconds, 10 digits (not milliseconds)
+	// Sign with the SERVER's clock, not Deluge's: Deluge's time can be out by hours (it was an hour behind on 28 October 2026).
+	time_response = invokeurl [ url :base_url + "/staff/time"  type :GET ];
+	time = time_response.get("serverTime").toLong().toString();  // VERIFY: exactly 10 digits, e.g. 1793199782
 	nonce = zoho.encryption.sha256(zoho.currenttime.toString() + user_id + zoho.currenttime.toLong().toString()).subString(0,32);
 	                                                             // VERIFY: any fresh 32+ hex characters will do
 

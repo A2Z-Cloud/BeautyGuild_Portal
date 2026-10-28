@@ -211,6 +211,26 @@ test('ping proves the channel and shows the path the function saw', async () => 
   });
 });
 
+test('time gives the function clock in whole seconds with no sign-in, and does not touch the CRM', async () => {
+  await withStaffApp({}, async ({ base, crmCalls, logs }) => {
+    const r = await fetch(base + '/staff/time');
+    assert.equal(r.status, 200);
+    assert.deepEqual(await r.json(), { serverTime: NOW_S });
+    assert.match(String(NOW_S), /^\d{10}$/);
+    assert.equal(crmCalls.length, 0);
+    assert.equal(logs.length, 0, 'a clock reading is not an audited staff request');
+  });
+  // A request signed with the time this route gave is accepted.
+  await withStaffApp({}, async ({ call, base }) => {
+    const { serverTime } = await (await fetch(base + '/staff/time')).json();
+    assert.equal((await call('/staff/ping', { time: String(serverTime) })).status, 200);
+  });
+  // Off with the switch.
+  await withStaffApp({ env: { ...ENV, PORTAL_STAFF_API_ENABLED: 'false' } }, async ({ base }) => {
+    assert.equal((await fetch(base + '/staff/time')).status, 404);
+  });
+});
+
 test('every way of failing the signature gets the same 401 and tells the caller nothing', async () => {
   await withStaffApp({}, async ({ call, logs }) => {
     const refused = [
