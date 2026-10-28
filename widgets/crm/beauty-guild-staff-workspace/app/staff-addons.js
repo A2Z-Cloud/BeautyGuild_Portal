@@ -2,7 +2,7 @@
 (function(global){
 'use strict';
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const state={record:null,entity:'',mode:'',quote:null,payload:null,busy:false,code:'',waiver:'',reason:'',note:''};
+const state={record:null,entity:'',mode:'',quote:null,payload:null,savedRevision:null,checkoutUrl:'',busy:false,code:'',waiver:'',reason:'',note:''};
 const reasons=['Goodwill Gesture','Complaint','Upgrade','Promotion','Payment Problem','Other'];
 const eligible=[['','No waiver'],['MEM-JOIN','Joining fee']];
 const $=id=>document.getElementById(id);
@@ -43,7 +43,8 @@ function mtaFields(){
  '<label for="staff-mta-details">Additional change fields (JSON, optional)</label><textarea id="staff-mta-details" rows="4" placeholder="Optional additional JSON"></textarea>'+
  note('Use the same portal declarations and customer-confirmation requirements. This form does not independently confirm declarations or provide cover.')+
  '<div class="staff-addon-actions"><button class="button secondary" type="button" data-staff-addon="cover">Load current cover</button><button class="button primary" type="button" data-staff-addon="quote-mta">Get live quote</button><button class="button secondary" type="button" data-staff-addon="save-mta" disabled id="staff-mta-save">Save quoted revision</button></div>'+
- '<div class="staff-addon-result" id="staff-mta-result" role="status" aria-live="polite">No quote requested.</div>';
+ '<div class="staff-addon-result" id="staff-mta-result" role="status" aria-live="polite">No quote requested.</div>'+
+ '<section class="staff-addon-panel" aria-label="MTA secure payment"><h3>Secure payment</h3><p>Available only after an eligible quotation and successful revision save. The customer pays through Stripe Checkout; CRM is updated by the existing payment processing.</p><label class="staff-payment-consent"><input type="checkbox" id="staff-mta-accepted" /> I confirm the customer explicitly accepted the Code of Ethics and Terms of Business.</label><button type="button" class="button primary" data-staff-addon="payment-mta" id="staff-mta-payment" disabled>Generate test payment link</button><div id="staff-mta-payment-result" role="status" aria-live="polite"></div></section>';
 }
 function specific(){
  const t=$('staff-mta-type')?.value||'';
@@ -56,7 +57,7 @@ function specific(){
  state.quote=null;const b=$('staff-mta-save');if(b)b.disabled=true;
 }
 function open(mode,record,entity){
- state.mode=mode;state.entity=entity||'';state.record=record;state.quote=null;state.payload=null;
+ state.mode=mode;state.entity=entity||'';state.record=record;state.quote=null;state.payload=null;state.savedRevision=null;state.checkoutUrl='';
  let d=$('staff-addon-dialog');if(!d){d=document.createElement('dialog');d.id='staff-addon-dialog';d.className='staff-addon-dialog';document.body.appendChild(d);}
  d.innerHTML='<div class="staff-addon-head"><div><small>STAFF WORKSPACE</small><h2>'+(mode==='mta'?'Mid-term adjustment':'Voucher / waiver')+'</h2><p>'+esc(record?.Name||record?.Policy_Number||record?.Deal_Name||'Selected record')+'</p></div><button type="button" class="button secondary" data-staff-addon="close">Close</button></div>'+
  (mode==='mta'?mtaFields():discountFields()+note('Referral and waiver inputs are ready for a membership quote. No discount is applied without a signed quote response.')+'<output id="staff-discount-outcome"></output>');
@@ -99,8 +100,8 @@ async function quote(){
    const response=await global.BGStaffApi.call('quote',p);
    if(response?.error||response?.code||response?.ok===false)throw Error(response.message||response.error||response.code);
    if(!response?.quote)throw Error('Backend returned no quote. Check the response contract.');
-   state.quote=response;state.payload=p;
-   result(response);const b=$('staff-mta-save');if(b)b.disabled=false;
+   state.quote=response;state.payload=p;state.savedRevision=null;state.checkoutUrl='';
+   result(response);const b=$('staff-mta-save');if(b)b.disabled=response.quote.payable!==true;
  }catch(e){state.quote=null;state.payload=null;result(e.message||String(e),true);const b=$('staff-mta-save');if(b)b.disabled=true;}
  finally{state.busy=false;}
 }
@@ -113,8 +114,27 @@ async function save(){
    const response=await global.BGStaffApi.call('save_revision',state.payload);
    if(response?.error||response?.code||response?.ok===false)throw Error(response.message||response.error||response.code);
    result(response?.auditNote===false?{warning:'Revision saved but its audit Note failed. Investigate in CRM.',response}:response,response?.auditNote===false);
-   state.quote=null;const b=$('staff-mta-save');if(b)b.disabled=true;
+   state.savedRevision=response.revision||response.revisions?.[0]||null;
+   const payment=$('staff-mta-payment');if(payment)payment.disabled=!(state.quote?.quote?.payable&&state.savedRevision);
+   const b=$('staff-mta-save');if(b)b.disabled=true;
  }catch(e){result(e.message||String(e),true);}
+ finally{state.busy=false;}
+}
+async function payment(){
+ const output=$('staff-mta-payment-result');
+ if(state.busy||!state.savedRevision||!state.quote?.quote?.payable||!state.payload)return;
+ if(!$('staff-mta-accepted')?.checked){if(output)output.textContent='Customer acceptance of the Code of Ethics and terms must be confirmed.';return;}
+ try{
+   if(JSON.stringify(payload())!==JSON.stringify(state.payload))throw Error('MTA details changed. Requote and save the revision again.');
+   if(!global.confirm('Generate a test-mode Stripe Checkout link for this customer’s saved MTA revision?'))return;
+   state.busy=true;if(output)output.textContent='Requesting secure Checkout link…';
+   const result=await global.BGStaffApi.call('payment_link',{...state.payload,accepted:'yes'});
+   if(result?.alreadyPaid){if(output)output.textContent='Already paid according to Stripe. Refresh the CRM record to view the authoritative payment status.';return;}
+   const link=String(result?.checkoutUrl||'');
+   if(!/^https:\/\/checkout\.stripe\.com\//.test(link))throw Error('The backend returned no valid Stripe Checkout URL.');
+   state.checkoutUrl=link;
+   if(output)output.innerHTML='<button type="button" class="button secondary" data-staff-addon="copy-mta-payment">Copy payment link</button> <button type="button" class="button secondary" data-staff-addon="open-mta-payment">Open Stripe Checkout</button>';
+ }catch(e){if(output)output.textContent=String(e.message||e);}
  finally{state.busy=false;}
 }
 function validate(){const out=$('staff-discount-outcome');if(!out)return;if(state.waiver&&!state.reason)out.textContent='Choose a waiver reason.';else if(state.waiver&&state.reason==='Other'&&!state.note.trim())out.textContent='Add a note for Other.';else out.textContent='Inputs captured. Final eligibility, discount and pricing must be verified by the signed quote.';}
@@ -125,6 +145,9 @@ document.addEventListener('click',event=>{
  const a=b.dataset.staffAddon;
  if(a==='close'){$('staff-addon-dialog')?.close?.();return;}
  if(a==='validate-discount'){validate();return;}
+ if(a==='copy-mta-payment'){if(state.checkoutUrl)navigator.clipboard?.writeText(state.checkoutUrl).catch(()=>{});return;}
+ if(a==='open-mta-payment'){if(state.checkoutUrl)global.open(state.checkoutUrl,'_blank','noopener,noreferrer');return;}
+ if(a==='payment-mta'){payment();return;}
  if(a==='cover'){loadCover();return;}
  if(a==='quote-mta'){quote();return;}
  if(a==='save-mta'){save();return;}
