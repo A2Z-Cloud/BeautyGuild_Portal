@@ -138,6 +138,12 @@ test('verifyStaffRequest: accepts a good request and says why it refuses a bad o
   assert.equal(check(headers({ 'x-staff-nonce': 'zz' })).reason, 'bad_nonce');
   assert.equal(check(headers({ 'x-staff-signature': 'abc' })).reason, 'bad_signature_format');
   assert.equal(check(headers({ 'x-staff-signature': 'f'.repeat(64) })).reason, 'bad_signature');
+  // The CRM's Deluge gives base64, so the same signature as base64 (or upper case hex) is accepted too.
+  const sig = signStaffRequest({ secret: SECRET, ...parts });
+  assert.equal(check(headers({ 'x-staff-signature': Buffer.from(sig, 'hex').toString('base64') })).ok, true);
+  assert.equal(check(headers({ 'x-staff-signature': sig.toUpperCase() })).ok, true);
+  assert.equal(check(headers({ 'x-staff-signature': Buffer.alloc(32, 7).toString('base64') })).reason, 'bad_signature');
+  assert.equal(check(headers({ 'x-staff-signature': 'A'.repeat(43) + '!' })).reason, 'bad_signature_format');
   assert.equal(check(headers(), { path: '/staff/ping' }).reason, 'bad_signature');
   assert.equal(check(headers(), { method: 'POST' }).reason, 'bad_signature');
   assert.equal(check(headers(), { body: Buffer.from('x') }).reason, 'bad_signature');

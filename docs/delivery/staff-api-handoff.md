@@ -26,7 +26,7 @@ Widget (Slate) -> CRM custom function (signs) -> beauty_guild_api /staff/... (ve
 Nothing else is worth building until these four things are proven. They are the unknowns the design could not settle from documentation.
 
 1. **Which user does the function run as, and can the widget fake it?** Make a custom function that returns `zoho.loginuserid`. Call it from a test widget with `ZOHO.CRM.FUNCTIONS.execute`. Sign in as two different staff users and check the id changes. Then try to make the widget pass a different id as an argument, and confirm the function still returns the real logged-in one. **If the id can be supplied by the widget, stop: the identity must come from somewhere the widget cannot influence, and the design needs changing.**
-2. **Does your HMAC match ours?** In the function, compute the signature for the published test vector (secret, time, nonce and user in [staff-api.md](../api-contracts/staff-api.md)) and compare it with `02b0be8f…f798`. Check the empty-body hash too (`e3b0c442…b855`). If they differ, the usual causes are an upper case or base64 output (it must be lower case hex), a trailing newline, or `\n` not becoming a real newline.
+2. **Does your HMAC match ours?** In the function, compute the signature for the published test vector (secret, time, nonce and user in [staff-api.md](../api-contracts/staff-api.md)) and compare it with `02b0be8f…f798`. Check the empty-body hash too (`e3b0c442…b855`). If they differ, the usual causes are a trailing newline, or `\n` not becoming a real newline (in Deluge it can stay as two characters, so build the newline explicitly). Hex or base64 output are both accepted.
 3. **Where can the secret live?** Find where a CRM function can read a secret that only admins can see (for example a CRM variable or a connection parameter), and who can read it.
 4. **Can the Catalyst function read CRM users?** Its CRM connection needs the permission to read users. Call `/staff/me` once the function is deployed with the switch on. A `503 STAFF_LOOKUP_UNAVAILABLE` usually means the scope is missing.
 
@@ -35,7 +35,7 @@ You can test the Catalyst side **without the CRM at all** using the script in se
 ## 3. CRM setup
 
 - **Secret:** generate 32 random bytes (`openssl rand -hex 32`). Store it in the CRM where only admins can read it (spike item 3). Use a **different** secret for Development and Production.
-- **Allowed roles:** agree which CRM profiles or roles may use the staff routes. They go in `PORTAL_STAFF_API_ROLES`, for example `Guild Staff, Administrator`. Empty means nobody.
+- **Allowed roles:** agree which CRM profiles or roles may use the staff routes. They go in `PORTAL_STAFF_API_ROLES`, agreed on 28 October 2026: `Administrator, Standard` (CRM profile names). Empty means nobody.
 - **Field permissions:** the workflow-field editor in the widget (see `WORKFLOW-FIELD-EDITING.md`) can only be as safe as the CRM's own field-level edit permissions. Set them for the fields that fire workflows.
 - **The signing function:** takes a route, method and body from the widget, signs, calls the Catalyst function, and returns the response.
 
@@ -60,7 +60,7 @@ map staff_api_call(string route, string method, string body)
 	body_hash = zoho.encryption.sha256(body);                    // VERIFY: lower case hex? Empty body must give e3b0c442...b855
 	to_sign = method.toUpperCase() + "\n" + route + "\n" + body_hash + "\n" + time + "\n" + nonce + "\n" + user_id;
 	                                                             // VERIFY: "\n" is a real newline; no newline at the end
-	signature = zoho.encryption.hmacsha256(secret, to_sign);     // VERIFY: lower case hex output, not base64 (spike item 2)
+	signature = zoho.encryption.hmacsha256(secret, to_sign);     // VERIFY: Deluge returns base64, which the function accepts as it is (spike item 2)
 
 	headers = Map();
 	headers.put("X-Staff-User", user_id);

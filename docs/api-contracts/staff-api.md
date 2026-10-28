@@ -16,7 +16,7 @@ Set on the function (the deploy script sends them; values are never committed).
 | `PORTAL_STAFF_API_ENABLED` | Switch | `true` turns the routes on. Anything else: the routes do not exist (404). **Default off** |
 | `STAFF_API_SECRET` | Secret | The signing secret. At least 32 characters. Required when the switch is on, otherwise the function refuses to start |
 | `STAFF_API_SECRET_PREVIOUS` | Secret | Optional. The retiring secret during a rotation. Either secret is accepted |
-| `PORTAL_STAFF_API_ROLES` | Setting | Comma separated CRM **profile or role names** allowed to use the API, for example `Guild Staff, Administrator`. Matched case-insensitively. **Empty allows nobody** |
+| `PORTAL_STAFF_API_ROLES` | Setting | Comma separated CRM **profile or role names** allowed to use the API, for example `Administrator, Standard` (the roles agreed on 28 October 2026). Matched case-insensitively. **Empty allows nobody** |
 | `PORTAL_STAFF_API_WINDOW_SECONDS` | Setting | How far the request time may differ from the function's clock. Default 300, between 30 and 600 |
 
 Generate a secret with `openssl rand -hex 32` (64 characters). Use a different secret in each environment.
@@ -30,7 +30,7 @@ Every request carries four headers.
 | `X-Staff-User` | The CRM user id of the logged-in staff member (10 to 25 digits) |
 | `X-Staff-Time` | Seconds since 1 January 1970, 10 digits |
 | `X-Staff-Nonce` | A fresh random value for every request: 32 to 128 hex characters (lower case) |
-| `X-Staff-Signature` | 64 hex characters: HMAC-SHA256 of the string below, keyed with the secret |
+| `X-Staff-Signature` | HMAC-SHA256 of the string below, keyed with the secret, as 64 hex characters (lower or upper case) **or** as standard base64 (44 characters ending `=`, which is what Deluge returns). Both forms of the same signature are accepted |
 
 **The string that is signed** is six values joined by a single newline (`\n`), with no trailing newline:
 

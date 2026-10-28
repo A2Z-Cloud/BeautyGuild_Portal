@@ -12,6 +12,7 @@ const { createRateLimiter, clientKey } = require('./rateLimit');
 
 const NONCE = /^[0-9a-f]{32,128}$/;
 const SIGNATURE = /^[0-9a-f]{64}$/;
+const SIGNATURE_BASE64 = /^[A-Za-z0-9+/]{43}=$/;
 const CRM_USER_ID = /^\d{10,25}$/;
 const SECONDS = /^\d{10}$/;
 const MAX_BODY_BYTES = 256 * 1024;
@@ -34,6 +35,14 @@ function signStaffRequest({ secret, method, path, body, time, nonce, userId }) {
     .digest('hex');
 }
 
+// The CRM's Deluge returns the HMAC as base64, so either 64 hex characters or 44 base64 characters is accepted. Returns lower case hex, or ''.
+function normaliseSignature(value) {
+  const raw = String(value || '').trim();
+  if (SIGNATURE.test(raw.toLowerCase())) return raw.toLowerCase();
+  if (SIGNATURE_BASE64.test(raw)) return Buffer.from(raw, 'base64').toString('hex');
+  return '';
+}
+
 const sameHex = (a, b) => a.length === b.length && crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
 
 // Checks the four headers, the time window and the signature against every current secret (so a secret can be rotated). It does not
@@ -43,12 +52,13 @@ function verifyStaffRequest({ secrets, method, path, body, headers, nowMs, windo
   const userId = String(headers['x-staff-user'] || '');
   const time = String(headers['x-staff-time'] || '');
   const nonce = String(headers['x-staff-nonce'] || '').toLowerCase();
-  const signature = String(headers['x-staff-signature'] || '').toLowerCase();
-  if (!userId || !time || !nonce || !signature) return { ok: false, reason: 'missing_header' };
+  const rawSignature = String(headers['x-staff-signature'] || '');
+  if (!userId || !time || !nonce || !rawSignature) return { ok: false, reason: 'missing_header' };
   if (!CRM_USER_ID.test(userId)) return { ok: false, reason: 'bad_user' };
   if (!SECONDS.test(time)) return { ok: false, reason: 'bad_time' };
   if (!NONCE.test(nonce)) return { ok: false, reason: 'bad_nonce' };
-  if (!SIGNATURE.test(signature)) return { ok: false, reason: 'bad_signature_format' };
+  const signature = normaliseSignature(rawSignature);
+  if (!signature) return { ok: false, reason: 'bad_signature_format' };
   if (Math.abs(nowMs / 1000 - Number(time)) > windowSeconds) return { ok: false, reason: 'stale' };
   const parts = { method, path, body, time, nonce, userId };
   // Every secret is tried, with no early exit, so the time taken does not say which one matched.
