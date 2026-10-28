@@ -141,6 +141,14 @@ The caller always gets the same `401`. The function log has the reason (`staff_r
 | `bad_signature` | The signature does not match what the function expected |
 | `replay` | The nonce was already used |
 
+When `/staff/me` returns `503 STAFF_LOOKUP_UNAVAILABLE`, the log line (`outcome: error`, `reason: lookup_unavailable`) says why:
+
+| `stage` | Meaning |
+| --- | --- |
+| `connection` | The function could not get CRM credentials from the Catalyst connection (wrong connection name, not authorised, deleted). `error` and `message` say what |
+| `request` | The call to the CRM did not complete (network, timeout) |
+| `crm` | The CRM answered with an error. `crmStatus`, `crmCode` and `crmMessage` are the CRM's own. `OAUTH_SCOPE_MISMATCH` or `INVALID_OAUTH_SCOPE` means the connection lacks `ZohoCRM.users.READ`; `INVALID_URL_PATTERN` or a 400 would mean the users endpoint path is wrong |
+
 For `bad_signature` the log line also carries, with **no secret and no signature in it**:
 - `lineLengths`: the length of each of the six signed lines, in order (method, path, body hash, time, nonce, user id). For `GET /staff/ping` with a 19 digit user id: `[3, 11, 64, 10, 32, 19]`. A line with a different length is the one that differs (a path with the `/server/beauty_guild_api` prefix, a `\n` written as two characters, an empty or upper case body hash).
 - `pathSeen`: the path the function saw. This is the exact string to sign.

@@ -170,20 +170,42 @@ function registerStaffRoutes(
   };
 
   // A valid signature proves the CRM function sent the request. The CRM still has to say the user is real, active and allowed.
+  // A refusal to act because the CRM could not say. `diag` is for the log only and is never sent to the caller: which step failed and, for a
+  // CRM answer, its status and error code (for example OAUTH_SCOPE_MISMATCH when the connection lacks the users scope). No token or header.
+  const lookupFailed = diag =>
+    Object.assign(new HttpError(503, 'STAFF_LOOKUP_UNAVAILABLE', 'Staff lookup is unavailable.'), { diag });
+  const brief = (v, n) =>
+    String(v ?? '')
+      .replace(/[\u0000-\u001f]/g, ' ')
+      .slice(0, n);
+
   async function lookupStaffUser(req, userId) {
+    let headers;
+    try {
+      headers = await getCrmHeaders(req);
+    } catch (e) {
+      throw lookupFailed({ stage: 'connection', error: brief(e?.name, 60), message: brief(e?.message, 120) });
+    }
     let response;
     try {
-      const headers = await getCrmHeaders(req);
       response = await fetchImpl(`${crmApiDomain}/crm/v3/users/${encodeURIComponent(userId)}`, {
         headers: { ...headers, Accept: 'application/json' },
         signal: AbortSignal.timeout(10000),
       });
-    } catch {
-      throw new HttpError(503, 'STAFF_LOOKUP_UNAVAILABLE', 'Staff lookup is unavailable.');
+    } catch (e) {
+      throw lookupFailed({ stage: 'request', error: brief(e?.name, 60), message: brief(e?.message, 120) });
     }
     if (response.status === 204 || response.status === 404) return null;
     // Fail closed: any other answer, including a missing CRM scope for users, is a refusal to act, not a guess.
-    if (!response.ok) throw new HttpError(503, 'STAFF_LOOKUP_UNAVAILABLE', 'Staff lookup is unavailable.');
+    if (!response.ok) {
+      const body = await response.json().catch(() => null);
+      throw lookupFailed({
+        stage: 'crm',
+        crmStatus: response.status,
+        crmCode: brief(body?.code, 60),
+        crmMessage: brief(body?.message, 160),
+      });
+    }
     const record = ((await response.json().catch(() => null)) || {}).users?.[0];
     if (!record || String(record.id) !== String(userId)) return null;
     return {
@@ -218,6 +240,7 @@ function registerStaffRoutes(
         staffUserId: req.staffCall.userId,
         outcome: 'error',
         reason: 'lookup_unavailable',
+        ...(err.diag || {}),
       });
       return next(err);
     }
