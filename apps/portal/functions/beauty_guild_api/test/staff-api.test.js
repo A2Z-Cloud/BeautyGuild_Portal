@@ -265,7 +265,13 @@ test('me returns the CRM user and the actor, looked up by id in the CRM and neve
       profile: 'Guild Staff',
       role: 'Processing',
     });
-    assert.deepEqual(r.body.actor, { kind: 'staff', id: USER, name: 'Sam Staff', canWaive: true });
+    assert.deepEqual(r.body.actor, {
+      type: 'staff',
+      id: USER,
+      name: 'Sam Staff',
+      email: 'sam@beautyguild.com',
+      canWaive: true,
+    });
     assert.deepEqual(crmCalls, [`https://www.zohoapis.eu/crm/v3/users/${USER}`]);
     assert.match(logs.join('\n'), /"event":"staff_request".*"outcome":"ok"/);
   });

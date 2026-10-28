@@ -1,15 +1,18 @@
 # Staff API: handoff note for the Staff Workspace build
 
-**Status (27 October 2026):** the backend foundation is built, tested and **not deployed**. This note is for the people building the CRM side and the widget. The contract is [staff-api.md](../api-contracts/staff-api.md). The design is `STAFF-API-AND-IDENTITY.md` in the Staff Workspace folder on the Slate branch.
+**Status (28 October 2026):** the backend foundation and the first routes (`/staff/quote`, `/staff/insurance-change/revision`) are built and tested; the foundation is on `main`. **Nothing is deployed.** This note is for the people building the CRM side and the widget. The contract is [staff-api.md](../api-contracts/staff-api.md). The design is `STAFF-API-AND-IDENTITY.md` in the Staff Workspace folder on the Slate branch.
 
 ## What exists and what does not
 
 | Exists (in the portal function, off by default) | Does not exist yet |
 | --- | --- |
-| Signature check, time window, nonce check | The CRM custom function that signs requests |
-| CRM user lookup, active check and role allow-list | Any quote, assess, save, waiver or payment-link route |
+| Signature check (hex or base64), time window, nonce check | The CRM custom function that signs requests |
+| CRM user lookup, active check and role allow-list | A staff payment link route (charging) |
 | `GET /staff/ping` and `GET /staff/me` | A deployed, switched-on Development endpoint |
-| 17 tests and two checked test vectors | CRM-visible audit records |
+| `POST /staff/quote` (also the assessment), `POST /staff/insurance-change/revision` | Vouchers (needs a Creator reader for use history) |
+| `POST /staff/quote` (also the assessment) and `POST /staff/insurance-change/revision` | A staff payment link or any charge |
+| Staff waivers on the quote (joining fee, once per person) | Vouchers (needs a Creator reader for use history) |
+| Tests and two checked test vectors | CRM-visible audit records beyond an optional text field |
 
 The function is not deployed with this change. A person with deploy access sets the secret and the switch in Development when you are ready (section 6).
 
@@ -33,6 +36,9 @@ Nothing else is worth building until these four things are proven. They are the 
 You can test the Catalyst side **without the CRM at all** using the script in section 5.
 
 ## 3. CRM setup
+
+- **Catalyst connection:** no new connection. The function already uses the project's Zoho CRM connection named `zohocrm` (`CRM_CONNECTION_NAME`). The staff routes add one need: it must be allowed to **read users** (scope `ZohoCRM.users.READ`), alongside the module scopes it already has (`ZohoCRM.modules.ALL`, or the narrower ones for Contacts, Deals and the insurance modules). If the connection was made without the users scope, `/staff/me` returns `503 STAFF_LOOKUP_UNAVAILABLE`; add the scope to the connection in the Catalyst console and authorise it again.
+- **Who the audit field names:** the Catalyst connection writes the records, so the CRM's `Modified_By` is the connection's user, not the staff member. Create a single line text field on `Policy_Revisions` (suggested API name `Staff_Actor`) and set `PORTAL_STAFF_AUDIT_FIELD=Staff_Actor`.
 
 - **Secret:** generate 32 random bytes (`openssl rand -hex 32`). Store it in the CRM where only admins can read it (spike item 3). Use a **different** secret for Development and Production.
 - **Allowed roles:** agree which CRM profiles or roles may use the staff routes. They go in `PORTAL_STAFF_API_ROLES`, agreed on 28 October 2026: `Administrator, Standard` (CRM profile names). Empty means nobody.
@@ -117,10 +123,15 @@ Expected for `/staff/ping`: `{"ok":true,"serverTime":…,"seenPath":"/staff/ping
 - Every route that writes must be safe to repeat, because replay protection is per instance.
 - Keep the Development and Production secrets and allowed roles separate.
 
-## 8. Open questions (from the design, not settled here)
+## 8. Decisions and open questions
 
-1. Replay protection: a durable store, or a short window plus repeat-safe routes.
-2. Whether staff are limited to Contacts they can see in CRM, or approved roles may act for any Contact.
-3. The approved staff roles for view, screening detail, saving, waiving and payment links.
-4. Whether and when API Gateway is enabled. It is not needed for any of this.
-5. The staff-identity field on Policy_Revisions for the audit trail.
+Decided on 28 October 2026:
+- **Roles:** CRM profiles `Administrator` and `Standard` (`PORTAL_STAFF_API_ROLES=Administrator, Standard`).
+- **Contacts:** approved staff may act for any Contact.
+- **Replay protection:** a five minute window, a per-instance nonce check, and routes that are safe to repeat. A durable store is not needed yet.
+- **API Gateway:** not needed for any of this.
+
+Still open:
+1. **The audit field.** `Modified_By` was suggested, but it records the connection's user, so a text field such as `Staff_Actor` is needed (section 3).
+2. **Vouchers** need a Creator reader for use history before `voucherCode` can work.
+3. **Staff payment links** (charging a customer from the widget) are not built. They create a Stripe session and touch the Creator contract, so they need their own design and approval.

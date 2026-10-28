@@ -16,6 +16,7 @@ Set on the function (the deploy script sends them; values are never committed).
 | `PORTAL_STAFF_API_ENABLED` | Switch | `true` turns the routes on. Anything else: the routes do not exist (404). **Default off** |
 | `STAFF_API_SECRET` | Secret | The signing secret. At least 32 characters. Required when the switch is on, otherwise the function refuses to start |
 | `STAFF_API_SECRET_PREVIOUS` | Secret | Optional. The retiring secret during a rotation. Either secret is accepted |
+| `PORTAL_STAFF_AUDIT_FIELD` | Setting | API name of a single line text field on `Policy_Revisions` that records the staff member on a staff save. Unset: not written |
 | `PORTAL_STAFF_API_ROLES` | Setting | Comma separated CRM **profile or role names** allowed to use the API, for example `Administrator, Standard` (the roles agreed on 28 October 2026). Matched case-insensitively. **Empty allows nobody** |
 | `PORTAL_STAFF_API_WINDOW_SECONDS` | Setting | How far the request time may differ from the function's clock. Default 300, between 30 and 600 |
 
@@ -92,17 +93,39 @@ The channel and the person. The user is read from the CRM by the id in the signe
 {
   "requestId": "…",
   "staff": { "id": "1011174000000000042", "name": "Sam Staff", "email": "sam@beautyguild.com", "profile": "Guild Staff", "role": "Processing" },
-  "actor": { "kind": "staff", "id": "1011174000000000042", "name": "Sam Staff", "canWaive": true }
+  "actor": { "type": "staff", "id": "1011174000000000042", "name": "Sam Staff", "email": "sam@beautyguild.com", "canWaive": true }
 }
 ```
 
 `actor` is the object the pricing and discount code takes. `canWaive` is true for every allowed role today (Guild answer, 26 October 2026) and will be narrowed if the roles are agreed otherwise.
+
+### `POST /staff/quote`
+Prices for a Contact the staff member chose. **Nothing is charged, saved or sent**, and no Stripe session is made. It is also the assessment: insurance answers come back as a decision or a referral, exactly as the customer's quote does. The body is signed JSON.
+
+| Field | Notes |
+| --- | --- |
+| `contactId` | Required. A CRM Contact id. 422 if it is not an id, 404 if there is no such Contact |
+| `service`, `level`, `branch`, `billing`, `addons`, `insurance`, `change`, `changes`, `recordId`, `previousId`, `start`, ... | The same inputs as the customer's `POST /portal/checkout/quote` |
+| `voucherCode` | Optional. A bespoke voucher code. **Not usable yet**: a voucher's use history is read from Creator and no reader is wired, so it is refused (fails closed) |
+| `waivers` | Optional. `[{ "sku": "MEM-JOIN", "reason": "Goodwill Gesture", "note": "" }]`. Up to 6. The reason must be on the list; `Other` needs a note; the joining fee can be waived once per person |
+| `applicationId` | Optional. Ties a voucher use to one application |
+
+`voucherCode` and `waivers` return `503 DISCOUNTS_DISABLED` while `PORTAL_DISCOUNTS_ENABLED` is off. The response is `{ "requestId", "contact": { "id", "name" }, "quote": { ... } }`, where `quote` is the same shape as the customer's quote.
+
+### `POST /staff/insurance-change/revision`
+Saves a quoted insurance change as a revision for the Contact, as the customer's own route does (a payable change as Quoted with draft rows, a referred one as Under Review). **No payment.** Same body as `/staff/quote` with `service` forced to `insurance_change`, plus `recordId` (the membership). Refused with `503 NOT_AVAILABLE` until `PORTAL_INSURANCE_CHANGES_ENABLED` and `PORTAL_INSURANCE_CHANGES_WRITES` are on. Responds `201` with `{ revision, revisions, contact, created: true }`, or `200` when the same change was already saved.
+
+**Who saved it.** If `PORTAL_STAFF_AUDIT_FIELD` names a **single line text** field on `Policy_Revisions`, it is set to `Sam Staff (<CRM user id>)`. The function connection writes the record, so the CRM's own `Modified_By` shows the connection's user, not the staff member: do not rely on it. The function log has a `staff_request` line for every call either way.
+
+Both routes limit each staff user to 60 calls a minute (best effort).
 
 ## Responses
 
 | Status | Code | When |
 | --- | --- | --- |
 | 200 | | Success |
+| 400 | `INVALID_REQUEST` | The body is not a JSON object |
+| 422, 404 | `INVALID_REQUEST`, `NOT_FOUND` | No usable `contactId`, or no such Contact. Pricing rules answer as they do for a customer (for example `409 MEMBERSHIP_EXISTS`) |
 | 401 | `STAFF_AUTH_FAILED` | **Any** signature problem, a replayed nonce, an unknown, inactive or not-allowed user. The body is always the same, so a caller learns nothing about which check failed. The reason is in the function log |
 | 404 | `NOT_FOUND` | The switch is off, or no such route |
 | 413 | `TOO_LARGE` | Body over 256 KB |

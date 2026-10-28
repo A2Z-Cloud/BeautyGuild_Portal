@@ -13,6 +13,7 @@ const { prorate } = require('./prorata');
 const { saveRevision } = require('./insuranceRevisions');
 const plans = require('./plans');
 const { createDiscounts } = require('./discounts');
+const { createCrmStore } = require('./voucherAdapter');
 const { applyDiscounts, discountsMetadata, DiscountError, BRANCH } = require('./discountEngine');
 const { branchCouponPlan, createBranchCoupon } = require('./branchCoupon');
 const { fitToStripeLimit, filledCount, MAX_FILLED_KEYS } = require('./metadataContract');
@@ -40,6 +41,8 @@ function registerCheckoutRoutes(
     insuranceChangesWritesEnabled = false,
     insuranceChangesPaymentEnabled = false,
     revisionNamePrefix = '',
+    // CRM text field on Policy_Revisions that records which staff member saved the revision. Unset: not written (the function log still has it).
+    staffAuditField = '',
     enabled,
     getCurrentUser,
     getCrmHeaders,
@@ -177,7 +180,7 @@ function registerCheckoutRoutes(
     }
   }
 
-  async function build(req, input, { guest = false, createContact = false } = {}) {
+  async function build(req, input, { guest = false, createContact = false, staff = null } = {}) {
     const service = SERVICES[input.service];
     if (!service) throw new HttpError(422, 'INVALID_REQUEST', 'Choose something to pay for.');
     // Creator does not handle this payment type yet, so it stays off until the switch is turned on (PORTAL_MEMBERSHIP_CHANGES_ENABLED).
@@ -186,8 +189,10 @@ function registerCheckoutRoutes(
     if (input.service === 'membership_change' && !membershipChangesEnabled)
       throw new HttpError(503, 'NOT_AVAILABLE', 'Membership changes are not available online yet.');
     let contact = null;
+    // A staff quote is for a Contact the staff member chose, already looked up by the staff route; nothing comes from a portal user.
+    if (staff) contact = staff.contact;
     // A guest (no account) has no contact and is never risk screened: their price is a guide, and the checks run when they pay.
-    if (!guest) {
+    else if (!guest) {
       try {
         contact = await resolveContact(req, crm, req.portalUser);
       } catch (e) {
@@ -200,7 +205,7 @@ function registerCheckoutRoutes(
       crm,
       contact,
       input,
-      user: guest ? null : req.portalUser,
+      user: staff ? { id: 'staff:' + staff.actor.id } : guest ? null : req.portalUser,
       risk: guest ? null : riskChecks,
       discounts,
     });
@@ -256,7 +261,17 @@ function registerCheckoutRoutes(
     // Discounts: the school referral code (customer) and, for the staff route, a voucher and waivers. The engine prices the discount on the
     // lines HERE, before a monthly plan is split, so a monthly plan spreads it over the first 12 payments exactly (see discountEngine.js).
     const joiningFeePence = prepared.joiningFee?.due ? (await priceFor('joining_fee')).unit : 0;
-    const request = discountsEnabled && discountRequestFor ? await discountRequestFor(req, input) : null;
+    const request = staff
+      ? {
+          code: staff.code,
+          waivers: staff.waivers,
+          actor: staff.actor,
+          applicationId: staff.applicationId,
+          store: staff.store,
+        }
+      : discountsEnabled && discountRequestFor
+        ? await discountRequestFor(req, input)
+        : null;
     let engine = null;
     if (discountsEnabled && (prepared.discount || request)) {
       try {
@@ -634,6 +649,39 @@ function registerCheckoutRoutes(
       res.json({ quote: { ...view(await build(req, input, { guest: true })), indicative: true } });
     }),
   );
+  // Saves the revisions of a priced insurance change. Shared by the customer route and the staff route; `audit` is {field, value} for staff.
+  async function persistRevisions(req, b, recordId, audit = null) {
+    const revisions = b.prepared.revisions;
+    if (!revisions || !revisions.length) throw new HttpError(422, 'INVALID_REQUEST', 'Choose a change to save.');
+    // A change the member can pay for is only saved once every declaration and confirmation is answered.
+    for (const r of revisions)
+      if (r.outcome === 'PASS' && r.details.incomplete.length)
+        throw new HttpError(422, 'INCOMPLETE', [...new Set(r.details.incomplete)].join(' '));
+    const failure = 'We could not save your change. Please try again.';
+    const ids = new Map();
+    const saved = [];
+    for (const r of revisions)
+      saved.push(
+        await saveRevision({
+          ...r,
+          ids,
+          read: path => crm(req, path),
+          create: (module, record) =>
+            crmCreate(
+              req,
+              module,
+              audit && module === 'Policy_Revisions' ? { ...record, [audit.field]: audit.value } : record,
+              failure,
+            ),
+          update: (module, id, fields) => crmUpdate(req, module, id, fields),
+          contactId: b.contact.id,
+          dealId: recordId,
+          lines: b.lines,
+          namePrefix: revisionNamePrefix,
+        }),
+      );
+    return saved;
+  }
   // Saves a quoted insurance change as a revision in the CRM: a payable change as Quoted with draft rows, a referred one as Under Review
   // with the full request for the office. Nothing is charged and no live cover row is touched. Off until the writes switch is on.
   router.post(
@@ -644,29 +692,7 @@ function registerCheckoutRoutes(
       if (!limiter(req.portalUser.id))
         throw new HttpError(429, 'RATE_LIMIT', 'Too many requests. Please wait a moment and try again.');
       const b = await build(req, { ...inputFrom(req.body || {}), service: 'insurance_change', quote: true });
-      const revisions = b.prepared.revisions;
-      if (!revisions || !revisions.length) throw new HttpError(422, 'INVALID_REQUEST', 'Choose a change to save.');
-      // A change the member can pay for is only saved once every declaration and confirmation is answered.
-      for (const r of revisions)
-        if (r.outcome === 'PASS' && r.details.incomplete.length)
-          throw new HttpError(422, 'INCOMPLETE', [...new Set(r.details.incomplete)].join(' '));
-      const failure = 'We could not save your change. Please try again.';
-      const ids = new Map();
-      const saved = [];
-      for (const r of revisions)
-        saved.push(
-          await saveRevision({
-            ...r,
-            ids,
-            read: path => crm(req, path),
-            create: (module, record) => crmCreate(req, module, record, failure),
-            update: (module, id, fields) => crmUpdate(req, module, id, fields),
-            contactId: b.contact.id,
-            dealId: String(req.body?.recordId || ''),
-            lines: b.lines,
-            namePrefix: revisionNamePrefix,
-          }),
-        );
+      const saved = await persistRevisions(req, b, String(req.body?.recordId || ''));
       res.status(saved.every(x => x.reused) ? 200 : 201).json({ revision: saved[0], revisions: saved });
     }),
   );
@@ -987,5 +1013,43 @@ function registerCheckoutRoutes(
     }),
   );
   app.use('/portal/checkout', router);
+
+  // Entry points for the staff API (staff.js). They never read a portal user: the Contact is the one the staff member chose, looked up
+  // here by id, and the actor is the staff member the CRM vouched for. Nothing is charged and no Stripe session is made.
+  async function staffBuild(req, { contactId, body, voucherCode, waivers, applicationId, actor, service }) {
+    if (!ID.test(String(contactId || ''))) throw new HttpError(422, 'INVALID_REQUEST', 'Choose a customer.');
+    const row = (
+      await crm(req, 'Contacts/' + contactId + '?fields=' + encodeURIComponent('Email,First_Name,Last_Name'))
+    )[0];
+    if (!row || String(row.id) !== String(contactId)) throw new HttpError(404, 'NOT_FOUND', 'Customer not found.');
+    if ((voucherCode || waivers.length) && !discountsEnabled)
+      throw new HttpError(503, 'DISCOUNTS_DISABLED', 'Vouchers and waivers are not switched on.');
+    // No Creator reader is wired yet, so a voucher's use history cannot be read and a voucher fails closed (waivers need only the CRM).
+    const store = discountsEnabled ? createCrmStore({ crm, creator: undefined, req }) : undefined;
+    const b = await build(
+      req,
+      { ...inputFrom(body), ...(service ? { service } : {}), quote: true },
+      { staff: { contact: row, actor, code: voucherCode, waivers, applicationId, store } },
+    );
+    return { b, contact: { id: String(row.id), name: [row.First_Name, row.Last_Name].filter(Boolean).join(' ') } };
+  }
+  return {
+    async staffQuote(req, args) {
+      const { b, contact } = await staffBuild(req, args);
+      return { contact, quote: view(b) };
+    },
+    // Saves a quoted insurance change as a revision on behalf of the customer, as the customer's own route does, recording who saved it.
+    async staffSaveRevision(req, args) {
+      // The same gates as the customer's route: nothing is saved until insurance changes and their writes are switched on.
+      if (!insuranceChangesEnabled || !insuranceChangesWritesEnabled)
+        throw new HttpError(503, 'NOT_AVAILABLE', 'Insurance changes are not available yet.');
+      const { b, contact } = await staffBuild(req, { ...args, service: 'insurance_change' });
+      const audit = staffAuditField
+        ? { field: staffAuditField, value: clean(args.actor.name || 'Staff', 60) + ' (' + args.actor.id + ')' }
+        : null;
+      const saved = await persistRevisions(req, b, String(args.body?.recordId || ''), audit);
+      return { contact, revision: saved[0], revisions: saved, created: !saved.every(x => x.reused) };
+    },
+  };
 }
 module.exports = { registerCheckoutRoutes };
