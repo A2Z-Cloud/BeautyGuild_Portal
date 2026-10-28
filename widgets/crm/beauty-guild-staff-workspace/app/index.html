@@ -14,7 +14,7 @@
   <script type="module" src="v12-journeys.mjs?v=20261027-1"></script>
   <link rel="stylesheet" href="staff-addons.css?v=20261028-1" />
   <script src="staff-addons.js?v=20261028-1" defer></script>
-  <script src="widget.js?v=20261027-1" defer></script>
+  <link rel="stylesheet" href="staff-api-test.css?v=20261028-2" />\n  <script src="staff-api-test.js?v=20261028-2" defer></script>\n  <script src="widget.js?v=20261027-1" defer></script>
 </head>
 <body>
 <div class="shell" id="app">
@@ -35,7 +35,7 @@
   <main class="workspace">
     <header class="topbar">
       <div class="top-title"><div class="eyebrow">BEAUTY GUILD</div><h1 id="pageTitle">Staff Workspace</h1><p id="pageSubtitle">Applications and customer records</p></div>
-      <button type="button" class="button secondary" id="refreshBtn" title="Refresh current records"><span class="inline-icon" data-icon="refresh-cw"></span> Refresh</button>
+      <button type="button" class="button secondary" id="staff-api-open">Test Staff API</button>\n      <button type="button" class="button secondary" id="refreshBtn" title="Refresh current records"><span class="inline-icon" data-icon="refresh-cw"></span> Refresh</button>
     </header>
     <div class="content">
       <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
@@ -57,6 +57,16 @@
     <label for="actionDescription" id="actionDescriptionLabel">Details</label><textarea id="actionDescription" rows="5" maxlength="16000" placeholder="Add relevant details"></textarea>
     <div class="modal-actions"><button type="button" class="button secondary" id="cancelModal2">Cancel</button><button type="submit" class="button primary" id="saveAction">Save</button></div>
   </form>
+</dialog>
+<dialog id="staff-api-dialog" class="staff-api-dialog" aria-label="Staff API Development test">
+  <div class="staff-api-head"><div><h2>Staff API connection test</h2><p>Calls the existing Zoho CRM function using the embedded widget SDK. Development only.</p></div><button type="button" class="button secondary" id="staff-api-close">Close</button></div>
+  <div class="staff-api-actions"><button type="button" class="button secondary" data-staff-api-action="ping">1. Ping</button><button type="button" class="button secondary" data-staff-api-action="me">2. Me</button><button type="button" class="button primary" data-staff-api-action="quote">3. Quote</button></div>
+  <label for="staff-api-payload">Quote / MTA request JSON (only used for Quote and Save Revision)</label>
+  <textarea id="staff-api-payload" spellcheck="false" placeholder='{"contactId":"CRM_CONTACT_ID","service":"insurance_change","recordId":"CRM_MEMBERSHIP_ID","change":{}}'></textarea>
+  <p class="staff-api-warning">Quotation is read-only. Revision saving writes CRM records, so use a disposable Development policy and confirm explicitly.</p>
+  <label class="staff-api-confirm"><input type="checkbox" id="staff-api-confirm-save"/>I am testing a Development record and understand revision saving writes draft CRM records.</label>
+  <button type="button" class="button secondary" data-staff-api-action="save_revision">4. Save revision (Development only)</button>
+  <label for="staff-api-output">Response</label><pre id="staff-api-output" role="status" aria-live="polite">Ready</pre>
 </dialog>
 </body>
 </html>
