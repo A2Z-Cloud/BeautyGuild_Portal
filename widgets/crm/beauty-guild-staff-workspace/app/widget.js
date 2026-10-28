@@ -689,6 +689,20 @@
       }catch(e){j.paymentError=String(e.message||e);}
       finally{j.paymentBusy=false;render();}
     }
+    else if(action==='journey-refresh-payment'){
+      const j=state.journey;if(!j?.contact?.id)return;
+      const module=j.kind==='accreditation'?'Training_Centre_Accred':j.kind==='insurance'?'Insurance_Policy':'Deals';
+      const id=j.kind==='accreditation'?j.accreditationRecordId:j.remote?.id;
+      if(!/^\d{10,25}$/.test(String(id||''))){j.paymentError='No linked CRM application record is available yet. Open the application in CRM to check payment status.';render();return;}
+      j.paymentStatusBusy=true;j.paymentError='';render();
+      try{
+        const record=await getRecord(module,id);
+        const owner=record.Contact_Name||record.Contact||record.Applicant_Contact;
+        if(owner?.id&&String(owner.id)!==String(j.contact.id))throw Error('CRM record belongs to another Contact.');
+        j.paymentCrm={id:String(id),module,Payment_Status:record.Payment_Status??null,Application_Status:record.Application_Status??null,Application_Stage:record.Application_Stage??null,Policy_Status:record.Policy_Status??null,Stage:record.Stage??null,checkedAt:new Date().toLocaleString('en-GB')};
+      }catch(e){j.paymentError='CRM payment status could not be loaded: '+String(e.message||e);}
+      finally{j.paymentStatusBusy=false;render();}
+    }
     else if(action==='journey-copy-payment'){const url=state.journey?.paymentLink;if(url)navigator.clipboard?.writeText(url).catch(()=>setNotice('Copy failed. Open the payment link and copy it from your browser.','error'));}
     else if(action==='journey-open-payment'){const url=state.journey?.paymentLink;if(url&&/^https:\/\/checkout\.stripe\.com\//.test(url))window.open(url,'_blank','noopener,noreferrer');}
     else if(action==='journey-quote'){
