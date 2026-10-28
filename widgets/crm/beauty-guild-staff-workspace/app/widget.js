@@ -678,7 +678,8 @@
       if(!window.confirm('Create a test-mode Stripe Checkout link for this customer and the current application?'))return;
       j.paymentBusy=true;j.paymentError='';render();
       try{
-        const body={...j.answers,contactId:String(j.contact.id),service:j.kind==='membership'&&j.answers.insurance==='yes'?'combined':j.kind,accepted:'yes'};
+        const body={...window.BGJourney12.apiRequest(j),accepted:'yes'};
+        if(j.lastQuoteInputs&&JSON.stringify(window.BGJourney12.apiRequest(j))!==j.lastQuoteInputs)throw Error('Answers changed after quotation. Calculate a fresh quote before generating a link.');
         const response=await window.BGStaffApi.call('payment_link',body);
         if(response?.alreadyPaid){j.paymentAlreadyPaid=true;j.paymentLink='';}
         else if(/^https:\/\/checkout\.stripe\.com\//.test(response?.checkoutUrl||''))j.paymentLink=response.checkoutUrl;
@@ -695,13 +696,12 @@
       try{
         if(!window.BGStaffApi?.call)throw Error('Signed staff API integration unavailable.');
         const kind=j.kind;
-        // The existing Portal V2 quote engine remains the authority; input keys are passed unchanged.
-        const payload={...j.answers,contactId:String(j.contact.id),service:kind};
-        if(payload.insurance==='yes'&&kind==='membership')payload.service='combined';
+        const base=window.BGJourney12.apiRequest(j);
+        const payload={...base};
         if(window.BGStaffAddons?.quoteInputs&&kind==='membership')Object.assign(payload,window.BGStaffAddons.quoteInputs());
         const result=await window.BGStaffApi.call('quote',payload);
         if(result?.error||result?.ok===false||!result?.quote)throw Error(result?.message||result?.error||'No authoritative quote returned by the Staff API.');
-        j.liveQuote=result;j.lastQuoteInputs=JSON.stringify(payload);
+        j.liveQuote=result;j.lastQuoteInputs=JSON.stringify(base);
       }catch(error){j.quoteError=String(error?.message||error);}
       finally{j.quotePending=false;render();}
     }
