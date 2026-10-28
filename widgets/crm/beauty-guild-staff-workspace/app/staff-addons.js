@@ -143,7 +143,7 @@ async function payment(){
 }
 function validate(){const out=$('staff-discount-outcome');if(!out)return;if(state.waiver&&!state.reason)out.textContent='Choose a waiver reason.';else if(state.waiver&&state.reason==='Other'&&!state.note.trim())out.textContent='Add a note for Other.';else out.textContent='Inputs captured. Final eligibility, discount and pricing must be verified by the signed quote.';}
 document.addEventListener('input',event=>{const f=event.target.dataset?.staffField;if(f&&Object.prototype.hasOwnProperty.call(state,f))state[f]=event.target.value;});
-document.addEventListener('change',event=>{const f=event.target.dataset?.staffField;if(f&&Object.prototype.hasOwnProperty.call(state,f))state[f]=event.target.value;if(event.target.id==='staff-mta-type')specific();if(event.target.closest('#staff-addon-dialog')&&state.quote&&event.target.id!=='staff-mta-save'){state.quote=null;const b=$('staff-mta-save');if(b)b.disabled=true;}});
+document.addEventListener('change',event=>{const f=event.target.dataset?.staffField;if(f&&Object.prototype.hasOwnProperty.call(state,f))state[f]=event.target.value;if(event.target.id==='staff-mta-type')specific();if(event.target.closest('#staff-addon-dialog')&&state.mode==='mta'&&event.target.id!=='staff-mta-accepted'){state.quote=null;state.payload=null;state.savedRevision=null;state.checkoutUrl='';const save=$('staff-mta-save'),pay=$('staff-mta-payment');if(save)save.disabled=true;if(pay)pay.disabled=true;const out=$('staff-mta-payment-result');if(out)out.textContent='The change was edited. Obtain a new quotation and save the revision before payment.';}});
 document.addEventListener('click',event=>{
  const b=event.target.closest('[data-staff-addon]');if(!b)return;
  const a=b.dataset.staffAddon;
