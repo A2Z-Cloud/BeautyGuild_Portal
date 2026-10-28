@@ -16,7 +16,6 @@ Set on the function (the deploy script sends them; values are never committed).
 | `PORTAL_STAFF_API_ENABLED` | Switch | `true` turns the routes on. Anything else: the routes do not exist (404). **Default off** |
 | `STAFF_API_SECRET` | Secret | The signing secret. At least 32 characters. Required when the switch is on, otherwise the function refuses to start |
 | `STAFF_API_SECRET_PREVIOUS` | Secret | Optional. The retiring secret during a rotation. Either secret is accepted |
-| `PORTAL_STAFF_AUDIT_FIELD` | Setting | API name of a single line text field on `Policy_Revisions` that records the staff member on a staff save. Unset: not written |
 | `PORTAL_STAFF_API_ROLES` | Setting | Comma separated CRM **profile or role names** allowed to use the API, for example `Administrator, Standard` (the roles agreed on 28 October 2026). Matched case-insensitively. **Empty allows nobody** |
 | `PORTAL_STAFF_API_WINDOW_SECONDS` | Setting | How far the request time may differ from the function's clock. Default 300, between 30 and 600 |
 
@@ -113,9 +112,9 @@ Prices for a Contact the staff member chose. **Nothing is charged, saved or sent
 `voucherCode` and `waivers` return `503 DISCOUNTS_DISABLED` while `PORTAL_DISCOUNTS_ENABLED` is off. The response is `{ "requestId", "contact": { "id", "name" }, "quote": { ... } }`, where `quote` is the same shape as the customer's quote.
 
 ### `POST /staff/insurance-change/revision`
-Saves a quoted insurance change as a revision for the Contact, as the customer's own route does (a payable change as Quoted with draft rows, a referred one as Under Review). **No payment.** Same body as `/staff/quote` with `service` forced to `insurance_change`, plus `recordId` (the membership). Refused with `503 NOT_AVAILABLE` until `PORTAL_INSURANCE_CHANGES_ENABLED` and `PORTAL_INSURANCE_CHANGES_WRITES` are on. Responds `201` with `{ revision, revisions, contact, created: true }`, or `200` when the same change was already saved.
+Saves a quoted insurance change as a revision for the Contact, as the customer's own route does (a payable change as Quoted with draft rows, a referred one as Under Review). **No payment.** Same body as `/staff/quote` with `service` forced to `insurance_change`, plus `recordId` (the membership). Refused with `503 NOT_AVAILABLE` until `PORTAL_INSURANCE_CHANGES_ENABLED` and `PORTAL_INSURANCE_CHANGES_WRITES` are on. Responds `201` with `{ revision, revisions, contact, created: true, auditNote: true }`, or `200` when the same change was already saved.
 
-**Who saved it.** If `PORTAL_STAFF_AUDIT_FIELD` names a **single line text** field on `Policy_Revisions`, it is set to `Sam Staff (<CRM user id>)`. The function connection writes the record, so the CRM's own `Modified_By` shows the connection's user, not the staff member: do not rely on it. The function log has a `staff_request` line for every call either way.
+**Who saved it.** Each new revision gets a CRM **Note** ("Saved by Sam Staff (CRM user id) through the Staff Workspace", with the quote reference and status). The function connection writes the record, so the CRM's own `Modified_By` shows the connection's user, not the staff member; the Note is the record. The revision is saved first: if the Note fails the response is still `201` with `"auditNote": false` and the failure is logged. The connection needs permission to create notes (`ZohoCRM.modules.ALL`, or `ZohoCRM.modules.notes.CREATE`). The Note payload shape is **unverified against the CRM**: check one in Development. The function log has a `staff_request` line for every call either way.
 
 Both routes limit each staff user to 60 calls a minute (best effort).
 

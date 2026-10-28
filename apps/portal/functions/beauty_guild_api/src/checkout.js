@@ -41,8 +41,6 @@ function registerCheckoutRoutes(
     insuranceChangesWritesEnabled = false,
     insuranceChangesPaymentEnabled = false,
     revisionNamePrefix = '',
-    // CRM text field on Policy_Revisions that records which staff member saved the revision. Unset: not written (the function log still has it).
-    staffAuditField = '',
     enabled,
     getCurrentUser,
     getCrmHeaders,
@@ -650,7 +648,7 @@ function registerCheckoutRoutes(
     }),
   );
   // Saves the revisions of a priced insurance change. Shared by the customer route and the staff route; `audit` is {field, value} for staff.
-  async function persistRevisions(req, b, recordId, audit = null) {
+  async function persistRevisions(req, b, recordId) {
     const revisions = b.prepared.revisions;
     if (!revisions || !revisions.length) throw new HttpError(422, 'INVALID_REQUEST', 'Choose a change to save.');
     // A change the member can pay for is only saved once every declaration and confirmation is answered.
@@ -666,13 +664,7 @@ function registerCheckoutRoutes(
           ...r,
           ids,
           read: path => crm(req, path),
-          create: (module, record) =>
-            crmCreate(
-              req,
-              module,
-              audit && module === 'Policy_Revisions' ? { ...record, [audit.field]: audit.value } : record,
-              failure,
-            ),
+          create: (module, record) => crmCreate(req, module, record, failure),
           update: (module, id, fields) => crmUpdate(req, module, id, fields),
           contactId: b.contact.id,
           dealId: recordId,
@@ -1044,11 +1036,38 @@ function registerCheckoutRoutes(
       if (!insuranceChangesEnabled || !insuranceChangesWritesEnabled)
         throw new HttpError(503, 'NOT_AVAILABLE', 'Insurance changes are not available yet.');
       const { b, contact } = await staffBuild(req, { ...args, service: 'insurance_change' });
-      const audit = staffAuditField
-        ? { field: staffAuditField, value: clean(args.actor.name || 'Staff', 60) + ' (' + args.actor.id + ')' }
-        : null;
-      const saved = await persistRevisions(req, b, String(args.body?.recordId || ''), audit);
-      return { contact, revision: saved[0], revisions: saved, created: !saved.every(x => x.reused) };
+      const saved = await persistRevisions(req, b, String(args.body?.recordId || ''));
+      // Who saved it: a CRM Note on each new revision. The connection writes the record, so the CRM's own Modified_By is the connection's
+      // user. The revision is already saved, so a note that fails is reported (auditNote: false) and logged, never turned into an error.
+      let auditNote = true;
+      for (const r of saved.filter(x => !x.reused)) {
+        try {
+          await crmCreate(
+            req,
+            'Notes',
+            {
+              Note_Title: 'Saved by staff',
+              Note_Content: [
+                'Saved by ' +
+                  clean(args.actor.name || 'Staff', 80) +
+                  ' (CRM user ' +
+                  args.actor.id +
+                  ') through the Staff Workspace.',
+                'Quote ' + (r.quoteId || '') + ', status ' + r.status + '.',
+                new Date(now()).toISOString(),
+              ].join('\n'),
+              Parent_Id: { module: { api_name: 'Policy_Revisions' }, id: r.id },
+            },
+            'note',
+          );
+        } catch {
+          auditNote = false;
+          console.warn(
+            JSON.stringify({ event: 'staff_audit_note_failed', staffUserId: args.actor.id, revisionId: r.id }),
+          );
+        }
+      }
+      return { contact, revision: saved[0], revisions: saved, created: !saved.every(x => x.reused), auditNote };
     },
   };
 }

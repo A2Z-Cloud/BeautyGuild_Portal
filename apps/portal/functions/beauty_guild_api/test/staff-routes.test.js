@@ -163,29 +163,38 @@ test('a staff waiver takes the joining fee off the quote, as the approved staff 
   assert.equal(w.crmPosts.length, 0, 'a quote records nothing');
 });
 
-test('a staff revision save writes the same revision the customer route would, and records who saved it', async () => {
+test('a staff revision save writes the revision and a Note naming the staff member on it', async () => {
   const w = fixture();
   await withStaff(
     w,
     async ({ call }) => {
       const r = await call('/staff/insurance-change/revision', asked());
       assert.equal(r.status, 201, JSON.stringify(r.body));
-      assert.ok(r.body.revision);
-      const [rev] = posts(w, 'Policy_Revisions');
-      assert.equal(rev.Staff_Actor, 'Sam Staff (' + STAFF + ')');
+      assert.equal(r.body.auditNote, true);
+      const [note] = posts(w, 'Notes');
+      assert.match(note.Note_Content, /Sam Staff/);
+      assert.match(note.Note_Content, new RegExp(STAFF));
+      assert.equal(note.Parent_Id.module.api_name, 'Policy_Revisions');
+      assert.equal(note.Parent_Id.id, r.body.revision.id);
     },
-    { ...WRITES, PORTAL_STAFF_AUDIT_FIELD: 'Staff_Actor' },
+    WRITES,
   );
 });
 
-test('with no audit field set, the revision still saves and carries no extra field', async () => {
+test('if the Note cannot be written the revision stays saved and the response says so', async () => {
   const w = fixture();
+  const base = w.fetchImpl;
+  w.fetchImpl = async (url, init = {}) =>
+    init.method === 'POST' && String(url).includes('/crm/v3/Notes')
+      ? { status: 500, ok: false, json: async () => ({}) }
+      : base(url, init);
   await withStaff(
     w,
     async ({ call }) => {
       const r = await call('/staff/insurance-change/revision', asked());
       assert.equal(r.status, 201, JSON.stringify(r.body));
-      assert.equal(Object.keys(posts(w, 'Policy_Revisions')[0]).includes('Staff_Actor'), false);
+      assert.equal(r.body.auditNote, false);
+      assert.equal(posts(w, 'Policy_Revisions').length, 1);
     },
     WRITES,
   );
