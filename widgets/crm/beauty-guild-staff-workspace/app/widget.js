@@ -608,7 +608,7 @@
     else if(action==='journey-load-draft'){
       const j=state.journey;if(!j?.contact?.id)return;
       const id=el.dataset.id,service=el.dataset.service;
-      if(!/^[a-z_]+$/.test(service||'')||!/^\\d{10,25}$/.test(id||''))return;
+      if(!/^[a-z_]+$/.test(service||'')||!/^\d{10,25}$/.test(id||''))return;
       j.draftsBusy=true;j.draftsError='';render();
       try{
         const out=await window.BGStaffApi.call('drafts_get',{contactId:String(j.contact.id),service,id});
@@ -643,13 +643,13 @@
         const body={...j.answers,contactId:String(j.contact.id),service:j.kind==='membership'&&j.answers.insurance==='yes'?'combined':j.kind,accepted:'yes'};
         const response=await window.BGStaffApi.call('payment_link',body);
         if(response?.alreadyPaid){j.paymentAlreadyPaid=true;j.paymentLink='';}
-        else if(/^https:\\/\\/checkout\\.stripe\\.com\\//.test(response?.checkoutUrl||''))j.paymentLink=response.checkoutUrl;
+        else if(/^https:\/\/checkout\.stripe\.com\//.test(response?.checkoutUrl||''))j.paymentLink=response.checkoutUrl;
         else throw Error('The server did not return a valid Stripe Checkout URL.');
       }catch(e){j.paymentError=String(e.message||e);}
       finally{j.paymentBusy=false;render();}
     }
     else if(action==='journey-copy-payment'){const url=state.journey?.paymentLink;if(url)navigator.clipboard?.writeText(url).catch(()=>setNotice('Copy failed. Open the payment link and copy it from your browser.','error'));}
-    else if(action==='journey-open-payment'){const url=state.journey?.paymentLink;if(url&&/^https:\\/\\/checkout\\.stripe\\.com\\//.test(url))window.open(url,'_blank','noopener,noreferrer');}
+    else if(action==='journey-open-payment'){const url=state.journey?.paymentLink;if(url&&/^https:\/\/checkout\.stripe\.com\//.test(url))window.open(url,'_blank','noopener,noreferrer');}
     else if(action==='journey-quote'){
       const j=state.journey;
       if(!j?.contact?.id||!j.kind||j.quotePending)return;
