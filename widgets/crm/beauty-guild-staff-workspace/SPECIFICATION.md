@@ -1,6 +1,6 @@
 # Beauty Guild Staff Workspace | Functional and UX Specification
 
-**Document version:** 2.2 (shared staff/customer journey clarification, 20 October 2026)  
+**Document version:** 2.3 (28 October 2026, full Staff Workspace including payment links and status)  
 **Product:** Zoho CRM Staff Workspace widget  
 **Location:** BeautyGuild_Portal / widgets / crm / beauty-guild-staff-workspace  
 **Audience:** Solution architecture, CRM and Catalyst developers, design, QA, delivery and customer reviewers  
@@ -40,14 +40,14 @@ The widget must **not** become a second source of truth or a replacement for Zoh
 | SW-11 | Assisted creation | Search for an existing CRM Contact or create one before starting; complete the **same Portal V2 journey** for that Contact, with conditional forms, existing quote rules and CRM record mappings | Agreed / P1 |
 | SW-12 | Cross-channel draft lifecycle | Persist one CRM-backed application under the selected Contact; staff can save/resume in the CRM widget and the same customer can register/sign in to Portal V2 and resume the **same draft** at the correct step. Support the reverse hand-off, revision checks and no duplicate applications | Agreed / P1; cross-channel integration and testing required |
 | SW-13 | Declarations and evidence | Store staff-captured responses with source and audit; customer confirmation required for sensitive/legal declarations where the business process requires it | Agreed / P1, detailed mapping required |
-| SW-14 | Payment-link generation | Use existing Portal V2 server-side quote and Stripe Checkout session logic to generate/reuse a **customer-specific payment link**; staff can copy, send or open the link during a call. After payment, the existing Creator-to-CRM process continues. Do not build a separate payment or rating engine | Agreed / P1; same-system integration, Creator webhook verification |
+| SW-14 | Payment-link generation and verified status | Reuse existing Portal V2 quote and Stripe Checkout session logic for selected customer; generate/reuse/copy/open secure payment URL, show expired/already-paid states and refresh authoritative CRM/payment status. Applies to supported Membership, Insurance, Accreditation and eligible MTA journeys, with discounts only when validated by server-side pricing. No separate payment/rating engine and no card entry in widget | **Required for complete V1.2 / P0**; Development Stripe end-to-end verification required. Creator implementation outside Staff Workspace scope |
 | SW-15 | Risk and processing flags | Surface genuine underwriting/referral, missing evidence, exceptions and failures as permitted; use actual CRM risk fields, not derived assumptions | Agreed / P1 |
 | SW-16 | Permissions and audit | Apply staff role/CRM permissions and service-side authorisation; log meaningful staff draft actions, declaration capture and integrations | Agreed / P0 |
 | SW-17 | Resilience | Loading, partial data, empty, permissions, API failures, stale revisions, rate limits and connection issues must be visible and actionable | Agreed / P0 |
 | SW-18 | Portal V2 design parity | One coherent design system with matching brand colours, fonts, Lucide icon mapping, status styling and responsive layouts | Proposed UX / P0 |
 | SW-19 | Deep-link/navigation context | Support CRM record context and preserve in-widget location, active tab, queue page, search/filter/sort, scroll and unfinished creation state where safe | Agreed / P0 |
 
-P0 is necessary for a credible processing workspace. P1 is part of the wider agreed V1 functional scope, but any unverified write operation must remain disabled until technical acceptance. Deferred payment work must not block read-only processing.
+P0 is necessary for a complete processing workspace, now including staff payment-link generation and verified payment status. P1 remains within agreed functional scope, but any unverified write operation must remain disabled until technical acceptance. Payment actions remain gated by service-side eligibility, quote freshness, permission and Development test validation.
 
 ## 3. Navigation and information architecture
 
@@ -265,7 +265,7 @@ The primary UX has three **macro stages**:
 
 **Important implementation nuance:** The Portal V2 Accreditation draft currently persists its linked CRM record set, while Membership/Insurance drafts use the Journey ID plus CRM Note state. Both must round-trip through the **same existing service-specific representation** when the actor changes. Do not claim seamless cross-channel hand-off is already live until tested end-to-end.
 
-## 7. Payments and post-payment processing (payment link integration)
+## 7. Payments in the Staff Workspace (required V1.2)
 
 **Confirmed requirement:** The Staff Workspace **generates a Stripe payment link**, using the exact quotation and checkout process already implemented for Portal V2. Staff can copy, share or open the link while assisting the customer on a call. **No separate MOTO product, new card-entry form, separate pricing engine or second payment workflow is requested.**
 
@@ -274,10 +274,10 @@ The primary UX has three **macro stages**:
 3. Return and display the **Stripe Checkout URL** associated with the customer's application. Allow **Copy link**, optional approved customer email, and **Open link**; reuse an existing open session where appropriate and show expired/already-paid states. When staff use the link with a customer during a call, the card entry takes place on the existing Stripe payment screen, **not** in widget fields or CRM notes. Existing business card-handling policy still applies.
 4. Ensure Stripe's `customer_email`, `client_reference_id` and Creator-facing metadata identify the **customer**, not the CRM staff member. Keep staff identity separately for audit. Do not impersonate the customer in Catalyst to bypass Contact ownership checks.
 5. Once Stripe reports successful payment, **the existing Creator webhook and CRM automations** handle status updates, Membership/Accreditation/Insurance fulfilment and documentation according to the service's established flow. The widget refreshes and displays the resulting CRM state; it must not manually mark Paid or Active.
-6. Verify the actual Creator webhook branches for Membership, Accreditation, standalone Insurance and combined Membership + Insurance, and validate Stripe session reuse/expiry and payment reconciliation before live payments.
+6. In Development, verify Stripe session creation/reuse/expiry, amounts, correct customer/application references, paid/already-paid outcomes and CRM payment status reconciliation for Membership, Accreditation, standalone Insurance, combined Membership + Insurance and payable MTA where supported. Treat downstream processors as external integrations; their implementation is not a Staff Workspace task.
 7. Do not introduce a new payment mechanism as part of this widget. If current Stripe/Catalyst configuration has restrictions (such as test-only checkout), validate/configure the **existing** system rather than duplicating it.
 
-**Architecture:** Staff-assisted and customer-self-service applications use **one set of Portal V2 journey rules, one CRM draft, one server-side quote, one Stripe Checkout session and the existing Creator-to-CRM post-payment process**. The only new surface is the Staff Workspace entry point and authorised staff/customer context hand-off.
+**Architecture:** Staff-assisted and customer-self-service applications use **one set of Portal V2 journey rules, one CRM draft, one server-side quote and one Stripe Checkout session**. The widget initiates authorised checkout and reads authoritative payment status; existing downstream settlement/fulfilment integrations are outside its implementation scope. The only new service boundary is the staff-authorised customer context and payment action.
 
 ## 8. Portal V2-aligned visual specification
 
@@ -312,7 +312,7 @@ The primary UX has three **macro stages**:
 
 **Catalyst services:** authoritative server-side journey, catalogue, quotation, underwriting and Stripe session logic when enabled and validated.
 
-**Zoho Creator:** post-payment/webhook and related business processing as defined by existing integrations.
+**External downstream services:** existing post-payment/webhook and business processing remain integration dependencies. Their implementation and redesign are not included in the Staff Workspace build.
 
 **CRM:** system of record for Contacts, Accounts, applications, statuses, layouts, related records, workflow/Blueprint/custom actions, permissions and audit.
 
@@ -362,7 +362,7 @@ Do not store API keys, tokens, Stripe secrets or unrestricted service credential
 | A15 | Offline/API errors and page limits | Honest error or partial-data warning and functional retry |
 | A16 | Browser narrow width and keyboard | Usable navigation, actions, focus and forms |
 | A17 | Official Zoho widget upload | ZET validate/pack, successful installation and live test |
-| A18 | Staff generates Stripe payment link | Existing Portal V2 quote and Checkout session reused; correct selected customer metadata, copy/open link, no new payment integration, Creator webhook updates CRM |
+| A18 | Staff generates Stripe payment link | Existing Portal V2 quote and Checkout session reused; correct selected customer metadata, copy/open link, no new payment engine; verified payment state refreshed from authoritative source |
 | A19 | Open Insurance record with new fields | Exact API mapping and display of Member Gate, Sanctions, Manual Review, Next Action and Document Status |
 | A20 | Gate matrix across incomplete screening and underwriting | Missing/Not Checked/Review/Error/Stop/Not Assessed outcomes cannot silently activate or issue cover |
 | A21 | Payment marked Paid without verified settlement | Does not imply authoritative payment or issue; fulfilment relies on verified backend outcome |
@@ -388,7 +388,7 @@ For unsupported/unfinished features, UAT must record **not ready**, rather than 
 - Confirm whether staff can create Contacts/Accounts from the widget and which deduplication rules apply.
 - Implement the **confirmed shared staff/customer application hand-off** using current Portal V2 draft adapters (Accreditation linked records versus Membership/Insurance Journey ID + Note state). Test staff-start/customer-resume and customer-start/staff-resume, new Contact registration, account email matching, revision conflicts and deduplication. These are integration tests, not new business-process design decisions.
 - Agree the staff declaration attestation vs customer-confirmed evidence requirements with Guild/insurance stakeholders.
-- Implement a narrowly authorised CRM staff context for the **same existing** Catalyst pricing/quote/Checkout code, resolving the staff-selected customer Contact and keeping customer identifiers in Stripe/Creator metadata. Confirm existing Creator webhook compatibility and the existing Stripe payment-link configuration; **no separate MOTO integration**.
+- Implement a narrowly authorised CRM staff context for the **same existing** Catalyst pricing/quote/Checkout code, resolving the staff-selected customer Contact and keeping customer identifiers in Stripe session metadata. Confirm the existing payment-status integration and checkout configuration without building downstream payment processors; **no separate MOTO integration**.
 - Confirm WorkDrive/CRM email/document access, record visibility and paging.
 - Resolve **INS-G01–INS-G12** against the new Insurance Deluge functions: explicit underwriting/sanctions/member eligibility clearance, verified payment provenance, quote version/reprice gate, reliable screening precedence, reviewer audit, document approval, and incomplete-quote schedule.
 - Agree whether a paid-but-not-activated policy may have a Payment_Status of Paid while blocked; show this as a processing exception without automatically reversing financial state.
@@ -415,3 +415,10 @@ For unsupported/unfinished features, UAT must record **not ready**, rather than 
 **Prior widget source:** separately supplied Staff Workspace candidate kit and the existing [widget README](README.md). The above links describe the source being used for UX and integration alignment. They do not prove the CRM widget is already built or deployed.
 
 **Change control:** update this specification when any workflow, technical boundary, pagination rule, draft mapping or status vocabulary changes. Obtain approval before implementation of new privileged actions or integrations.
+
+
+## V1.2 scope amendment: payment completion (28 October 2026)
+
+This amendment supersedes earlier V1.2 Build Brief language that stopped at a disabled payment button. The **full Staff Workspace** must support CRM customer selection, Membership/Insurance/Accreditation applications, MTA, vouchers and authorised waivers; shared save/resume; checks; authoritative quotes; customer-specific Stripe Checkout link creation/reuse; and verification/display of payment outcome. Staff can copy or open a payment URL, but must never collect card details inside the widget or manually mark a policy Paid/Active. REFER, STOP, INCOMPLETE, ERROR and stale/unavailable validations must not become payable.
+
+The Staff API is an adapter over existing Portal V2 pricing, CRM draft, underwriting and Stripe checkout logic, not a second implementation. Required surfaces include staff application create/read/update, assessment/history, quote, checkout create/resume and verified payment-status read. Exact routes may differ if equivalent capabilities already exist; do not duplicate them. Test-mode Stripe end-to-end acceptance is required before classing this milestone as complete. Creator implementation, downstream invoicing/Books sync and production live-charge cutover are explicitly excluded from this Staff Workspace workstream.
