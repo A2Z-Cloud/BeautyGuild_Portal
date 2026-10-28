@@ -14,6 +14,7 @@ const { registerDraftRoutes } = require('./crmDrafts');
 const { registerSchoolRoutes } = require('./schoolServices');
 const { registerStaffRoutes } = require('./staff');
 const { createRiskChecks } = require('./riskChecks');
+const { readBuildInfo } = require('./buildInfo');
 
 const TEXT_MIN = 3;
 const TEXT_MAX = 100;
@@ -41,6 +42,7 @@ function createApp({
   getAnalyticsHeaders,
   accreditationSleep,
   discountRequestFor = null,
+  buildInfo = readBuildInfo(),
 }) {
   const loqate = createLoqate({ config, fetchImpl, log });
   const courses = createCourses({ config, getCrmHeaders, fetchImpl, now, log });
@@ -79,7 +81,8 @@ function createApp({
       ? next()
       : next(new HttpError(429, 'RATE_LIMIT', 'Too many requests. Please wait a moment and try again.'));
 
-  app.get('/health', (req, res) => res.json({ ok: true }));
+  // `build` says which commit was deployed (see buildInfo.js), so a stale deployment can be told from a current one.
+  app.get('/health', (req, res) => res.json({ ok: true, ...(buildInfo ? { build: buildInfo } : {}) }));
 
   app.get(
     '/courses',

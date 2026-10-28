@@ -22,6 +22,17 @@ fi
 if [ ! -d "$FN_MODULES/express" ]; then
   echo "Refusing to deploy: $FN_MODULES is missing or incomplete. Run: cd functions/beauty_guild_api && npm ci" >&2; exit 1
 fi
+# The Development function is shared, and a deploy replaces all of it. A checkout that is behind main would silently put older code live
+# (and wipe newer settings), so refuse unless this checkout contains the latest origin/main. Override only on purpose: BGV2_ALLOW_STALE=1.
+if [ "${BGV2_ALLOW_STALE:-}" != "1" ]; then
+  git fetch -q origin main 2>/dev/null || echo "Warning: could not fetch origin/main, so the check that this checkout is up to date was skipped." >&2
+  if git rev-parse -q --verify origin/main >/dev/null && ! git merge-base --is-ancestor origin/main HEAD; then
+    echo "Refusing to deploy: this checkout does not include the latest origin/main ($(git rev-parse --short=8 origin/main)). Update it first (git pull), or set BGV2_ALLOW_STALE=1 if you really mean to deploy older code." >&2; exit 1
+  fi
+fi
+COMMIT="$(git rev-parse --short=8 HEAD)"
+if [ -n "$(git status --porcelain -- functions/beauty_guild_api)" ]; then DIRTY=true; else DIRTY=false; fi
+BUILD_INFO="functions/beauty_guild_api/build-info.json"
 ENV_FILE="${BGV2_ENV_FILE:-$HOME/Documents/GitHub/BGV2-env/Key-Development-Value.txt}"
 CONFIG="functions/beauty_guild_api/catalyst-config.json"
 FLAGS_FILE="${BGV2_FLAGS_FILE:-$HOME/Documents/GitHub/BGV2-env/feature-flags.env}"
@@ -41,7 +52,7 @@ fi
 
 BACKUP="$(mktemp)"
 cp "$CONFIG" "$BACKUP"
-restore() { cp "$BACKUP" "$CONFIG"; rm -f "$BACKUP"; }
+restore() { cp "$BACKUP" "$CONFIG"; rm -f "$BACKUP" "$BUILD_INFO"; }
 trap restore EXIT
 
 ENV_FILE="$ENV_FILE" FLAGS_FILE="$FLAGS_FILE" CONFIG="$CONFIG" ALLOWED="$ALLOWED" FLAG_NAMES="$FLAG_NAMES" node -e '
@@ -64,5 +75,10 @@ fs.writeFileSync(process.env.CONFIG, JSON.stringify(config, null, 2) + "\n");
 console.log("Sending variables:", Object.keys(vars).join(", ") || "(none)");
 '
 
+# Say which commit this deployment is, so GET /health can report it (removed again by restore).
+printf '{"commit":"%s","dirty":%s,"builtAt":"%s"}\n' "$COMMIT" "$DIRTY" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$BUILD_INFO"
+
 catalyst deploy --only functions
 echo "Done. $CONFIG restored (no secrets left in the repo)."
+# Do not trust "deployment successful": ask the live function what it is running.
+"$(dirname "$0")/verify-function.sh" "$COMMIT"

@@ -74,3 +74,13 @@ also keeps the existing values, but the script is the way to change them.
 Then check `https://<project-domain>/server/beauty_guild_api/health`. Build the client with
 `VITE_DATA_MODE=api VITE_API_BASE_URL=/server/beauty_guild_api VITE_ENABLED_LEGACY_APIS=courses,address`
 to use these routes from the portal.
+
+The script refuses to deploy from a checkout that does not include the latest `origin/main`, because the Development function is shared and a deploy replaces all of it: an older checkout would silently put older code live. It stamps the deployment with the commit it was built from, and after deploying it asks the live function what it is running (`GET /health` returns `build.commit`) and fails loudly if that is not what it just deployed.
+
+To check at any time whether the live function is the version you expect (for example if the staff routes suddenly return 404):
+
+~~~sh
+scripts/verify-function.sh               # expects the latest origin/main
+scripts/verify-function.sh 1a2b3c4d      # expects that commit
+~~~
+
