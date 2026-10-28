@@ -399,6 +399,9 @@ function registerStaffRoutes(
 
   // Prices only: nothing is charged, saved or sent. Also the assessment: insurance answers come back as a decision or a referral.
   router.post('/quote', authenticate, requireStaff, priced('/quote', 'staffQuote'));
+  // A Stripe Checkout link for the customer (test mode, its own switch). Same body as /staff/quote. Returns `checkoutUrl` for the staff member to
+  // send; the session identifies the customer, not the staff member.
+  router.post('/payment-link', authenticate, requireStaff, priced('/payment-link', 'staffPaymentLink'));
   // Saves a quoted insurance change as a revision (no payment), recording the staff member. Safe to repeat: the same change saves once.
   router.post(
     '/insurance-change/revision',

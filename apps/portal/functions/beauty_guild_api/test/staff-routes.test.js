@@ -331,3 +331,107 @@ test('staff read membership options and cover for a Contact, and both are read o
   );
   assert.equal(w.crmPosts.length, 0, 'reads write nothing');
 });
+
+// ---- Staff payment link ----
+const LINKS = { PORTAL_STAFF_PAYMENT_LINKS_ENABLED: 'true' };
+// Paying needs the customer's acceptance of the Code of Ethics and terms (the checkout rule), which the widget captures from the customer.
+const PAY = { ...MEMBERSHIP, accepted: 'yes' };
+
+test("a staff payment link is the customer's own checkout: the Checkout email and references are the customer, never the staff member", async () => {
+  const w = newCustomer();
+  await withStaff(
+    w,
+    async ({ call }) => {
+      const r = await call('/staff/payment-link', PAY);
+      assert.equal(r.status, 201, JSON.stringify(r.body));
+      assert.match(r.body.checkoutUrl, /^https:\/\/checkout\.stripe\.com\//);
+      assert.equal(r.body.contact.id, IDS.me);
+    },
+    LINKS,
+  );
+  assert.equal(w.stripePosts.length, 1, 'one Checkout Session');
+  const text = w.stripePosts[0].params.toString();
+  assert.equal(w.stripePosts[0].params.get('customer_email'), 'alice@example.test');
+  assert.equal(w.stripePosts[0].params.get('client_reference_id'), IDS.me);
+  assert.equal(w.stripePosts[0].params.get('metadata[email]'), 'alice@example.test');
+  for (const staff of [STAFF, 'Sam Staff', 'sam@beautyguild.com', 'staff%3A'])
+    assert.equal(text.includes(staff), false, 'the staff member is not in the Stripe request: ' + staff);
+});
+
+test('a staff payment link is off by default, needs the customer email, and keeps every checkout rule', async () => {
+  const w = newCustomer();
+  await withStaff(w, async ({ call }) => {
+    const off = await call('/staff/payment-link', PAY);
+    assert.equal(off.status, 503);
+    assert.equal(off.body.code, 'NOT_AVAILABLE');
+  });
+  assert.equal(w.stripePosts.length, 0);
+  // Test mode only, as for every checkout.
+  await withStaff(
+    w,
+    async ({ call }) => {
+      assert.equal((await call('/staff/payment-link', PAY)).status, 503);
+    },
+    { ...LINKS, STRIPE_SECRET_KEY: 'sk_live_not_allowed' },
+  );
+  assert.equal(w.stripePosts.length, 0);
+  // A Contact with no email cannot be sent a link.
+  const noEmail = newCustomer();
+  const base = noEmail.fetchImpl;
+  noEmail.fetchImpl = async (url, init = {}) =>
+    String(url).match(/Contacts\/\d+\?fields=/)
+      ? json({ data: [{ id: IDS.me, First_Name: 'Alice', Last_Name: 'Test' }] })
+      : base(url, init);
+  await withStaff(
+    noEmail,
+    async ({ call }) => {
+      const r = await call('/staff/payment-link', PAY);
+      assert.equal(r.status, 422);
+      assert.equal(r.body.code, 'NO_EMAIL');
+    },
+    LINKS,
+  );
+  assert.equal(noEmail.stripePosts.length, 0);
+  // The same rules as a customer: a membership the Contact already holds is not sold again.
+  await withStaff(
+    fixture(),
+    async ({ call }) => {
+      const r = await call('/staff/payment-link', PAY);
+      assert.equal(r.status, 409);
+      assert.equal(r.body.code, 'MEMBERSHIP_EXISTS');
+    },
+    LINKS,
+  );
+  // A voucher or waiver is refused on a link until its records and reservation exist, so none can be used twice.
+  const discounted = newCustomer();
+  await withStaff(
+    discounted,
+    async ({ call }) => {
+      const waiver = await call('/staff/payment-link', {
+        ...PAY,
+        waivers: [{ sku: 'MEM-JOIN', reason: 'Goodwill Gesture' }],
+      });
+      assert.equal(waiver.status, 422);
+      assert.equal(waiver.body.code, 'DISCOUNTS_NOT_ON_LINKS');
+      assert.equal((await call('/staff/payment-link', { ...PAY, voucherCode: 'WELCOME' })).status, 422);
+    },
+    { ...LINKS, PORTAL_DISCOUNTS_ENABLED: 'true' },
+  );
+  assert.equal(discounted.stripePosts.length, 0);
+  // The customer's acceptance is required, as for any payment.
+  await withStaff(
+    newCustomer(),
+    async ({ call }) => {
+      assert.equal((await call('/staff/payment-link', MEMBERSHIP)).status, 422);
+    },
+    LINKS,
+  );
+  // Unsigned.
+  await withStaff(
+    newCustomer(),
+    async ({ call }) => {
+      assert.equal((await call('/staff/payment-link', PAY, { secret: 'x'.repeat(40) })).status, 401);
+    },
+    LINKS,
+  );
+});

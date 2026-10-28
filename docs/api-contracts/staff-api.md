@@ -108,7 +108,7 @@ Prices for a Contact the staff member chose. **Nothing is charged, saved or sent
 | --- | --- |
 | `contactId` | Required. A CRM Contact id. 422 if it is not an id, 404 if there is no such Contact |
 | `service`, `level`, `branch`, `billing`, `addons`, `insurance`, `change`, `changes`, `recordId`, `previousId`, `start`, ... | The same inputs as the customer's `POST /portal/checkout/quote` |
-| `voucherCode` | Optional. A bespoke voucher code. **Not usable yet**: a voucher's use history is read from Creator and no reader is wired, so it is refused (fails closed) |
+| `voucherCode` | Optional. A bespoke voucher code. Needs `PORTAL_VOUCHER_REDEMPTION_ENABLED` and the Creator report `Voucher_Redemptions_Report` (its use history is read from Creator through the reader now wired in). **Unverified end to end**: until that report exists the history cannot be read and the voucher fails closed with `DISCOUNT_LOG_UNAVAILABLE` |
 | `waivers` | Optional. `[{ "sku": "MEM-JOIN", "reason": "Goodwill Gesture", "note": "" }]`. Up to 6. The reason must be on the list; `Other` needs a note; the joining fee can be waived once per person |
 | `applicationId` | Optional. Ties a voucher use to one application |
 
@@ -120,6 +120,15 @@ Saves a quoted insurance change as a revision for the Contact, as the customer's
 **Who saved it.** Each new revision gets a CRM **Note** ("Saved by Sam Staff (CRM user id) through the Staff Workspace", with the quote reference and status). The function connection writes the record, so the CRM's own `Modified_By` shows the connection's user, not the staff member; the Note is the record. The revision is saved first: if the Note fails the response is still `201` with `"auditNote": false` and the failure is logged. The connection needs permission to create notes (`ZohoCRM.modules.ALL`, or `ZohoCRM.modules.notes.CREATE`). The Note payload shape is **unverified against the CRM**: check one in Development. The function log has a `staff_request` line for every call either way.
 
 Both routes limit each staff user to 60 calls a minute (best effort).
+
+### `POST /staff/payment-link`
+Creates the portal's own Stripe Checkout Session for the customer and returns its URL for the staff member to send. **Nothing is sent from here.** Same body as `POST /staff/quote` (`contactId`, the service inputs) **plus `accepted: "yes"`**: paying needs the customer's acceptance of the Code of Ethics and terms, exactly as online, so the widget must capture it from the customer. It is the portal's checkout, so every rule, price, risk check, CRM record and the Creator metadata contract are the same as when the customer pays online and Creator handles the payment as it does today.
+
+- **The customer, not the staff member, is on the session.** The Checkout email is the Contact's CRM email (422 `NO_EMAIL` if there is none), `client_reference_id` and the metadata are the Contact's, and no staff id, name or email goes to Stripe. The staff member is in the function log only.
+- **Switch:** `PORTAL_STAFF_PAYMENT_LINKS_ENABLED` (off by default; 503 `NOT_AVAILABLE`). Test mode only: the checkout refuses any key that is not `sk_test_`.
+- **Vouchers and waivers are refused on a link** (422 `DISCOUNTS_NOT_ON_LINKS`) until the Waive_Logs row and voucher reservation that must be written when a link is made are built; otherwise one could be used twice. Quote with `/staff/quote` to show the discounted price.
+- **Response:** `201 { requestId, contact, checkoutUrl, created: true }` for a new session, `200` with `checkoutUrl` and `reused: true` for an open one, or `200 { alreadyPaid: true }`. A referred or blocked quote is `422 REFERRAL_REQUIRED`, as online.
+- The success and cancel URLs return to the portal's payment-return page; the customer is not signed in there unless they already are.
 
 ### `GET /staff/membership-options?contactId=...&recordId=...`
 Read only. What the customer can choose when changing a membership: each branch and whether they already hold it. `recordId` is the membership (Deal) id. `503 NOT_AVAILABLE` until `PORTAL_MEMBERSHIP_CHANGES_ENABLED` is on. Returns `{ requestId, contact: { id }, options }`, the same `options` as the customer's `GET /portal/checkout/membership-options`.
