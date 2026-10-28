@@ -44,6 +44,42 @@ function upstream(url) {
     };
   if (u.includes('Training_Centre_Accred/302'))
     return { data: [{ id: '302', Applicant_Contact: { id: 'other' }, Account: { id: '202', name: 'Other School' } }] };
+  if (u.includes('Training_Centre_Accred/1011174000000000301'))
+    return {
+      data: [
+        {
+          id: '1011174000000000301',
+          Applicant_Contact: { id: '101' },
+          Account: { id: '201', name: 'Grace School' },
+          Accreditation_Status: 'Accredited',
+        },
+      ],
+    };
+  if (u.includes('Accreditation_Centre_Link/search'))
+    return { data: [{ id: 'link1', Training_Centre: { id: '1011174000000000401' } }] };
+  if (u.includes('Training_Centres/1011174000000000401'))
+    return {
+      data: [
+        {
+          id: '1011174000000000401',
+          Name: 'Grace School',
+          Town: 'Derby',
+          Contact_Name: 'Jess Owner',
+          Website: 'https://glow.test',
+          About_the_School: 'A friendly neighbourhood academy.',
+          Facebook: 'glowacademy',
+          Instagram: '@glowacademy',
+          TikTok: '@glowacademy',
+          LinkedIn: 'glow-academy',
+          School_Image: 'https://paula356.sg-host.com/wp-content/uploads/school.png',
+          School_Logo: 'https://paula356.sg-host.com/wp-content/uploads/logo.png',
+          Parking: true,
+          Free_Wifi: true,
+        },
+      ],
+    };
+  if (u.includes('wp-json/wp/v2/training-venue'))
+    return [{ link: 'https://paula356.sg-host.com/training-venue/grace-school/' }];
   if (u.includes('Deals/1000000000401')) return { data: [{ id: '1000000000401', Contact_Name: { id: '101' } }] };
   if (u.includes('Deals/1000000000402')) return { data: [{ id: '1000000000402', Contact_Name: { id: 'other' } }] };
   if (u.includes('Membership_Extension/search'))
@@ -117,6 +153,31 @@ test('school listing only includes owned accreditations', async () => {
     const r = await call('/portal/management/schools');
     assert.equal(r.status, 200);
     assert.equal(r.body.schools[0].name, 'Grace School');
+  });
+});
+test('the school profile carries the About/Website/socials/Facilities fields and the image/logo URLs', async () => {
+  await withServer({}, async call => {
+    const r = await call('/portal/management/schools/1011174000000000301/profile');
+    assert.equal(r.status, 200);
+    assert.equal(r.body.profile.contactName, 'Jess Owner');
+    assert.equal(r.body.profile.website, 'https://glow.test');
+    assert.equal(r.body.profile.about, 'A friendly neighbourhood academy.');
+    assert.equal(r.body.profile.facebook, 'glowacademy');
+    assert.equal(r.body.profile.instagram, '@glowacademy');
+    assert.equal(r.body.profile.tiktok, '@glowacademy');
+    assert.equal(r.body.profile.linkedIn, 'glow-academy');
+    assert.equal(r.body.profile.imageUrl, 'https://paula356.sg-host.com/wp-content/uploads/school.png');
+    assert.equal(r.body.profile.logoUrl, 'https://paula356.sg-host.com/wp-content/uploads/logo.png');
+    assert.deepEqual(r.body.profile.facilities.sort(), ['freeWifi', 'parking']);
+    assert.equal(r.body.profile.wordpressUrl, 'https://paula356.sg-host.com/training-venue/grace-school/');
+  });
+});
+test('the school profile omits the WordPress link when the lookup finds no matching page', async () => {
+  const noMatch = u => (String(u).includes('wp-json/wp/v2/training-venue') ? [] : upstream(u));
+  await withServer({ fetchImpl: async u => ({ status: 200, ok: true, json: async () => noMatch(u) }) }, async call => {
+    const r = await call('/portal/management/schools/1011174000000000301/profile');
+    assert.equal(r.status, 200);
+    assert.equal(r.body.profile.wordpressUrl, null);
   });
 });
 test('another Contact cannot open a school by changing its ID', async () => {
@@ -202,6 +263,10 @@ function writeUpstream(extra = {}) {
     const u = decodeURIComponent(String(url)),
       post = (opts.method || 'GET') === 'POST';
     if (extra.qualificationsSearch && u.includes('Qualifications/search')) return extra.qualificationsSearch;
+    if (u.includes('Accreditation_Centre_Link/search'))
+      return { data: extra.centreId ? [{ id: 'link1', Training_Centre: { id: extra.centreId } }] : [] };
+    if ((opts.method || 'GET') === 'PUT' && extra.centreId && u.includes('Training_Centres/' + extra.centreId))
+      return { data: [{ status: 'success' }] };
     if (u.includes('Training_Centre_Accred/1000000000301'))
       return {
         data: [
@@ -244,6 +309,7 @@ async function withWrites(extra, action) {
   );
 }
 const jpost = body => ({ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+const jput = body => ({ method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
 const goodQual = {
   name: 'Level 3 Beauty',
   trainingCentre: 'Academy of Beauty, Leeds',
@@ -374,4 +440,105 @@ test('the school list carries what the Accreditation card needs: stage, payment 
     assert.equal(s.payable, false);
     assert.equal(s.qualificationCount, 2);
   });
+});
+
+const goodProfile = {
+  contactName: 'Jess Owner',
+  website: 'https://glow.test',
+  about: 'A friendly neighbourhood academy.',
+  facebook: 'glowacademy',
+  instagram: '@glowacademy',
+  tiktok: '@glowacademy',
+  linkedIn: 'glow-academy',
+  facilities: ['parking', 'freeWifi'],
+  imageUrl: 'https://paula356.sg-host.com/wp-content/uploads/school.png',
+  imageId: 9001,
+  logoUrl: 'https://paula356.sg-host.com/wp-content/uploads/logo.png',
+  logoId: 9002,
+};
+test('school profile writes are disabled unless writes are explicitly authorised', async () => {
+  await withServer({}, async call => {
+    const r = await call('/portal/management/schools/1000000000301/profile', jput(goodProfile));
+    assert.equal(r.status, 503);
+    assert.equal(r.body.code, 'SCHOOL_WRITES_DISABLED');
+  });
+});
+test('a profile update is rejected before the accreditation has a linked training centre', async () => {
+  await withWrites({}, async call => {
+    const r = await call('/portal/management/schools/1000000000301/profile', jput(goodProfile));
+    assert.equal(r.status, 409);
+    assert.equal(r.body.code, 'CENTRE_REQUIRED');
+  });
+});
+test('another Contact cannot update a school profile by changing its ID', async () => {
+  await withWrites({ centreId: '401' }, async call => {
+    const r = await call('/portal/management/schools/1000000000999/profile', jput(goodProfile));
+    assert.equal(r.status, 404);
+  });
+});
+test('rejects an unrecognised facility, over-long text and an invalid media id', async () => {
+  await withWrites({ centreId: '401' }, async call => {
+    assert.equal(
+      (await call('/portal/management/schools/1000000000301/profile', jput({ ...goodProfile, facilities: ['hotTub'] })))
+        .status,
+      422,
+    );
+    assert.equal(
+      (
+        await call(
+          '/portal/management/schools/1000000000301/profile',
+          jput({ ...goodProfile, about: 'x'.repeat(2001) }),
+        )
+      ).status,
+      422,
+    );
+    assert.equal(
+      (
+        await call(
+          '/portal/management/schools/1000000000301/profile',
+          jput({ ...goodProfile, imageId: 'not-a-number' }),
+        )
+      ).status,
+      422,
+    );
+    assert.equal(
+      (await call('/portal/management/schools/1000000000301/profile', jput({ ...goodProfile, logoId: -5 }))).status,
+      422,
+    );
+  });
+});
+test('updates the training centre with the profile content, including clearing fields left blank', async () => {
+  await withWrites({ centreId: '401' }, async (call, calls) => {
+    const r = await call('/portal/management/schools/1000000000301/profile', jput(goodProfile));
+    assert.equal(r.status, 200);
+    assert.deepEqual(r.body, { ok: true });
+    const put = calls.find(c => c.method === 'PUT' && c.url.includes('Training_Centres/401'));
+    assert.ok(put, 'the training centre was updated');
+  });
+  const writes = [];
+  await withServer(
+    {
+      config: writeCfg,
+      fetchImpl: async (u, o) => {
+        if ((o?.method || 'GET') === 'PUT' && String(u).includes('Training_Centres/401')) writes.push(o.body);
+        return { status: 200, ok: true, json: async () => writeUpstream({ centreId: '401' })(u, o) };
+      },
+    },
+    async call => {
+      await call(
+        '/portal/management/schools/1000000000301/profile',
+        jput({ ...goodProfile, website: '', imageId: '' }),
+      );
+    },
+  );
+  const data = JSON.parse(writes[0]).data[0];
+  assert.equal(data.Contact_Name, 'Jess Owner');
+  assert.equal(data.Website, null);
+  assert.equal(data.School_Image, goodProfile.imageUrl);
+  assert.equal(data.School_Image_ID, null);
+  assert.equal(data.School_Logo, goodProfile.logoUrl);
+  assert.equal(data.School_Logo_ID, '9002');
+  assert.equal(data.Parking, true);
+  assert.equal(data.Free_Wifi, true);
+  assert.equal(data.Changing_Area, false);
 });

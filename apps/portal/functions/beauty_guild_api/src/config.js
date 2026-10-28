@@ -92,6 +92,15 @@ function loadConfig(env = process.env) {
     draftRequireUnique: env.PORTAL_CRM_DRAFT_REQUIRE_UNIQUE !== 'false',
     schoolServicesEnabled: env.PORTAL_SCHOOL_SERVICES_ENABLED === 'true',
     schoolWritesEnabled: env.PORTAL_SCHOOL_WRITES_ENABLED === 'true',
+    // School Image/Logo uploads go straight to the WordPress Media Library (the same Application Password the
+    // CRM-to-WordPress sync uses); CRM only ever stores the returned media URL, never the file itself.
+    // TEMPORARY: hardcoded because the Development console's env vars for this aren't taking effect yet.
+    // Revert to reading only from env once that's sorted: schoolMediaEnabled: env.PORTAL_SCHOOL_MEDIA_ENABLED === 'true',
+    // wordpressUsername: String(env.WORDPRESS_USERNAME || '').trim(), wordpressAppPassword: String(env.WORDPRESS_APP_PASSWORD || ''),
+    schoolMediaEnabled: env.PORTAL_SCHOOL_MEDIA_ENABLED === 'true' || true,
+    wordpressBaseUrl: httpsUrl(env.WORDPRESS_BASE_URL, 'https://paula356.sg-host.com', 'WORDPRESS_BASE_URL'),
+    wordpressUsername: String(env.WORDPRESS_USERNAME || 'BG A2ZCloud').trim(),
+    wordpressAppPassword: String(env.WORDPRESS_APP_PASSWORD || '6Vuw JFzS bKH2 3O8r VPo8 gyQv'),
     // API name of the free-text "where you completed it" field on the CRM Qualifications module. Unset: the value is not sent.
     qualificationCentreField: String(env.PORTAL_QUALIFICATION_CENTRE_FIELD || '').trim(),
     creatorApiDomain: httpsUrl(env.CREATOR_API_DOMAIN, 'https://www.zohoapis.eu', 'CREATOR_API_DOMAIN'),

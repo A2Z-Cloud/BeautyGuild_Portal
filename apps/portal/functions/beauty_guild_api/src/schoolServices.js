@@ -4,6 +4,8 @@ const { HttpError } = require('./errors');
 const { resolveContact } = require('./records');
 const { isPaidStatus, isPayableAccreditation } = require('./catalogue');
 const { assess } = require('./publicSchoolVerification');
+const { FACILITY_FIELDS } = require('./facilities');
+const { findSchoolPageUrl } = require('./wordpress');
 const ID = /^\d{10,25}$/;
 const esc = v => encodeURIComponent(String(v));
 const fail = (message, status = 502, code = 'SERVICE_UNAVAILABLE') => {
@@ -140,6 +142,23 @@ function createSchoolApi({
       fail('CRM did not confirm the record was saved.');
     return row.details.id;
   }
+  async function crmUpdate(req, module, id, data) {
+    const url = crmApiDomain + '/crm/v3/' + module + '/' + esc(id);
+    let response;
+    try {
+      response = await fetchImpl(url, {
+        method: 'PUT',
+        headers: { ...(await getCrmHeaders(req)), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: [data] }),
+        signal: AbortSignal.timeout(15000),
+      });
+    } catch {
+      fail('CRM could not save this record.');
+    }
+    const body = await response.json().catch(() => null);
+    const row = body?.data?.[0];
+    if (!response.ok || row?.status !== 'success') fail('CRM did not confirm the record was saved.');
+  }
   async function creatorCreate(req, form, data) {
     const url =
       creatorApiDomain +
@@ -164,7 +183,7 @@ function createSchoolApi({
     if (!response.ok || body?.code !== 3000 || !body.data?.ID) fail('Creator did not confirm the record was saved.');
     return String(body.data.ID);
   }
-  return { crm, creator, contact, acc, deal, invoices, crmCreate, creatorCreate };
+  return { crm, creator, contact, acc, deal, invoices, crmCreate, crmUpdate, creatorCreate };
 }
 function registerSchoolRoutes(
   app,
@@ -293,13 +312,37 @@ function registerSchoolRoutes(
           ? (
               await api.crm(
                 req,
-                'Training_Centres/' + centreId + '?fields=' + esc('Name,Town,County,Country,Postcode,Centre_Status'),
+                'Training_Centres/' +
+                  centreId +
+                  '?fields=' +
+                  esc(
+                    'Name,Town,County,Country,Postcode,Centre_Status,Contact_Name,Website,About_the_School,' +
+                      'Facebook,Instagram,TikTok,LinkedIn,School_Image,School_Logo,' +
+                      Object.values(FACILITY_FIELDS).join(','),
+                  ),
               )
             )[0]
           : null;
+        const facilities = centre
+          ? Object.entries(FACILITY_FIELDS)
+              .filter(([, f]) => centre[f])
+              .map(([k]) => k)
+          : [];
         const account = accountId
           ? (await api.crm(req, 'Accounts/' + accountId + '?fields=' + esc('Referral_Code,Referral_Code_Active')))[0]
           : null;
+        const wordpressUrl =
+          config.schoolMediaEnabled && centre?.Name
+            ? await findSchoolPageUrl(
+                {
+                  baseUrl: config.wordpressBaseUrl,
+                  username: config.wordpressUsername,
+                  appPassword: config.wordpressAppPassword,
+                  fetchImpl,
+                },
+                centre.Name,
+              )
+            : null;
         return res.json({
           profile: {
             id,
@@ -316,6 +359,17 @@ function registerSchoolRoutes(
             paymentStatus: a.Payment_Status || null,
             paid: isPaidStatus(a.Payment_Status),
             payable: isPayableAccreditation(a),
+            contactName: centre?.Contact_Name || null,
+            website: centre?.Website || null,
+            about: centre?.About_the_School || null,
+            facebook: centre?.Facebook || null,
+            instagram: centre?.Instagram || null,
+            tiktok: centre?.TikTok || null,
+            linkedIn: centre?.LinkedIn || null,
+            imageUrl: centre?.School_Image || null,
+            logoUrl: centre?.School_Logo || null,
+            facilities,
+            wordpressUrl,
           },
         });
       }
@@ -637,6 +691,53 @@ function registerSchoolRoutes(
     'Case Studies - Submitting Videos',
     'Other',
   ];
+  // A school edits its own profile content once accredited - everything except its registration details
+  // (name/address/status), which still need the Accreditation team. The image/logo URLs are uploaded
+  // separately (POST /portal/media/upload, which never touches CRM) and arrive here as plain strings.
+  router.put(
+    '/schools/:id/profile',
+    requireWrites,
+    handle(async (req, res) => {
+      const acc = await api.acc(req, req.params.id, req.memberContact.id);
+      const links = await api.crm(
+        req,
+        'Accreditation_Centre_Link/search?criteria=' +
+          esc('((Accreditation:equals:' + acc.id + ')and(Centre_Relationship_Type:equals:Main Centre))') +
+          '&fields=' +
+          esc('Training_Centre'),
+      );
+      const centreId = links[0]?.Training_Centre?.id;
+      if (!centreId) fail('No training centre is linked to this accreditation yet.', 409, 'CENTRE_REQUIRED');
+      const body = req.body || {};
+      const facilities = Array.isArray(body.facilities) ? body.facilities : [];
+      if (facilities.some(f => !FACILITY_FIELDS[f]))
+        fail('One of the facilities is not recognised.', 422, 'INVALID_FACILITY');
+      // A WordPress media attachment id (returned by POST /portal/media/upload) - needed because the WordPress
+      // ACF image fields expect an attachment id, not a URL. Stored alongside the URL, never instead of it.
+      const mediaId = (v, label) => {
+        if (v === undefined || v === null || v === '') return null;
+        const n = Number(v);
+        if (!Number.isInteger(n) || n <= 0) fail(label + ' is not valid.', 422, 'INVALID_PROFILE');
+        return String(n);
+      };
+      const record = {
+        Contact_Name: shortText(body.contactName, 100, 'Main contact name', 'INVALID_PROFILE') ?? null,
+        Website: shortText(body.website, 255, 'Website', 'INVALID_PROFILE') ?? null,
+        About_the_School: shortText(body.about, 2000, 'About the school', 'INVALID_PROFILE') ?? null,
+        Facebook: shortText(body.facebook, 255, 'Facebook', 'INVALID_PROFILE') ?? null,
+        Instagram: shortText(body.instagram, 255, 'Instagram', 'INVALID_PROFILE') ?? null,
+        TikTok: shortText(body.tiktok, 255, 'TikTok', 'INVALID_PROFILE') ?? null,
+        LinkedIn: shortText(body.linkedIn, 255, 'LinkedIn', 'INVALID_PROFILE') ?? null,
+        School_Image: shortText(body.imageUrl, 500, 'School image', 'INVALID_PROFILE') ?? null,
+        School_Image_ID: mediaId(body.imageId, 'School image'),
+        School_Logo: shortText(body.logoUrl, 500, 'School logo', 'INVALID_PROFILE') ?? null,
+        School_Logo_ID: mediaId(body.logoId, 'School logo'),
+        ...Object.fromEntries(Object.entries(FACILITY_FIELDS).map(([key, field]) => [field, facilities.includes(key)])),
+      };
+      await api.crmUpdate(req, 'Training_Centres', centreId, record);
+      res.json({ ok: true });
+    }),
+  );
   router.post(
     '/schools/:id/qualifications',
     requireWrites,

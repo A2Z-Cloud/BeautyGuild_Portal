@@ -8,7 +8,7 @@ import reactHooks from 'eslint-plugin-react-hooks';
 const unused = ['warn', { args: 'none', varsIgnorePattern: '^_', caughtErrors: 'none' }];
 
 export default [
-  { ignores: ['dist/**', 'node_modules/**', 'public/**', 'auth-css/**', 'functions/**/node_modules/**'] },
+  { ignores: ['dist/**', '.build/**', 'node_modules/**', 'public/**', 'auth-css/**', 'functions/**/node_modules/**'] },
   js.configs.recommended,
   {
     // The browser app (ES modules, JSX).

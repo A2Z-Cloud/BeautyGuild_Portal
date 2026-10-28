@@ -24,6 +24,13 @@ const schoolHttp = schoolOn ? createHttpClient({ baseUrl: integrationConfig.apiB
 const schoolReq = (path, opts) =>
   schoolHttp ? schoolHttp('/portal/management' + path, opts) : unavailable('School and invoice services');
 const schoolWritesOn = schoolOn && import.meta.env.VITE_PORTAL_SCHOOL_WRITES === 'true';
+const mediaOn =
+  integrationConfig.baseConfigured &&
+  integrationConfig.catalystAuth &&
+  import.meta.env.VITE_PORTAL_SCHOOL_MEDIA === 'true';
+const mediaHttp = mediaOn ? createHttpClient({ baseUrl: integrationConfig.apiBaseUrl }) : null;
+const mediaReq = (path, opts) =>
+  mediaHttp ? mediaHttp('/portal/media' + path, opts) : unavailable('School media uploads');
 const recordsOn =
   integrationConfig.baseConfigured && integrationConfig.catalystAuth && import.meta.env.VITE_PORTAL_RECORDS === 'true';
 const recordHttp = recordsOn ? createHttpClient({ baseUrl: integrationConfig.apiBaseUrl }) : null;
@@ -56,6 +63,7 @@ export const INTEGRATIONS = Object.freeze({
   address: isEnabled(integrationConfig, 'address'),
   schoolServices: schoolOn,
   schoolWrites: schoolWritesOn,
+  schoolMedia: mediaOn,
   crmRecords: recordsOn,
   crmDrafts: draftsOn,
   // The accreditation application writes the V1 record set, so it has its own switch on top of saved drafts.
@@ -104,6 +112,10 @@ export const portalApi = Object.freeze({
       ? (await schoolReq('/schools/' + encodeURIComponent(id) + '/qualifications', { method: 'POST', body: data }))
           .qualification
       : unavailable('School qualification changes'),
+  updateSchoolProfile: async (id, data) =>
+    schoolWritesOn
+      ? schoolReq('/schools/' + encodeURIComponent(id) + '/profile', { method: 'PUT', body: data })
+      : unavailable('School profile changes'),
   addSchoolTutor: async (id, data) =>
     schoolWritesOn
       ? await schoolReq('/schools/' + encodeURIComponent(id) + '/tutors', { method: 'POST', body: data })
@@ -146,6 +158,13 @@ export const portalApi = Object.freeze({
   listDrafts: async () => (await draftReq('/')).drafts,
   submitAccreditation: async data =>
     (await draftReq('/accreditation/submit', { method: 'POST', body: data })).accreditation,
+  uploadSchoolMedia: async (type, { fileName, mimeType, dataBase64 }) =>
+    mediaOn
+      ? await mediaReq('/upload', {
+          method: 'POST',
+          body: { type, fileName, mimeType, dataBase64 },
+        })
+      : unavailable('School media uploads'),
   discardDraft: async (service, id) => draftReq('/' + service + '/' + encodeURIComponent(id), { method: 'DELETE' }),
   checkoutQuote: async params => (await billingReq('/quote?' + new URLSearchParams(params).toString())).quote,
   checkoutQuotePost: async body => (await billingReq('/quote', { method: 'POST', body })).quote,

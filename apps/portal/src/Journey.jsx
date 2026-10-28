@@ -135,6 +135,11 @@ function SubmittedCard({ result, payable }) {
     </section>
   );
 }
+// Accreditation never creates a Contact on save (project decision 2026-10-18, docs/api-contracts/crm-drafts.md) -
+// unlike membership/insurance, which do. A verified sign-in with no existing Guild Contact gets this instead of
+// the generic save/submit failure message, so it's clear what to do next rather than looking like a bug.
+const NO_GUILD_CONTACT_MESSAGE =
+  'We could not find a Guild record for your email address. Please join the Guild or start an insurance application first, then come back to finish your accreditation application.';
 function CheckpointNotice({ kind }) {
   return (
     <div className="journey-checkpoint">
@@ -232,7 +237,9 @@ export function Journey({ kind }) {
       setSaveStatus(
         e.code === 'REVISION_CONFLICT'
           ? 'This application has changed elsewhere. Please reload the page before saving.'
-          : 'We could not save your application. Please try again.',
+          : e.code === 'CONTACT_UNLINKED'
+            ? NO_GUILD_CONTACT_MESSAGE
+            : 'We could not save your application. Please try again.',
       );
     } finally {
       setSaving(false);
@@ -295,7 +302,11 @@ export function Journey({ kind }) {
       }
       // Our own validation wording (422 and 409) is safe to show; anything else gets a fixed message from the transport.
       setSaveStatus(
-        e.status === 422 || e.status === 409 ? e.message : 'We could not submit your application. Please try again.',
+        e.code === 'CONTACT_UNLINKED'
+          ? NO_GUILD_CONTACT_MESSAGE
+          : e.status === 422 || e.status === 409
+            ? e.message
+            : 'We could not submit your application. Please try again.',
       );
     } finally {
       setSaving(false);

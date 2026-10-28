@@ -1,6 +1,17 @@
 import React, { useState } from 'react';
 import { portalApi } from './services/api.js';
 import { Notice } from './UiParts.jsx';
+import { FACILITY_OPTIONS } from './facilities.js';
+
+const MEDIA_MIME_TYPES = 'image/png,image/jpeg,image/webp';
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(',')[1] || '');
+    reader.onerror = () => reject(reader.error || new Error('Could not read the file.'));
+    reader.readAsDataURL(file);
+  });
+}
 
 const DELIVERY = ['Face to Face In the Classroom', 'Face to Face via Live Video Link', 'Online only', 'Other'];
 const ASSESS = [
@@ -26,17 +37,18 @@ const MONTHS = [
 ];
 const formField = (k, v, set) => <input value={v || ''} onChange={e => set(k, e.target.value)} />;
 function MultiOptions({ label, values, options, onChange }) {
+  const items = options.map(o => (typeof o === 'string' ? { value: o, label: o } : o));
   return (
     <fieldset className="school-multi">
       <legend>{label}</legend>
-      {options.map(o => (
-        <label key={o}>
+      {items.map(o => (
+        <label key={o.value}>
           <input
             type="checkbox"
-            checked={values.includes(o)}
-            onChange={e => onChange(e.target.checked ? [...values, o] : values.filter(v => v !== o))}
+            checked={values.includes(o.value)}
+            onChange={e => onChange(e.target.checked ? [...values, o.value] : values.filter(v => v !== o.value))}
           />
-          {o}
+          {o.label}
         </label>
       ))}
     </fieldset>
@@ -432,6 +444,141 @@ export function BookingForm({ schoolId, session, onDone }) {
       {error && <Notice title="Not saved">{error}</Notice>}
       <button type="submit" className="btn btn-primary" disabled={busy || !values.studentName || !values.studentEmail}>
         {busy ? 'Saving…' : 'Save booking'}
+      </button>
+    </form>
+  );
+}
+// School image/logo upload: picks a file, uploads it straight to the WordPress Media Library (no CRM involved
+// in the upload itself) and keeps the returned URL as a normal form value, saved along with everything else
+// when the form submits.
+function MediaField({ label, slot, url, media, onPick, onUpload }) {
+  return (
+    <div className="school-media-field">
+      <label>
+        {label}
+        <input
+          type="file"
+          accept={MEDIA_MIME_TYPES}
+          onChange={e => onPick(slot, e.target.files && e.target.files[0] ? e.target.files[0] : null)}
+        />
+      </label>
+      {media.file && (
+        <button
+          type="button"
+          className="btn btn-secondary"
+          disabled={media.status === 'uploading'}
+          onClick={() => onUpload(slot)}
+        >
+          {media.status === 'uploading' ? 'Uploading…' : 'Upload ' + label.toLowerCase()}
+        </button>
+      )}
+      {url && (
+        <small className="muted">
+          Current:{' '}
+          <a href={url} target="_blank" rel="noopener noreferrer">
+            view {label.toLowerCase()}
+          </a>
+        </small>
+      )}
+      {media.error && (
+        <small role="alert" className="error">
+          {media.error}
+        </small>
+      )}
+    </div>
+  );
+}
+export function SchoolProfileForm({ schoolId, initial, onDone }) {
+  const [values, setValues] = useState({
+    contactName: initial?.contactName || '',
+    website: initial?.website || '',
+    about: initial?.about || '',
+    facebook: initial?.facebook || '',
+    instagram: initial?.instagram || '',
+    tiktok: initial?.tiktok || '',
+    linkedIn: initial?.linkedIn || '',
+    facilities: initial?.facilities || [],
+    imageUrl: initial?.imageUrl || '',
+    imageId: '',
+    logoUrl: initial?.logoUrl || '',
+    logoId: '',
+  });
+  const [busy, setBusy] = useState(false),
+    [error, setError] = useState('');
+  const [media, setMedia] = useState({
+    image: { file: null, status: 'idle', error: null },
+    logo: { file: null, status: 'idle', error: null },
+  });
+  const set = (key, value) => setValues(p => ({ ...p, [key]: value }));
+  const pickMedia = (slot, file) => setMedia(m => ({ ...m, [slot]: { file, status: 'idle', error: null } }));
+  const uploadMedia = async slot => {
+    const file = media[slot].file;
+    if (!file) return;
+    setMedia(m => ({ ...m, [slot]: { ...m[slot], status: 'uploading', error: null } }));
+    try {
+      const dataBase64 = await fileToBase64(file);
+      const result = await portalApi.uploadSchoolMedia(slot, { fileName: file.name, mimeType: file.type, dataBase64 });
+      // The WordPress attachment id rides along with the URL - CRM needs it to populate the WordPress ACF
+      // image field, which expects an attachment id rather than a URL.
+      set(slot === 'logo' ? 'logoUrl' : 'imageUrl', result.url);
+      set(slot === 'logo' ? 'logoId' : 'imageId', result.mediaId);
+      setMedia(m => ({ ...m, [slot]: { file: null, status: 'done', error: null } }));
+    } catch (e) {
+      setMedia(m => ({ ...m, [slot]: { ...m[slot], status: 'error', error: e.message } }));
+    }
+  };
+  async function submit(e) {
+    e.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      await portalApi.updateSchoolProfile(schoolId, values);
+      onDone();
+    } catch (err) {
+      setError(err.message || 'Profile could not be saved.');
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <form className="school-ops-form" onSubmit={submit}>
+      <h3>Edit school profile</h3>
+      <label>Main contact name{formField('contactName', values.contactName, set)}</label>
+      <label>Website{formField('website', values.website, set)}</label>
+      <label>
+        About the school
+        <textarea rows={4} maxLength={2000} value={values.about} onChange={e => set('about', e.target.value)} />
+      </label>
+      <MultiOptions
+        label="Facilities"
+        values={values.facilities}
+        options={FACILITY_OPTIONS}
+        onChange={v => set('facilities', v)}
+      />
+      <label>Facebook{formField('facebook', values.facebook, set)}</label>
+      <label>Instagram{formField('instagram', values.instagram, set)}</label>
+      <label>TikTok{formField('tiktok', values.tiktok, set)}</label>
+      <label>LinkedIn{formField('linkedIn', values.linkedIn, set)}</label>
+      <MediaField
+        label="School image"
+        slot="image"
+        url={values.imageUrl}
+        media={media.image}
+        onPick={pickMedia}
+        onUpload={uploadMedia}
+      />
+      <MediaField
+        label="School logo"
+        slot="logo"
+        url={values.logoUrl}
+        media={media.logo}
+        onPick={pickMedia}
+        onUpload={uploadMedia}
+      />
+      {error && <Notice title="Not saved">{error}</Notice>}
+      <button type="submit" className="btn btn-primary" disabled={busy}>
+        {busy ? 'Saving…' : 'Save profile'}
       </button>
     </form>
   );

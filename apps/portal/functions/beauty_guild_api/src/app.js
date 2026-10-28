@@ -13,6 +13,7 @@ const { registerVoucherRoutes } = require('./vouchers');
 const { registerDraftRoutes } = require('./crmDrafts');
 const { registerSchoolRoutes } = require('./schoolServices');
 const { registerStaffRoutes } = require('./staff');
+const { registerMediaRoutes } = require('./media');
 const { createRiskChecks } = require('./riskChecks');
 const { createCreatorReader } = require('./creatorReports');
 const { readBuildInfo } = require('./buildInfo');
@@ -64,7 +65,8 @@ function createApp({
       !req.path.startsWith('/public/quote') &&
       !req.path.startsWith('/portal/drafts') &&
       !req.path.startsWith('/portal/management') &&
-      !req.path.startsWith('/staff')
+      !req.path.startsWith('/staff') &&
+      !req.path.startsWith('/portal/media')
     )
       return next(new HttpError(405, 'METHOD_NOT_ALLOWED', 'Method not allowed.'));
     return next();
@@ -131,6 +133,13 @@ function createApp({
     getCurrentUser,
     getCrmHeaders,
     getCreatorHeaders,
+    config,
+    fetchImpl,
+  });
+  registerMediaRoutes(app, {
+    enabled: config.schoolMediaEnabled,
+    getCurrentUser,
+    getCrmHeaders,
     config,
     fetchImpl,
   });

@@ -312,6 +312,59 @@ test('the placeholder Account is renamed once the school is named, but a real Ac
   });
 });
 
+test('the About/Website/socials/Facilities fields are written to the training centre and read back on resume', async () => {
+  const crm = fakeCrm();
+  const extra = {
+    centreContact: 'Jess Owner',
+    centreWebsite: 'https://glow.test',
+    centreAbout: 'A friendly neighbourhood academy.',
+    centreFacilities: ['parking', 'freeWifi', 'publicTransportNearby'],
+    centreFacebook: 'glowacademy',
+    centreInstagram: '@glowacademy',
+    centreTiktok: '@glowacademy',
+    centreLinkedIn: 'glow-academy',
+    centreImageUrl: 'https://paula356.sg-host.com/wp-content/uploads/school.png',
+    centreLogoUrl: 'https://paula356.sg-host.com/wp-content/uploads/logo.png',
+  };
+  let id;
+  await withApp(crm, async call => {
+    id = (await call('/portal/drafts/', send('POST', body(answers(extra))))).body.draft.id;
+  });
+  const centre = crm.store.Training_Centres[0];
+  assert.equal(centre.Contact_Name, 'Jess Owner');
+  assert.equal(centre.Website, 'https://glow.test');
+  assert.equal(centre.About_the_School, 'A friendly neighbourhood academy.');
+  assert.equal(centre.Facebook, 'glowacademy');
+  assert.equal(centre.Instagram, '@glowacademy');
+  assert.equal(centre.TikTok, '@glowacademy');
+  assert.equal(centre.LinkedIn, 'glow-academy');
+  assert.equal(centre.School_Image, 'https://paula356.sg-host.com/wp-content/uploads/school.png');
+  assert.equal(centre.School_Logo, 'https://paula356.sg-host.com/wp-content/uploads/logo.png');
+  assert.equal(centre.Parking, true);
+  assert.equal(centre.Free_Wifi, true);
+  assert.equal(centre.Public_Transport_Nearby, true);
+  assert.equal(centre.Email_Address, 'hello@glow.test');
+  assert.equal(centre.Changing_Area, false);
+  assert.equal(centre.Eating_Area, false);
+  assert.equal(centre.Disabled_Access, false);
+  assert.equal(centre.Air_Conditioning, false);
+  assert.equal(centre.Refreshments_Provided, false);
+  await withApp(crm, async call => {
+    const read = await call('/portal/drafts/accreditation/' + id);
+    const a = read.body.draft.answers;
+    assert.equal(a.centreContact, 'Jess Owner');
+    assert.equal(a.centreWebsite, 'https://glow.test');
+    assert.equal(a.centreAbout, 'A friendly neighbourhood academy.');
+    assert.equal(a.centreFacebook, 'glowacademy');
+    assert.equal(a.centreInstagram, '@glowacademy');
+    assert.equal(a.centreTiktok, '@glowacademy');
+    assert.equal(a.centreLinkedIn, 'glow-academy');
+    assert.equal(a.centreImageUrl, 'https://paula356.sg-host.com/wp-content/uploads/school.png');
+    assert.equal(a.centreLogoUrl, 'https://paula356.sg-host.com/wp-content/uploads/logo.png');
+    assert.deepEqual(a.centreFacilities.sort(), ['freeWifi', 'parking', 'publicTransportNearby'].sort());
+  });
+});
+
 test('resume rebuilds the answers from the CRM records and lists only my drafts', async () => {
   const crm = fakeCrm();
   await withApp(crm, async call => {

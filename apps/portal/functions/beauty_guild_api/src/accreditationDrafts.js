@@ -1,5 +1,5 @@
 'use strict';
-// Accreditation application: the V1 record set, with the same fields. No new CRM fields.
+// Accreditation application: the V1 record set, plus the About/Website/socials/Facilities fields added to Training_Centres.
 // A draft is the real set of CRM records V1 writes (Account, Training_Centres, Training_Centre_Accred at stage Draft,
 // Accreditation_Centre_Link, TC_Course_Offering) and the applicant's phone and address on the Contact. Nothing is kept
 // in a Note and Journey_ID is not used. Resume re-reads those records. The Contact comes from the verified email
@@ -8,6 +8,7 @@
 const crypto = require('node:crypto');
 const { HttpError } = require('./errors');
 const { phoneIssue } = require('./phone');
+const { FACILITY_FIELDS } = require('./facilities');
 
 const CRMID = /^\d{10,25}$/;
 const DRAFT = 'Draft';
@@ -42,7 +43,10 @@ const ACC_FIELDS = [
   'Created_Time',
 ].join(',');
 const CENTRE_FIELDS =
-  'Name,Account,Contact,Email,Phone_Number,Mobile_Phone_Number,Address_Line_1,Address_Line_2,Address_Line_3,Town,County,Country,Postcode';
+  'Name,Account,Contact,Email,Phone_Number,Mobile_Phone_Number,Address_Line_1,Address_Line_2,Address_Line_3,Town,County,Country,Postcode,' +
+  'Contact_Name,Website,About_the_School,Facebook,Instagram,TikTok,LinkedIn,School_Image,School_Logo,' +
+  'Parking,Changing_Area,Eating_Area,Disabled_Access,Free_Wifi,Air_Conditioning,Refreshments_Provided,Public_Transport_Nearby';
+const FACILITY_KEYS = new Set(Object.keys(FACILITY_FIELDS));
 const CONTACT_FIELDS =
   'Salutation,First_Name,Last_Name,Email,Phone,Mobile,Interests,Correspondence_Address_Line_1,Correspondence_Address_Line_2,Correspondence_Address_Line_3,Correspondence_Town,Correspondence_County,Correspondence_Postcode,Correspondence_Country';
 
@@ -82,6 +86,11 @@ function str(value, max = 255) {
   return s;
 }
 const flag = v => (v === 'yes' || v === true ? true : v === 'no' || v === false ? false : null);
+function strArray(value, allowed) {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value)) fail('INVALID_ANSWERS', 'One of your answers is not valid.');
+  return [...new Set(value.map(v => String(v)))].filter(v => allowed.has(v));
+}
 
 const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/;
 // The other tutors the applicant lists (UAT: names and emails up front, as V1 Step 9). A draft keeps the complete rows; a
@@ -165,6 +174,16 @@ function readAnswers(a, { final = false, now = Date.now() } = {}) {
       county: str(a.centreCounty),
       postcode: str(a.centrePostcode, 20),
       country,
+      contact: str(a.centreContact, 100),
+      website: str(a.centreWebsite, 255),
+      about: str(a.centreAbout, 2000),
+      facebook: str(a.centreFacebook, 255),
+      instagram: str(a.centreInstagram, 255),
+      tiktok: str(a.centreTiktok, 255),
+      linkedIn: str(a.centreLinkedIn, 255),
+      facilities: strArray(a.centreFacilities, FACILITY_KEYS),
+      imageUrl: str(a.centreImageUrl, 500),
+      logoUrl: str(a.centreLogoUrl, 500),
     },
     declarations: [flag(a.qualifiedSixMonths), flag(a.teachingQualification), flag(a.evidenceAvailable)],
     otherTutors,
@@ -340,6 +359,8 @@ function createAccreditation({
       Account: { id: accountId },
       Contact: { id: person.id },
       Email: v(s.email),
+      // The WordPress sync reads this field, not Email.
+      Email_Address: v(s.email),
       Phone_Number: v(s.phone),
       Mobile_Phone_Number: v(s.mobile),
       Address_Line_1: v(s.l1),
@@ -349,6 +370,16 @@ function createAccreditation({
       County: v(s.county),
       Country: v(normCountry(s.country)),
       Postcode: v(s.postcode),
+      Contact_Name: v(s.contact),
+      Website: v(s.website),
+      About_the_School: v(s.about),
+      Facebook: v(s.facebook),
+      Instagram: v(s.instagram),
+      TikTok: v(s.tiktok),
+      LinkedIn: v(s.linkedIn),
+      School_Image: v(s.imageUrl),
+      School_Logo: v(s.logoUrl),
+      ...Object.fromEntries(Object.entries(FACILITY_FIELDS).map(([key, field]) => [field, s.facilities.includes(key)])),
       ...(isNew ? { Centre_Status: 'Unverified' } : {}),
     };
   }
@@ -622,6 +653,18 @@ function createAccreditation({
         centreTown: centre?.Town || '',
         centreCounty: centre?.County || '',
         centrePostcode: centre?.Postcode || '',
+        centreContact: centre?.Contact_Name || '',
+        centreWebsite: centre?.Website || '',
+        centreAbout: centre?.About_the_School || '',
+        centreFacebook: centre?.Facebook || '',
+        centreInstagram: centre?.Instagram || '',
+        centreTiktok: centre?.TikTok || '',
+        centreLinkedIn: centre?.LinkedIn || '',
+        centreFacilities: Object.entries(FACILITY_FIELDS)
+          .filter(([, field]) => centre?.[field])
+          .map(([key]) => key),
+        centreImageUrl: centre?.School_Image || '',
+        centreLogoUrl: centre?.School_Logo || '',
         qualifiedSixMonths: fromYesNo(acc.Declaration_1_qualified_for_six_months),
         teachingQualification: fromYesNo(acc.Declaration_2_teaching_qualification),
         evidenceAvailable: fromYesNo(acc.Declaration_3_evidence_available),

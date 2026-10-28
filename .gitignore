@@ -16,6 +16,9 @@ coverage/
 .vite/
 .cache/
 
+# catalyst serve's local build output
+.build/
+
 # Python and other local caches
 __pycache__/
 *.pyc
