@@ -175,7 +175,7 @@ function render(j){
    const all=steps.flatMap(s=>s.fields||[]).filter(f=>show(f,j.answers)&&nonblank(j.answers[f.name]));
    body='<h3>Application review and quotation</h3><p>Confirm the information supplied by the customer. The signed Catalyst API determines eligibility and prices; staff entries are not independent customer declarations.</p>'+
      '<dl class="v12-review">'+all.map(f=>'<div><dt>'+esc(f.label)+'</dt><dd>'+esc(Array.isArray(j.answers[f.name])?j.answers[f.name].map(x=>typeof x==='object'?JSON.stringify(x):x).join(', '):j.answers[f.name])+'</dd></div>').join('')+'</dl>'+
-     '<div class="v12-quote-actions"><button type="button" class="button primary" data-action="journey-quote" '+(j.quotePending?'disabled':'')+'>Calculate live quotation</button></div>'+
+     '<div class="v12-quote-actions"><button type="button" class="button primary" data-action="journey-quote" '+(j.quotePending||j.kind==='accreditation'&&!j.accreditationSubmitted?'disabled title="Submit Accreditation before pricing"':'')+'>Calculate live quotation</button></div>'+
      (j.quotePending?'<p class="v12-muted">Requesting current pricing and assessment…</p>':'')+
      (j.quoteError?'<p class="v12-warning" role="alert">'+esc(j.quoteError)+'</p>':'')+
      (j.liveQuote?quoteSummary(j.liveQuote):'')+
@@ -274,7 +274,7 @@ function apiRequest(j){
    businessName:String(a.tradingName||a.businessName||''),address1:String(a.address1||''),address2:String(a.address2||''),
    town:String(a.town||''),county:String(a.county||''),postcode:String(a.postcode||''),code:String(a.code||''),
    previousId:String(a.previousId||''),changeType:String(a.changeType||''),
-   centreId:String(a.centreId||'')};
+   centreId:String(a.centreId||''),recordId:kind==='accreditation'?String(j.accreditationRecordId||''):String(a.recordId||'')};
  if(kind==='insurance'||kind==='membership'&&a.insurance==='yes')base.insurance=insuranceRequest(a);
  if(kind==='membership'&&a.insurance==='yes')base.service='membership';
  return base;
