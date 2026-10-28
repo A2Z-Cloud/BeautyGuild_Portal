@@ -167,11 +167,12 @@
     }else if(selection==='processing'){
       main='<section class="v12-detail-section"><h3>Processing and decisions</h3>'+fieldRows(entity,record,['Application_Status','Application_Stage','Underwriting_Status','Risk_Status','Sanctions_Status','Payment_Status','Policy_Status','Finance_Sync_Status','Next_Action','Next_Action_Date','Stop_Reason','Manual_Review_Outcome'],true)+'<div class="v12-warning">Risk decisions and payment status must be verified in CRM and the authoritative Catalyst service. This screen does not clear a referral or activate cover.</div></section>'+(typeof ctx.processing==='function'?ctx.processing(entity,record):'');
     }else{main=relationContent(entity,record,selection,ctx.crm,ctx.rerender);}
+    const extraAction=global.BGStaffAddons?.action(entity,record)||'';
     const header='<header class="v12-record-head"><div><span class="v12-kicker">'+safe(appNames[entity]||pretty(entity))+'</span><h2>'+safe(ctx.title(entity,record))+'</h2><p>'+safe(ctx.summary(entity,record)||'')+'</p></div><div class="v12-status-row">'+statusBar(entity,record)+'</div></header>';
     const navigation=[['details','Details'],['timeline','Timeline'],['processing','Processing']].map(p=>'<button class="v12-side-link '+(selection===p[0]?'active':'')+'" data-action="v12-tab" data-tab="'+p[0]+'">'+safe(p[1])+'</button>').join('');
     const related=relations.map(r=>'<button class="v12-side-link '+(selection===r.id?'active':'')+'" data-action="v12-tab" data-tab="'+safe(r.id)+'">'+safe(r.label)+'</button>').join('');
     const metaText=meta.loading?'CRM layout metadata loading…':meta.problems?.length?'Some CRM metadata could not be loaded; fields and relationships may be incomplete.':'CRM layout and field labels';
-    return '<div class="v12-record">'+header+'<div class="v12-actions">'+ctx.actions(entity,id)+'</div><div class="v12-record-layout"><div class="v12-main">'+main+'<p class="v12-meta-note">'+safe(metaText)+'</p></div><aside class="v12-side" aria-label="Record sections and related lists"><h3>Record</h3>'+navigation+'<h3>Related Lists</h3>'+related+'</aside></div></div>';
+    return '<div class="v12-record">'+header+'<div class="v12-actions">'+ctx.actions(entity,id)+extraAction+'</div><div class="v12-record-layout"><div class="v12-main">'+main+'<p class="v12-meta-note">'+safe(metaText)+'</p></div><aside class="v12-side" aria-label="Record sections and related lists"><h3>Record</h3>'+navigation+'<h3>Related Lists</h3>'+related+'</aside></div></div>';
   }
   async function action(el,focus,crm,rerender){
     if(!focus)return false;
