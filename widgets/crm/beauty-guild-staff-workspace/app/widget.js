@@ -625,7 +625,7 @@
       j.draftsBusy=true;j.draftsError='';render();
       try{
         const out=await window.BGStaffApi.call('drafts_get',{contactId:String(j.contact.id),service,id});
-        const d=out?.draft;if(!d?.answers||!d?.journeyId)throw Error('The draft response cannot be restored.');
+        const d=out?.draft;if(!d?.answers)throw Error('The draft response cannot be restored.');
         j.kind=d.service==='combined'?'membership':d.service;j.answers={...d.answers};
         j.step=Math.max(0,Number(d.step)||0);j.remote={id:String(d.id),service:d.service,journeyId:d.journeyId,revision:d.revision};
       }catch(e){j.draftsError=String(e.message||e);}
@@ -652,6 +652,8 @@
       try{
         const request={contactId:String(j.contact.id),service:'accreditation',id:j.remote.id,journeyId:j.remote.journeyId,revision:j.remote.revision,step:j.step,answers:j.answers};
         const response=await window.BGStaffApi.call('accreditation_submit',request);
+        if(!response?.accreditation?.id)throw Error('Accreditation submission was not confirmed.');
+        j.accreditationSubmitted=true;j.accreditationRecordId=String(response.accreditation.id);
         j.draftsMessage='Accreditation submitted. CRM confirmation: '+JSON.stringify(response);
       }catch(e){j.draftsError=String(e.message||e);}
       finally{j.draftsBusy=false;render();}
@@ -696,6 +698,7 @@
       try{
         if(!window.BGStaffApi?.call)throw Error('Signed staff API integration unavailable.');
         const kind=j.kind;
+        if(j.kind==='accreditation'&&!j.accreditationSubmitted)throw Error('Save and submit Accreditation before requesting its payable quote.');
         const base=window.BGJourney12.apiRequest(j);
         const payload={...base};
         if(window.BGStaffAddons?.quoteInputs&&kind==='membership')Object.assign(payload,window.BGStaffAddons.quoteInputs());
