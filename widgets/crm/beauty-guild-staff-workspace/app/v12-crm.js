@@ -154,7 +154,9 @@
        body+
        '<div class="v12-pager"><button class="button secondary" data-action="v12-rel-page" data-list="'+safe(name)+'" data-page="'+((item.page||1)-1)+'" '+((item.page||1)===1?'disabled':'')+'>Previous</button><span>Page '+(item.page||1)+'</span><button class="button secondary" data-action="v12-rel-page" data-list="'+safe(name)+'" data-page="'+((item.page||1)+1)+'" '+(!hasNext?'disabled':'')+'>Next</button></div>';
   }
+  let focusedRecord=null;
   function detailPage(entity,record,ctx){
+    focusedRecord={entity,record};
     const id=String(record.id),key=entity+':'+id,selection=chosen.get(key)||'details';
     const relations=relationList(entity),meta=metaCache.get(entity)||{};
     let main='';
@@ -193,5 +195,5 @@
     }
     return false;
   }
-  global.BGCRM12={prime,detailPage,tableRows,action,metadata:entity=>metaCache.get(entity)||null,relationList,format};
+  global.BGCRM12={prime,detailPage,tableRows,action,getFocusedRecord:()=>focusedRecord,metadata:entity=>metaCache.get(entity)||null,relationList,format};
 })(window);
