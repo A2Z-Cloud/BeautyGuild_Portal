@@ -626,7 +626,7 @@
       try{
         const out=await window.BGStaffApi.call('drafts_get',{contactId:String(j.contact.id),service,id});
         const d=out?.draft;if(!d?.answers)throw Error('The draft response cannot be restored.');
-        j.kind=d.service==='combined'?'membership':d.service;j.answers={...d.answers};
+        j.kind=d.service==='combined'?'membership':d.service;j.answers=window.BGJourney12.restoreAnswers(d);j.customerAccepted=false;j.liveQuote=null;j.lastQuoteInputs=null;
         j.step=Math.max(0,Number(d.step)||0);j.remote={id:String(d.id),service:d.service,journeyId:d.journeyId,revision:d.revision};
       }catch(e){j.draftsError=String(e.message||e);}
       finally{j.draftsBusy=false;render();}
@@ -663,9 +663,9 @@
       j.draftsBusy=true;j.draftsError='';j.draftsMessage='';render();
       try{
         const service=j.kind==='membership'&&j.answers.insurance==='yes'?'combined':j.kind;
-        const request={contactId:String(j.contact.id),service,answers:j.answers,step:Math.max(0,j.step),journeyId:j.remote?.journeyId||window.crypto?.randomUUID?.()};
+        const request={contactId:String(j.contact.id),service,answers:window.BGJourney12.draftAnswers(j),step:Math.max(0,j.step),journeyId:j.remote?.journeyId||window.crypto?.randomUUID?.()};
         if(!request.journeyId)throw Error('Secure journey ID generation is unavailable.');
-        if(j.remote){request.id=j.remote.id;request.revision=j.remote.revision;}
+        if(j.remote){if(j.remote.service!==service)throw Error('Application type changed. Discard the previous draft or start a new application before saving.');request.id=j.remote.id;request.revision=j.remote.revision;}
         const out=await window.BGStaffApi.call(j.remote?'drafts_update':'drafts_save',request);
         const d=out?.draft;if(!d?.id||!d?.revision)throw Error('Draft save was not confirmed by the server.');
         j.remote={id:String(d.id),service:d.service||service,journeyId:d.journeyId||request.journeyId,revision:d.revision};
