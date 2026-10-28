@@ -204,6 +204,10 @@ function render(j){
    '<button class="button secondary" type="button" data-action="journey-save" '+(j.draftsBusy?'disabled':'')+'>Save to CRM</button><button class="button secondary" type="button" data-action="journey-drafts">Resume draft</button>'+
    '<button class="linklike" type="button" data-action="journey-reset">Start again</button></footer></section>';
 }
+function invalidateQuote(j){
+ if(!j)return;
+ j.liveQuote=null;j.lastQuoteInputs=null;j.paymentLink='';j.paymentAlreadyPaid=false;j.customerAccepted=false;j.paymentError='';
+}
 function setField(j,el){
  const k=el.dataset.v12Field;if(!k)return false;
  const f=config(j.kind,j.answers).flatMap(s=>s.fields||[]).find(x=>x.name===k);
@@ -213,7 +217,7 @@ function setField(j,el){
   const a=Array.isArray(j.answers[k])?[...j.answers[k]]:[];
   j.answers[k]=el.checked?[...new Set([...a,el.value])]:a.filter(x=>x!==el.value);
  }else j.answers[k]=el.value;
- delete j.v12Errors?.[k];j.formError='';
+ invalidateQuote(j);delete j.v12Errors?.[k];j.formError='';
  return true;
 }
 function input(j,el){
@@ -224,7 +228,7 @@ function input(j,el){
   if(!Number.isInteger(index)||index<0||index>20||!['firstName','lastName','surname','email','type'].includes(key))return false;
   const a=Array.isArray(j.answers[name])?[...j.answers[name]]:[];
   while(a.length<=index)a.push({});
-  a[index]={...a[index],[key]:el.value};j.answers[name]=a;j.formError='';return true;
+  a[index]={...a[index],[key]:el.value};j.answers[name]=a;invalidateQuote(j);j.formError='';return true;
  }
  return false;
 }
@@ -232,14 +236,14 @@ function click(j,el){
  if(!j||j.step<0)return false;
  if(el.dataset?.v12Copy==='centre'&&j.kind==='accreditation'){
    for(const [from,to]of Object.entries(COPY_HOME_MAP))if(nonblank(j.answers[from]))j.answers[to]=j.answers[from];
-   return true;
+   invalidateQuote(j);return true;
  }
  const add=el.dataset?.v12Add,remove=el.dataset?.v12Remove;
  const name=add||remove;if(!['insNamedPeople','tutors'].includes(name))return false;
  const a=Array.isArray(j.answers[name])?[...j.answers[name]]:[];
  if(add&&a.length<(name==='insNamedPeople'?4:20))a.push(name==='insNamedPeople'?{type:'employee',firstName:'',lastName:''}:{firstName:'',surname:'',email:''});
  if(remove){const i=Number(el.dataset.v12Index);if(Number.isInteger(i)&&i>=0&&i<a.length)a.splice(i,1);}
- j.answers[name]=a;return true;
+ j.answers[name]=a;invalidateQuote(j);return true;
 }
 function advance(j,delta){
  const steps=config(j.kind,j.answers).filter(s=>show(s,j.answers));
