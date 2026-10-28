@@ -618,6 +618,31 @@
       }catch(e){j.draftsError=String(e.message||e);}
       finally{j.draftsBusy=false;render();}
     }
+    else if(action==='journey-discard'){
+      const j=state.journey,id=el.dataset.id,service=el.dataset.service;
+      if(!j?.contact?.id||!/^\d{10,25}$/.test(String(id||''))||!['membership','insurance','combined','accreditation'].includes(service))return;
+      if(!window.confirm('Discard this customer draft in CRM? This cannot be undone.'))return;
+      j.draftsBusy=true;j.draftsError='';render();
+      try{
+        await window.BGStaffApi.call('drafts_discard',{contactId:String(j.contact.id),service,id});
+        j.availableDrafts=(j.availableDrafts||[]).filter(d=>String(d.id)!==String(id));
+        if(j.remote?.id===id)j.remote=null;
+        j.draftsMessage='Draft discarded in CRM.';
+      }catch(e){j.draftsError=String(e.message||e);}
+      finally{j.draftsBusy=false;render();}
+    }
+    else if(action==='journey-accreditation-submit'){
+      const j=state.journey;
+      if(j?.kind!=='accreditation'||!j.remote?.id||j.draftsBusy)return;
+      if(!window.confirm('Submit this saved Accreditation draft to CRM for processing?'))return;
+      j.draftsBusy=true;j.draftsError='';render();
+      try{
+        const request={contactId:String(j.contact.id),service:'accreditation',id:j.remote.id,journeyId:j.remote.journeyId,revision:j.remote.revision,step:j.step,answers:j.answers};
+        const response=await window.BGStaffApi.call('accreditation_submit',request);
+        j.draftsMessage='Accreditation submitted. CRM confirmation: '+JSON.stringify(response);
+      }catch(e){j.draftsError=String(e.message||e);}
+      finally{j.draftsBusy=false;render();}
+    }
     else if(action==='journey-save'){
       const j=state.journey;if(!j?.contact?.id||!j.kind||j.draftsBusy)return;
       j.draftsBusy=true;j.draftsError='';j.draftsMessage='';render();
