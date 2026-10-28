@@ -177,7 +177,9 @@ function render(j){
  }
  return '<section class="v12-journey"><header><span class="process-kicker">STAFF-ASSISTED APPLICATION · PORTAL V2 QUESTIONS</span><h2>'+esc(j.kind[0].toUpperCase()+j.kind.slice(1))+'</h2></header>'+
   '<p class="v12-muted">Staff-assisted application. CRM draft saving is not available until the staff applications API is deployed.</p>'+
-  ctx+crumb+'<div class="v12-journey-body">'+body+'</div>'+
+  ctx+crumb+
+  (j.kind==='membership'&&j.step>=0?'<section class="v12-journey-tools"><strong>Existing membership changes</strong><p class="v12-muted">For a renewal or upgrade, retrieve eligible options from the selected customer’s existing CRM membership.</p><input id="staff-membership-record-id" inputmode="numeric" placeholder="CRM Membership Deal ID" /><button class="button secondary" type="button" data-action="journey-membership-options" '+(j.membershipOptionsLoading?'disabled':'')+'>Load membership options</button>'+(j.optionsError?'<p role="alert" class="v12-warning">'+esc(j.optionsError)+'</p>':'')+(j.membershipOptions?'<pre class="v12-quote-output">'+esc(JSON.stringify(j.membershipOptions,null,2))+'</pre>':'')+'</section>':'')+
+  '<div class="v12-journey-body">'+body+'</div>'+
   (j.draftsMessage?'<p role="status" class="v12-muted">'+esc(j.draftsMessage)+'</p>':'')+
   (j.draftsError?'<p role="alert" class="v12-warning">'+esc(j.draftsError)+'</p>':'')+
   (Array.isArray(j.availableDrafts)&&j.availableDrafts.length?'<section class="v12-detail-section"><h3>Saved customer drafts</h3>'+j.availableDrafts.map(d=>'<button type="button" class="button secondary" data-action="journey-load-draft" data-id="'+esc(d.id)+'" data-service="'+esc(d.service)+'">Resume '+esc(d.service)+' · '+esc(d.id)+'</button>').join('')+'</section>':'')+
