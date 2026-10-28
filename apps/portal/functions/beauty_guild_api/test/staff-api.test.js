@@ -353,10 +353,28 @@ test('me refuses an inactive user, a profile not on the list, an unknown user an
 });
 
 test('me fails closed, with a 503, when the CRM cannot say (for example a missing users scope)', async () => {
-  await withStaffApp({ crm: () => json({ code: 'OAUTH_SCOPE_MISMATCH' }, 401) }, async ({ call }) => {
-    const r = await call('/staff/me');
-    assert.equal(r.status, 503);
-    assert.equal(r.body.code, 'STAFF_LOOKUP_UNAVAILABLE');
+  await withStaffApp(
+    { crm: () => json({ code: 'OAUTH_SCOPE_MISMATCH', message: 'invalid oauth scope to access this API' }, 401) },
+    async ({ call, logs }) => {
+      const r = await call('/staff/me');
+      assert.equal(r.status, 503);
+      assert.deepEqual(
+        r.body,
+        { error: 'Staff lookup is unavailable.', code: 'STAFF_LOOKUP_UNAVAILABLE' },
+        'nothing extra to the caller',
+      );
+      // The log says why, so a missing scope can be told from a wrong URL or a broken connection.
+      const entry = JSON.parse(logs.find(l => l.includes('lookup_unavailable')));
+      assert.equal(entry.stage, 'crm');
+      assert.equal(entry.crmStatus, 401);
+      assert.equal(entry.crmCode, 'OAUTH_SCOPE_MISMATCH');
+      assert.match(entry.crmMessage, /oauth scope/);
+      assert.equal(logs.join('\n').includes('Zoho-oauthtoken'), false, 'no token in the log');
+    },
+  );
+  await withStaffApp({ crm: () => json({}, 400) }, async ({ call, logs }) => {
+    assert.equal((await call('/staff/me', { nonce: nonce(21) })).status, 503);
+    assert.equal(JSON.parse(logs.find(l => l.includes('lookup_unavailable'))).crmStatus, 400);
   });
   await withStaffApp(
     {
