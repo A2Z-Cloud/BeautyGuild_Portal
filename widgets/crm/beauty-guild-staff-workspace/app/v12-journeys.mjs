@@ -258,6 +258,29 @@ function advance(j,delta){
  if(stops.length)return false;
  j.v12Errors={};j.formError='';j.step=Math.min(steps.length,j.step+1);return true;
 }
+const CONSENT_KEYS=['accepted','termsAccepted','insInformationAccurate','insEthicsAccepted','insDemandsNeedsAccepted','insNonAdvisedAccepted'];
+function draftAnswers(j){
+ const a={...(j.answers||{})};
+ for(const key of CONSENT_KEYS)delete a[key];
+ if(j.kind==='accreditation')return a;
+ const iv={...a};for(const key of CONSENT_KEYS)delete iv[key];
+ if(j.kind==='insurance')return {insurance:{iv,country:a.country||'',start:a.start||''}};
+ const addons={};
+ for(const key of ['bundle','certificate','badge','sticker']){const n=Number(a['addon_'+key]||0);if(Number.isInteger(n)&&n>0)addons[key]=n;}
+ const f={level:a.level||'',branch:a.branch||'',branches:a.branches||[],billing:a.billing||'annual',addons,insurance:a.insurance==='yes',start:a.start||'',...(a.code?{code:a.code}:{})};
+ const d={firstName:a.firstName||'',lastName:a.lastName||'',email:a.email||'',tradingName:a.tradingName||'',mobile:a.mobile||'',address1:a.address1||'',address2:a.address2||'',town:a.town||'',county:a.county||'',postcode:a.postcode||'',country:a.country||''};
+ return {membership:{f,d},...(f.insurance?{insurance:{iv,country:a.country||''}}:{})};
+}
+function restoreAnswers(d){
+ const a=d?.answers||{};
+ if(d.service==='accreditation')return {...a};
+ if(d.service==='insurance'&&a.insurance?.iv)return {...a.insurance.iv,country:a.insurance.country||'',start:a.insurance.start||''};
+ if(a.membership?.f){
+   const f=a.membership.f,d=a.membership.d||{},ins=a.insurance;
+   return {...d,...(ins?.iv||{}),level:f.level,branch:f.branch,branches:f.branches,billing:f.billing,start:f.start,code:f.code||'',insurance:ins?'yes':'no',country:ins?.country||d.country||'',...Object.fromEntries(Object.entries(f.addons||{}).map(([k,v])=>['addon_'+k,v]))};
+ }
+ return {...a};
+}
 function apiRequest(j){
  const a=j?.answers||{},kind=j?.kind;
  if(!j?.contact?.id)throw Error('Select a CRM customer first.');
@@ -279,4 +302,4 @@ function apiRequest(j){
  if(kind==='membership'&&a.insurance==='yes')base.service='membership';
  return base;
 }
-window.BGJourney12={apiRequest,config,prefill,render,advance,input,click,loadCourses,courseSource,INSURANCE_STEPS,accreditationSteps};
+window.BGJourney12={apiRequest,draftAnswers,restoreAnswers,config,prefill,render,advance,input,click,loadCourses,courseSource,INSURANCE_STEPS,accreditationSteps};
