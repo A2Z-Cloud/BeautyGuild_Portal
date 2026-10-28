@@ -1,0 +1,8 @@
+.staff-api-dialog{width:min(760px,calc(100% - 24px));max-height:90vh;border:1px solid #e5dbe2;border-radius:12px;padding:22px;color:#332738;box-shadow:0 16px 60px #28192c33}
+.staff-api-dialog::backdrop{background:#21132799}.staff-api-head{display:flex;justify-content:space-between;gap:16px;align-items:start}
+.staff-api-head h2{margin:0 0 4px}.staff-api-dialog p{font-size:13px;color:#756775}
+.staff-api-actions{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}.staff-api-dialog label{display:block;font-size:12px;font-weight:650;margin:10px 0 5px}
+.staff-api-dialog textarea{width:100%;min-height:120px;padding:12px;border:1px solid #ded2dc;border-radius:8px;font:12px/1.5 monospace}
+.staff-api-dialog pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:260px;overflow:auto;background:#f7f4f6;border:1px solid #e9e2e7;border-radius:8px;padding:14px;font:12px/1.5 monospace}
+.staff-api-dialog pre[data-error="true"]{border-color:#c45569;background:#fff3f5}.staff-api-warning{background:#fff7ee;padding:10px;border-radius:7px}
+.staff-api-confirm{display:flex;gap:8px;align-items:start;font-size:12px}.staff-api-confirm input{margin-top:3px}
