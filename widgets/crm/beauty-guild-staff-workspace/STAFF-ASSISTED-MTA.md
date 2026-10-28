@@ -52,7 +52,7 @@ Rules carried over from the portal and the V1.2 brief:
 
 ## 5. Staff identity, declarations and audit
 
-- Record the staff user on each revision separately from the customer. This needs a field or a note on Policy_Revisions (for example `Requested_By_Staff`, name to be agreed), not yet created.
+- Record the staff user on each revision separately from the customer. Decided 28 October 2026: a CRM **Note** on the revision names the staff member (no new field). It is built for the revision save (`POST /staff/insurance-change/revision`).
 - The portal's repeated declarations are customer confirmations. For a staff-entered change, store them as **staff-attested** or send the link for the customer to confirm, matching the existing rule in SPECIFICATION.md section 6.3 and acceptance A14. Do not mark staff entries as customer-confirmed.
 - Use the revision name prefix `MTA` as the portal does (`PORTAL_REVISION_NAME_PREFIX`), so staff and customer revisions share one numbering style.
 
