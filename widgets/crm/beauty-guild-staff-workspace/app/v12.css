@@ -190,3 +190,5 @@
 @media(max-width:650px){.staff-cancellation-form,.staff-cancellation-amounts{grid-template-columns:1fr}.staff-cancellation-head{flex-direction:column}}
 
 .staff-cancel-authorise{display:flex!important;align-items:flex-start;gap:10px;margin:18px 0;padding:15px;background:#fff;border:1px solid #eadfe5;border-radius:10px;font-size:12px;line-height:1.6}.staff-cancel-authorise input{width:16px!important;height:16px;flex:none;margin-top:2px}.staff-cancellation-quote>.button{margin-top:10px}
+
+.journey-top-nav{display:flex;align-items:center;margin:0 0 18px}.journey-top-back{gap:7px;border:1px solid #e9dfe5!important;border-radius:9px!important;background:#fff!important;color:#5e5060!important;font-size:12px!important;padding:10px 15px!important}.journey-top-back:hover{background:#faf6f9!important}
