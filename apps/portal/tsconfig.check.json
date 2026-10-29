@@ -23,6 +23,8 @@
     "functions/beauty_guild_api/src/staff.js",
     "functions/beauty_guild_api/src/cancellations.js",
     "functions/beauty_guild_api/src/cancellationQuote.js",
-    "functions/beauty_guild_api/src/stripeRead.js"
+    "functions/beauty_guild_api/src/stripeRead.js",
+    "functions/beauty_guild_api/src/paymentFacts.js",
+    "functions/beauty_guild_api/src/creditCoupon.js"
   ]
 }

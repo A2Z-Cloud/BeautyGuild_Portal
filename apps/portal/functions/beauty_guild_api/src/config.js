@@ -59,6 +59,9 @@ function loadConfig(env = process.env) {
       .filter(Boolean),
     // Staff can create a Stripe Checkout link for a customer (POST /staff/payment-link). Off unless 'true'. Test mode only, like all checkout.
     staffPaymentLinksEnabled: env.PORTAL_STAFF_PAYMENT_LINKS_ENABLED === 'true',
+    // Associate to Full upgrade with the unused Associate fee credited (docs/delivery/cancellations-refunds-spec.md, section 3.6). Off unless 'true';
+    // off, an upgrade is priced exactly as before (the full Full price, no credit).
+    membershipUpgradeEnabled: env.PORTAL_MEMBERSHIP_UPGRADE_ENABLED === 'true',
     // Staff cancellation, downgrade and refund quotes (docs/delivery/cancellations-refunds-spec.md). Read only. Off unless 'true'.
     cancellationsEnabled: env.PORTAL_CANCELLATIONS_ENABLED === 'true',
     staffApiWindowSeconds: boundedInt(env.PORTAL_STAFF_API_WINDOW_SECONDS, 300, 30, 600),

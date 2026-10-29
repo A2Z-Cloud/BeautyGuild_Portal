@@ -22,6 +22,10 @@ const DESCRIPTIONS = {
   existing_membership:
     'JSON of the current membership (type, start_date, expiry_date, deal_id) when renewing or upgrading. Empty for a new member.',
   previous_membership_id: 'The Deal being renewed or upgraded. Empty for a new membership.',
+  upgrade_credit:
+    'Only on an upgrade from Associate to Full with the upgrade credit switched on: the unused Associate membership fee credited against this payment, gross (a one-time Stripe coupon on the first invoice, so `total_amount` is already net of it). Not a cash refund.',
+  previous_subscription_id:
+    "Only on an upgrade with a credit: the Associate membership's Stripe subscription, which Creator ends at `membership_start` once this payment is verified (the old Associate must not renew).",
   change_type: '`new`, `renewal` or `upgrade` for a purchase; `mta` for a change to a current membership.',
   membership_level: '`associate`, `full_non_salon` or `full_salon`.',
   primary_branch: 'The main branch: `beauty`, `holistic`, `nails` or `hair`.',
@@ -170,14 +174,17 @@ const INSURANCE_CORE = [
 
 // Keys per purchase type, on top of SESSION_COMMON. `required` is on every session of the type, `optional` only sometimes.
 const SESSION_TYPES = {
-  membership: { required: MEMBERSHIP_CORE, optional: [...JOIN_DETAILS, 'monthly_plan', 'discounts'] },
+  membership: {
+    required: MEMBERSHIP_CORE,
+    optional: [...JOIN_DETAILS, 'monthly_plan', 'discounts'],
+  },
   membership_insurance: {
     required: [
       ...MEMBERSHIP_CORE.filter(k => k !== 'insurance_route'),
       ...INSURANCE_CORE.filter(k => !MEMBERSHIP_CORE.includes(k)),
       'insurance_route',
     ],
-    optional: [...JOIN_DETAILS, 'monthly_plan', 'discounts'],
+    optional: [...JOIN_DETAILS, 'monthly_plan', 'discounts', 'upgrade_credit', 'previous_subscription_id'],
   },
   insurance: {
     required: [
