@@ -7,7 +7,6 @@ import {
   Camera,
   CheckCircle2,
   ExternalLink,
-  Globe,
   Image as ImageIcon,
   Info,
   LockKeyhole,
