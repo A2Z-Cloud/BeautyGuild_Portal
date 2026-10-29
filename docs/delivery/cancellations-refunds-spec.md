@@ -135,7 +135,7 @@ A new module (suggested name **Membership_Cancellations**, an owner decision whe
 | --- | --- |
 | Name (auto), Contact, Membership (Deal), Policy (lookup, optional) | |
 | Scenario | Cancel Associate, Cancel Full, Downgrade Full, Upgrade Associate |
-| Status | Pending, Subscription Ended, Refunding, Refunded, Refund Failed, Completed, Cancelled (withdrawn) |
+| Status | Pending, Subscription Ended, Refund Failed, Completed. The function sets all four, from Stripe's own answer to each step, so the record is right without waiting for Creator, which only records the refunds in Books |
 | Effective Date, Cooling Off (boolean) | |
 | Lines JSON | Each line: code (SKU), name, `paid_pence`, `refund_pence`, tax treatment. Creator reads this to build the Books credit note, so no breakdown has to travel in Stripe metadata |
 | Membership Refund, Premium Refund, IPT Refund, Fee Applied, Net Refund (pence or currency) | |
