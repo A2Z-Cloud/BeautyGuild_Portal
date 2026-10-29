@@ -729,9 +729,11 @@ function registerSchoolRoutes(
         TikTok: shortText(body.tiktok, 255, 'TikTok', 'INVALID_PROFILE') ?? null,
         LinkedIn: shortText(body.linkedIn, 255, 'LinkedIn', 'INVALID_PROFILE') ?? null,
         School_Image: shortText(body.imageUrl, 500, 'School image', 'INVALID_PROFILE') ?? null,
-        School_Image_ID: mediaId(body.imageId, 'School image'),
+        // Preserve existing WordPress ACF attachment IDs on ordinary text edits.
+        // Only explicitly submitted IDs can replace or clear the corresponding CRM field.
+        ...(Object.hasOwn(body, 'imageId') ? { School_Image_ID: mediaId(body.imageId, 'School image') } : {}),
         School_Logo: shortText(body.logoUrl, 500, 'School logo', 'INVALID_PROFILE') ?? null,
-        School_Logo_ID: mediaId(body.logoId, 'School logo'),
+        ...(Object.hasOwn(body, 'logoId') ? { School_Logo_ID: mediaId(body.logoId, 'School logo') } : {}),
         ...Object.fromEntries(Object.entries(FACILITY_FIELDS).map(([key, field]) => [field, facilities.includes(key)])),
       };
       await api.crmUpdate(req, 'Training_Centres', centreId, record);
