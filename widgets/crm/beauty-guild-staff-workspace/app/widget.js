@@ -392,6 +392,12 @@
          '<p class="v12-muted">Confirmation requires the matching quote hash, authorised CRM cancellation record and backend write switches. No cancellation or refund has been executed here.</p></section>':'')+
       '</div>';
   }
+  document.addEventListener('click',event=>{
+    const action=event.target?.closest?.('[data-action]')?.dataset?.action;
+    if(!event.target?.closest?.('#staff-cancellation-dialog'))return;
+    if(action==='membership-cancel-close'){cancellationDialog().close();event.preventDefault();}
+    else if(action==='membership-cancel-quote'){quoteCancellation();event.preventDefault();}
+  });
   function openCancellation(record){
     if(!state.contact?.id||!record?.id){setNotice('Open a Membership transaction linked to a CRM Contact before requesting cancellation.','error');return;}
     const type=String(record.Membership_Type||record.Member_Type||record.Membership_Level||'').toLowerCase();
