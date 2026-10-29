@@ -22,8 +22,16 @@ import './SchoolProfilePanel.css';
 
 // Keys are the existing Training_Centres profile fields accepted by PUT /schools/:id/profile.
 const editableFields = [
-  'contactName', 'website', 'about', 'facebook', 'instagram', 'tiktok',
-  'linkedIn', 'facilities', 'imageUrl', 'logoUrl',
+  'contactName',
+  'website',
+  'about',
+  'facebook',
+  'instagram',
+  'tiktok',
+  'linkedIn',
+  'facilities',
+  'imageUrl',
+  'logoUrl',
 ];
 const tabs = [
   { key: 'overview', label: 'Overview' },
@@ -41,7 +49,7 @@ const socials = [
 function editableProfile(profile) {
   const data = {};
   for (const key of editableFields) {
-    data[key] = key === 'facilities' ? [...(profile?.facilities || [])] : (profile?.[key] || '');
+    data[key] = key === 'facilities' ? [...(profile?.facilities || [])] : profile?.[key] || '';
   }
   return data;
 }
@@ -86,12 +94,19 @@ function MediaUpload({ kind, label, value, state, onPick, onUpload, disabled }) 
         {url ? (
           <img src={url} alt={label + ' currently saved for your school'} />
         ) : (
-          <div className="school-profile-media-placeholder"><ImageIcon size={30} aria-hidden="true" /><span>No {label.toLowerCase()} yet</span></div>
+          <div className="school-profile-media-placeholder">
+            <ImageIcon size={30} aria-hidden="true" />
+            <span>No {label.toLowerCase()} yet</span>
+          </div>
         )}
       </div>
       <div className="school-profile-media-controls">
         <h4>{label}</h4>
-        <p>{kind === 'logo' ? 'Your logo appears alongside your school listing.' : 'The main image represents your training centre.'}</p>
+        <p>
+          {kind === 'logo'
+            ? 'Your logo appears alongside your school listing.'
+            : 'The main image represents your training centre.'}
+        </p>
         {INTEGRATIONS.schoolMedia && !disabled ? (
           <>
             <label className="school-profile-file-picker">
@@ -113,19 +128,38 @@ function MediaUpload({ kind, label, value, state, onPick, onUpload, disabled }) 
                 </button>
               </div>
             )}
-            {state.status === 'done' && <span className="school-profile-media-success"><CheckCircle2 size={15} /> Uploaded. Save the profile to apply this image.</span>}
+            {state.status === 'done' && (
+              <span className="school-profile-media-success">
+                <CheckCircle2 size={15} /> Uploaded. Save the profile to apply this image.
+              </span>
+            )}
           </>
         ) : (
-          <small>{disabled ? 'Image changes are not currently enabled.' : 'Media uploads are not enabled for this portal.'}</small>
+          <small>
+            {disabled ? 'Image changes are not currently enabled.' : 'Media uploads are not enabled for this portal.'}
+          </small>
         )}
-        {state.error && <span className="school-profile-field-error" role="alert">{state.error}</span>}
-        {url && <a href={url} target="_blank" rel="noopener noreferrer">View current image <ExternalLink size={13} aria-hidden="true" /></a>}
+        {state.error && (
+          <span className="school-profile-field-error" role="alert">
+            {state.error}
+          </span>
+        )}
+        {url && (
+          <a href={url} target="_blank" rel="noopener noreferrer">
+            View current image <ExternalLink size={13} aria-hidden="true" />
+          </a>
+        )}
       </div>
     </section>
   );
 }
 function Detail({ label, value }) {
-  return <div className="school-profile-detail"><dt>{label}</dt><dd>{value || '—'}</dd></div>;
+  return (
+    <div className="school-profile-detail">
+      <dt>{label}</dt>
+      <dd>{value || '—'}</dd>
+    </div>
+  );
 }
 export default function SchoolProfilePanel({ data, schoolId, onDone }) {
   const profile = data.profile;
@@ -186,9 +220,12 @@ export default function SchoolProfilePanel({ data, schoolId, onDone }) {
     try {
       const dataBase64 = await fileToBase64(file);
       const result = await portalApi.uploadSchoolMedia(kind, {
-        fileName: file.name, mimeType: file.type, dataBase64,
+        fileName: file.name,
+        mimeType: file.type,
+        dataBase64,
       });
-      if (!result?.url || !result?.mediaId) throw new Error('The media upload did not return an image and attachment ID.');
+      if (!result?.url || !result?.mediaId)
+        throw new Error('The media upload did not return an image and attachment ID.');
       set(kind === 'logo' ? 'logoUrl' : 'imageUrl', result.url);
       setMediaIds(previous => ({ ...previous, [kind === 'logo' ? 'logoId' : 'imageId']: result.mediaId }));
       setMedia(previous => ({ ...previous, [kind]: { file: null, status: 'done', error: '' } }));
@@ -236,14 +273,25 @@ export default function SchoolProfilePanel({ data, schoolId, onDone }) {
           <p>Keep your training centre information accurate for prospective students.</p>
         </div>
         {publicUrl && (
-          <a className="btn btn-secondary school-profile-public-link" href={publicUrl} target="_blank" rel="noopener noreferrer">
+          <a
+            className="btn btn-secondary school-profile-public-link"
+            href={publicUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
             View public profile <ExternalLink size={15} aria-hidden="true" />
           </a>
         )}
       </div>
       <div className="school-profile-hero">
         <div className="school-profile-cover">
-          {image ? <img src={image} alt="" /> : <span><ImageIcon size={27} aria-hidden="true" /> No school image uploaded</span>}
+          {image ? (
+            <img src={image} alt="" />
+          ) : (
+            <span>
+              <ImageIcon size={27} aria-hidden="true" /> No school image uploaded
+            </span>
+          )}
         </div>
         <div className="school-profile-identity">
           <div className="school-profile-logo">
@@ -251,9 +299,14 @@ export default function SchoolProfilePanel({ data, schoolId, onDone }) {
           </div>
           <div className="school-profile-identity-text">
             <h3>{profile.name}</h3>
-            <p><MapPin size={14} aria-hidden="true" /> {[profile.town, profile.county].filter(Boolean).join(', ') || 'Location not provided'}</p>
+            <p>
+              <MapPin size={14} aria-hidden="true" />{' '}
+              {[profile.town, profile.county].filter(Boolean).join(', ') || 'Location not provided'}
+            </p>
             <div className="school-profile-chips">
-              <span><ShieldCheck size={14} aria-hidden="true" /> {profile.level || 'Training centre'}</span>
+              <span>
+                <ShieldCheck size={14} aria-hidden="true" /> {profile.level || 'Training centre'}
+              </span>
               <Status value={profile.status || 'Unknown'} />
             </div>
           </div>
@@ -261,8 +314,20 @@ export default function SchoolProfilePanel({ data, schoolId, onDone }) {
       </div>
       <div className="school-profile-summary">
         <div className="school-profile-progress">
-          <div className="school-profile-progress-header"><strong>Profile content</strong><span>{count} of {completion.length} items completed</span></div>
-          <div className="school-profile-progress-track" role="progressbar" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100} aria-label="Profile content completeness">
+          <div className="school-profile-progress-header">
+            <strong>Profile content</strong>
+            <span>
+              {count} of {completion.length} items completed
+            </span>
+          </div>
+          <div
+            className="school-profile-progress-track"
+            role="progressbar"
+            aria-valuenow={percent}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label="Profile content completeness"
+          >
             <span style={{ width: percent + '%' }} />
           </div>
           <p>Optional guidance based on your existing profile information, not an accreditation score.</p>
@@ -304,23 +369,54 @@ export default function SchoolProfilePanel({ data, schoolId, onDone }) {
               </div>
               <label className="school-profile-field">
                 <span>About the school</span>
-                <textarea rows={8} maxLength={2000} value={values.about} disabled={!canEdit} onChange={e => set('about', e.target.value)} />
+                <textarea
+                  rows={8}
+                  maxLength={2000}
+                  value={values.about}
+                  disabled={!canEdit}
+                  onChange={e => set('about', e.target.value)}
+                />
                 <small className="school-profile-count">{values.about.length}/2000 characters</small>
               </label>
-              <div className="school-profile-guidance"><BookOpen size={18} aria-hidden="true" /> Describe your teaching approach, experience and the environment students can expect. This uses your existing About the School field.</div>
+              <div className="school-profile-guidance">
+                <BookOpen size={18} aria-hidden="true" /> Describe your teaching approach, experience and the
+                environment students can expect. This uses your existing About the School field.
+              </div>
             </div>
           )}
           {activeTab === 'media' && (
             <div className="school-profile-content">
               <div className="school-profile-section-head">
                 <h3>Branding & media</h3>
-                <p>Choose your existing school logo and main school image. These are the two currently supported media fields.</p>
+                <p>
+                  Choose your existing school logo and main school image. These are the two currently supported media
+                  fields.
+                </p>
               </div>
               <div className="school-profile-media-list">
-                <MediaUpload kind="logo" label="School logo" value={values.logoUrl} state={media.logo} onPick={pickMedia} onUpload={uploadMedia} disabled={!canEdit} />
-                <MediaUpload kind="image" label="School image" value={values.imageUrl} state={media.image} onPick={pickMedia} onUpload={uploadMedia} disabled={!canEdit} />
+                <MediaUpload
+                  kind="logo"
+                  label="School logo"
+                  value={values.logoUrl}
+                  state={media.logo}
+                  onPick={pickMedia}
+                  onUpload={uploadMedia}
+                  disabled={!canEdit}
+                />
+                <MediaUpload
+                  kind="image"
+                  label="School image"
+                  value={values.imageUrl}
+                  state={media.image}
+                  onPick={pickMedia}
+                  onUpload={uploadMedia}
+                  disabled={!canEdit}
+                />
               </div>
-              <div className="school-profile-guidance"><Info size={18} aria-hidden="true" /> Upload the image first, then save your profile to apply it. Images upload to the existing WordPress media library.</div>
+              <div className="school-profile-guidance">
+                <Info size={18} aria-hidden="true" /> Upload the image first, then save your profile to apply it. Images
+                upload to the existing WordPress media library.
+              </div>
             </div>
           )}
           {activeTab === 'contact' && (
@@ -330,8 +426,20 @@ export default function SchoolProfilePanel({ data, schoolId, onDone }) {
                 <p>Maintain the contact information and social links already connected to your training centre.</p>
               </div>
               <div className="school-profile-fields-grid">
-                <Field label="Main contact name" maxLength={100} value={values.contactName} onChange={v => set('contactName', v)} disabled={!canEdit} />
-                <Field label="Website" value={values.website} onChange={v => set('website', v)} disabled={!canEdit} hint="Use the full address, including https://." />
+                <Field
+                  label="Main contact name"
+                  maxLength={100}
+                  value={values.contactName}
+                  onChange={v => set('contactName', v)}
+                  disabled={!canEdit}
+                />
+                <Field
+                  label="Website"
+                  value={values.website}
+                  onChange={v => set('website', v)}
+                  disabled={!canEdit}
+                  hint="Use the full address, including https://."
+                />
               </div>
               <h4>Social media</h4>
               <div className="school-profile-fields-grid">
@@ -355,9 +463,12 @@ export default function SchoolProfilePanel({ data, schoolId, onDone }) {
                       type="checkbox"
                       checked={values.facilities.includes(value)}
                       disabled={!canEdit}
-                      onChange={e => set('facilities', e.target.checked
-                        ? [...values.facilities, value]
-                        : values.facilities.filter(x => x !== value))}
+                      onChange={e =>
+                        set(
+                          'facilities',
+                          e.target.checked ? [...values.facilities, value] : values.facilities.filter(x => x !== value),
+                        )
+                      }
                     />
                     {label}
                   </label>
@@ -371,7 +482,10 @@ export default function SchoolProfilePanel({ data, schoolId, onDone }) {
                 <h3>Registration & accreditation</h3>
                 <p>These details are managed by the Guild Accreditation team and cannot be edited here.</p>
               </div>
-              <div className="school-profile-locked"><LockKeyhole size={18} aria-hidden="true" /> Need a correction to your registered details? Contact the Accreditation team.</div>
+              <div className="school-profile-locked">
+                <LockKeyhole size={18} aria-hidden="true" /> Need a correction to your registered details? Contact the
+                Accreditation team.
+              </div>
               <dl className="school-profile-details">
                 <Detail label="Registered training centre" value={profile.name} />
                 <Detail label="Town / city" value={profile.town} />
@@ -384,12 +498,19 @@ export default function SchoolProfilePanel({ data, schoolId, onDone }) {
                 <Detail label="Referral code" value={profile.referralCode} />
               </dl>
               {profile.referralCode && profile.referralActive && (
-                <a className="school-profile-referral" href={'https://beautyguild.com/Join/' + encodeURIComponent(profile.referralCode)} target="_blank" rel="noopener noreferrer">
+                <a
+                  className="school-profile-referral"
+                  href={'https://beautyguild.com/Join/' + encodeURIComponent(profile.referralCode)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
                   View school referral landing page <ExternalLink size={14} aria-hidden="true" />
                 </a>
               )}
               {INTEGRATIONS.stripeCheckout && profile.payable && (
-                <Link className="btn btn-primary" to={'/pay/accreditation/' + profile.id}>Pay for accreditation <ArrowRight size={15} aria-hidden="true" /></Link>
+                <Link className="btn btn-primary" to={'/pay/accreditation/' + profile.id}>
+                  Pay for accreditation <ArrowRight size={15} aria-hidden="true" />
+                </Link>
               )}
             </div>
           )}
@@ -401,16 +522,24 @@ export default function SchoolProfilePanel({ data, schoolId, onDone }) {
           </span>
           {canEdit ? (
             <div>
-              <button type="button" className="btn btn-secondary" disabled={busy || uploading} onClick={discard}>Discard changes</button>
+              <button type="button" className="btn btn-secondary" disabled={busy || uploading} onClick={discard}>
+                Discard changes
+              </button>
               <button type="submit" className="btn btn-primary" disabled={busy || uploading || pendingUpload || !dirty}>
                 {busy ? 'Saving…' : 'Save changes'}
               </button>
             </div>
           ) : (
-            <small><LockKeyhole size={14} aria-hidden="true" /> Profile editing is currently unavailable.</small>
+            <small>
+              <LockKeyhole size={14} aria-hidden="true" /> Profile editing is currently unavailable.
+            </small>
           )}
         </div>
-        {pendingUpload && <p className="school-profile-pending" role="status">Upload or clear the selected image before saving.</p>}
+        {pendingUpload && (
+          <p className="school-profile-pending" role="status">
+            Upload or clear the selected image before saving.
+          </p>
+        )}
       </form>
     </div>
   );
