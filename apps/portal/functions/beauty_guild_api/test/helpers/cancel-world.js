@@ -15,6 +15,11 @@ function cancelWorld({
   invoiceAmount = 12780,
   failRefunds = 0,
   noCancellationModule = false,
+  monthly = false,
+  instalments = 3,
+  lineShape = 'old',
+  linesHasMore = false,
+  extraLines = [],
 } = {}) {
   const w = fixture(over);
   const stripeCalls = [];
@@ -35,8 +40,8 @@ function cancelWorld({
       type: 'membership_insurance',
       membership_start: iso(-5),
       membership_expiry: iso(360),
-      subscription_type: 'annual',
-      base_membership_amount: '55.00',
+      subscription_type: monthly ? 'monthly' : 'annual',
+      base_membership_amount: monthly ? '4.59' : '55.00',
       insurance_net_amount: '65.00',
       insurance_ipt_amount: '7.80',
       ...session.metadata,
@@ -52,6 +57,41 @@ function cancelWorld({
     },
     ...subscription,
   };
+  // A monthly payer: `instalments` paid invoices, each with the membership fee share, two premium lines, IPT and the admin fee, the first also with the
+  // joining fee. Lines name a price by id; the price holds the price list code (the line shape is old or new to test both).
+  const PRICES = {
+    price_mem: { id: 'price_mem', lookup_key: 'MEM-FULLNS-Y', recurring: { interval: 'month' } },
+    price_prem: { id: 'price_prem', recurring: { interval: 'month' }, product: { metadata: { sku: 'INS-MEDMAL-NS' } } },
+    price_ipt: { id: 'price_ipt', recurring: { interval: 'month' }, product: { metadata: { sku: 'INS-IPT' } } },
+    price_admin: { id: 'price_admin', lookup_key: 'MEM-ADMIN', recurring: { interval: 'month' } },
+    price_join: { id: 'price_join', lookup_key: 'MEM-JOIN', recurring: null },
+    price_employee: { id: 'price_employee', lookup_key: 'MEM-FULLNS-Y', recurring: null },
+    price_unknown: { id: 'price_unknown', recurring: null, product: { metadata: {} } },
+  };
+  const lineOf = (priceId, amount) =>
+    lineShape === 'new'
+      ? { amount, pricing: { price_details: { price: priceId } } }
+      : { amount, price: { id: priceId } };
+  const monthlyInvoices = () =>
+    Array.from({ length: instalments }, (_, i) => {
+      const lines = [
+        lineOf('price_mem', 459),
+        lineOf('price_prem', 271),
+        lineOf('price_prem', 271),
+        lineOf('price_ipt', 65),
+        lineOf('price_admin', 150),
+        ...(i === 0 ? [lineOf('price_join', 1000)] : []),
+        ...extraLines.map(([id, amount]) => lineOf(id, amount)),
+      ];
+      return {
+        id: 'in_' + (i + 1),
+        amount_paid: lines.reduce((t, l) => t + l.amount, 0),
+        created: 1700000000 + i,
+        payment_intent: 'pi_' + (i + 1),
+        lines: { data: linesHasMore ? lines.slice(0, 2) : lines, has_more: linesHasMore },
+        _all: lines,
+      };
+    });
   const base = w.fetchImpl;
   const ok = body => json(body);
   w.fetchImpl = async (url, init = {}) => {
@@ -93,8 +133,18 @@ function cancelWorld({
         return ok(refund);
       }
       if (u.includes('/refunds?')) return ok({ data: w.refunds });
+      const priceId = /\/prices\/(price_[a-z_]+)/.exec(u);
+      if (priceId) return PRICES[priceId[1]] ? ok(PRICES[priceId[1]]) : json({}, 404);
+      const linesFor = /\/invoices\/(in_\d)\/lines/.exec(u);
+      if (linesFor) return ok({ data: monthlyInvoices().find(i => i.id === linesFor[1])._all });
       if (u.includes('/invoices?'))
-        return ok({ data: [{ id: 'in_1', amount_paid: invoiceAmount, created: 1700000000, payment_intent: 'pi_1' }] });
+        return ok({
+          data: monthly
+            ? monthlyInvoices()
+                .map(({ _all, ...inv }) => inv)
+                .reverse()
+            : [{ id: 'in_1', amount_paid: invoiceAmount, created: 1700000000, payment_intent: 'pi_1' }],
+        });
       if (u.includes('/checkout/sessions/cs_1')) return ok(SESSION);
       if (u.includes('/subscriptions/search')) return ok({ data: [{ id: 'sub_1' }] });
       if (u.includes('/checkout/sessions?')) return ok({ data: [SESSION] });

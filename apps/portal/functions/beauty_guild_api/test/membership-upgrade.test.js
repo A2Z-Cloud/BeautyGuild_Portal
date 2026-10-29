@@ -82,6 +82,35 @@ test('with the switch off nothing changes: no credit, no coupon and none of the 
   assert.equal(params.has('metadata[previous_subscription_id]'), false);
 });
 
+test('an Associate who pays monthly is credited what they have paid beyond the value used (4 shares of £4.59 paid, 90 days used: £4.77)', async () => {
+  const monthly = {
+    ...ASSOCIATE_SESSION,
+    metadata: { ...ASSOCIATE_SESSION.metadata, subscription_type: 'monthly', base_membership_amount: '4.59' },
+  };
+  const paid = n =>
+    Array.from({ length: n }, (_, i) => ({
+      id: 'in_a' + i,
+      amount_paid: 459,
+      created: 1700000000 + i,
+      lines: { data: [{ amount: 459, price: { id: 'price_assoc_mem' } }], has_more: false },
+    }));
+  const credit = async n => {
+    let out;
+    await withApp(
+      upgrading({ associateSession: monthly, associateInvoices: paid(n) }),
+      async ({ quote }) => (out = await quote(asked())),
+      UPGRADE,
+    );
+    return out;
+  };
+  // The year is 12 shares (£55.08); 90 of 365 days are used, valued at £13.59 (rounded up); 4 shares paid is £18.36.
+  const four = await credit(4);
+  assert.equal(four.status, 200, JSON.stringify(four.body));
+  assert.equal(four.body.quote.upgrade.creditPence, 477);
+  // Paid no more than the value used: no credit, never negative.
+  assert.equal((await credit(2)).body.quote.upgrade.creditPence, 0);
+});
+
 test('a credit larger than what is charged is capped at it, never paid out', async () => {
   const big = { ...ASSOCIATE_SESSION, metadata: { ...ASSOCIATE_SESSION.metadata, base_membership_amount: '5500.00' } };
   await withApp(

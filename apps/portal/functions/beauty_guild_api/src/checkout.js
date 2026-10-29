@@ -220,12 +220,27 @@ function registerCheckoutRoutes(
     });
     if (found.status !== 'ok') throw notAvailable('We could not confirm the payment for your current membership.');
     const session = found.session;
-    if (String(session.metadata.subscription_type) !== 'annual')
-      throw notAvailable('Upgrading a membership you pay for monthly is not available online yet.');
-    const paid = gbpToPence(session.metadata.base_membership_amount);
+    const frequency = String(session.metadata.subscription_type);
+    if (frequency !== 'annual' && frequency !== 'monthly')
+      throw notAvailable('We could not read how you pay for your current membership.');
+    // A yearly payer has paid the whole fee. A monthly payer's year is twelve shares: the fee for the year is twelve times the share, and the credit is
+    // limited to the shares actually paid so far (read from the paid instalments).
+    let paid = gbpToPence(session.metadata.base_membership_amount);
+    let yearFee = paid;
+    let paidToDate;
+    if (frequency === 'monthly') {
+      if (paid == null) throw notAvailable('We could not read what you paid for your current membership.');
+      yearFee = paid * 12;
+      const instalments = await paymentFacts.monthlyPaid({ subscriptionId: session.subscription });
+      if (!instalments.instalments)
+        throw notAvailable('We could not confirm the payments for your current membership.');
+      paidToDate = instalments.membershipPence;
+      paid = paidToDate;
+    }
     if (paid == null) throw notAvailable('We could not read what you paid for your current membership.');
     const credit = computeUpgradeCredit({
-      membershipFeePence: paid,
+      membershipFeePence: yearFee,
+      ...(paidToDate === undefined ? {} : { paidToDatePence: paidToDate }),
       start: deal.Start_Date,
       end: deal.Expiry_Date,
       upgradeDate: start,
