@@ -125,6 +125,33 @@ test('if the CRM record cannot be made, Stripe is never touched', async () => {
   assert.equal(w.refunds.length, 0);
 });
 
+test('a field the CRM rejects is named in the log (never to the caller), and Stripe is still untouched', async () => {
+  const w = cancelWorld({ noCancellationModule: 'badField' });
+  const logs = [];
+  const orig = console.log;
+  console.log = line => logs.push(String(line));
+  try {
+    await withStaff(
+      w,
+      async ({ call }) => {
+        const r = await confirmAfterQuote(call);
+        assert.equal(r.status, 502);
+        assert.deepEqual(r.body, {
+          error: 'The CRM did not confirm the change. Nothing further was done.',
+          code: 'CRM_UNAVAILABLE',
+        });
+      },
+      ON,
+    );
+  } finally {
+    console.log = orig;
+  }
+  const entry = JSON.parse(logs.find(l => l.includes('record_not_created')));
+  assert.equal(entry.crmCode, 'INVALID_DATA');
+  assert.equal(entry.crmField, 'Cancellation_Status');
+  assert.equal(stripeWrites(w).length, 0);
+});
+
 test('confirming the same cancellation twice (a double click, a resend) is one cancellation: no second refund, no second call to end the subscription', async () => {
   const w = cancelWorld();
   await withStaff(

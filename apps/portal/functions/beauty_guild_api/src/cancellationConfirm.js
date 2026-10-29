@@ -373,7 +373,20 @@ function createCancellationConfirm({
       subscriptions: q.stripe.subscriptions.map(s => s.id),
     };
     // The record first. If this fails nothing else happens.
-    const id = await crmWriter.create(req, MODULE, recordFor(q, plan, actor, hash, body));
+    let id;
+    try {
+      id = await crmWriter.create(req, MODULE, recordFor(q, plan, actor, hash, body));
+    } catch (e) {
+      audit({
+        staffUserId: actor.id,
+        contactId: q.contact.id,
+        scenario: plan.scenario,
+        outcome: 'record_not_created',
+        code: e.code || '',
+        ...(e.diag || {}),
+      });
+      throw e;
+    }
     audit({
       cancellationId: id,
       staffUserId: actor.id,

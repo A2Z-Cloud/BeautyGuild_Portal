@@ -103,7 +103,22 @@ function cancelWorld({
     }
     // The CRM cancellation record (a module the Guild has yet to create) and its Note.
     if (du.includes('/crm/v3/Membership_Cancellations')) {
-      if (noCancellationModule) return json({ code: 'INVALID_MODULE' }, 400);
+      // A field name the CRM does not know: the search works, the create is rejected naming the field.
+      if (noCancellationModule === 'badField' && method === 'POST')
+        return json(
+          {
+            data: [
+              {
+                status: 'error',
+                code: 'INVALID_DATA',
+                message: 'invalid data',
+                details: { api_name: 'Cancellation_Status' },
+              },
+            ],
+          },
+          400,
+        );
+      if (noCancellationModule === true) return json({ code: 'INVALID_MODULE' }, 400);
       if (method === 'POST') {
         w.events.push('crm:create');
         const rec = { id: String(++seq), ...JSON.parse(init.body).data[0] };
