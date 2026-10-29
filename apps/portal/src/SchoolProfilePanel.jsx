@@ -140,7 +140,7 @@ export default function SchoolProfilePanel({ data, schoolId, onDone }) {
     logo: { file: null, status: 'idle', error: '' },
   });
   const canEdit = INTEGRATIONS.schoolWrites;
-  const dirty = JSON.stringify(values) !== JSON.stringify(initial);
+  const dirty = JSON.stringify(values) !== JSON.stringify(initial) || Object.keys(mediaIds).length > 0;
   const pendingUpload = Boolean(media.image.file || media.logo.file);
   const uploading = media.image.status === 'uploading' || media.logo.status === 'uploading';
   const set = (key, value) => setValues(previous => ({ ...previous, [key]: value }));
