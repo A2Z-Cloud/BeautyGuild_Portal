@@ -60,7 +60,7 @@ used_net   = round up ( annual_premium_net x used_days / term_days )
 premium_refund = max(0, paid_net - used_net)
 ipt_refund     = min( IPT actually paid, round down ( premium_refund x 12% ) )
 ```
-Example: three instalments of £9.34 (£28.02 paid, premium and IPT together) and 61 days used (value used £18.72) leave £9.30, which is below the £10 fee, so no refund is due.
+Example: three instalments of £8.34 premium and £1.00 IPT (£25.02 and £3.00 paid) and 61 days used (premium value used £16.72) leave a premium refund of £8.30 and IPT of £0.99, £9.29 before the fee, which is below the £10 fee, so no refund is due. (The calculation is on net premium and IPT separately, as the Guild's schedule shows them.)
 
 ### 3.4 Totals
 ```text
@@ -91,7 +91,7 @@ Unused days run from the upgrade date (the new insurance start date, up to 30 da
 | Fee larger than refund | Unused premium and IPT £8.00 | gross £8.00, fee applied £8.00, net **£0.00**, `no_refund_due` |
 | Cooling off | Cancelled 25 May 2026 (7 days after a 18 May start) | membership fee, premium £100.00 and IPT £12.00 refunded, **no fee** |
 | Cooling off boundary | Policy start 18 May 2026 | 1 June 2026 qualifies, 2 June does not |
-| Monthly payer | 3 x £9.34 paid, 61 days used | refund before fee £9.30, net **£0.00** |
+| Monthly payer | 3 instalments: £25.02 premium and £3.00 IPT paid, 61 days used | refund before fee £9.29, net **£0.00** |
 | Guild upgrade example | £20 due back, £85 for Full | charge **£65** |
 
 ## 4. Who does what
