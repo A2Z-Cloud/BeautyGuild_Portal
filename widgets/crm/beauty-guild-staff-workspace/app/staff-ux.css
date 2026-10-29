@@ -67,3 +67,9 @@ body.staff-dev-tools #staff-api-open{display:inline-flex}
 .record-statuses .pill.draft,.status-pair .pill.draft{color:var(--staff-draft)}
 .record-statuses .pill.neutral,.status-pair .pill.neutral{color:var(--staff-neutral)}
 .status-missing{color:#8e858e;font-size:11px}
+
+.staff-mta-linkage{border:1px solid #eee3e9;border-radius:7px;padding:11px 13px;margin:13px 0;background:#fdfafd}
+.staff-mta-linkage summary{cursor:pointer;color:#9d3570;font-size:12px;font-weight:750}
+.staff-mta-linkage[open] summary{margin-bottom:10px}
+.staff-mta-linkage .staff-addon-info{margin:9px 0}
+.staff-mta-linkage label{display:block}
