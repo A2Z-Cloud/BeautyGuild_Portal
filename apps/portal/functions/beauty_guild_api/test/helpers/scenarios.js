@@ -63,6 +63,23 @@ const SCHOOL = [
     Account: { id: '1011174000003698036', name: 'Test Academy' },
   },
 ];
+const UPGRADE = { PORTAL_MEMBERSHIP_UPGRADE_ENABLED: 'true' };
+const dayIso = n => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10);
+// An Associate membership of 90 days ago, bought yearly for GBP 55.00: its unused part is credited when it is upgraded to Full.
+const UPGRADING = { ...ASSOCIATE, Start_Date: dayIso(-90), Expiry_Date: dayIso(274) };
+const ASSOCIATE_SESSION = {
+  id: 'cs_associate',
+  mode: 'subscription',
+  payment_status: 'paid',
+  subscription: 'sub_prev',
+  metadata: {
+    contact_id: IDS.me,
+    membership_start: UPGRADING.Start_Date,
+    membership_expiry: UPGRADING.Expiry_Date,
+    subscription_type: 'annual',
+    base_membership_amount: '55.00',
+  },
+};
 const SCENARIOS = [
   ['membership: new, yearly', { unlinked: true }, BUY],
   [
@@ -72,6 +89,18 @@ const SCENARIOS = [
   ],
   ['membership: monthly', { unlinked: true }, { ...BUY, billing: 'monthly' }],
   ['membership: renewal', { deals: [ASSOCIATE] }, { ...BUY, previousId: IDS.deal }],
+  [
+    'membership with insurance: upgrade from Associate, unused fee credited',
+    { deals: [UPGRADING], previousDeal: UPGRADING, associateSession: ASSOCIATE_SESSION, env: UPGRADE },
+    {
+      ...BUY,
+      level: 'full_non_salon',
+      insurance: INS_OK,
+      country: 'United Kingdom',
+      previousId: IDS.deal,
+      changeType: 'upgrade',
+    },
+  ],
   [
     'membership with insurance: yearly',
     { unlinked: true },
@@ -129,4 +158,4 @@ const SCENARIOS = [
   ],
 ];
 
-module.exports = { SCENARIOS };
+module.exports = { SCENARIOS, UPGRADING, ASSOCIATE_SESSION, UPGRADE, INS_OK, BUY, FULL, ASSOCIATE };

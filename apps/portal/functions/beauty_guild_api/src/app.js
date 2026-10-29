@@ -185,6 +185,7 @@ function createApp({
     insuranceChangesPaymentEnabled: config.insuranceChangesPaymentEnabled,
     revisionNamePrefix: config.revisionNamePrefix,
     staffPaymentLinksEnabled: config.staffPaymentLinksEnabled,
+    membershipUpgradeEnabled: config.membershipUpgradeEnabled,
     creatorReader: createCreatorReader({
       getCreatorHeaders,
       creatorApiDomain: config.creatorApiDomain,

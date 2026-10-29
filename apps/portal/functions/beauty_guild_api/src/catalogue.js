@@ -525,7 +525,7 @@ SERVICES.insurance = {
 SERVICES.membership = {
   title: 'Membership',
   allowNoContact: true,
-  async prepare({ req, crm, contact, input, user, risk, discounts }) {
+  async prepare({ req, crm, contact, input, user, risk, discounts, upgradeCredit = null }) {
     const level = String(input.level || ''),
       branch = String(input.branch || '');
     if (level === 'international')
@@ -572,6 +572,19 @@ SERVICES.membership = {
         'MEMBERSHIP_EXISTS',
       );
     const { start, end: expiry } = resolveStart(input.start, 'membership');
+    // An upgrade from Associate to Full, with the unused Associate fee credited (only while the upgrade switch is on: see checkout.js). The
+    // helper refuses anything that is not an active, annual Associate membership whose payment can be confirmed, rather than charge the full price.
+    const upgrade =
+      change === 'upgrade' && upgradeCredit
+        ? await upgradeCredit({
+            req,
+            contact,
+            previousId: previous,
+            level,
+            start,
+            hasInsurance: Boolean(input.insurance),
+          })
+        : null;
 
     // On a monthly plan the yearly price is divided by 12. The joining fee and the add-ons are spread over the first 12 payments only
     // (term year_one); the membership and any extra branches carry on (see plans.js).
@@ -600,6 +613,7 @@ SERVICES.membership = {
       lines,
       monthly: billing === 'monthly',
       renews: true,
+      upgrade,
       noContact: !contact,
       inline: ins?.inline || [],
       blocked: ins?.blocked || null,
@@ -636,6 +650,13 @@ SERVICES.membership = {
             : '',
           previous_membership_id: previous || '',
           change_type: change,
+          // An upgrade with a credit: what was credited, and the Associate's Stripe subscription, which Creator ends once the upgrade is paid.
+          ...(upgrade
+            ? {
+                upgrade_credit: pounds(upgrade.appliedPence ?? upgrade.creditPence),
+                previous_subscription_id: upgrade.previousSubscriptionId || '',
+              }
+            : {}),
           name,
           ...detailsMeta(input),
           membership_level: level,

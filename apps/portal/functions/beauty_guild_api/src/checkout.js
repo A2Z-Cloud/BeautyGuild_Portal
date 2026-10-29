@@ -12,6 +12,11 @@ const { ITEMS, SERVICES, pounds, netPounds, membershipChangeOptions } = require(
 const { prorate } = require('./prorata');
 const { saveRevision } = require('./insuranceRevisions');
 const { loadCover } = require('./cover');
+const { createCreditCoupon } = require('./creditCoupon');
+const { createPaymentFacts, gbpToPence } = require('./paymentFacts');
+const { createStripeReader } = require('./stripeRead');
+const { levelOf } = require('./cancellationQuote');
+const { upgradeCredit: computeUpgradeCredit } = require('./cancellations');
 const plans = require('./plans');
 const { createDiscounts } = require('./discounts');
 const { createCrmStore } = require('./voucherAdapter');
@@ -43,6 +48,7 @@ function registerCheckoutRoutes(
     insuranceChangesPaymentEnabled = false,
     revisionNamePrefix = '',
     staffPaymentLinksEnabled = false,
+    membershipUpgradeEnabled = false,
     // Reads voucher use history from Creator (creatorReports.js). Without it a voucher fails closed, as the use history cannot be checked.
     creatorReader = undefined,
     enabled,
@@ -182,7 +188,82 @@ function registerCheckoutRoutes(
     }
   }
 
-  async function build(req, input, { guest = false, createContact = false, staff = null } = {}) {
+  // The unused Associate fee credited against an upgrade to Full (spec 3.6). Refuses, rather than charging the full price, anything that is not an
+  // active, annual Associate membership of this Contact whose payment can be confirmed in Stripe, and an upgrade to anything but Full with insurance.
+  const stripeGet = createStripeReader({ stripeKey, fetchImpl });
+  const paymentFacts = createPaymentFacts({ stripeGet });
+  const notAvailable = message =>
+    new HttpError(422, 'UPGRADE_NOT_AVAILABLE', message + ' Please call the office to upgrade.');
+  async function upgradeCreditFor({ req, contact, previousId, level, start, hasInsurance }) {
+    if (!contact || !ID.test(String(previousId))) throw notAvailable('We could not find your membership.');
+    if (!/^full_/.test(level)) throw notAvailable('An upgrade is to a Full membership.');
+    if (!hasInsurance)
+      throw notAvailable('An upgrade is to a Full membership with insurance, so choose your insurance.');
+    const deal = (
+      await crm(
+        req,
+        'Deals/' +
+          previousId +
+          '?fields=' +
+          encodeURIComponent('Contact_Name,Stage,Membership_Type,Start_Date,Expiry_Date'),
+      )
+    )[0];
+    if (!deal || String(deal.Contact_Name?.id) !== String(contact.id))
+      throw notAvailable('We could not find your membership.');
+    if (levelOf(deal.Membership_Type) !== 'associate')
+      throw notAvailable('Only an Associate membership can be upgraded online.');
+    if (!/^active$/i.test(String(deal.Stage || ''))) throw notAvailable('Your membership is not active.');
+    const found = await paymentFacts.findMembershipSession({
+      contactId: String(contact.id),
+      start: deal.Start_Date,
+      end: deal.Expiry_Date,
+    });
+    if (found.status !== 'ok') throw notAvailable('We could not confirm the payment for your current membership.');
+    const session = found.session;
+    if (String(session.metadata.subscription_type) !== 'annual')
+      throw notAvailable('Upgrading a membership you pay for monthly is not available online yet.');
+    const paid = gbpToPence(session.metadata.base_membership_amount);
+    if (paid == null) throw notAvailable('We could not read what you paid for your current membership.');
+    const credit = computeUpgradeCredit({
+      membershipFeePence: paid,
+      start: deal.Start_Date,
+      end: deal.Expiry_Date,
+      upgradeDate: start,
+    });
+    return {
+      previousId: String(previousId),
+      creditPence: credit.creditPence,
+      usedDays: credit.usedDays,
+      unusedDays: credit.unusedDays,
+      termDays: credit.termDays,
+      previousStart: String(deal.Start_Date),
+      previousEnd: String(deal.Expiry_Date),
+      previousSubscriptionId: session.subscription ? String(session.subscription) : '',
+    };
+  }
+  // The credit comes off what is charged now: the first payment on a monthly plan. A credit larger than that is capped, never paid out. It
+  // cannot be combined with the additional branch discount (one Stripe coupon per checkout).
+  function applyUpgradeCredit(b) {
+    const u = b.prepared && b.prepared.upgrade;
+    if (!u || b.alreadyPaid) return b;
+    if (b.branchCoupon)
+      throw new HttpError(
+        422,
+        'UPGRADE_NOT_AVAILABLE',
+        'An upgrade cannot be combined with an additional branch discount yet. Please call the office to upgrade.',
+      );
+    const appliedPence = Math.min(u.creditPence, b.totalPence);
+    u.appliedPence = appliedPence;
+    return {
+      ...b,
+      upgrade: { ...u, appliedPence, netPence: b.totalPence - appliedPence },
+      totalPence: b.totalPence - appliedPence,
+    };
+  }
+  async function build(req, input, options = {}) {
+    return applyUpgradeCredit(await buildPriced(req, input, options));
+  }
+  async function buildPriced(req, input, { guest = false, createContact = false, staff = null } = {}) {
     const service = SERVICES[input.service];
     if (!service) throw new HttpError(422, 'INVALID_REQUEST', 'Choose something to pay for.');
     // Creator does not handle this payment type yet, so it stays off until the switch is turned on (PORTAL_MEMBERSHIP_CHANGES_ENABLED).
@@ -210,6 +291,7 @@ function registerCheckoutRoutes(
       user: staff ? { id: 'staff:' + staff.actor.id } : guest ? null : req.portalUser,
       risk: guest ? null : riskChecks,
       discounts,
+      upgradeCredit: membershipUpgradeEnabled ? upgradeCreditFor : null,
     });
     if (prepared.alreadyPaid) return { service, contact, alreadyPaid: true };
     // An insurance change is payable only when the writes and the payment switches are both on (docs/delivery/mta-r3-plan.md, the gate).
@@ -483,6 +565,19 @@ function registerCheckoutRoutes(
           ...(b.discountLines?.length ? { discounts: b.discountLines } : {}),
           ...(b.prepared.codeResult && b.prepared.codeResult.status !== 'applied'
             ? { codeResult: { status: b.prepared.codeResult.status, message: b.prepared.codeResult.message } }
+            : {}),
+          // An upgrade from Associate: the unused Associate fee credited, and what is left to pay (`totalPence` is already the net).
+          ...(b.upgrade
+            ? {
+                upgrade: {
+                  creditPence: b.upgrade.creditPence,
+                  appliedPence: b.upgrade.appliedPence,
+                  netPence: b.upgrade.netPence,
+                  unusedDays: b.upgrade.unusedDays,
+                  termDays: b.upgrade.termDays,
+                  associateEnds: b.upgrade.previousEnd,
+                },
+              }
             : {}),
           // A monthly plan: 12 payments a year, the first including the joining fee and any add-ons in full, every later one (and every renewal) the same ongoing amount.
           ...(b.plan
@@ -845,6 +940,23 @@ function registerCheckoutRoutes(
           entries: b.entries.filter(e => e.sku === BRANCH),
           key: 'portal-v2-coupon-' + couponKey,
         });
+      }
+      // The upgrade credit's coupon (never with the branch coupon: applyUpgradeCredit refuses that).
+      if (b.upgrade && b.upgrade.appliedPence > 0) {
+        const creditKey = crypto
+          .createHash('sha256')
+          .update(
+            [b.contact?.id || payer.id, b.upgrade.previousId, b.upgrade.appliedPence, Math.floor(now() / 120000)].join(
+              '|',
+            ),
+          )
+          .digest('hex')
+          .slice(0, 40);
+        couponId = await createCreditCoupon(
+          stripe,
+          { amountOffPence: b.upgrade.appliedPence, previousMembershipId: b.upgrade.previousId },
+          { key: 'portal-v2-credit-' + creditKey },
+        );
       }
       const discountsEntry = () =>
         discountsMetadata(

@@ -11,13 +11,12 @@ const crypto = require('node:crypto');
 const { HttpError } = require('./errors');
 const { loadCover } = require('./cover');
 const engine = require('./cancellations');
+const { createPaymentFacts, gbpToPence } = require('./paymentFacts');
 
 const ID = /^\d{10,25}$/;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const uri = encodeURIComponent;
 const text = v => (v == null ? '' : String(v).trim());
-// "55.00" -> 5500. Anything that is not a plain amount is unreadable, not zero.
-const gbpToPence = v => (/^\d+(\.\d{1,2})?$/.test(text(v)) ? Math.round(Number(text(v)) * 100) : null);
 const sum = rows => rows.reduce((t, n) => t + n, 0);
 
 // A membership type is Associate or Full ("Associate Member", "Full Member (Non-Salon)").
@@ -33,24 +32,7 @@ const skuFamily = sku =>
 function createCancellationQuotes({ enabled, call, stripeGet, staffContact, now = Date.now }) {
   const blockedBy = (list, code, message) => list.push({ code, message });
 
-  // The checkout sessions that could be this membership's payment: the policy's own session, and the sessions of the Contact's subscriptions.
-  // Stripe search can lag by about a minute, so a very new membership may not be found yet.
-  async function candidateSessions(req, { contactId, policySessionId }) {
-    const found = [];
-    if (policySessionId) {
-      const s = await stripeGet('/checkout/sessions/' + uri(policySessionId));
-      if (s) found.push(s);
-    }
-    const subs = await stripeGet(
-      '/subscriptions/search?limit=20&query=' + uri("metadata['contact_id']:'" + contactId + "'"),
-    );
-    for (const sub of (subs && subs.data) || []) {
-      if (found.some(s => s.subscription === sub.id)) continue;
-      const list = await stripeGet('/checkout/sessions?limit=1&subscription=' + uri(sub.id));
-      for (const s of (list && list.data) || []) found.push(s);
-    }
-    return found;
-  }
+  const payments = createPaymentFacts({ stripeGet });
 
   async function subscriptionItems(id) {
     const sub = await stripeGet('/subscriptions/' + uri(id) + '?expand[]=items.data.price.product');
@@ -171,27 +153,23 @@ function createCancellationQuotes({ enabled, call, stripeGet, staffContact, now 
     let insurancePaid = null;
     const subscriptionIds = [];
     if (!blocking.length) {
-      const sessions = await candidateSessions(req, { contactId: String(contact.id), policySessionId });
-      const paidMine = s =>
-        s.payment_status === 'paid' &&
-        s.mode === 'subscription' &&
-        text(s.metadata && s.metadata.contact_id) === String(contact.id);
-      const membershipSessions = sessions.filter(
-        s =>
-          paidMine(s) &&
-          text(s.metadata.membership_start) === text(m.startDate) &&
-          text(s.metadata.membership_expiry) === text(m.endDate),
-      );
-      if (membershipSessions.length === 0)
+      const found = await payments.findMembershipSession({
+        contactId: String(contact.id),
+        start: m.startDate,
+        end: m.endDate,
+        policySessionId,
+      });
+      const sessions = found.sessions;
+      if (found.status === 'none')
         blockedBy(
           blocking,
           'TERM_NOT_VERIFIED',
           'No Stripe payment was found for this membership term. It may have renewed, or was paid a moment ago (Stripe search lags by about a minute).',
         );
-      else if (membershipSessions.length > 1)
+      else if (found.status === 'ambiguous')
         blockedBy(blocking, 'AMBIGUOUS_PAYMENT', 'More than one Stripe payment matches this membership term.');
       else {
-        const s = membershipSessions[0];
+        const s = found.session;
         if (text(s.metadata.subscription_type) !== 'annual')
           blockedBy(
             blocking,

@@ -39,8 +39,16 @@ const IDS = {
 
 // liveStripe: true sends every Stripe request to the real Stripe API (test mode, with the key in env.STRIPE_SECRET_KEY) and records
 // the sessions it made in state.liveSessions; the CRM stays fake.
-function world({ deals = [], acc = {}, unlinked = false, liveStripe = false, schools = [], previousDeal = {} } = {}) {
-  const state = { stripePosts: [], crmPosts: [], liveSessions: [] };
+function world({
+  deals = [],
+  acc = {},
+  unlinked = false,
+  liveStripe = false,
+  schools = [],
+  previousDeal = {},
+  associateSession = null,
+} = {}) {
+  const state = { stripePosts: [], crmPosts: [], liveSessions: [], couponPosts: [] };
   const json = (body, status = 200) => ({ status, ok: status < 400, json: async () => body });
   state.fetchImpl = async (url, init = {}) => {
     url = String(url);
@@ -73,6 +81,15 @@ function world({ deals = [], acc = {}, unlinked = false, liveStripe = false, sch
     if (url === 'https://api.stripe.com/v1/checkout/sessions') {
       state.stripePosts.push({ params: new URLSearchParams(init.body) });
       return json({ id: 'cs_test_1', url: 'https://checkout.stripe.com/c/pay/cs_test_1' });
+    }
+    // An upgrade reads the Associate's paid checkout session (found through the Contact's subscriptions) and makes a credit coupon.
+    if (associateSession && url.startsWith('https://api.stripe.com/v1/subscriptions/search'))
+      return json({ data: [{ id: 'sub_prev' }] });
+    if (associateSession && url.startsWith('https://api.stripe.com/v1/checkout/sessions?'))
+      return json({ data: [associateSession] });
+    if (url === 'https://api.stripe.com/v1/coupons') {
+      state.couponPosts.push({ params: new URLSearchParams(init.body) });
+      return json({ id: 'coupon_test_' + state.couponPosts.length });
     }
     if (url.includes('/checkout/sessions/')) return json({}, 404);
     if (init.method === 'POST' && url.includes('/crm/v3/')) {
@@ -135,7 +152,15 @@ async function withApp(state, fn, env = {}) {
       });
       return { status: r.status, body: await r.json() };
     };
-    await fn({ post });
+    const quote = async body => {
+      const r = await fetch('http://127.0.0.1:' + server.address().port + '/portal/checkout/quote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      return { status: r.status, body: await r.json() };
+    };
+    await fn({ post, quote });
   } finally {
     await new Promise(resolve => server.close(resolve));
   }
