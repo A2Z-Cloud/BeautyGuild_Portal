@@ -163,6 +163,23 @@ function quoteSummary(result){
  (q.codeResult?.message?'<p class="v12-warning">'+esc(q.codeResult.message)+'</p>':'')+
  '</section>';
 }
+function pricingAside(j){
+ const a=j.answers||{},q=j.liveQuote?.quote;
+ const fmt=v=>v===undefined||v===null?'—':pounds(v);
+ const kind=j.kind==='membership'?'Membership':j.kind==='insurance'?'Insurance':'Accreditation';
+ const sel=j.kind==='membership'
+  ?[a.level?['Member type',String(a.level).replaceAll('_',' ')]:null,a.billing?['Billing',a.billing==='monthly'?'Monthly':'Annual']:null,a.insurance==='yes'?['Insurance','Included']:null,Array.isArray(a.branches)&&a.branches.length?['Extra branches',String(a.branches.length)]:null]
+  :j.kind==='insurance'?[a.start?['Start date',a.start]:null]:[a.billing?['Billing',a.billing]:null];
+ const lines=(q&&Array.isArray(q.lines)?q.lines:[]).slice(0,12).map(l=>'<div class="staff-price-line"><span>'+esc(l.name||'Item')+'</span><strong>'+fmt(l.totalPence)+'</strong></div>').join('');
+ const selections=sel.filter(Boolean).map(x=>'<div class="staff-price-line"><span>'+esc(x[0])+'</span><strong>'+esc(x[1])+'</strong></div>').join('');
+ const extra=q?.plan?'<div class="staff-price-line"><span>First payment</span><strong>'+fmt(q.plan.firstPaymentPence)+'</strong></div><div class="staff-price-line"><span>Later payments</span><strong>'+fmt(q.plan.laterPaymentPence)+'</strong></div>':'';
+ const message=q?'Authoritative Catalyst quotation. Changes to the application invalidate this amount.':'Prices are confirmed by the Beauty Guild pricing service. Continue answering questions, then calculate a quote before sharing an amount.';
+ return '<aside class="staff-price-rail" aria-label="Application price summary"><div class="staff-price-head"><h3>Price summary</h3><span class="staff-price-status">'+(q?(q.payable?'Verified quote':'Review required'):'Quote needed')+'</span></div>'+
+ '<p class="staff-price-customer">'+esc(kind)+(j.contact?' · '+esc([j.contact.First_Name,j.contact.Last_Name].filter(Boolean).join(' ')||j.contact.Full_Name||'Selected customer'):'')+'</p>'+
+ (q?lines:selections)+extra+
+ '<div style="padding-top:13px"><span class="staff-price-copy">'+(q?'Quoted amount':'Pay today')+'</span><div class="staff-price-total">'+(q?fmt(q.totalPence):'—')+'</div>'+
+ '<p class="staff-price-copy">'+message+'</p></div></aside>';
+}
 function render(j){
  if(!j?.kind||j.step<0)return '';
  const steps=config(j.kind,j.answers).filter(s=>show(s,j.answers));
@@ -195,7 +212,7 @@ function render(j){
   '<p class="v12-muted">Staff-assisted application. CRM draft saving is not available until the staff applications API is deployed.</p>'+
   ctx+crumb+
   (j.kind==='membership'&&j.step>=0?'<section class="v12-journey-tools"><strong>Existing membership changes</strong><p class="v12-muted">For a renewal or upgrade, retrieve eligible options from the selected customer’s existing CRM membership.</p><input id="staff-membership-record-id" inputmode="numeric" placeholder="CRM Membership Deal ID" /><button class="button secondary" type="button" data-action="journey-membership-options" '+(j.membershipOptionsLoading?'disabled':'')+'>Load membership options</button>'+(j.optionsError?'<p role="alert" class="v12-warning">'+esc(j.optionsError)+'</p>':'')+(j.membershipOptions?'<pre class="v12-quote-output">'+esc(JSON.stringify(j.membershipOptions,null,2))+'</pre>':'')+'</section>':'')+
-  '<div class="v12-journey-body">'+body+'</div>'+
+  '<div class="staff-journey-grid"><div class="staff-journey-primary"><div class="v12-journey-body">'+body+'</div></div>'+pricingAside(j)+'</div>'+
   (j.draftsMessage?'<p role="status" class="v12-muted">'+esc(j.draftsMessage)+'</p>':'')+
   (j.draftsError?'<p role="alert" class="v12-warning">'+esc(j.draftsError)+'</p>':'')+
   (Array.isArray(j.availableDrafts)&&j.availableDrafts.length?'<section class="v12-detail-section"><h3>Saved customer drafts</h3>'+j.availableDrafts.map(d=>'<button type="button" class="button secondary" data-action="journey-load-draft" data-id="'+esc(d.id)+'" data-service="'+esc(d.service)+'">Resume '+esc(d.service)+' · '+esc(d.id)+'</button>').join('')+'</section>':'')+
