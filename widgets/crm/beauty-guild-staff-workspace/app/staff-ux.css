@@ -56,3 +56,14 @@ body.staff-dev-tools #staff-api-open{display:inline-flex}
 .staff-mta-summary .staff-price-line{font-size:11px}
 .staff-mta-dialog .staff-addon-info{line-height:1.5}
 @media(max-width:620px){.staff-mta-progress span{font-size:9px;padding:7px 4px}.staff-contact-select{display:none}}
+
+/* Semantic text states for the primary module lists */
+.record-statuses .pill,.status-pair .pill{display:inline-flex;align-items:center;gap:6px;border:0;background:transparent;padding:0;font-size:12px;font-weight:750;border-radius:0}
+.record-statuses .pill:before,.status-pair .pill:before{content:"";width:7px;height:7px;flex:none;border-radius:50%;background:currentColor}
+.record-statuses .pill.ok,.status-pair .pill.ok{color:var(--staff-success)}
+.record-statuses .pill.danger,.status-pair .pill.danger{color:var(--staff-danger)}
+.record-statuses .pill.attention,.status-pair .pill.attention{color:var(--staff-warning)}
+.record-statuses .pill.info,.status-pair .pill.info{color:var(--staff-info)}
+.record-statuses .pill.draft,.status-pair .pill.draft{color:var(--staff-draft)}
+.record-statuses .pill.neutral,.status-pair .pill.neutral{color:var(--staff-neutral)}
+.status-missing{color:#8e858e;font-size:11px}
