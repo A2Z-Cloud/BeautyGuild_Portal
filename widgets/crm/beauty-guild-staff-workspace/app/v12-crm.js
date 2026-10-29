@@ -116,8 +116,18 @@
     return groups;
   }
   function statusBar(entity,record){
-    const keys=['Application_Status','Stage','Current_Membership_Status','Underwriting_Status','Risk_Status','Sanctions_Status','Payment_Status','Policy_Status','Document_Status','Accreditation_Status','Application_Stage'];
-    return keys.filter(k=>record[k]!==undefined&&record[k]!==null).map(k=>{const editor=global.BGAccredEdit&&global.BGAccredEdit.render(entity,record,k);return '<span class="v12-status v12-'+iconStatus(record[k])+'"><span>'+safe(pretty(k))+'</span> <strong>'+(editor||safe(format(k,record[k])))+'</strong></span>';}).join('');
+    const config={
+      Insurance_Policy:['Application_Status','Underwriting_Status','Payment_Status','Policy_Status'],
+      Deals:['Stage','Payment_Status'],
+      Membership:['Current_Membership_Status'],
+      Training_Centre_Accred:['Application_Stage','Accreditation_Status','Payment_Status']
+    };
+    const keys=config[entity]||['Status','Application_Status','Payment_Status','Policy_Status','Risk_Status','Investigation_Status'];
+    return keys.filter(k=>Object.prototype.hasOwnProperty.call(record,k)).map(k=>{
+      const raw=record[k],missing=raw===undefined||raw===null||raw==='';
+      const editor=global.BGAccredEdit&&global.BGAccredEdit.render(entity,record,k);
+      return '<span class="v12-status v12-'+(missing?'neutral':iconStatus(raw))+'"><span>'+safe(pretty(k))+'</span><strong>'+(editor||safe(missing?'Not recorded':format(k,raw)))+'</strong></span>';
+    }).join('');
   }
   function relationList(entity){
     const x=metaCache.get(entity)||{};
