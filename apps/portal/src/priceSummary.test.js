@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { dueToday, planSummary, thenCharge, waivedLine, offersCode } from './priceSummary.js';
+import { dueToday, planSummary, thenCharge, upgradeCredit, waivedLine, offersCode } from './priceSummary.js';
 
 const annual = {
   totalPence: 6500,
@@ -96,4 +96,21 @@ test('a waived joining fee is shown as a waived line, and the code box is offere
   assert.equal(offersCode({ joiningFee: { due: false } }), false);
   assert.equal(offersCode(annual), false, 'discounts off: the server sends no joiningFee, so no box');
   assert.equal(offersCode(null), false);
+});
+
+test('an upgrade shows the credit and what is left to pay, which is already the total due today', () => {
+  const quote = {
+    totalPence: 9857,
+    upgrade: { creditPence: 4143, appliedPence: 4143, netPence: 9857, unusedDays: 275, termDays: 365 },
+    lines: [],
+  };
+  assert.deepEqual(upgradeCredit(quote), { pence: 4143, netPence: 9857, unusedDays: 275, termDays: 365 });
+  assert.equal(dueToday(quote), 9857);
+  assert.equal(upgradeCredit({ totalPence: 100, lines: [] }), null);
+  assert.equal(
+    upgradeCredit({ upgrade: { creditPence: 0, appliedPence: 0, netPence: 100 } }),
+    null,
+    'nothing to credit, nothing shown',
+  );
+  assert.equal(upgradeCredit(null), null);
 });

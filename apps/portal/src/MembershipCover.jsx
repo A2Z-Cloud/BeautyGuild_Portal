@@ -4,6 +4,7 @@ import { formatDate } from './format.js';
 import { Link } from 'react-router-dom';
 import { INTEGRATIONS, portalApi } from './services/api.js';
 import { eligibility } from './insuranceChangeForm.js';
+import { canUpgrade, upgradeLink } from './membershipUpgrade.js';
 
 const money = pence => '£' + (pence / 100).toFixed(2);
 const GUILD_PHONE = '01332 224830';
@@ -117,11 +118,25 @@ export function CoverSummary({ state, id }) {
           )}
         </>
       ) : (
-        <p className="school-empty-text">
-          {/associate/i.test(membership.type || '')
-            ? 'Associate membership does not include insurance.'
-            : 'We could not find a current insurance policy on this membership.'}
-        </p>
+        <>
+          <p className="school-empty-text">
+            {/associate/i.test(membership.type || '')
+              ? 'Associate membership does not include insurance.'
+              : 'We could not find a current insurance policy on this membership.'}
+          </p>
+          {INTEGRATIONS.membershipUpgrade &&
+            canUpgrade(
+              { type: membership.type, status: membership.status, endDate: membership.endDate },
+              new Date().toISOString().slice(0, 10),
+            ) && (
+              <p>
+                <Link className="btn btn-primary" to={upgradeLink(id)}>
+                  Upgrade to Membership with Insurance
+                </Link>{' '}
+                <small className="muted">The unused part of your Associate membership fee is credited.</small>
+              </p>
+            )}
+        </>
       )}
       {INTEGRATIONS.insuranceChanges && insurance && eligibility(cover).online ? (
         <p>

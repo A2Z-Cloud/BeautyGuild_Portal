@@ -11,7 +11,8 @@ export { isExpired };
 export function useServiceRecords(kind) {
   const [rows, setRows] = useState(null);
   useEffect(() => {
-    if (!INTEGRATIONS.crmRecords) {
+    // A page that has no use for records passes no kind, and nothing is fetched.
+    if (!kind || !INTEGRATIONS.crmRecords) {
       setRows([]);
       return undefined;
     }

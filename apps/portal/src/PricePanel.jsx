@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { formatDate } from './format.js';
 import { isFuture } from './startDate.js';
-import { dueToday, planSummary, thenCharge, waivedLine } from './priceSummary.js';
+import { dueToday, planSummary, thenCharge, upgradeCredit, waivedLine } from './priceSummary.js';
 
 const money = pence => '£' + (pence / 100).toFixed(2);
 
@@ -22,6 +22,7 @@ export default function PricePanel({
   const then = thenCharge(quote),
     plan = planSummary(quote),
     waived = waivedLine(quote),
+    credit = upgradeCredit(quote),
     future = isFuture(start);
   return (
     <aside className="price-panel" aria-label="Your price" aria-live="polite">
@@ -93,6 +94,14 @@ export default function PricePanel({
                   ))}
                 </div>
               )}
+              {credit && (
+                <div className="price-rows">
+                  <div className="price-row price-credit">
+                    <span>Credit for the unused part of your Associate membership</span>
+                    <strong>-{money(credit.pence)}</strong>
+                  </div>
+                </div>
+              )}
               <div className="price-total">
                 <span>Due today</span>
                 <strong>{money(dueToday(quote))}</strong>
@@ -128,6 +137,12 @@ export default function PricePanel({
               )}
               {future && (
                 <p className="price-then">Starts on {formatDate(start)}. It shows as Coming soon until then.</p>
+              )}
+              {credit && (
+                <p className="price-then">
+                  The credit is the part of your Associate membership fee you have not used, worked out to your new
+                  start date. Your Associate membership carries on until your new membership starts.
+                </p>
               )}
               {note && <p className="price-then">{note}</p>}
               <p className="price-vat">Prices include VAT and Insurance Premium Tax where they apply.</p>
