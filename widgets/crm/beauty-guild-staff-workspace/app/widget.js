@@ -372,6 +372,51 @@
     finally{state.savingReview=false;render();}
   }
 
+  const cancellationState={busy:false,quote:null,error:'',response:null,dealId:'',contactId:'',scenario:'',effectiveDate:'',reason:''};
+  function cancellationDialog(){
+    let d=document.getElementById('staff-cancellation-dialog');
+    if(!d){d=document.createElement('dialog');d.id='staff-cancellation-dialog';d.className='staff-cancellation-dialog';document.body.appendChild(d);}
+    return d;
+  }
+  function cancellationHtml(){
+    const c=cancellationState,q=c.quote;
+    const money=n=>Number.isSafeInteger(Number(n))?'£'+(Number(n)/100).toFixed(2):'Not supplied';
+    const warnings=a=>Array.isArray(a)&&a.length?'<ul>'+a.map(v=>'<li>'+esc(v.message||v.code||String(v))+'</li>').join('')+'</ul>':'';
+    return '<div class="staff-cancellation-head"><div><span class="v12-kicker">STAFF-ONLY MEMBERSHIP SERVICE</span><h2>Cancellation and downgrade review</h2><p>All prices and eligibility come from the secured Portal V2 service. Quoting does not change membership, payments or subscriptions.</p></div><button type="button" class="button secondary" data-action="membership-cancel-close">Close</button></div>'+
+      '<div class="staff-cancellation-form"><label>Membership Deal ID<input readonly value="'+esc(c.dealId)+'"></label><label>Requested action<select id="staff-cancellation-scenario"><option value="cancel_associate" '+(c.scenario==='cancel_associate'?'selected':'')+'>Cancel Associate</option><option value="cancel_full" '+(c.scenario==='cancel_full'?'selected':'')+'>Cancel Full membership</option><option value="downgrade_full" '+(c.scenario==='downgrade_full'?'selected':'')+'>Downgrade Full to Associate</option></select></label><label>Effective date<input id="staff-cancellation-date" type="date" value="'+esc(c.effectiveDate)+'"></label><label>Membership refund override (pence, optional)<input id="staff-cancellation-override" type="number" min="0" step="1" placeholder="Leave blank for standard rules"></label><label>Override reason<input id="staff-cancellation-reason" placeholder="Required if overriding refund"></label></div>'+
+      '<div class="staff-cancellation-actions"><button type="button" class="button primary" data-action="membership-cancel-quote" '+(c.busy?'disabled':'')+'>Calculate cancellation quote</button></div>'+
+      (c.busy?'<p role="status">Checking CRM and Stripe…</p>':'')+(c.error?'<p class="v12-warning" role="alert">'+esc(c.error)+'</p>':'')+
+      (c.response?'<section class="staff-cancellation-quote"><h3>'+((c.response.quotable&&q)?'Cancellation financial summary':'Cancellation cannot be quoted')+'</h3>'+
+         (q?'<div class="staff-cancellation-amounts"><div><span>Membership refund</span><strong>'+money(q.membership?.refundPence)+'</strong></div><div><span>Insurance refund</span><strong>'+money(q.insurance?.refundPence)+'</strong></div><div><span>Cancellation fee</span><strong>'+money(q.feeAppliedPence)+'</strong></div><div><span>Net refund</span><strong>'+money(q.netRefundPence)+'</strong></div></div><p>Effective: '+esc(q.effectiveDate||'Not recorded')+' · Cooling off: '+(q.coolingOff?'Yes':'No')+'</p>':'')+
+         warnings(c.response.blocking)+warnings(c.response.warnings)+
+         '<p class="v12-muted">Confirmation requires the matching quote hash, authorised CRM cancellation record and backend write switches. No cancellation or refund has been executed here.</p></section>':'')+
+      '</div>';
+  }
+  function openCancellation(record){
+    if(!state.contact?.id||!record?.id){setNotice('Open a Membership transaction linked to a CRM Contact before requesting cancellation.','error');return;}
+    const type=String(record.Membership_Type||record.Member_Type||record.Membership_Level||'').toLowerCase();
+    const scenario=type.includes('associate')?'cancel_associate':'cancel_full';
+    Object.assign(cancellationState,{busy:false,quote:null,response:null,error:'',dealId:String(record.id),contactId:String(state.contact.id),scenario,effectiveDate:new Date().toISOString().slice(0,10)});
+    const d=cancellationDialog();d.innerHTML=cancellationHtml();d.showModal?.();
+  }
+  async function quoteCancellation(){
+    const c=cancellationState;if(c.busy)return;
+    const d=cancellationDialog();
+    c.scenario=d.querySelector('#staff-cancellation-scenario')?.value||c.scenario;
+    c.effectiveDate=d.querySelector('#staff-cancellation-date')?.value||'';
+    const refund=d.querySelector('#staff-cancellation-override')?.value?.trim()||'';
+    const reason=d.querySelector('#staff-cancellation-reason')?.value?.trim()||'';
+    if(!c.effectiveDate){c.error='An effective date is required.';d.innerHTML=cancellationHtml();return;}
+    const body={contactId:c.contactId,membershipId:c.dealId,scenario:c.scenario,effectiveDate:c.effectiveDate};
+    if(refund!==''){if(!/^\d+$/.test(refund)){c.error='Refund override must be a whole number of pence.';d.innerHTML=cancellationHtml();return;}if(!reason){c.error='Give a reason for the refund override.';d.innerHTML=cancellationHtml();return;}body.membershipRefundPence=Number(refund);body.overrideReason=reason;}
+    c.busy=true;c.error='';c.response=null;c.quote=null;d.innerHTML=cancellationHtml();
+    try{
+      const result=await window.BGStaffApi.call('cancellation_quote',body);
+      if(typeof result?.quotable!=='boolean')throw Error('The CRM dispatcher has not returned the cancellation quote contract. Confirm that cancellation_quote is mapped to POST /staff/cancellation.');
+      c.response=result;c.quote=result.quotable?result.quote:null;
+    }catch(e){c.error=String(e.message||e);}
+    finally{c.busy=false;d.innerHTML=cancellationHtml();}
+  }
   function membershipServiceDashboard(entity,record){
     if(![M.PROFILE,M.DEAL].includes(entity)||!state.contact)return '';
     const c=state.contact,contactId=String(c.id);
@@ -404,6 +449,7 @@
       '</section><section><h4>Renewal and service actions</h4>'+
         '<p class="v12-muted">Renewals and upgrades follow the existing application and checkout logic. Payment is verified from CRM after Creator processes the Stripe event.</p>'+
         '<div class="membership-service-actions">'+
+          (activeDeal?.id?'<button type="button" class="button secondary" data-action="membership-cancel-open" data-id="'+esc(activeDeal.id)+'">Cancellation / downgrade quote</button>':'')+
           '<button type="button" class="button primary" data-action="journey-start" data-kind="membership">New membership / renewal</button>'+
           recordLink(M.DEAL,activeDeal,'Review current transaction')+
         '</div></section></div></section>';
@@ -687,6 +733,9 @@
       }catch(e){j.optionsError=String(e.message||e);}
       finally{j.membershipOptionsLoading=false;render();}
     }
+    else if(action==='membership-cancel-open'){const deal=allFor(M.DEAL).find(x=>String(x.id)===String(el.dataset.id));if(deal)openCancellation(deal);}
+    else if(action==='membership-cancel-quote')await quoteCancellation();
+    else if(action==='membership-cancel-close')cancellationDialog().close();
     else if(action==='journey-find-drafts'){
       const j=state.journey;
       if(j?.contact?.id){await loadJourneyDrafts(j);return;}
