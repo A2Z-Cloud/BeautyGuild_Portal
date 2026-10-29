@@ -4,7 +4,7 @@ const { HttpError } = require('./errors');
 const { createLoqate } = require('./loqate');
 const { createCourses } = require('./courses');
 const { createRateLimiter, clientKey } = require('./rateLimit');
-const { registerRecordRoutes } = require('./records');
+const { registerRecordRoutes, createCrmClient } = require('./records');
 const { registerCheckoutRoutes } = require('./checkout');
 const { registerDocumentRoutes } = require('./documents');
 const { registerDiagnosticsRoutes } = require('./diagnostics');
@@ -16,6 +16,8 @@ const { registerStaffRoutes } = require('./staff');
 const { registerMediaRoutes } = require('./media');
 const { createRiskChecks } = require('./riskChecks');
 const { createCreatorReader } = require('./creatorReports');
+const { createStripeReader } = require('./stripeRead');
+const { createCancellationQuotes } = require('./cancellationQuote');
 const { readBuildInfo } = require('./buildInfo');
 
 const TEXT_MIN = 3;
@@ -214,7 +216,16 @@ function createApp({
     enabled: config.staffApiEnabled,
     secrets: config.staffApiSecrets,
     roles: config.staffApiRoles,
-    actions: checkout,
+    actions: {
+      ...checkout,
+      staffCancellationQuote: createCancellationQuotes({
+        enabled: config.cancellationsEnabled,
+        call: createCrmClient({ getCrmHeaders, crmApiDomain: config.crmApiDomain, fetchImpl }).call,
+        stripeGet: createStripeReader({ stripeKey: config.stripeSecretKey, fetchImpl }),
+        staffContact: checkout.staffContact,
+        now,
+      }),
+    },
     draftsRouter: drafts.router,
     windowSeconds: config.staffApiWindowSeconds,
     getCrmHeaders,

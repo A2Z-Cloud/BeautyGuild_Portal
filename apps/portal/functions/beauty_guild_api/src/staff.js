@@ -399,6 +399,14 @@ function registerStaffRoutes(
 
   // Prices only: nothing is charged, saved or sent. Also the assessment: insurance answers come back as a decision or a referral.
   router.post('/quote', authenticate, requireStaff, priced('/quote', 'staffQuote'));
+  // What a cancellation, downgrade or Associate cancellation would refund (read only: nothing is saved, charged or refunded). The widget shows
+  // exactly what comes back; it never calculates. See docs/delivery/cancellations-refunds-spec.md.
+  router.post(
+    '/cancellation/quote',
+    authenticate,
+    requireStaff,
+    priced('/cancellation/quote', 'staffCancellationQuote'),
+  );
   // A Stripe Checkout link for the customer (test mode, its own switch). Same body as /staff/quote. Returns `checkoutUrl` for the staff member to
   // send; the session identifies the customer, not the staff member.
   router.post('/payment-link', authenticate, requireStaff, priced('/payment-link', 'staffPaymentLink'));
