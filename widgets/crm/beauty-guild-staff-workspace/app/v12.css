@@ -156,3 +156,20 @@
 .v12-member-service-actions>span{font-size:11px;font-weight:700;color:#655767;letter-spacing:.04em;margin-right:12px}
 .v12-member-service-actions .button{background:#fff}
 @media(max-width:820px){.staff-member-grid{grid-template-columns:1fr}.staff-member-fact{align-items:flex-start}.v12-member-service-actions>span{flex-basis:100%}}
+
+
+.membership-workspace{margin:20px 0 22px;padding:23px;background:#fff;border:1px solid #e9dfe5;border-radius:13px}
+.membership-workspace-heading{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:20px}
+.membership-workspace-heading h3{font-size:23px;margin:5px 0}.membership-workspace-heading p{font-size:12px;color:#776c77;margin:0}
+.membership-health-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:20px}
+.membership-health-grid>div{display:flex;flex-direction:column;gap:8px;padding:17px;border:1px solid #e9dfe5;border-radius:10px}
+.membership-health-grid span{font-size:11px;color:#756a77}.membership-health-grid strong{font-size:16px;overflow-wrap:anywhere}.membership-health-grid small{font-size:11px;color:#776c77}
+.membership-service-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.membership-service-grid>section{border:1px solid #eae2e7;border-radius:11px;padding:18px;min-width:0}
+.membership-service-grid h4{font-size:16px;margin:0 0 12px}
+.membership-service-row{padding:13px 0;display:flex;align-items:center;justify-content:space-between;gap:14px;border-bottom:1px solid #f0e9ee}
+.membership-service-row:last-of-type{border-bottom:0}.membership-service-row strong{font-size:12px}
+.membership-service-row p{font-size:11px;color:#776c77;margin:5px 0 0;line-height:1.5}
+.membership-service-row .button{flex-shrink:0}.membership-service-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:15px}
+@media(max-width:1100px){.membership-health-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:740px){.membership-service-grid,.membership-health-grid{grid-template-columns:1fr}.membership-workspace-heading,.membership-service-row{align-items:flex-start;flex-direction:column}}
