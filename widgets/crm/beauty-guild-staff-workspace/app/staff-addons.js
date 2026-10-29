@@ -32,7 +32,7 @@ function contactId(record){
 }
 function mtaFields(){
  const known=contactId(state.record);
- return '<p>Describe the proposed change. Only the server can determine its eligibility, price and referral outcome.</p>'+
+ return '<nav class="staff-mta-progress" aria-label="Adjustment stages"><span>1 · Policy</span><span>2 · Changes</span><span>3 · Quote</span><span>4 · Payment</span></nav><h3>Policy and proposed change</h3>'+
  '<dl class="staff-addon-details"><dt>Policy</dt><dd>'+esc(state.record?.Policy_Number||state.record?.Name||state.record?.id)+'</dd><dt>Status</dt><dd>'+esc(state.record?.Policy_Status||'Not recorded')+'</dd><dt>Cover end</dt><dd>'+esc(state.record?.Policy_End_Date||state.record?.End_Date||'Not recorded')+'</dd></dl>'+
  field('staff-mta-contact','CRM Contact ID','inputmode="numeric" value="'+esc(known)+'" placeholder="Required: selected policy owner"')+
  note('Check the Contact ID against the policy in CRM. The backend independently verifies ownership.')+
@@ -40,11 +40,24 @@ function mtaFields(){
  field('staff-effective-date','Effective date','type="date"')+
  '<label for="staff-mta-type">Change type</label><select id="staff-mta-type"><option value="">Choose a change</option><option value="person">Add named person</option><option value="treatment">Add treatment</option><option value="teaching">Teaching cover</option><option value="equipment">Equipment cover increase</option><option value="el">Employers Liability change</option></select>'+
  '<div id="staff-mta-specific"></div>'+
- '<fieldset class="staff-mta-declarations"><legend>Customer evidence</legend><label for="staff-mta-qualified">Qualified to perform the requested treatment or service</label><select id="staff-mta-qualified"><option value="">Select</option><option value="yes">Yes</option><option value="no">No</option></select><label for="staff-mta-patch">Patch testing where required</label><select id="staff-mta-patch"><option value="">Select</option><option value="yes">Yes</option><option value="no">No</option></select><label><input type="checkbox" id="staff-mta-information" /> Customer confirmed information is accurate</label><label><input type="checkbox" id="staff-mta-ethics" /> Customer confirmed Code of Ethics</label><label><input type="checkbox" id="staff-mta-demands" /> Customer confirmed demands and needs</label><label><input type="checkbox" id="staff-mta-nonadvised" /> Customer confirmed non-advised cover</label></fieldset>'+
+ '<fieldset class="staff-mta-declarations"><legend>Customer declarations and evidence</legend><label for="staff-mta-qualified">Qualified to perform the requested treatment or service</label><select id="staff-mta-qualified"><option value="">Select</option><option value="yes">Yes</option><option value="no">No</option></select><label for="staff-mta-patch">Patch testing where required</label><select id="staff-mta-patch"><option value="">Select</option><option value="yes">Yes</option><option value="no">No</option></select><label><input type="checkbox" id="staff-mta-information" /> Customer confirmed information is accurate</label><label><input type="checkbox" id="staff-mta-ethics" /> Customer confirmed Code of Ethics</label><label><input type="checkbox" id="staff-mta-demands" /> Customer confirmed demands and needs</label><label><input type="checkbox" id="staff-mta-nonadvised" /> Customer confirmed non-advised cover</label></fieldset>'+
  note('Collect the required insurance declarations and qualified evidence in the existing portal journey. These checkboxes only record confirmation relayed by the customer; the backend determines referral or approval.')+
  '<div class="staff-addon-actions"><button class="button secondary" type="button" data-staff-addon="cover">Load current cover</button><button class="button primary" type="button" data-staff-addon="quote-mta">Get live quote</button><button class="button secondary" type="button" data-staff-addon="save-mta" disabled id="staff-mta-save">Save quoted revision</button></div>'+
  '<div class="staff-addon-result" id="staff-mta-result" role="status" aria-live="polite">No quote requested.</div>'+
  '<section class="staff-addon-panel" aria-label="MTA secure payment"><h3>Secure payment</h3><p>Available only after an eligible quotation and successful revision save. The customer pays through Stripe Checkout; CRM is updated by the existing payment processing.</p><label class="staff-payment-consent"><input type="checkbox" id="staff-mta-accepted" /> I confirm the customer explicitly accepted the Code of Ethics and Terms of Business.</label><button type="button" class="button primary" data-staff-addon="payment-mta" id="staff-mta-payment" disabled>Generate test payment link</button><div id="staff-mta-payment-result" role="status" aria-live="polite"></div></section>';
+}
+function updateMtaSummary(){
+ const box=$('staff-mta-summary-body');if(!box)return;
+ const q=state.quote?.quote;
+ const fmt=p=>Number.isFinite(Number(p))?'£'+(Number(p)/100).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2}):'—';
+ const policy=state.record||{};
+ const selection=$('staff-mta-type')?.selectedOptions?.[0]?.textContent||'Not selected';
+ const effective=$('staff-effective-date')?.value||'Not selected';
+ const changeLines=q&&Array.isArray(q.lines)?q.lines.map(l=>'<div class="staff-price-line"><span>'+esc(l.name||'Adjustment')+'</span><strong>'+fmt(l.totalPence)+'</strong></div>').join(''):'';
+ const coverInfo=state.cover?(Array.isArray(state.cover.extensions)?state.cover.extensions.length+' cover lines loaded':'Current cover loaded'):'Current cover not loaded';
+ box.innerHTML='<dl><dt>Policy</dt><dd>'+esc(policy.Policy_Number||policy.Name||'Selected policy')+'</dd><dt>Current cover</dt><dd>'+esc(coverInfo)+'</dd><dt>Change</dt><dd>'+esc(selection)+'</dd><dt>Effective date</dt><dd>'+esc(effective)+'</dd></dl>'+
+ changeLines+'<div class="staff-mta-amount"><span>Pay today</span><strong>'+(q?fmt(q.totalPence):'—')+'</strong></div>'+
+ '<p class="staff-addon-info">'+(q?(q.payable?'Verified Catalyst quotation.':'Review or referral required; payment may be blocked.'):'No price is shown until the authorised Catalyst quote succeeds.')+'</p>';
 }
 function specific(){
  const t=$('staff-mta-type')?.value||'';
@@ -54,15 +67,16 @@ function specific(){
  t==='teaching'?'<label for="staff-teaching">Teaching cover</label><select id="staff-teaching"><option value="standard">Standard</option><option value="additional">Additional</option></select>':
  t==='equipment'?'<label for="staff-equipment">Equipment cover limit</label><select id="staff-equipment">'+[5000,10000,15000,20000].map(x=>'<option value="'+x+'">£'+x.toLocaleString('en-GB')+'</option>').join('')+'</select>':
  t==='el'?'<label for="staff-el">Employers Liability tier</label><select id="staff-el">'+[1,3,5].map(x=>'<option value="'+x+'">'+x+'</option>').join('')+'</select>':'';
- state.quote=null;const b=$('staff-mta-save');if(b)b.disabled=true;
+ state.quote=null;const b=$('staff-mta-save');if(b)b.disabled=true;updateMtaSummary();
 }
 function open(mode,record,entity){
- state.mode=mode;state.entity=entity||'';state.record=record;state.quote=null;state.payload=null;state.savedRevision=null;state.checkoutUrl='';
+ state.mode=mode;state.entity=entity||'';state.record=record;state.cover=null;state.quote=null;state.payload=null;state.savedRevision=null;state.checkoutUrl='';
  let d=$('staff-addon-dialog');if(!d){d=document.createElement('dialog');d.id='staff-addon-dialog';d.className='staff-addon-dialog';document.body.appendChild(d);}
- d.innerHTML='<div class="staff-addon-head"><div><small>STAFF WORKSPACE</small><h2>'+(mode==='mta'?'Mid-term adjustment':'Voucher / waiver')+'</h2><p>'+esc(record?.Name||record?.Policy_Number||record?.Deal_Name||'Selected record')+'</p></div><button type="button" class="button secondary" data-staff-addon="close">Close</button></div>'+
- (mode==='mta'?mtaFields():discountFields()+note('Referral and waiver inputs are ready for a membership quote. No discount is applied without a signed quote response.')+'<output id="staff-discount-outcome"></output>');
+ d.classList.toggle('staff-mta-dialog',mode==='mta');
+ d.innerHTML='<div class="staff-addon-head"><div><small>STAFF WORKSPACE</small><h2>'+(mode==='mta'?'Change policy cover':'Voucher / waiver')+'</h2><p>'+esc(record?.Name||record?.Policy_Number||record?.Deal_Name||'Selected record')+'</p></div><button type="button" class="button secondary" data-staff-addon="close">Close</button></div>'+
+ (mode==='mta'?'<div class="staff-mta-grid"><section class="staff-mta-main">'+mtaFields()+'</section><aside class="staff-mta-summary" aria-label="Policy and adjustment quote"><h3>Adjustment summary</h3><div id="staff-mta-summary-body"></div></aside></div>':discountFields()+note('Referral and waiver inputs are ready for a membership quote. No discount is applied without a signed quote response.')+'<output id="staff-discount-outcome"></output>');
  if(d.showModal)d.showModal();else d.setAttribute('open','');
- if(mode==='mta')loadCover();
+ if(mode==='mta'){updateMtaSummary();loadCover();}
 }
 async function loadCover(){
  const target=$('staff-mta-result');if(!target)return;
@@ -70,7 +84,7 @@ async function loadCover(){
  const recordId=String($('staff-mta-record')?.value||'').trim();
  if(!/^\d{10,25}$/.test(contact)||!/^\d{10,25}$/.test(recordId)){target.textContent='Enter the Contact and Membership IDs to load current cover.';return;}
  target.textContent='Loading authoritative existing cover…';
- try{const response=await global.BGStaffApi.call('cover',{contactId:contact,recordId});state.cover=response?.cover||null;target.textContent=JSON.stringify(state.cover||response,null,2);}
+ try{const response=await global.BGStaffApi.call('cover',{contactId:contact,recordId});state.cover=response?.cover||null;target.innerHTML='<strong>Current cover loaded from the staff API.</strong><details><summary>Inspect source details</summary><pre>'+esc(JSON.stringify(state.cover||response,null,2))+'</pre></details>';updateMtaSummary();}
  catch(e){target.textContent='Current cover could not be loaded: '+String(e.message||e);}
 }
 function payload(){
@@ -94,7 +108,16 @@ function payload(){
  return {contactId:c,recordId,service:'insurance_change',change};
 }
 function result(message,error=false){
- const el=$('staff-mta-result');if(el){el.textContent=typeof message==='string'?message:JSON.stringify(message,null,2);el.classList.toggle('error',error);}
+ const el=$('staff-mta-result');if(!el)return;
+ el.classList.toggle('error',error);
+ if(typeof message==='string'){el.textContent=message;updateMtaSummary();return;}
+ const q=message?.quote;
+ const saved=message?.revision||message?.revisions?.length;
+ const heading=q?(q.payable?'Quotation ready':'Quotation requires review'):saved?'Revision saved':'Staff API response';
+ const description=q?(q.payable?'Review the breakdown before saving the revision.':'This change may require a manual decision before payment.'):saved?'The CRM revision has been recorded. Check the payment stage if applicable.':'';
+ el.innerHTML='<strong>'+esc(heading)+'</strong>'+(description?'<p>'+esc(description)+'</p>':'')+
+ '<details><summary>Technical response details</summary><pre>'+esc(JSON.stringify(message,null,2))+'</pre></details>';
+ updateMtaSummary();
 }
 async function quote(){
  if(state.busy)return;
@@ -143,7 +166,7 @@ async function payment(){
 }
 function validate(){const out=$('staff-discount-outcome');if(!out)return;if(state.waiver&&!state.reason)out.textContent='Choose a waiver reason.';else if(state.waiver&&state.reason==='Other'&&!state.note.trim())out.textContent='Add a note for Other.';else out.textContent='Inputs captured. Final eligibility, discount and pricing must be verified by the signed quote.';}
 document.addEventListener('input',event=>{const f=event.target.dataset?.staffField;if(f&&Object.prototype.hasOwnProperty.call(state,f))state[f]=event.target.value;});
-document.addEventListener('change',event=>{const f=event.target.dataset?.staffField;if(f&&Object.prototype.hasOwnProperty.call(state,f))state[f]=event.target.value;if(event.target.id==='staff-mta-type')specific();if(event.target.closest('#staff-addon-dialog')&&state.mode==='mta'&&event.target.id!=='staff-mta-accepted'){state.quote=null;state.payload=null;state.savedRevision=null;state.checkoutUrl='';const save=$('staff-mta-save'),pay=$('staff-mta-payment');if(save)save.disabled=true;if(pay)pay.disabled=true;const out=$('staff-mta-payment-result');if(out)out.textContent='The change was edited. Obtain a new quotation and save the revision before payment.';}});
+document.addEventListener('change',event=>{const f=event.target.dataset?.staffField;if(f&&Object.prototype.hasOwnProperty.call(state,f))state[f]=event.target.value;if(event.target.id==='staff-mta-type')specific();if(event.target.closest('#staff-addon-dialog')&&state.mode==='mta'&&event.target.id!=='staff-mta-accepted'){state.quote=null;state.payload=null;state.savedRevision=null;state.checkoutUrl='';const save=$('staff-mta-save'),pay=$('staff-mta-payment');if(save)save.disabled=true;if(pay)pay.disabled=true;const out=$('staff-mta-payment-result');if(out)out.textContent='The change was edited. Obtain a new quotation and save the revision before payment.';}if(event.target.closest('#staff-addon-dialog'))updateMtaSummary();});
 document.addEventListener('click',event=>{
  const b=event.target.closest('[data-staff-addon]');if(!b)return;
  const a=b.dataset.staffAddon;
