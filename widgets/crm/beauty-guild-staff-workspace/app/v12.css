@@ -136,3 +136,23 @@
 .notice{border:1px solid #e9dfe5!important}
 .v12-status-row{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px}
 .v12-status{border:1px solid #eadfe6!important;border-radius:9px!important}
+
+
+/* Membership-first record presentation */
+.staff-member-overview{padding:24px;background:#fff}
+.staff-member-intro{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:22px}
+.staff-member-intro h3{font-size:22px;line-height:1.2;margin:6px 0 8px;color:#28202a}
+.staff-member-intro p{font-size:12px;color:#776b77;margin:0}
+.staff-member-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.staff-member-group{border:1px solid #eae2e7;border-radius:12px;padding:20px;background:#fff}
+.staff-member-group h4{margin:0 0 14px;font-size:15px}
+.staff-member-fact{display:flex;justify-content:space-between;align-items:baseline;gap:14px;border-bottom:1px solid #f2edf0;padding:11px 0}
+.staff-member-fact:last-child{border:0;padding-bottom:0}
+.staff-member-fact span{font-size:12px;color:#766c77}
+.staff-member-fact strong{font-size:13px;text-align:right;max-width:62%;overflow-wrap:anywhere}
+.v12-member-actions{display:flex;flex-direction:column;gap:14px;margin:18px 0 24px}
+.v12-member-primary-actions,.v12-member-service-actions{display:flex;flex-wrap:wrap;align-items:center;gap:9px}
+.v12-member-service-actions{padding:15px 18px;border:1px solid #eae2e7;border-radius:11px;background:#faf8fa}
+.v12-member-service-actions>span{font-size:11px;font-weight:700;color:#655767;letter-spacing:.04em;margin-right:12px}
+.v12-member-service-actions .button{background:#fff}
+@media(max-width:820px){.staff-member-grid{grid-template-columns:1fr}.staff-member-fact{align-items:flex-start}.v12-member-service-actions>span{flex-basis:100%}}
