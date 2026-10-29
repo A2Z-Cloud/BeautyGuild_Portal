@@ -181,6 +181,35 @@
        '<div class="v12-pager"><button class="button secondary" data-action="v12-rel-page" data-list="'+safe(name)+'" data-page="'+((item.page||1)-1)+'" '+((item.page||1)===1?'disabled':'')+'>Previous</button><span>Page '+(item.page||1)+'</span><button class="button secondary" data-action="v12-rel-page" data-list="'+safe(name)+'" data-page="'+((item.page||1)+1)+'" '+(!hasNext?'disabled':'')+'>Next</button></div>';
   }
   let focusedRecord=null;
+  function crmTimeline(entity,record,api,rerender){
+    const id=String(record.id);
+    const lists=relationList(entity);
+    const selected=lists.filter(r=>/notes|tasks|activities|calls|meetings/i.test(r.id+' '+r.label)).slice(0,5);
+    // Use the same CRM related-record loader as the Related Lists tab, never fabricated activity.
+    for(const rel of selected){const key=relationKey(entity,id,rel.id);if(!relatedCache.has(key))loadRelation(entity,id,rel.id,api,rerender);}
+    const events=[];
+    for(const [field,label] of [['Created_Time','Record created'],['Modified_Time','Record last modified']]){
+      if(record[field])events.push({date:String(record[field]),title:label,description:field==='Modified_Time'?'CRM record last changed':'CRM record first created'});
+    }
+    let pending=0,errors=0;
+    for(const rel of selected){
+      const item=relatedCache.get(relationKey(entity,id,rel.id));if(!item||item.loading)pending++;
+      if(item?.error)errors++;
+      for(const row of item?.pages?.get(1)||[]){
+        const date=row.Created_Time||row.Modified_Time||row.Due_Date||row.Call_Start_Time||row.Start_DateTime||'';
+        const title=row.Subject||row.Note_Title||row.Title||row.Event_Title||row.Call_Type||rel.label;
+        const description=row.Note_Content||row.Description||row.Status||'';
+        events.push({date:String(date),title:String(title),description:String(description).replace(/<[^>]*>/g,' ').slice(0,240),module:rel.label});
+      }
+    }
+    events.sort((a,b)=>b.date.localeCompare(a.date));
+    const content=events.map(x=>'<li class="staff-timeline-event"><time>'+safe(x.date?new Date(x.date).toLocaleString('en-GB',{dateStyle:'medium',timeStyle:'short'}):'Date not recorded')+'</time><div><strong>'+safe(x.title)+'</strong>'+(x.module?'<span class="staff-timeline-type">'+safe(x.module)+'</span>':'')+(x.description?'<p>'+safe(x.description)+'</p>':'')+'</div></li>').join('');
+    return '<section class="v12-detail-section"><h3>Record timeline</h3><p class="v12-muted">CRM record events and available related activity, newest first. The full CRM audit history remains available in native CRM.</p>'+
+      (pending?'<p class="v12-muted" role="status">Loading CRM activities…</p>':'')+
+      (errors?'<p class="v12-warning">Some CRM related activity could not be retrieved with the current permissions.</p>':'')+
+      '<ol class="staff-timeline">'+(content||'<li class="v12-muted">No dated activity is available for this record.</li>')+'</ol>'+
+      '<button type="button" class="button secondary" data-action="v12-timeline-refresh">Refresh timeline</button></section>';
+  }
   function detailPage(entity,record,ctx){
     focusedRecord={entity,record};
     const id=String(record.id),key=entity+':'+id,selection=chosen.get(key)||'details';
@@ -191,7 +220,7 @@
       main='<div class="v12-record-toolbar"><div class="v12-tabs"><button class="'+(!showEmpty?'selected':'')+'" data-action="v12-all" data-show="false">Populated fields</button><button class="'+(showEmpty?'selected':'')+'" data-action="v12-all" data-show="true">All CRM fields</button></div></div>';
       main+=layoutSections(entity,record).map(g=>'<section class="v12-detail-section"><h3>'+safe(g.title)+'</h3>'+fieldRows(entity,record,g.keys,showEmpty)+'</section>').join('');
     }else if(selection==='timeline'){
-      main='<section class="v12-detail-section"><h3>Record timeline</h3>'+fieldRows(entity,record,['Created_Time','Created_By','Modified_Time','Modified_By','Owner'],true)+'<p class="v12-muted">Open Notes or Tasks from Related Lists for their actual CRM entries. An aggregated CRM audit timeline is not available through this widget yet.</p></section>';
+      main=crmTimeline(entity,record,ctx.crm,ctx.rerender);
     }else if(selection==='processing'){
       main='<section class="v12-detail-section"><h3>Processing and decisions</h3>'+fieldRows(entity,record,['Application_Status','Application_Stage','Underwriting_Status','Risk_Status','Sanctions_Status','Payment_Status','Policy_Status','Finance_Sync_Status','Next_Action','Next_Action_Date','Stop_Reason','Manual_Review_Outcome'],true)+'<div class="v12-warning">Risk decisions and payment status must be verified in CRM and the authoritative Catalyst service. This screen does not clear a referral or activate cover.</div></section>'+(typeof ctx.processing==='function'?ctx.processing(entity,record):'');
     }else{main=relationContent(entity,record,selection,ctx.crm,ctx.rerender);}
@@ -212,6 +241,10 @@
     const a=el?.dataset?.action;
     if(!a||!a.startsWith('v12-'))return false;
     const entity=focus.entity,record=focus.record,key=entity+':'+record.id;
+    if(a==='v12-timeline-refresh'){
+      for(const rel of relationList(entity).filter(r=>/notes|tasks|activities|calls|meetings/i.test(r.id+' '+r.label)))relatedCache.delete(relationKey(entity,record.id,rel.id));
+      rerender();return true;
+    }
     if(a==='v12-tab'){
       const tab=el.dataset.tab;if(!['details','timeline','processing'].includes(tab)&&!relationList(entity).some(x=>x.id===tab))return true;
       chosen.set(key,tab);rerender();if(!['details','timeline','processing'].includes(tab))await loadRelation(entity,record.id,tab,crm,rerender);return true;
