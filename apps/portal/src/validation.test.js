@@ -105,7 +105,8 @@ test('tutor and premises dependent fields only required when active', () => {
 test('address lookup country maps onto the dropdown options', () => {
   assert.equal(countryOption('United Kingdom'), 'United Kingdom');
   assert.equal(countryOption(' ireland '), 'Ireland');
-  assert.equal(countryOption('Germany'), 'Other');
+  assert.equal(countryOption('Germany'), 'Germany');
+  assert.equal(countryOption('Narnia'), 'Other');
   assert.equal(countryOption(''), '');
   assert.equal(countryOption(undefined), '');
   assert.ok(COUNTRY_OPTIONS.includes(countryOption('France')));

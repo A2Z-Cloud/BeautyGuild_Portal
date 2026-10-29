@@ -37,7 +37,7 @@ export const centreCountry = v => String(v.country === 'Other' ? v.countryOther 
 export const isUkCentre = v => UK_COUNTRIES.has(centreCountry(v).toLowerCase());
 const contactCountryName = v =>
   String(v.contactCountry === 'Other' ? v.contactCountryOther || '' : v.contactCountry || '').trim();
-const isUkContact = v => UK_COUNTRIES.has(contactCountryName(v).toLowerCase());
+export const isUkContact = v => UK_COUNTRIES.has(contactCountryName(v).toLowerCase());
 
 export const DECLARATIONS = [
   [

@@ -154,7 +154,7 @@ Every session has: `email`, `name`, `currency`, `status`, `source`, `type`, `con
 | `product_details` | always | A label for what was bought, for example `Accreditation + Associate Membership`. |
 | `product_name` | always | The product name for the invoice. |
 | `membership_required` | always | `true` if the school had no membership, so one is bundled with the accreditation. |
-| `membership_id` | always | The member profile of the school's current membership. Empty if none. |
+| `membership_id` | always | The Deal id of the school's current membership. Empty if none. |
 | `membership_details` | always | JSON of `required`, `type` (Associate or International when bundled), `start_date` and `expiry_date`. |
 | `monthly_plan` | sometimes | Monthly plans only, and only while there is room under Stripe's 50 key limit (it is also on the subscription): JSON of `payments`, `first_payment`, `later_payment`, `one_off_total` (the joining fee and add-ons charged in full with the first payment), `year_one_total` (what is paid over the first twelve months), `admin_fee` and `admin_fee_net`. |
 

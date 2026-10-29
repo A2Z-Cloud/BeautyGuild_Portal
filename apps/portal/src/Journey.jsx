@@ -3,7 +3,14 @@ import { ArrowLeft, ArrowRight, CreditCard, FileText, LockKeyhole, MapPin, Save,
 import { Link, useNavigate } from 'react-router-dom';
 import { JOURNEYS, countryOption } from './JourneyConfig.js';
 import { Field, Notice, PageHeading, Stages } from './UiParts.jsx';
-import { centreCountry, resolveFields, COPY_HOME_MAP, DECLARATIONS_WARNING } from './accreditationInputs.js';
+import {
+  centreCountry,
+  isUkCentre,
+  isUkContact,
+  resolveFields,
+  COPY_HOME_MAP,
+  DECLARATIONS_WARNING,
+} from './accreditationInputs.js';
 import { LEGAL } from './legal.js';
 import { PolicyDocuments } from './LegalLinks.jsx';
 import { startLimits } from './startDate.js';
@@ -13,6 +20,13 @@ import AddressLookup from './components/AddressLookup.jsx';
 import { INTEGRATIONS, portalApi } from './services/api.js';
 import { prefillFor } from './prefill.js';
 
+// Accreditation only: the fields a postcode lookup fills in, hidden behind a "look up my address" view until
+// either the lookup can't find it (the applicant asks for manual entry) or the country isn't the UK, where
+// there is no postcode lookup to offer in the first place.
+const ADDRESS_BLOCK_SIBLINGS = {
+  postcode: ['address1', 'address2', 'address3', 'town', 'county'],
+  centrePostcode: ['centreAddress1', 'centreAddress2', 'centreAddress3', 'centreTown', 'centreCounty'],
+};
 const reviewValue = (f, value) =>
   f.type === 'courses'
     ? value.length + (value.length === 1 ? ' course selected' : ' courses selected')
@@ -177,12 +191,17 @@ export function Journey({ kind }) {
   const current = visible[index];
   const last = index === visible.length - 1;
   const [errors, setErrors] = useState({});
+  const [manualAddress, setManualAddress] = useState({});
   const [saving, setSaving] = useState(false),
     [saveStatus, setSaveStatus] = useState(''),
     [submitted, setSubmitted] = useState(null);
-  // A new accreditation application starts today. The Contact's details are filled in below, as for the other journeys.
+  // A new accreditation application starts today, for a UK applicant and centre (most common case; either can be
+  // changed, which also switches that address off the UK postcode-lookup view onto plain manual fields).
   useEffect(() => {
-    if (kind === 'accreditation' && !values.startDate) setAnswer(kind, 'startDate', startLimits().min);
+    if (kind !== 'accreditation') return;
+    if (!values.startDate) setAnswer(kind, 'startDate', startLimits().min);
+    if (!values.contactCountry) setAnswer(kind, 'contactCountry', 'United Kingdom');
+    if (!values.country) setAnswer(kind, 'country', 'United Kingdom');
   }, [kind]); // eslint-disable-line react-hooks/exhaustive-deps
   async function saveDraft() {
     if (!live) {
@@ -391,6 +410,17 @@ export function Journey({ kind }) {
       if (from === 'country' && resolved === 'Other' && address.country) update(to + 'Other', address.country);
     }
   };
+  // Postcode lookup is a UK-only convenience, and accreditation (unlike the other journeys) takes non-UK
+  // applicants and centres: the lookup view only applies there, and only for a UK country, until the applicant
+  // asks to enter the address manually instead (manualAddress), after which it stays as plain fields.
+  const isLookupMode = fieldName => {
+    if (kind !== 'accreditation' || !ADDRESS_BLOCK_SIBLINGS[fieldName]) return false;
+    if (manualAddress[fieldName]) return false;
+    return fieldName === 'postcode' ? isUkContact(values) : isUkCentre(values);
+  };
+  const hiddenInLookupMode = new Set(
+    Object.keys(ADDRESS_BLOCK_SIBLINGS).flatMap(key => (isLookupMode(key) ? ADDRESS_BLOCK_SIBLINGS[key] : [])),
+  );
   if (submitted)
     return (
       <div className="page journey-page">
@@ -445,35 +475,60 @@ export function Journey({ kind }) {
                   </div>
                 )}
                 <div className="fields-grid">
-                  {resolveFields(current.fields, values).map(f =>
-                    f.type === 'copyHome' ? (
-                      <div key={f.name} className="copy-home">
-                        <button type="button" className="btn btn-secondary" onClick={copyHome}>
-                          Copy my address and contact details
-                        </button>
-                        <small>
-                          Fills in the centre address, mobile, telephone and email from your own details. You can change
-                          anything afterwards.
-                        </small>
-                      </div>
-                    ) : (
+                  {resolveFields(current.fields, values).map(f => {
+                    if (hiddenInLookupMode.has(f.name)) return null;
+                    if (f.type === 'copyHome')
+                      return (
+                        <div key={f.name} className="copy-home">
+                          <button type="button" className="btn btn-secondary" onClick={copyHome}>
+                            Copy my address and contact details
+                          </button>
+                          <small>
+                            Fills in the centre address, mobile, telephone and email from your own details. You can
+                            change anything afterwards.
+                          </small>
+                        </div>
+                      );
+                    const lookup = isLookupMode(f.name);
+                    return (
                       <React.Fragment key={f.name}>
                         <Field
-                          field={f}
+                          field={
+                            lookup
+                              ? {
+                                  ...f,
+                                  label: 'Postcode or start typing your address',
+                                  placeholder: 'e.g. AB1 2CD, or start typing your address',
+                                  hint: undefined,
+                                }
+                              : f
+                          }
                           value={values[f.name]}
                           onChange={update}
                           error={errors[f.name]}
                           values={values}
                         />
-                        {INTEGRATIONS.address && addressBindings[f.name] && (
+                        {INTEGRATIONS.address && addressBindings[f.name] && (kind !== 'accreditation' || lookup) && (
                           <AddressLookup
                             query={values[f.name] || ''}
                             onSelect={address => applyAddress(f.name, address)}
                           />
                         )}
+                        {lookup && (
+                          <p className="address-manual-toggle">
+                            Can&rsquo;t find the address?{' '}
+                            <button
+                              type="button"
+                              className="link-button"
+                              onClick={() => setManualAddress(m => ({ ...m, [f.name]: true }))}
+                            >
+                              Enter address manually
+                            </button>
+                          </p>
+                        )}
                       </React.Fragment>
-                    ),
-                  )}
+                    );
+                  })}
                 </div>
                 {kind === 'accreditation' &&
                   current.id === 'declarations' &&

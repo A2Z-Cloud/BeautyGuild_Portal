@@ -173,7 +173,9 @@ const SERVICES = {
           product_details: label,
           product_name: bundle || international ? label : 'Standard Accreditation',
           membership_required: bundle ? 'true' : 'false',
-          membership_id: membership?.profileId || '',
+          // The Deal's own id, not its Member_Profile id - Training_Centre_Accred.Membership is a
+          // lookup to Deals, so this has to be the Deal's own id to link correctly (matches V1).
+          membership_id: membership?.id || '',
           membership_details: JSON.stringify({
             required: bundle,
             type: bundle ? (international ? 'International' : 'Associate') : null,

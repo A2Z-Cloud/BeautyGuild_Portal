@@ -186,7 +186,7 @@ test('accreditation with a current membership pays the plain accreditation price
     const p = w.stripePosts[0].params;
     yearlyLine(p, 0, 35400, 'ACC-STD');
     assert.equal(p.get('metadata[product_amount]'), '354.00');
-    assert.equal(p.get('metadata[membership_id]'), 'prof1');
+    assert.equal(p.get('metadata[membership_id]'), DEAL);
     assert.equal(p.get('metadata[membership_required]'), 'false');
   });
 });

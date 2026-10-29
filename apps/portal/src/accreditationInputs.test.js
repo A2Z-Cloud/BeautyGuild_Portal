@@ -148,11 +148,11 @@ test('mobile is the required number, the centre needs an email and mobile, and p
 
 test('resuming rebuilds the form: unlisted countries become Other, old dates and titles are cleaned', () => {
   const out = restoreAccreditationAnswers(
-    { country: 'Nigeria', contactCountry: 'united kingdom', startDate: '2020-01-01', title: 'Mrs.' },
+    { country: 'Narnia', contactCountry: 'united kingdom', startDate: '2020-01-01', title: 'Mrs.' },
     COUNTRY_OPTIONS,
   );
   assert.equal(out.country, 'Other');
-  assert.equal(out.countryOther, 'Nigeria');
+  assert.equal(out.countryOther, 'Narnia');
   assert.equal(out.contactCountry, 'United Kingdom');
   assert.equal(out.startDate, '');
   assert.equal(out.title, 'Mrs');

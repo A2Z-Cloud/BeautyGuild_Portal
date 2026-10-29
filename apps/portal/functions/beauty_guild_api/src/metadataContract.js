@@ -105,7 +105,9 @@ const DESCRIPTIONS = {
   product_details: 'A label for what was bought, for example `Accreditation + Associate Membership`.',
   product_name: 'The product name for the invoice.',
   membership_required: '`true` if the school had no membership, so one is bundled with the accreditation.',
-  membership_id: "The member profile of the school's current membership. Empty if none.",
+  // Named membership_id rather than membership_deal_id (unlike every other purchase type) to match V1:
+  // Training_Centre_Accred.Membership is a CRM lookup to Deals, so this must be the Deal's own id.
+  membership_id: "The Deal id of the school's current membership. Empty if none.",
   membership_details:
     'JSON of `required`, `type` (Associate or International when bundled), `start_date` and `expiry_date`.',
   // Additional venue
