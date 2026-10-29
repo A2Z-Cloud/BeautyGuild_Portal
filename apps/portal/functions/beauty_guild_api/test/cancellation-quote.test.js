@@ -4,10 +4,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { IDS } = require('./helpers/world');
-const { fixture, iso, ME, DEAL } = require('./helpers/insurance-fixture');
+const { iso, ME, DEAL } = require('./helpers/insurance-fixture');
 const { withStaff } = require('./helpers/staff-harness');
 
-const json = (body, status = 200) => ({ status, ok: status < 400, json: async () => body });
 const ON = { PORTAL_CANCELLATIONS_ENABLED: 'true' };
 const ASK = (extra = {}) => ({
   contactId: IDS.me,
@@ -17,68 +16,7 @@ const ASK = (extra = {}) => ({
   ...extra,
 });
 
-// A Full member with a yearly policy: £55.00 membership, premium £65.00 net and £7.80 IPT, all paid by one Stripe subscription.
-function cancelWorld({ session = {}, subscription = {}, over = {}, policySession = 'cs_1', stripeStatus = 200 } = {}) {
-  const w = fixture(over);
-  const stripeCalls = [];
-  const SESSION = {
-    id: 'cs_1',
-    mode: 'subscription',
-    payment_status: 'paid',
-    subscription: 'sub_1',
-    metadata: {
-      contact_id: ME,
-      type: 'membership_insurance',
-      membership_start: iso(-5),
-      membership_expiry: iso(360),
-      subscription_type: 'annual',
-      base_membership_amount: '55.00',
-      insurance_net_amount: '65.00',
-      insurance_ipt_amount: '7.80',
-      ...session.metadata,
-    },
-    ...Object.fromEntries(Object.entries(session).filter(([k]) => k !== 'metadata')),
-  };
-  const SUB = {
-    id: 'sub_1',
-    status: 'active',
-    cancel_at: null,
-    items: {
-      data: [{ price: { lookup_key: 'MEM-FULLNS-Y' } }, { price: { product: { metadata: { sku: 'INS-MEDMAL-NS' } } } }],
-    },
-    ...subscription,
-  };
-  const base = w.fetchImpl;
-  w.fetchImpl = async (url, init = {}) => {
-    const u = String(url);
-    if (u.startsWith('https://api.stripe.com/v1/')) {
-      stripeCalls.push({ method: init.method || 'GET', url: u });
-      if (stripeStatus !== 200) return json({}, stripeStatus);
-      if (u.includes('/checkout/sessions/cs_1')) return json(SESSION);
-      if (u.includes('/subscriptions/search')) return json({ data: [{ id: 'sub_1' }] });
-      if (u.includes('/checkout/sessions?')) return json({ data: [SESSION] });
-      if (u.includes('/subscriptions/sub_1')) return json(SUB);
-      return json({}, 404);
-    }
-    if (u.includes('Insurance_Policy/pol1?fields='))
-      return json({ data: [{ id: 'pol1', Stripe_Checkout_Session_ID: policySession }] });
-    return base(url, init);
-  };
-  w.stripeCalls = stripeCalls;
-  return w;
-}
-const ASSOCIATE = {
-  deal: {
-    id: DEAL,
-    Deal_Name: 'Associate Member',
-    Stage: 'Active',
-    Membership_Type: 'Associate Member',
-    Start_Date: iso(-5),
-    Expiry_Date: iso(360),
-    Contact_Name: { id: ME },
-  },
-  policies: [],
-};
+const { cancelWorld, ASSOCIATE } = require('./helpers/cancel-world');
 const blockedWith = async (w, body, code, env = ON) => {
   await withStaff(
     w,

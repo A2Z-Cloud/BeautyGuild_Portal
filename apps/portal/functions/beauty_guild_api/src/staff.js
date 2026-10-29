@@ -407,6 +407,15 @@ function registerStaffRoutes(
     requireStaff,
     priced('/cancellation/quote', 'staffCancellationQuote'),
   );
+  // Records the cancellation, ends the Stripe subscription and creates the refunds. Safe to repeat; needs the quote's inputsHash and net figure.
+  router.post('/cancellation', authenticate, requireStaff, priced('/cancellation', 'staffCancellationConfirm'));
+  // Resumes a cancellation that stopped part way (for example a refund that failed), from the plan stored on its record.
+  router.post(
+    '/cancellation/retry',
+    authenticate,
+    requireStaff,
+    priced('/cancellation/retry', 'staffCancellationRetry'),
+  );
   // A Stripe Checkout link for the customer (test mode, its own switch). Same body as /staff/quote. Returns `checkoutUrl` for the staff member to
   // send; the session identifies the customer, not the staff member.
   router.post('/payment-link', authenticate, requireStaff, priced('/payment-link', 'staffPaymentLink'));
