@@ -173,3 +173,18 @@
 .membership-service-row .button{flex-shrink:0}.membership-service-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:15px}
 @media(max-width:1100px){.membership-health-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:740px){.membership-service-grid,.membership-health-grid{grid-template-columns:1fr}.membership-workspace-heading,.membership-service-row{align-items:flex-start;flex-direction:column}}
+
+
+.staff-cancellation-dialog{width:min(800px,calc(100vw - 32px));max-width:800px;max-height:88vh;overflow-y:auto;padding:24px;border:1px solid #eadfe5;border-radius:14px}
+.staff-cancellation-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:22px}
+.staff-cancellation-head h2{font-size:22px;margin:5px 0 8px}.staff-cancellation-head p{font-size:12px;color:#766a77;line-height:1.6;margin:0}
+.staff-cancellation-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.staff-cancellation-form label{display:grid;gap:6px;font-size:12px;color:#5b4e59}
+.staff-cancellation-form input,.staff-cancellation-form select{min-width:0;width:100%;border:1px solid #e5dae2;border-radius:9px;padding:10px 12px;background:#fff}
+.staff-cancellation-actions{display:flex;gap:10px;margin:22px 0}
+.staff-cancellation-quote{margin-top:20px;padding:20px;border:1px solid #e9dfe5;border-radius:12px;background:#faf9fa}
+.staff-cancellation-quote h3{font-size:17px;margin:0 0 14px}
+.staff-cancellation-amounts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.staff-cancellation-amounts>div{display:grid;gap:6px;background:#fff;border:1px solid #e9dfe5;padding:13px;border-radius:9px}
+.staff-cancellation-amounts span{color:#756875;font-size:11px}.staff-cancellation-amounts strong{font-size:17px}
+@media(max-width:650px){.staff-cancellation-form,.staff-cancellation-amounts{grid-template-columns:1fr}.staff-cancellation-head{flex-direction:column}}
