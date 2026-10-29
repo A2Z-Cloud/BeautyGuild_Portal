@@ -529,8 +529,16 @@ test('updates the training centre with the profile content, including clearing f
         '/portal/management/schools/1000000000301/profile',
         jput({ ...goodProfile, website: '', imageId: '' }),
       );
+      // A normal text-only edit must not clear existing ACF attachment IDs.
+      await call(
+        '/portal/management/schools/1000000000301/profile',
+        jput({ ...goodProfile, about: 'Updated description', imageId: undefined, logoId: undefined }),
+      );
     },
   );
+  const unchangedMedia = JSON.parse(writes[1]).data[0];
+  assert.equal(Object.hasOwn(unchangedMedia, 'School_Image_ID'), false);
+  assert.equal(Object.hasOwn(unchangedMedia, 'School_Logo_ID'), false);
   const data = JSON.parse(writes[0]).data[0];
   assert.equal(data.Contact_Name, 'Jess Owner');
   assert.equal(data.Website, null);
