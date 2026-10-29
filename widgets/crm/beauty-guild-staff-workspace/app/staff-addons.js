@@ -32,12 +32,16 @@ function contactId(record){
 }
 function mtaFields(){
  const known=contactId(state.record);
+ const linkedDeal=String(state.record?.Membership?.id||state.record?.Deal?.id||'');
+ const needsLink=!known||!linkedDeal;
  return '<nav class="staff-mta-progress" aria-label="Adjustment stages"><span>1 · Policy</span><span>2 · Changes</span><span>3 · Quote</span><span>4 · Payment</span></nav><h3>Policy and proposed change</h3>'+
  '<dl class="staff-addon-details"><dt>Policy</dt><dd>'+esc(state.record?.Policy_Number||state.record?.Name||state.record?.id)+'</dd><dt>Status</dt><dd>'+esc(state.record?.Policy_Status||'Not recorded')+'</dd><dt>Cover end</dt><dd>'+esc(state.record?.Policy_End_Date||state.record?.End_Date||'Not recorded')+'</dd></dl>'+
+ '<details class="staff-mta-linkage" '+(needsLink?'open':'')+'><summary>Customer and membership links '+(needsLink?'— action needed':'— recorded')+'</summary>'+
  field('staff-mta-contact','CRM Contact ID','inputmode="numeric" value="'+esc(known)+'" placeholder="Required: selected policy owner"')+
- note('Check the Contact ID against the policy in CRM. The backend independently verifies ownership.')+
- field('staff-mta-record','Membership / Deal record ID','inputmode="numeric" value="'+esc(state.record?.Membership?.id||state.record?.Deal?.id||'')+'" placeholder="Required for revision save"')+
- field('staff-effective-date','Effective date','type="date"')+
+ note('The backend independently verifies the selected policy owner against this Contact.')+
+ field('staff-mta-record','Membership / Deal ID','inputmode="numeric" value="'+esc(linkedDeal)+'" placeholder="Required for revision save"')+
+ '</details>'+
+  field('staff-effective-date','Effective date','type="date"')+
  '<label for="staff-mta-type">Change type</label><select id="staff-mta-type"><option value="">Choose a change</option><option value="person">Add named person</option><option value="treatment">Add treatment</option><option value="teaching">Teaching cover</option><option value="equipment">Equipment cover increase</option><option value="el">Employers Liability change</option></select>'+
  '<div id="staff-mta-specific"></div>'+
  '<fieldset class="staff-mta-declarations"><legend>Customer declarations and evidence</legend><label for="staff-mta-qualified">Qualified to perform the requested treatment or service</label><select id="staff-mta-qualified"><option value="">Select</option><option value="yes">Yes</option><option value="no">No</option></select><label for="staff-mta-patch">Patch testing where required</label><select id="staff-mta-patch"><option value="">Select</option><option value="yes">Yes</option><option value="no">No</option></select><label><input type="checkbox" id="staff-mta-information" /> Customer confirmed information is accurate</label><label><input type="checkbox" id="staff-mta-ethics" /> Customer confirmed Code of Ethics</label><label><input type="checkbox" id="staff-mta-demands" /> Customer confirmed demands and needs</label><label><input type="checkbox" id="staff-mta-nonadvised" /> Customer confirmed non-advised cover</label></fieldset>'+
@@ -49,7 +53,7 @@ function mtaFields(){
 function updateMtaSummary(){
  const box=$('staff-mta-summary-body');if(!box)return;
  const q=state.quote?.quote;
- const fmt=p=>Number.isFinite(Number(p))?'£'+(Number(p)/100).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2}):'—';
+ const fmt=p=>p!==null&&p!==undefined&&p!==''&&Number.isFinite(Number(p))?'£'+(Number(p)/100).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2}):'—';
  const policy=state.record||{};
  const selection=$('staff-mta-type')?.selectedOptions?.[0]?.textContent||'Not selected';
  const effective=$('staff-effective-date')?.value||'Not selected';
