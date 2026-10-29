@@ -34,21 +34,52 @@ function mtaFields(){
  const known=contactId(state.record);
  const linkedDeal=String(state.record?.Membership?.id||state.record?.Deal?.id||'');
  const needsLink=!known||!linkedDeal;
- return '<nav class="staff-mta-progress" aria-label="Adjustment stages"><span>1 · Policy</span><span>2 · Changes</span><span>3 · Quote</span><span>4 · Payment</span></nav><h3>Policy and proposed change</h3>'+
- '<dl class="staff-addon-details"><dt>Policy</dt><dd>'+esc(state.record?.Policy_Number||state.record?.Name||state.record?.id)+'</dd><dt>Status</dt><dd>'+esc(state.record?.Policy_Status||'Not recorded')+'</dd><dt>Cover end</dt><dd>'+esc(state.record?.Policy_End_Date||state.record?.End_Date||'Not recorded')+'</dd></dl>'+
- '<details class="staff-mta-linkage" '+(needsLink?'open':'')+'><summary>Customer and membership links '+(needsLink?'— action needed':'— recorded')+'</summary>'+
- field('staff-mta-contact','CRM Contact ID','inputmode="numeric" value="'+esc(known)+'" placeholder="Required: selected policy owner"')+
- note('The backend independently verifies the selected policy owner against this Contact.')+
- field('staff-mta-record','Membership / Deal ID','inputmode="numeric" value="'+esc(linkedDeal)+'" placeholder="Required for revision save"')+
- '</details>'+
-  field('staff-effective-date','Effective date','type="date"')+
- '<label for="staff-mta-type">Change type</label><select id="staff-mta-type"><option value="">Choose a change</option><option value="person">Add named person</option><option value="treatment">Add treatment</option><option value="teaching">Teaching cover</option><option value="equipment">Equipment cover increase</option><option value="el">Employers Liability change</option></select>'+
- '<div id="staff-mta-specific"></div>'+
- '<fieldset class="staff-mta-declarations"><legend>Customer declarations and evidence</legend><label for="staff-mta-qualified">Qualified to perform the requested treatment or service</label><select id="staff-mta-qualified"><option value="">Select</option><option value="yes">Yes</option><option value="no">No</option></select><label for="staff-mta-patch">Patch testing where required</label><select id="staff-mta-patch"><option value="">Select</option><option value="yes">Yes</option><option value="no">No</option></select><label><input type="checkbox" id="staff-mta-information" /> Customer confirmed information is accurate</label><label><input type="checkbox" id="staff-mta-ethics" /> Customer confirmed Code of Ethics</label><label><input type="checkbox" id="staff-mta-demands" /> Customer confirmed demands and needs</label><label><input type="checkbox" id="staff-mta-nonadvised" /> Customer confirmed non-advised cover</label></fieldset>'+
- note('Collect the required insurance declarations and qualified evidence in the existing portal journey. These checkboxes only record confirmation relayed by the customer; the backend determines referral or approval.')+
- '<div class="staff-addon-actions"><button class="button secondary" type="button" data-staff-addon="cover">Load current cover</button><button class="button primary" type="button" data-staff-addon="quote-mta">Get live quote</button><button class="button secondary" type="button" data-staff-addon="save-mta" disabled id="staff-mta-save">Save quoted revision</button></div>'+
- '<div class="staff-addon-result" id="staff-mta-result" role="status" aria-live="polite">No quote requested.</div>'+
- '<section class="staff-addon-panel" aria-label="MTA secure payment"><h3>Secure payment</h3><p>Available only after an eligible quotation and successful revision save. The customer pays through Stripe Checkout; CRM is updated by the existing payment processing.</p><label class="staff-payment-consent"><input type="checkbox" id="staff-mta-accepted" /> I confirm the customer explicitly accepted the Code of Ethics and Terms of Business.</label><button type="button" class="button primary" data-staff-addon="payment-mta" id="staff-mta-payment" disabled>Generate test payment link</button><div id="staff-mta-payment-result" role="status" aria-live="polite"></div></section>';
+ const tabs=[['policy','Current policy'],['changes','Proposed changes'],['quote','Review & quote'],['payment','Payment']];
+ return '<nav class="staff-mta-progress" role="tablist" aria-label="Mid-term adjustment sections">'+
+   tabs.map(([id,label],i)=>'<button type="button" role="tab" id="staff-mta-tab-'+id+'" aria-controls="staff-mta-panel-'+id+'" aria-selected="'+(i===0?'true':'false')+'" tabindex="'+(i===0?'0':'-1')+'" class="staff-mta-tab '+(i===0?'active':'')+'" data-staff-addon="mta-tab" data-step="'+id+'">'+(i+1)+'. '+label+'</button>').join('')+'</nav>'+
+ '<section class="staff-mta-step" id="staff-mta-panel-policy" role="tabpanel" aria-labelledby="staff-mta-tab-policy" data-mta-panel="policy">'+
+   '<h3>Existing policy</h3>'+
+   '<dl class="staff-addon-details"><dt>Policy</dt><dd>'+esc(state.record?.Policy_Number||state.record?.Name||state.record?.id)+'</dd><dt>Status</dt><dd>'+esc(state.record?.Policy_Status||'Not recorded')+'</dd><dt>Cover end</dt><dd>'+esc(state.record?.Policy_End_Date||state.record?.End_Date||'Not recorded')+'</dd></dl>'+
+   '<details class="staff-mta-linkage" '+(needsLink?'open':'')+'><summary>Customer and membership links '+(needsLink?'— action needed':'— verified by backend')+'</summary>'+
+     field('staff-mta-contact','CRM Contact ID','inputmode="numeric" value="'+esc(known)+'" placeholder="Required: selected policy owner"')+
+     note('The backend independently verifies the Contact, policy and Membership/Deal relationship.')+
+     field('staff-mta-record','Membership / Deal ID','inputmode="numeric" value="'+esc(linkedDeal)+'" placeholder="Required for revision save"')+
+   '</details>'+
+   '<div class="staff-addon-actions"><button type="button" class="button secondary" data-staff-addon="cover">Refresh current cover</button></div>'+
+   '<div id="staff-mta-cover" role="status" class="staff-addon-result">Current cover has not been loaded.</div>'+
+   '<div class="staff-mta-step-actions"><button type="button" class="button primary" data-staff-addon="mta-tab" data-step="changes">Choose change →</button></div>'+
+ '</section>'+
+ '<section class="staff-mta-step" id="staff-mta-panel-changes" role="tabpanel" aria-labelledby="staff-mta-tab-changes" data-mta-panel="changes" hidden>'+
+   '<h3>What needs to change?</h3>'+
+   field('staff-effective-date','Requested effective date','type="date"')+
+   '<label for="staff-mta-type">Change type</label><select id="staff-mta-type"><option value="">Choose a change</option><option value="person">Add named person</option><option value="treatment">Add treatment</option><option value="teaching">Teaching cover</option><option value="equipment">Equipment cover increase</option><option value="el">Employers Liability change</option></select>'+
+   '<div id="staff-mta-specific"></div>'+
+   '<fieldset class="staff-mta-declarations"><legend>Customer declarations and evidence</legend><label for="staff-mta-qualified">Qualified to perform requested treatment or service</label><select id="staff-mta-qualified"><option value="">Select</option><option value="yes">Yes</option><option value="no">No</option></select><label for="staff-mta-patch">Patch testing where required</label><select id="staff-mta-patch"><option value="">Select</option><option value="yes">Yes</option><option value="no">No</option></select><label><input type="checkbox" id="staff-mta-information" /> Customer confirmed information is accurate</label><label><input type="checkbox" id="staff-mta-ethics" /> Customer confirmed Code of Ethics</label><label><input type="checkbox" id="staff-mta-demands" /> Customer confirmed demands and needs</label><label><input type="checkbox" id="staff-mta-nonadvised" /> Customer confirmed non-advised cover</label></fieldset>'+
+   note('Record actual customer confirmations. Underwriting and eligibility are determined by the existing service.')+
+   '<div class="staff-mta-step-actions"><button type="button" class="button secondary" data-staff-addon="mta-tab" data-step="policy">← Current policy</button><button type="button" class="button primary" data-staff-addon="mta-tab" data-step="quote">Review & quote →</button></div>'+
+ '</section>'+
+ '<section class="staff-mta-step" id="staff-mta-panel-quote" role="tabpanel" aria-labelledby="staff-mta-tab-quote" data-mta-panel="quote" hidden>'+
+   '<h3>Review the adjustment</h3>'+
+   note('The authoritative pricing service calculates the adjustment. A referred change can still be saved for staff review; it cannot proceed to payment until eligible.')+
+   '<div class="staff-addon-actions"><button class="button primary" type="button" data-staff-addon="quote-mta">Calculate live quote</button><button class="button secondary" type="button" data-staff-addon="save-mta" disabled id="staff-mta-save">Save quoted revision</button></div>'+
+   '<div class="staff-addon-result" id="staff-mta-result" role="status" aria-live="polite">No quote requested.</div>'+
+   '<div class="staff-mta-step-actions"><button type="button" class="button secondary" data-staff-addon="mta-tab" data-step="changes">← Edit changes</button><button type="button" class="button secondary" data-staff-addon="mta-tab" data-step="payment">Payment →</button></div>'+
+ '</section>'+
+ '<section class="staff-mta-step" id="staff-mta-panel-payment" role="tabpanel" aria-labelledby="staff-mta-tab-payment" data-mta-panel="payment" hidden>'+
+   '<h3>Payment and next steps</h3><p class="staff-addon-info">A payment link is only available after an eligible quote and a successfully saved revision. The customer pays securely through Stripe; payment status is verified by the backend.</p>'+
+   '<section class="staff-addon-panel" aria-label="MTA secure payment"><label class="staff-payment-consent"><input type="checkbox" id="staff-mta-accepted" /> I confirm the customer explicitly accepted the Code of Ethics and Terms of Business.</label><button type="button" class="button primary" data-staff-addon="payment-mta" id="staff-mta-payment" disabled>Generate test payment link</button><div id="staff-mta-payment-result" role="status" aria-live="polite"></div></section>'+
+   '<div class="staff-mta-step-actions"><button type="button" class="button secondary" data-staff-addon="mta-tab" data-step="quote">← Review quote</button></div>'+
+ '</section>';
+}
+function setMtaStep(step){
+ const tabs=['policy','changes','quote','payment'];
+ if(!tabs.includes(step)||state.mode!=='mta')return;
+ state.activeStep=step;
+ for(const id of tabs){
+   const active=id===step,tab=$('staff-mta-tab-'+id),panel=$('staff-mta-panel-'+id);
+   if(tab){tab.classList.toggle('active',active);tab.setAttribute('aria-selected',String(active));tab.tabIndex=active?0:-1;}
+   if(panel)panel.hidden=!active;
+ }
 }
 function updateMtaSummary(){
  const box=$('staff-mta-summary-body');if(!box)return;
@@ -74,16 +105,16 @@ function specific(){
  state.quote=null;const b=$('staff-mta-save');if(b)b.disabled=true;updateMtaSummary();
 }
 function open(mode,record,entity){
- state.mode=mode;state.entity=entity||'';state.record=record;state.cover=null;state.quote=null;state.payload=null;state.savedRevision=null;state.checkoutUrl='';
+ state.mode=mode;state.entity=entity||'';state.record=record;state.cover=null;state.quote=null;state.payload=null;state.savedRevision=null;state.checkoutUrl='';state.busy=false;state.activeStep='policy';
  let d=$('staff-addon-dialog');if(!d){d=document.createElement('dialog');d.id='staff-addon-dialog';d.className='staff-addon-dialog';document.body.appendChild(d);}
  d.classList.toggle('staff-mta-dialog',mode==='mta');
  d.innerHTML='<div class="staff-addon-head"><div><small>STAFF WORKSPACE</small><h2>'+(mode==='mta'?'Change policy cover':'Voucher / waiver')+'</h2><p>'+esc(record?.Name||record?.Policy_Number||record?.Deal_Name||'Selected record')+'</p></div><button type="button" class="button secondary" data-staff-addon="close">Close</button></div>'+
  (mode==='mta'?'<div class="staff-mta-grid"><section class="staff-mta-main">'+mtaFields()+'</section><aside class="staff-mta-summary" aria-label="Policy and adjustment quote"><h3>Adjustment summary</h3><div id="staff-mta-summary-body"></div></aside></div>':discountFields()+note('Referral and waiver inputs are ready for a membership quote. No discount is applied without a signed quote response.')+'<output id="staff-discount-outcome"></output>');
  if(d.showModal)d.showModal();else d.setAttribute('open','');
- if(mode==='mta'){updateMtaSummary();loadCover();}
+ if(mode==='mta'){setMtaStep('policy');updateMtaSummary();loadCover();}
 }
 async function loadCover(){
- const target=$('staff-mta-result');if(!target)return;
+ const target=$('staff-mta-cover');if(!target)return;
  const contact=String($('staff-mta-contact')?.value||'').trim();
  const recordId=String($('staff-mta-record')?.value||'').trim();
  if(!/^\d{10,25}$/.test(contact)||!/^\d{10,25}$/.test(recordId)){target.textContent='Enter the Contact and Membership IDs to load current cover.';return;}
@@ -131,7 +162,7 @@ async function quote(){
    const response=await global.BGStaffApi.call('quote',p);
    if(response?.error||response?.code||response?.ok===false)throw Error(response.message||response.error||response.code);
    if(!response?.quote)throw Error('Backend returned no quote. Check the response contract.');
-   state.quote=response;state.payload=p;state.savedRevision=null;state.checkoutUrl='';
+   state.quote=response;state.payload=p;state.savedRevision=null;state.checkoutUrl='';setMtaStep('quote');
    result(response);const button=$('staff-mta-save');if(button)button.disabled=false; // Referred changes must also be saved for staff review; only payment is blocked.
  }catch(e){state.quote=null;state.payload=null;result(e.message||String(e),true);const b=$('staff-mta-save');if(b)b.disabled=true;}
  finally{state.busy=false;}
@@ -147,7 +178,7 @@ async function save(){
    result(response?.auditNote===false?{warning:'Revision saved but its audit Note failed. Investigate in CRM.',response}:response,response?.auditNote===false);
    state.savedRevision=response.revision||response.revisions?.[0]||null;
    const payment=$('staff-mta-payment');if(payment)payment.disabled=!(state.quote?.quote?.payable&&state.savedRevision);
-   const b=$('staff-mta-save');if(b)b.disabled=true;
+   const b=$('staff-mta-save');if(b)b.disabled=true;if(state.quote?.quote?.payable&&state.savedRevision)setMtaStep('payment');
  }catch(e){result(e.message||String(e),true);}
  finally{state.busy=false;}
 }
@@ -171,10 +202,19 @@ async function payment(){
 function validate(){const out=$('staff-discount-outcome');if(!out)return;if(state.waiver&&!state.reason)out.textContent='Choose a waiver reason.';else if(state.waiver&&state.reason==='Other'&&!state.note.trim())out.textContent='Add a note for Other.';else out.textContent='Inputs captured. Final eligibility, discount and pricing must be verified by the signed quote.';}
 document.addEventListener('input',event=>{const f=event.target.dataset?.staffField;if(f&&Object.prototype.hasOwnProperty.call(state,f))state[f]=event.target.value;});
 document.addEventListener('change',event=>{const f=event.target.dataset?.staffField;if(f&&Object.prototype.hasOwnProperty.call(state,f))state[f]=event.target.value;if(event.target.id==='staff-mta-type')specific();if(event.target.closest('#staff-addon-dialog')&&state.mode==='mta'&&event.target.id!=='staff-mta-accepted'){state.quote=null;state.payload=null;state.savedRevision=null;state.checkoutUrl='';const save=$('staff-mta-save'),pay=$('staff-mta-payment');if(save)save.disabled=true;if(pay)pay.disabled=true;const out=$('staff-mta-payment-result');if(out)out.textContent='The change was edited. Obtain a new quotation and save the revision before payment.';}if(event.target.closest('#staff-addon-dialog'))updateMtaSummary();});
+document.addEventListener('keydown',event=>{
+ const b=event.target?.closest?.('#staff-addon-dialog .staff-mta-tab');
+ if(!b||!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
+ const ids=['policy','changes','quote','payment'],current=ids.indexOf(b.dataset.step);
+ if(current<0)return;
+ const i=event.key==='Home'?0:event.key==='End'?ids.length-1:event.key==='ArrowRight'?(current+1)%ids.length:(current+ids.length-1)%ids.length;
+ setMtaStep(ids[i]);$('staff-mta-tab-'+ids[i])?.focus();event.preventDefault();
+});
 document.addEventListener('click',event=>{
  const b=event.target.closest('[data-staff-addon]');if(!b)return;
  const a=b.dataset.staffAddon;
  if(a==='close'){$('staff-addon-dialog')?.close?.();return;}
+ if(a==='mta-tab'){setMtaStep(b.dataset.step);$('staff-mta-tab-'+b.dataset.step)?.focus();return;}
  if(a==='validate-discount'){validate();return;}
  if(a==='copy-mta-payment'){if(state.checkoutUrl)navigator.clipboard?.writeText(state.checkoutUrl).catch(()=>{});return;}
  if(a==='open-mta-payment'){if(state.checkoutUrl)global.open(state.checkoutUrl,'_blank','noopener,noreferrer');return;}
