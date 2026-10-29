@@ -340,7 +340,7 @@
   function processingHome(){
     const modules=[['membership','Membership','Membership records, renewals and payments','users-round'],['insurance','Insurance','Policies, declarations and referrals','shield-check'],['accreditation','Accreditation','Applications, qualifications and centres','graduation-cap']];
     return `<div class="process-hero"><span class="process-kicker">APPLICATIONS</span><h2>Review applications</h2><p>Find a submitted application, review its details and continue processing in CRM.</p></div>
-      <div class="process-entry-grid">${modules.map(([kind,label,desc,iconName])=>`<article class="process-entry"><div class="entry-icon">${icon(iconName)}</div><h3>${label}</h3><p>${desc}</p><button type="button" class="button secondary" data-action="browse" data-kind="${kind}">View applications ${icon('chevron-right')}</button></article>`).join('')}</div>
+      <div class="process-entry-grid">${modules.map(([kind,label,desc,iconName])=>`<article class="process-entry process-entry--${kind}"><div class="entry-icon">${icon(iconName)}</div><h3>${label}</h3><p>${desc}</p><button type="button" class="button secondary" data-action="browse" data-kind="${kind}">View applications ${icon('chevron-right')}</button></article>`).join('')}</div>
       <div class="create-cta"><div><strong>Start a new application</strong><p>Walk through the guided application with a customer. The demonstration stops before payment.</p></div><div class="create-cta-actions"><button type="button" class="button secondary" data-action="journey-start">${icon('plus-circle')} Membership</button><button type="button" class="button secondary" data-action="journey-start">${icon('plus-circle')} Insurance</button><button type="button" class="button secondary" data-action="journey-start">${icon('plus-circle')} Accreditation</button></div></div>`;
   }
   function processingPanel(entity,record){
@@ -436,6 +436,15 @@
     else if(action==='membership-cancel-quote'){quoteCancellation();event.preventDefault();}
     else if(action==='membership-cancel-confirm'){confirmCancellation();event.preventDefault();}
     else if(action==='membership-cancel-retry'){retryCancellation();event.preventDefault();}
+  });
+  document.addEventListener('keydown',event=>{
+    const current=event.target?.closest?.('#staff-cancellation-dialog [role="tab"]');
+    if(!current||!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
+    const candidates=[...cancellationDialog().querySelectorAll('.staff-cancellation-tab:not(:disabled)')];
+    if(!candidates.length)return;
+    const index=candidates.indexOf(current),last=candidates.length-1;
+    const next=event.key==='Home'?0:event.key==='End'?last:event.key==='ArrowRight'?(index+1)%(last+1):(index-1+last+1)%(last+1);
+    candidates[next]?.click();event.preventDefault();
   });
   function openCancellation(record){
     if(!state.contact?.id||!record?.id){setNotice('Open a Membership transaction linked to a CRM Contact before requesting cancellation.','error');return;}
@@ -611,7 +620,7 @@
     return `<label class="journey-field" for="${id}"><span>${esc(f.label)}${f.required?' *':''}</span>${input}</label>`;
   }
   function visibleJourneySteps(){const j=state.journey;return(j&&JOURNEY_FLOW[j.kind]?.steps||[]).filter(x=>!x.when||x.when(j.answers));}
-  function renderJourney(){initJourney();const j=state.journey;if(j.kind&&j.step>=0){if(window.BGJourney12)return window.BGJourney12.render(j);return '<section class="journey-shell"><div class="journey-validation" role="alert">The current application form did not load. Refresh the Staff Workspace and check the Portal V2 form module. Your entries cannot be saved until it loads.</div></section>';}if(!j.kind){return `<section class="journey-shell"><div class="journey-heading"><span class="process-kicker">NEW APPLICATION</span><h2>Select application type</h2><p>Start a staff-assisted Guild application for an existing or new CRM customer.</p></div><div class="journey-draft-entry"><strong>Resume an existing application</strong><p>Choose a customer below, or use the current CRM customer, to retrieve their saved applications.</p><button type="button" class="button secondary" data-action="journey-find-drafts">Find draft applications</button></div><div class="journey-type-grid">${Object.entries(JOURNEY_FLOW).map(([kind,c])=>`<button class="journey-type-card" data-action="journey-type" data-kind="${kind}"><strong>${esc(c.title)}</strong><small>${esc(c.description)}</small><span>Start journey →</span></button>`).join('')}</div></section>`;}
+  function renderJourney(){initJourney();const j=state.journey;if(j.kind&&j.step>=0){if(window.BGJourney12)return window.BGJourney12.render(j);return '<section class="journey-shell"><div class="journey-validation" role="alert">The current application form did not load. Refresh the Staff Workspace and check the Portal V2 form module. Your entries cannot be saved until it loads.</div></section>';}if(!j.kind){return `<section class="journey-shell"><div class="journey-heading"><span class="process-kicker">NEW APPLICATION</span><h2>Select application type</h2><p>Start a staff-assisted Guild application for an existing or new CRM customer.</p></div><div class="journey-draft-entry"><strong>Resume an existing application</strong><p>Choose a customer below, or use the current CRM customer, to retrieve their saved applications.</p><button type="button" class="button secondary" data-action="journey-find-drafts">Find draft applications</button></div><div class="journey-type-grid">${Object.entries(JOURNEY_FLOW).map(([kind,c])=>`<button class="journey-type-card journey-type-card--${kind}" data-action="journey-type" data-kind="${kind}"><strong>${esc(c.title)}</strong><small>${esc(c.description)}</small><span>Start journey →</span></button>`).join('')}</div></section>`;}
     const cfg=JOURNEY_FLOW[j.kind],steps=visibleJourneySteps(),index=Math.min(j.step,steps.length);const current=steps[index],isContact=index<0,atPay=index>=steps.length;
     const labels=['Customer',...steps.map(x=>x.title),'Payment'];const active=isContact?0:atPay?labels.length-1:index+1;
     const bar=`<div class="journey-progress">${labels.map((l,i)=>`<span class="${i===active?'current':i<active?'done':''}">${i+1}. ${esc(l)}</span>`).join('')}</div>`;
