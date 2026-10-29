@@ -40,7 +40,23 @@
   function metaFields(entity){return metaCache.get(entity)?.fields||[];}
   function filteredField(field){return field&&field.api_name&&!field.api_name.startsWith('$')&&field.visible!==false&&field.view_type?.view!==false;}
   function fieldMap(entity){return new Map(metaFields(entity).filter(filteredField).map(x=>[x.api_name,x]));}
-  function iconStatus(x){const t=String(x||'').toLowerCase();return /^(active|approved|clear|paid|verified|current|completed)$/.test(t)?'good':/(failed|banned|stopped|stop|rejected|cancelled)/.test(t)?'bad':/(pending|refer|await|draft|not|review|processing)/.test(t)?'waiting':'neutral';}
+  function iconStatus(x){
+    const t=String(x??'').trim().toLowerCase();
+    if(!t)return 'neutral';
+    if(/^(active|approved|clear|cleared|paid|verified|current|completed|issued|succeeded)$/.test(t))return 'good';
+    if(/failed|banned|stopped|stop|rejected|cancelled|expired|declined|error|listed postcode|potential match/.test(t))return 'bad';
+    if(/awaiting payment|payment processing|in progress|processing|submitted/.test(t))return 'info';
+    if(/draft|paused|on hold/.test(t))return 'draft';
+    if(/pending|refer|await|review|not paid|unverified|outstanding|needs/.test(t))return 'waiting';
+    return 'neutral';
+  }
+  function statusMarkup(field,raw){
+    if(!/(?:^Stage$|_Status$|^Status$|_Stage$|^Result$|^Priority$|^Investigation_Status$)/.test(field))
+      return safe(format(field,raw));
+    const text=raw===undefined||raw===null||raw===''?'Not recorded':format(field,raw);
+    const tone=text==='Not recorded'?'missing':({good:'success',bad:'danger',info:'info',draft:'draft',waiting:'warning',neutral:'neutral'}[iconStatus(raw)]);
+    return '<span class="bg-state bg-state-'+tone+'">'+safe(text)+'</span>';
+  }
   async function prime(entity,api,rerender){
     if(!entity||!api?.META||metaCache.has(entity))return;
     const promise=Promise.allSettled([
@@ -71,7 +87,7 @@
       if(key==='id'||key.startsWith('$'))continue;
       const raw=record[key];if(!showEmpty&&(raw===undefined||raw===null||raw===''))continue;
       const name=f?.field_label||pretty(key);
-      let val=safe(format(key,raw));
+      let val=statusMarkup(key,raw);
       if(raw&&typeof raw==='object'&&!Array.isArray(raw)&&raw.id&&raw.name){
         const mod=f?.lookup?.module?.api_name||f?.lookup?.module||f?.lookup?.module_name;
         if(typeof mod==='string'&&/^[A-Za-z_]+$/.test(mod)){val='<button class="v12-link" data-action="select" data-entity="'+safe(mod)+'" data-id="'+safe(raw.id)+'">'+safe(raw.name)+'</button>';}
@@ -100,7 +116,7 @@
     return groups;
   }
   function statusBar(entity,record){
-    const keys=['Application_Status','Stage','Current_Membership_Status','Underwriting_Status','Risk_Status','Payment_Status','Policy_Status','Accreditation_Status','Application_Stage'];
+    const keys=['Application_Status','Stage','Current_Membership_Status','Underwriting_Status','Risk_Status','Sanctions_Status','Payment_Status','Policy_Status','Document_Status','Accreditation_Status','Application_Stage'];
     return keys.filter(k=>record[k]!==undefined&&record[k]!==null).map(k=>{const editor=global.BGAccredEdit&&global.BGAccredEdit.render(entity,record,k);return '<span class="v12-status v12-'+iconStatus(record[k])+'"><span>'+safe(pretty(k))+'</span> <strong>'+(editor||safe(format(k,record[k])))+'</strong></span>';}).join('');
   }
   function relationList(entity){
@@ -136,7 +152,7 @@
     if(!columns.length)columns=['Name'];
     const headings=columns.map(k=>'<th scope="col">'+safe(meta.get(k)?.field_label||pretty(k))+'</th>').join('');
     return '<div class="v12-table-wrap"><table class="v12-table"><thead><tr>'+headings+(navigable.has(entity)?'<th scope="col">Action</th>':'')+'</tr></thead><tbody>'+
-      rows.map(r=>'<tr>'+columns.map(k=>'<td>'+safe(format(k,r[k]))+'</td>').join('')+
+      rows.map(r=>'<tr>'+columns.map(k=>'<td>'+statusMarkup(k,r[k])+'</td>').join('')+
       (navigable.has(entity)?'<td><button class="v12-link" data-action="select" data-entity="'+safe(entity)+'" data-id="'+safe(r.id)+'">Open</button></td>':'')+'</tr>').join('')+
       '</tbody></table></div>';
   }
@@ -172,7 +188,12 @@
     const extraAction=global.BGStaffAddons?.action(entity,record)||'';
     const header='<header class="v12-record-head"><div><span class="v12-kicker">'+safe(appNames[entity]||pretty(entity))+'</span><h2>'+safe(ctx.title(entity,record))+'</h2><p>'+safe(ctx.summary(entity,record)||'')+'</p></div><div class="v12-status-row">'+statusBar(entity,record)+'</div></header>';
     const navigation=[['details','Details'],['timeline','Timeline'],['processing','Processing']].map(p=>'<button class="v12-side-link '+(selection===p[0]?'active':'')+'" data-action="v12-tab" data-tab="'+p[0]+'">'+safe(p[1])+'</button>').join('');
-    const related=relations.map(r=>'<button class="v12-side-link '+(selection===r.id?'active':'')+'" data-action="v12-tab" data-tab="'+safe(r.id)+'">'+safe(r.label)+'</button>').join('');
+    const related=relations.map(r=>{
+      const cache=relatedCache.get(relationKey(entity,id,r.id));
+      const loaded=cache?.pages?.get(cache.page||1);
+      const count=loaded?'<span class="staff-rel-count" aria-label="'+loaded.length+' loaded on current page">'+loaded.length+(cache.moreByPage?.get(cache.page||1)?'+':'')+'</span>':'';
+      return '<button class="v12-side-link '+(selection===r.id?'active':'')+'" data-action="v12-tab" data-tab="'+safe(r.id)+'"><span>'+safe(r.label)+'</span>'+count+'</button>';
+    }).join('');
     const metaText=meta.loading?'CRM layout metadata loading…':meta.problems?.length?'Some CRM metadata could not be loaded; fields and relationships may be incomplete.':'CRM layout and field labels';
     return '<div class="v12-record">'+header+'<div class="v12-actions">'+ctx.actions(entity,id)+extraAction+'</div><div class="v12-record-layout"><div class="v12-main">'+main+'<p class="v12-meta-note">'+safe(metaText)+'</p></div><aside class="v12-side" aria-label="Record sections and related lists"><h3>Record</h3>'+navigation+'<h3>Related Lists</h3>'+related+'</aside></div></div>';
   }
