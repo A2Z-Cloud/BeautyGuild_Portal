@@ -188,3 +188,5 @@
 .staff-cancellation-amounts>div{display:grid;gap:6px;background:#fff;border:1px solid #e9dfe5;padding:13px;border-radius:9px}
 .staff-cancellation-amounts span{color:#756875;font-size:11px}.staff-cancellation-amounts strong{font-size:17px}
 @media(max-width:650px){.staff-cancellation-form,.staff-cancellation-amounts{grid-template-columns:1fr}.staff-cancellation-head{flex-direction:column}}
+
+.staff-cancel-authorise{display:flex!important;align-items:flex-start;gap:10px;margin:18px 0;padding:15px;background:#fff;border:1px solid #eadfe5;border-radius:10px;font-size:12px;line-height:1.6}.staff-cancel-authorise input{width:16px!important;height:16px;flex:none;margin-top:2px}.staff-cancellation-quote>.button{margin-top:10px}
