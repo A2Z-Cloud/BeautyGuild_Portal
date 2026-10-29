@@ -142,3 +142,13 @@ body.staff-dev-tools #staff-api-open{display:inline-flex}
 .staff-cancellation-busy{padding:12px 21px;color:#9c286f;font-weight:700}
 @media(max-width:760px){.staff-mta-summary{position:static;min-height:0}.staff-cancellation-tabs{padding:0 8px}.staff-cancellation-tab{font-size:11px}.staff-cancellation-context{padding:10px 12px}.staff-cancel-context-note{margin-left:0;width:100%}.staff-cancellation-panel{padding:14px}.staff-cancellation-head{padding:13px}}
 @media(max-width:500px){.staff-mta-progress .staff-mta-tab{font-size:10px;padding:8px 2px}.staff-cancellation-tab{font-size:10px;padding:8px 2px}.staff-cancellation-form,.staff-cancellation-amounts{grid-template-columns:1fr}.staff-cancellation-head h2{font-size:22px}}
+
+/* Keep module entry surfaces aligned with the customer's Portal dashboard. */
+.process-entry--membership,.journey-type-card--membership{background:#ffe9f4;border-color:#f4d8e7}
+.process-entry--accreditation,.journey-type-card--accreditation{background:#f8eee5;border-color:#ecdfd0}
+.process-entry--insurance,.journey-type-card--insurance{background:#f0ebf7;border-color:#e2d9ef}
+.process-entry--membership .entry-icon{background:#fff;color:#b82d7b}
+.process-entry--accreditation .entry-icon{background:#fff;color:#876039}
+.process-entry--insurance .entry-icon{background:#fff;color:#725399}
+.process-entry .button{background:#ffffffcc}
+.journey-type-card:focus-visible,.process-entry .button:focus-visible{outline:2px solid #be2d78;outline-offset:2px}
