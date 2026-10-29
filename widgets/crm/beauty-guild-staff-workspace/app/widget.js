@@ -372,7 +372,7 @@
     finally{state.savingReview=false;render();}
   }
 
-  const cancellationState={busy:false,quote:null,error:'',response:null,dealId:'',contactId:'',scenario:'',effectiveDate:'',reason:''};
+  const cancellationState={busy:false,quote:null,error:'',response:null,dealId:'',contactId:'',scenario:'',effectiveDate:'',reason:'',request:null,confirmed:null,failedCancellationId:''};
   function cancellationDialog(){
     let d=document.getElementById('staff-cancellation-dialog');
     if(!d){d=document.createElement('dialog');d.id='staff-cancellation-dialog';d.className='staff-cancellation-dialog';document.body.appendChild(d);}
@@ -389,7 +389,10 @@
       (c.response?'<section class="staff-cancellation-quote"><h3>'+((c.response.quotable&&q)?'Cancellation financial summary':'Cancellation cannot be quoted')+'</h3>'+
          (q?'<div class="staff-cancellation-amounts"><div><span>Membership refund</span><strong>'+money(q.membership?.refundPence)+'</strong></div><div><span>Insurance refund</span><strong>'+money(q.insurance?.refundPence)+'</strong></div><div><span>Cancellation fee</span><strong>'+money(q.feeAppliedPence)+'</strong></div><div><span>Net refund</span><strong>'+money(q.netRefundPence)+'</strong></div></div><p>Effective: '+esc(q.effectiveDate||'Not recorded')+' · Cooling off: '+(q.coolingOff?'Yes':'No')+'</p>':'')+
          warnings(c.response.blocking)+warnings(c.response.warnings)+
-         '<p class="v12-muted">Confirmation requires the matching quote hash, authorised CRM cancellation record and backend write switches. No cancellation or refund has been executed here.</p></section>':'')+
+         '<p class="v12-muted">Confirmation rechecks the quote and uses the CRM cancellation record to perform the authorised Stripe operations.</p>'+
+         (c.response.quotable&&q&&/^[a-f0-9]{32}$/i.test(c.response.inputsHash||'')?'<label class="staff-cancel-authorise"><input type="checkbox" id="staff-cancel-authorise"> I have reviewed this cancellation, effective date, refund and warnings, and authorise the change.</label><button type="button" class="button primary" data-action="membership-cancel-confirm" '+(c.busy?'disabled':'')+'>Confirm cancellation and process refund</button>':'')+'</section>':'')+
+      (c.confirmed?'<section class="staff-cancellation-quote"><h3>Cancellation processing result</h3><p>Status: '+esc(c.confirmed.status||'Not recorded')+'</p><p>Cancellation ID: '+esc(c.confirmed.cancellationId||'Not returned')+'</p><p>Net refund: '+money(c.confirmed.netRefundPence)+'</p><p>Refunds: '+esc((c.confirmed.refunds||[]).length)+' recorded</p><p class="v12-muted">Refresh the CRM Membership and policy records to see authoritative lifecycle statuses.</p></section>':'')+
+      (c.failedCancellationId?'<div class="staff-cancellation-actions"><button type="button" class="button secondary" data-action="membership-cancel-retry" '+(c.busy?'disabled':'')+'>Retry incomplete cancellation '+esc(c.failedCancellationId)+'</button></div>':'')+
       '</div>';
   }
   document.addEventListener('click',event=>{
@@ -397,12 +400,14 @@
     if(!event.target?.closest?.('#staff-cancellation-dialog'))return;
     if(action==='membership-cancel-close'){cancellationDialog().close();event.preventDefault();}
     else if(action==='membership-cancel-quote'){quoteCancellation();event.preventDefault();}
+    else if(action==='membership-cancel-confirm'){confirmCancellation();event.preventDefault();}
+    else if(action==='membership-cancel-retry'){retryCancellation();event.preventDefault();}
   });
   function openCancellation(record){
     if(!state.contact?.id||!record?.id){setNotice('Open a Membership transaction linked to a CRM Contact before requesting cancellation.','error');return;}
     const type=String(record.Membership_Type||record.Member_Type||record.Membership_Level||'').toLowerCase();
     const scenario=type.includes('associate')?'cancel_associate':'cancel_full';
-    Object.assign(cancellationState,{busy:false,quote:null,response:null,error:'',dealId:String(record.id),contactId:String(state.contact.id),scenario,effectiveDate:new Date().toISOString().slice(0,10)});
+    Object.assign(cancellationState,{busy:false,quote:null,response:null,error:'',request:null,confirmed:null,failedCancellationId:'',dealId:String(record.id),contactId:String(state.contact.id),scenario,effectiveDate:new Date().toISOString().slice(0,10)});
     const d=cancellationDialog();d.innerHTML=cancellationHtml();d.showModal?.();
   }
   async function quoteCancellation(){
@@ -415,11 +420,43 @@
     if(!c.effectiveDate){c.error='An effective date is required.';d.innerHTML=cancellationHtml();return;}
     const body={contactId:c.contactId,membershipId:c.dealId,scenario:c.scenario,effectiveDate:c.effectiveDate};
     if(refund!==''){if(!/^\d+$/.test(refund)){c.error='Refund override must be a whole number of pence.';d.innerHTML=cancellationHtml();return;}if(!reason){c.error='Give a reason for the refund override.';d.innerHTML=cancellationHtml();return;}body.membershipRefundPence=Number(refund);body.overrideReason=reason;}
-    c.busy=true;c.error='';c.response=null;c.quote=null;d.innerHTML=cancellationHtml();
+    c.busy=true;c.error='';c.response=null;c.quote=null;c.request=null;c.confirmed=null;c.failedCancellationId='';d.innerHTML=cancellationHtml();
     try{
       const result=await window.BGStaffApi.call('cancellation_quote',body);
       if(typeof result?.quotable!=='boolean')throw Error('The CRM dispatcher has not returned the cancellation quote contract. Confirm that cancellation_quote is mapped to POST /staff/cancellation.');
-      c.response=result;c.quote=result.quotable?result.quote:null;
+      c.response=result;c.quote=result.quotable?result.quote:null;c.request=body;
+    }catch(e){c.error=String(e.message||e);}
+    finally{c.busy=false;d.innerHTML=cancellationHtml();}
+  }
+  async function confirmCancellation(){
+    const c=cancellationState,d=cancellationDialog();
+    if(c.busy||!c.response?.quotable||!c.request||!c.quote)return;
+    if(!/^[a-f0-9]{32}$/i.test(String(c.response.inputsHash||'')))return;
+    if(!Number.isSafeInteger(c.quote.netRefundPence)){c.error='An exact refund amount was not returned by the backend.';d.innerHTML=cancellationHtml();return;}
+    if(!d.querySelector('#staff-cancel-authorise')?.checked){c.error='Review and authorise the cancellation before confirming.';d.innerHTML=cancellationHtml();return;}
+    const approved=window.confirm('FINAL CONFIRMATION: This will create a CRM cancellation, end or schedule the end of Stripe subscriptions and issue any eligible refunds. Continue?');
+    if(!approved)return;
+    c.busy=true;c.error='';d.innerHTML=cancellationHtml();
+    try{
+      const result=await window.BGStaffApi.call('cancellation_confirm',{...c.request,confirmNetRefundPence:c.quote.netRefundPence,inputsHash:c.response.inputsHash});
+      if(!result?.cancellationId||!result?.status)throw Error('Cancellation execution was not confirmed by the backend. Check CRM before retrying.');
+      c.confirmed=result;c.response=null;c.quote=null;c.failedCancellationId=/failed|pending|partial/i.test(result.status)?String(result.cancellationId):'';
+    }catch(e){
+      c.error=String(e.message||e);
+      const id=e?.details?.cancellationId||e?.response?.details?.cancellationId;
+      if(/^\d{10,25}$/.test(String(id||'')))c.failedCancellationId=String(id);
+      c.response=null;c.quote=null;
+    }finally{c.busy=false;d.innerHTML=cancellationHtml();}
+  }
+  async function retryCancellation(){
+    const c=cancellationState,d=cancellationDialog(),id=c.failedCancellationId;
+    if(c.busy||!/^\d{10,25}$/.test(String(id||'')))return;
+    if(!window.confirm('Resume the existing cancellation from the step recorded in CRM? The backend prevents duplicate refunds.'))return;
+    c.busy=true;c.error='';d.innerHTML=cancellationHtml();
+    try{
+      const result=await window.BGStaffApi.call('cancellation_retry',{cancellationId:id});
+      if(!result?.cancellationId||!result?.status)throw Error('Retry did not return a confirmed cancellation state.');
+      c.confirmed=result;c.failedCancellationId=/failed|pending|partial/i.test(result.status)?id:'';
     }catch(e){c.error=String(e.message||e);}
     finally{c.busy=false;d.innerHTML=cancellationHtml();}
   }
