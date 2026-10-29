@@ -372,7 +372,7 @@
     finally{state.savingReview=false;render();}
   }
 
-  const cancellationState={busy:false,quote:null,error:'',response:null,dealId:'',contactId:'',scenario:'',effectiveDate:'',reason:'',request:null,confirmed:null,failedCancellationId:''};
+  const cancellationState={busy:false,quote:null,error:'',response:null,dealId:'',contactId:'',scenario:'',effectiveDate:'',reason:'',request:null,confirmed:null,failedCancellationId:'',tab:'details',overridePence:'',overrideReason:'',customerName:'',memberType:''};
   function cancellationDialog(){
     let d=document.getElementById('staff-cancellation-dialog');
     if(!d){d=document.createElement('dialog');d.id='staff-cancellation-dialog';d.className='staff-cancellation-dialog';document.body.appendChild(d);}
@@ -380,25 +380,59 @@
   }
   function cancellationHtml(){
     const c=cancellationState,q=c.quote;
-    const money=n=>Number.isSafeInteger(Number(n))?'£'+(Number(n)/100).toFixed(2):'Not supplied';
-    const warnings=a=>Array.isArray(a)&&a.length?'<ul>'+a.map(v=>'<li>'+esc(v.message||v.code||String(v))+'</li>').join('')+'</ul>':'';
-    return '<div class="staff-cancellation-head"><div><span class="v12-kicker">STAFF-ONLY MEMBERSHIP SERVICE</span><h2>Cancellation and downgrade review</h2><p>All prices and eligibility come from the secured Portal V2 service. Quoting does not change membership, payments or subscriptions.</p></div><button type="button" class="button secondary" data-action="membership-cancel-close">Close</button></div>'+
-      '<div class="staff-cancellation-form"><label>Membership Deal ID<input readonly value="'+esc(c.dealId)+'"></label><label>Requested action<select id="staff-cancellation-scenario"><option value="cancel_associate" '+(c.scenario==='cancel_associate'?'selected':'')+'>Cancel Associate</option><option value="cancel_full" '+(c.scenario==='cancel_full'?'selected':'')+'>Cancel Full membership</option><option value="downgrade_full" '+(c.scenario==='downgrade_full'?'selected':'')+'>Downgrade Full to Associate</option></select></label><label>Effective date<input id="staff-cancellation-date" type="date" value="'+esc(c.effectiveDate)+'"></label><label>Membership refund override (pence, optional)<input id="staff-cancellation-override" type="number" min="0" step="1" placeholder="Leave blank for standard rules"></label><label>Override reason<input id="staff-cancellation-reason" placeholder="Required if overriding refund"></label></div>'+
-      '<div class="staff-cancellation-actions"><button type="button" class="button primary" data-action="membership-cancel-quote" '+(c.busy?'disabled':'')+'>Calculate cancellation quote</button></div>'+
-      (c.busy?'<p role="status">Checking CRM and Stripe…</p>':'')+(c.error?'<p class="v12-warning" role="alert">'+esc(c.error)+'</p>':'')+
-      (c.response?'<section class="staff-cancellation-quote"><h3>'+((c.response.quotable&&q)?'Cancellation financial summary':'Cancellation cannot be quoted')+'</h3>'+
-         (q?'<div class="staff-cancellation-amounts"><div><span>Membership refund</span><strong>'+money(q.membership?.refundPence)+'</strong></div><div><span>Insurance refund</span><strong>'+money(q.insurance?.refundPence)+'</strong></div><div><span>Cancellation fee</span><strong>'+money(q.feeAppliedPence)+'</strong></div><div><span>Net refund</span><strong>'+money(q.netRefundPence)+'</strong></div></div><p>Effective: '+esc(q.effectiveDate||'Not recorded')+' · Cooling off: '+(q.coolingOff?'Yes':'No')+'</p>':'')+
-         warnings(c.response.blocking)+warnings(c.response.warnings)+
-         '<p class="v12-muted">Confirmation rechecks the quote and uses the CRM cancellation record to perform the authorised Stripe operations.</p>'+
-         (c.response.quotable&&q&&/^[a-f0-9]{32}$/i.test(c.response.inputsHash||'')?'<label class="staff-cancel-authorise"><input type="checkbox" id="staff-cancel-authorise"> I have reviewed this cancellation, effective date, refund and warnings, and authorise the change.</label><button type="button" class="button primary" data-action="membership-cancel-confirm" '+(c.busy?'disabled':'')+'>Confirm cancellation and process refund</button>':'')+'</section>':'')+
-      (c.confirmed?'<section class="staff-cancellation-quote"><h3>Cancellation processing result</h3><p>Status: '+esc(c.confirmed.status||'Not recorded')+'</p><p>Cancellation ID: '+esc(c.confirmed.cancellationId||'Not returned')+'</p><p>Net refund: '+money(c.confirmed.netRefundPence)+'</p><p>Refunds: '+esc((c.confirmed.refunds||[]).length)+' recorded</p><p class="v12-muted">Refresh the CRM Membership and policy records to see authoritative lifecycle statuses.</p></section>':'')+
-      (c.failedCancellationId?'<div class="staff-cancellation-actions"><button type="button" class="button secondary" data-action="membership-cancel-retry" '+(c.busy?'disabled':'')+'>Retry incomplete cancellation '+esc(c.failedCancellationId)+'</button></div>':'')+
-      '</div>';
+    const money=n=>n!==null&&n!==undefined&&n!==''&&Number.isSafeInteger(Number(n))?'£'+(Number(n)/100).toFixed(2):'Not supplied';
+    const warnings=a=>Array.isArray(a)&&a.length?'<div class="staff-cancel-alert" role="note"><strong>Important information</strong><ul>'+a.map(v=>'<li>'+esc(v.message||v.code||String(v))+'</li>').join('')+'</ul></div>':'';
+    const tabs=[['details','Membership'],['quote','Refund quote'],['review','Review & authorise'],['outcome','Outcome']];
+    const allowed=id=>id==='details'||id==='quote'&&!!c.response||id==='review'&&!!(c.response?.quotable&&q&&/^[a-f0-9]{32}$/i.test(c.response.inputsHash||''))||id==='outcome'&&!!(c.confirmed||c.failedCancellationId);
+    const tabNav='<nav class="staff-cancellation-tabs" role="tablist" aria-label="Cancellation steps">'+tabs.map(([id,label],idx)=>'<button type="button" role="tab" id="staff-cancel-tab-'+id+'" aria-controls="staff-cancel-panel-'+id+'" aria-selected="'+(c.tab===id?'true':'false')+'" tabindex="'+(c.tab===id?'0':'-1')+'" class="staff-cancellation-tab '+(c.tab===id?'active':'')+'" data-action="membership-cancel-tab" data-tab="'+id+'" '+(allowed(id)?'':'disabled')+'>'+(idx+1)+'. '+label+'</button>').join('')+'</nav>';
+    const breakdown=q?'<div class="staff-cancellation-amounts"><div><span>Membership refund</span><strong>'+money(q.membership?.refundPence)+'</strong></div><div><span>Insurance refund</span><strong>'+money(q.insurance?.refundPence)+'</strong></div><div><span>Cancellation fee</span><strong>'+money(q.feeAppliedPence)+'</strong></div><div class="staff-cancel-total"><span>Net refund</span><strong>'+money(q.netRefundPence)+'</strong></div></div>':'';
+    const form='<div class="staff-cancellation-form"><label>Requested action<select id="staff-cancellation-scenario"><option value="cancel_associate" '+(c.scenario==='cancel_associate'?'selected':'')+'>Cancel Associate membership</option><option value="cancel_full" '+(c.scenario==='cancel_full'?'selected':'')+'>Cancel Full membership</option><option value="downgrade_full" '+(c.scenario==='downgrade_full'?'selected':'')+'>Downgrade Full to Associate</option></select></label><label>Effective date<input id="staff-cancellation-date" type="date" value="'+esc(c.effectiveDate)+'"></label></div>'+
+      '<details class="staff-cancel-advanced"><summary>Advanced refund adjustment</summary><p class="v12-muted">Only enter an override when authorised. Values are in pence and require a reason.</p><div class="staff-cancellation-form"><label>Membership refund override (pence)<input id="staff-cancellation-override" type="number" min="0" step="1" value="'+esc(c.overridePence)+'" placeholder="Use standard calculation"></label><label>Reason for override<input id="staff-cancellation-reason" value="'+esc(c.overrideReason)+'" placeholder="Required for an override"></label></div></details>'+
+      '<div class="staff-cancellation-actions"><button type="button" class="button primary" data-action="membership-cancel-quote" '+(c.busy?'disabled':'')+'>Calculate refund quote →</button></div>';
+    const panel=(id,body)=>'<section class="staff-cancellation-panel" id="staff-cancel-panel-'+id+'" role="tabpanel" aria-labelledby="staff-cancel-tab-'+id+'" '+(c.tab===id?'':'hidden')+'>'+body+'</section>';
+    return '<div class="staff-cancellation-head"><div><h2>Cancellation & downgrade</h2><p>'+esc(c.customerName||'Selected customer')+' · '+esc(c.memberType||'Membership')+'</p></div><button type="button" class="button secondary" data-action="membership-cancel-close">Close</button></div>'+
+      tabNav+
+      '<div class="staff-cancellation-context"><span>Membership reference</span><strong>'+esc(c.dealId||'Not recorded')+'</strong><span class="staff-cancel-context-note">Quoting does not cancel membership or issue a refund.</span></div>'+
+      (c.busy?'<p role="status" class="staff-cancellation-busy">Checking CRM and Stripe…</p>':'')+
+      (c.error?'<p class="v12-warning" role="alert">'+esc(c.error)+'</p>':'')+
+      panel('details','<h3>What would the customer like to do?</h3>'+form)+
+      panel('quote','<h3>Refund quotation</h3>'+(c.response?(c.response.quotable&&q?breakdown+'<p class="v12-muted">Effective: '+esc(q.effectiveDate||'Not recorded')+' · Cooling off: '+(q.coolingOff?'Yes':'No')+'</p>':'<p class="v12-warning">The backend could not produce an eligible cancellation quote.</p>')+warnings(c.response.blocking)+warnings(c.response.warnings):'<p class="v12-muted">Calculate the refund using the current membership and Stripe information.</p>')+
+        '<div class="staff-cancellation-actions"><button type="button" class="button secondary" data-action="membership-cancel-tab" data-tab="details">← Edit request</button>'+(allowed('review')?'<button type="button" class="button primary" data-action="membership-cancel-tab" data-tab="review">Review & authorise →</button>':'')+'</div>')+
+      panel('review','<h3>Review before processing</h3><p class="v12-muted">Confirm the refund, effective date and warnings with the customer. The backend will recheck the quote before performing any action.</p>'+breakdown+warnings(c.response?.blocking)+warnings(c.response?.warnings)+
+        (allowed('review')?'<label class="staff-cancel-authorise"><input type="checkbox" id="staff-cancel-authorise"> I have reviewed this change, refund, effective date and warnings, and authorise the cancellation.</label><div class="staff-cancellation-actions"><button type="button" class="button secondary" data-action="membership-cancel-tab" data-tab="quote">← Refund quote</button><button type="button" class="button primary" data-action="membership-cancel-confirm" '+(c.busy?'disabled':'')+'>Confirm and process change</button></div>':'<p class="v12-warning">Obtain an eligible quotation first.</p>'))+
+      panel('outcome','<h3>Processing outcome</h3>'+(c.confirmed?'<div class="staff-cancel-outcome"><p><strong>Status:</strong> '+esc(c.confirmed.status||'Not recorded')+'</p><p><strong>Cancellation reference:</strong> '+esc(c.confirmed.cancellationId||'Not returned')+'</p><p><strong>Net refund:</strong> '+money(c.confirmed.netRefundPence)+'</p><p><strong>Refund operations:</strong> '+esc((c.confirmed.refunds||[]).length)+' recorded</p></div><p class="v12-muted">Refresh CRM Membership and policy records to confirm authoritative statuses.</p>':'<p class="v12-muted">No completed cancellation recorded in this session.</p>')+
+        (c.failedCancellationId?'<div class="staff-cancellation-actions"><button type="button" class="button secondary" data-action="membership-cancel-retry" '+(c.busy?'disabled':'')+'>Retry incomplete cancellation</button></div>':''));
+  }
+  function saveCancellationForm(){
+    const c=cancellationState,d=cancellationDialog();
+    const scenario=d.querySelector('#staff-cancellation-scenario')?.value;
+    const date=d.querySelector('#staff-cancellation-date')?.value;
+    const override=d.querySelector('#staff-cancellation-override')?.value?.trim();
+    const reason=d.querySelector('#staff-cancellation-reason')?.value;
+    if(scenario!==undefined)c.scenario=scenario;
+    if(date!==undefined)c.effectiveDate=date;
+    if(override!==undefined)c.overridePence=override;
+    if(reason!==undefined)c.overrideReason=reason;
+    if(c.request&&(c.request.scenario!==c.scenario||c.request.effectiveDate!==c.effectiveDate||
+        String(c.request.membershipRefundPence??'')!==String(c.overridePence||'')||
+        String(c.request.overrideReason||'')!==String(c.overridePence?c.overrideReason:''))){
+      c.response=null;c.quote=null;c.request=null;c.confirmed=null;
+      c.error='The request has changed. Calculate a new quote before authorising.';
+      c.tab='details';
+    }
   }
   document.addEventListener('click',event=>{
     const action=event.target?.closest?.('[data-action]')?.dataset?.action;
     if(!event.target?.closest?.('#staff-cancellation-dialog'))return;
-    if(action==='membership-cancel-close'){cancellationDialog().close();event.preventDefault();}
+    if(action==='membership-cancel-tab'){
+      saveCancellationForm();
+      const tab=event.target.closest('[data-tab]')?.dataset.tab;
+      const c=cancellationState;
+      const enabled=tab==='details'||tab==='quote'&&c.response||tab==='review'&&c.response?.quotable&&c.quote||tab==='outcome'&&(c.confirmed||c.failedCancellationId);
+      if(enabled){c.tab=tab;cancellationDialog().innerHTML=cancellationHtml();const target=cancellationDialog().querySelector('#staff-cancel-tab-'+tab);target?.focus();}
+      event.preventDefault();
+    }
+    else if(action==='membership-cancel-close'){cancellationDialog().close();event.preventDefault();}
     else if(action==='membership-cancel-quote'){quoteCancellation();event.preventDefault();}
     else if(action==='membership-cancel-confirm'){confirmCancellation();event.preventDefault();}
     else if(action==='membership-cancel-retry'){retryCancellation();event.preventDefault();}
@@ -407,16 +441,14 @@
     if(!state.contact?.id||!record?.id){setNotice('Open a Membership transaction linked to a CRM Contact before requesting cancellation.','error');return;}
     const type=String(record.Membership_Type||record.Member_Type||record.Membership_Level||'').toLowerCase();
     const scenario=type.includes('associate')?'cancel_associate':'cancel_full';
-    Object.assign(cancellationState,{busy:false,quote:null,response:null,error:'',request:null,confirmed:null,failedCancellationId:'',dealId:String(record.id),contactId:String(state.contact.id),scenario,effectiveDate:new Date().toISOString().slice(0,10)});
+    Object.assign(cancellationState,{busy:false,quote:null,response:null,error:'',request:null,confirmed:null,failedCancellationId:'',dealId:String(record.id),contactId:String(state.contact.id),scenario,effectiveDate:new Date().toISOString().slice(0,10),overridePence:'',overrideReason:'',tab:'details',customerName:rowTitle(M.CONTACT,state.contact),memberType:String(record.Membership_Type||record.Member_Type||'Membership')});
     const d=cancellationDialog();d.innerHTML=cancellationHtml();d.showModal?.();
   }
   async function quoteCancellation(){
     const c=cancellationState;if(c.busy)return;
     const d=cancellationDialog();
-    c.scenario=d.querySelector('#staff-cancellation-scenario')?.value||c.scenario;
-    c.effectiveDate=d.querySelector('#staff-cancellation-date')?.value||'';
-    const refund=d.querySelector('#staff-cancellation-override')?.value?.trim()||'';
-    const reason=d.querySelector('#staff-cancellation-reason')?.value?.trim()||'';
+    saveCancellationForm();
+    const refund=c.overridePence,reason=c.overrideReason;
     if(!c.effectiveDate){c.error='An effective date is required.';d.innerHTML=cancellationHtml();return;}
     const body={contactId:c.contactId,membershipId:c.dealId,scenario:c.scenario,effectiveDate:c.effectiveDate};
     if(refund!==''){if(!/^\d+$/.test(refund)){c.error='Refund override must be a whole number of pence.';d.innerHTML=cancellationHtml();return;}if(!reason){c.error='Give a reason for the refund override.';d.innerHTML=cancellationHtml();return;}body.membershipRefundPence=Number(refund);body.overrideReason=reason;}
@@ -424,7 +456,7 @@
     try{
       const result=await window.BGStaffApi.call('cancellation_quote',body);
       if(typeof result?.quotable!=='boolean')throw Error('The CRM dispatcher has not returned the cancellation quote contract. Confirm that cancellation_quote is mapped to POST /staff/cancellation.');
-      c.response=result;c.quote=result.quotable?result.quote:null;c.request=body;
+      c.response=result;c.quote=result.quotable?result.quote:null;c.request=body;c.tab='quote';
     }catch(e){c.error=String(e.message||e);}
     finally{c.busy=false;d.innerHTML=cancellationHtml();}
   }
@@ -440,11 +472,11 @@
     try{
       const result=await window.BGStaffApi.call('cancellation_confirm',{...c.request,confirmNetRefundPence:c.quote.netRefundPence,inputsHash:c.response.inputsHash});
       if(!result?.cancellationId||!result?.status)throw Error('Cancellation execution was not confirmed by the backend. Check CRM before retrying.');
-      c.confirmed=result;c.response=null;c.quote=null;c.failedCancellationId=/failed|pending|partial/i.test(result.status)?String(result.cancellationId):'';
+      c.confirmed=result;c.response=null;c.quote=null;c.failedCancellationId=/failed|pending|partial/i.test(result.status)?String(result.cancellationId):'';c.tab='outcome';
     }catch(e){
       c.error=String(e.message||e);
       const id=e?.details?.cancellationId||e?.response?.details?.cancellationId;
-      if(/^\d{10,25}$/.test(String(id||'')))c.failedCancellationId=String(id);
+      if(/^\d{10,25}$/.test(String(id||''))){c.failedCancellationId=String(id);c.tab='outcome';}
       c.response=null;c.quote=null;
     }finally{c.busy=false;d.innerHTML=cancellationHtml();}
   }
@@ -456,7 +488,7 @@
     try{
       const result=await window.BGStaffApi.call('cancellation_retry',{cancellationId:id});
       if(!result?.cancellationId||!result?.status)throw Error('Retry did not return a confirmed cancellation state.');
-      c.confirmed=result;c.failedCancellationId=/failed|pending|partial/i.test(result.status)?id:'';
+      c.confirmed=result;c.failedCancellationId=/failed|pending|partial/i.test(result.status)?id:'';c.tab='outcome';
     }catch(e){c.error=String(e.message||e);}
     finally{c.busy=false;d.innerHTML=cancellationHtml();}
   }
