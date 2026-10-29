@@ -207,7 +207,10 @@
   background: #fff;
   color: #2c1d31;
   padding: 11px 12px;
-  font: 400 13px/1.55 inherit;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.55;
+  font-family: inherit;
 }
 .school-profile-field input { min-height: 43px; }
 .school-profile-field textarea { resize: vertical; min-height: 160px; }
