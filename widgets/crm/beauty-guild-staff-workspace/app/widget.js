@@ -456,7 +456,7 @@
         '<p class="v12-muted">Renewals and upgrades follow the existing application and checkout logic. Payment is verified from CRM after Creator processes the Stripe event.</p>'+
         '<div class="membership-service-actions">'+
           (activeDeal?.id?'<button type="button" class="button secondary" data-action="membership-cancel-open" data-id="'+esc(activeDeal.id)+'">Cancellation / downgrade quote</button>':'')+
-          '<button type="button" class="button primary" data-action="journey-start" data-kind="membership">New membership / renewal</button>'+
+          '<button type="button" class="button primary" data-action="journey-start" data-kind="membership">New membership</button>'+ (activeDeal?.id?'<button type="button" class="button secondary" data-action="membership-renew" data-id="'+esc(activeDeal.id)+'">Renew membership</button><button type="button" class="button secondary" data-action="membership-upgrade" data-id="'+esc(activeDeal.id)+'">Upgrade membership</button>':'')+
           recordLink(M.DEAL,activeDeal,'Review current transaction')+
         '</div></section></div></section>';
   }
@@ -738,6 +738,14 @@
         j.membershipOptions=response.options;
       }catch(e){j.optionsError=String(e.message||e);}
       finally{j.membershipOptionsLoading=false;render();}
+    }
+    else if(action==='membership-renew'||action==='membership-upgrade'){
+      const deal=allFor(M.DEAL).find(x=>String(x.id)===String(el.dataset.id));
+      if(!deal||!state.contact?.id){setNotice('Select an existing membership and its customer.','error');return;}
+      state.view='create';initJourney('membership');state.journey.contact={...state.contact};state.journey.step=0;
+      state.journey.answers={previousId:String(deal.id),changeType:action==='membership-upgrade'?'upgrade':'renewal',purchaseType:action==='membership-upgrade'?'upgrade':'renewal'};
+      window.BGJourney12?.prefill(state.journey);render();
+      setNotice('The existing membership is linked. Complete the membership questions and obtain an authoritative quote before taking payment.','info');
     }
     else if(action==='membership-cancel-open'){const deal=allFor(M.DEAL).find(x=>String(x.id)===String(el.dataset.id));if(deal)openCancellation(deal);}
     else if(action==='membership-cancel-quote')await quoteCancellation();
