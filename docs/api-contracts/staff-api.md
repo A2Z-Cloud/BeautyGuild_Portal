@@ -121,6 +121,39 @@ Saves a quoted insurance change as a revision for the Contact, as the customer's
 
 Both routes limit each staff user to 60 calls a minute (best effort).
 
+### `POST /staff/cancellation/quote`
+**Read only.** What cancelling a membership would refund, for the widget to show. Nothing is saved, charged, refunded or ended, and Stripe is only read (a test checks every Stripe call is a GET). It is the first route of the cancellations work (`docs/delivery/cancellations-refunds-spec.md`); the confirm route that acts on it is not built yet.
+
+Body: `contactId`, `membershipId` (the Deal), `scenario` (`cancel_associate`, `cancel_full` or `downgrade_full`; it must match the membership: 422 `SCENARIO_MISMATCH` otherwise), `effectiveDate` (`YYYY-MM-DD`, default today), and optionally `membershipRefundPence` (a whole number of pence, a staff override of the membership fee refund, **never more than was paid**: 422 `OVERRIDE_TOO_HIGH`) with a required `overrideReason`.
+
+Response `200`:
+```json
+{
+  "requestId": "...", "contact": { "id": "..." },
+  "quotable": true,
+  "quote": {
+    "scenario": "cancel_full", "effectiveDate": "2026-11-28", "coolingOff": false,
+    "membership": { "paidPence": 5500, "refundPence": 0, "overridden": false },
+    "insurance": { "billing": "annual", "start": "...", "end": "...", "termDays": 365, "usedDays": 30, "unusedDays": 335,
+                   "premiumPaidPence": 6500, "iptPaidPence": 780, "premiumRefundPence": 5965, "iptRefundPence": 715, "refundPence": 6680 },
+    "feeAppliedPence": 1000, "grossRefundPence": 6680, "netRefundPence": 5680, "noRefundDue": false,
+    "warnings": [], "overrideReason": null
+  },
+  "stripe": { "subscriptions": [{ "id": "sub_...", "status": "active", "endsAt": "2026-11-28" }] },
+  "inputsHash": "<32 hex>", "blocking": [], "warnings": [{ "code": "EMPLOYEES_PRESENT", "message": "..." }],
+  "facts": { "membership": { ... }, "insurance": { ... } }
+}
+```
+`inputsHash` binds the later confirm to exactly these inputs and facts.
+
+**A quote that cannot be given is still a `200`**, with `quotable: false`, `quote: null` and the reasons in `blocking` (each `{ code, message }`), so the widget can say why. Nothing is ever guessed. The codes: `NOT_ACTIVE`, `DATES_UNKNOWN`, `MEMBERSHIP_TYPE_UNKNOWN`, `RENEWAL_EXISTS`, `MONTHLY_NOT_SUPPORTED_YET`, `PAYMENT_FREQUENCY_UNKNOWN`, `PREMIUM_UNKNOWN`, `NO_PAYMENT_RECORD`, `TERM_NOT_VERIFIED` (no Stripe payment matches this term: renewed, or paid under a minute ago, as Stripe search lags), `AMBIGUOUS_PAYMENT`, `AMOUNT_UNREADABLE`, `AMOUNTS_DISAGREE` (the CRM premium does not match what was paid, so the policy changed since purchase), `SUBSCRIPTION_NOT_FOUND`, `ALREADY_ENDING`, `MIXED_SUBSCRIPTION` (the subscription also holds accreditation, which a membership cancellation must not end).
+
+`warnings` (not blocking): `EXTRAS_PRESENT` (branches or add-ons, not refunded here), `EMPLOYEES_PRESENT`, `BACKDATED`, `UNKNOWN_SUBSCRIPTION_ITEMS`, and the engine's own notes.
+
+**Where the facts come from:** the money from Stripe (the checkout session's metadata, as paid), the dates, premium rows, payment frequency and status from the CRM. **First slice:** an annual, first-term membership. A monthly payer, a renewed term, a renewal policy and a policy changed since purchase are refused for now.
+
+Other errors: 422 `INVALID_REQUEST`, 404 `NOT_FOUND`, 502 `STRIPE_UNAVAILABLE`, 503 `NOT_AVAILABLE` while `PORTAL_CANCELLATIONS_ENABLED` is off (default).
+
 ### `POST /staff/payment-link`
 Creates the portal's own Stripe Checkout Session for the customer and returns its URL for the staff member to send. **Nothing is sent from here.** Same body as `POST /staff/quote` (`contactId`, the service inputs) **plus `accepted: "yes"`**: paying needs the customer's acceptance of the Code of Ethics and terms, exactly as online, so the widget must capture it from the customer. It is the portal's checkout, so every rule, price, risk check, CRM record and the Creator metadata contract are the same as when the customer pays online and Creator handles the payment as it does today.
 
