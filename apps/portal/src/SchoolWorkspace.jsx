@@ -18,10 +18,10 @@ import { formatDate } from './format.js';
 import { INTEGRATIONS, portalApi } from './services/api.js';
 import { DocumentsPanel } from './DocumentsPanel.jsx';
 import { MembershipCoverPanel } from './MembershipCover.jsx';
-import { QualificationForm, SessionForm, TutorForm, BookingForm, SchoolProfileForm } from './SchoolActionForms.jsx';
+import { QualificationForm, SessionForm, TutorForm, BookingForm } from './SchoolActionForms.jsx';
+import SchoolProfilePanel from './SchoolProfilePanel.jsx';
 import SchoolVerification from './SchoolVerification.jsx';
 import CourseGroups from './components/CourseGroups.jsx';
-import { FACILITY_LABELS } from './facilities.js';
 
 const GROUPS = [
   {
@@ -133,103 +133,6 @@ export function SchoolsList() {
     </div>
   );
 }
-function SchoolProfile({ data, schoolId, editing, setEditing, onDone }) {
-  const p = data.profile;
-  return (
-    <>
-      <h2>School profile</h2>
-      <p className="muted">
-        Your centre's registration details below cannot be changed online — contact the Accreditation team for those.
-        The profile content further down (about, website, social links, facilities, image and logo) is yours to keep up
-        to date.
-      </p>
-      {(p.imageUrl || p.logoUrl) && (
-        <div className="school-media">
-          {p.imageUrl && <img src={p.imageUrl} alt={p.name ? p.name + ' training centre' : 'Training centre'} />}
-          {p.logoUrl && <img src={p.logoUrl} alt={p.name ? p.name + ' logo' : 'School logo'} className="school-logo" />}
-        </div>
-      )}
-      {INTEGRATIONS.stripeCheckout && p.payable && (
-        <p>
-          <Link className="btn btn-primary" to={'/pay/accreditation/' + p.id}>
-            Pay for accreditation
-          </Link>
-        </p>
-      )}
-      {p.paid && (
-        <p>
-          <Status value="Paid" />
-        </p>
-      )}
-      <dl className="detail-list">
-        {Object.entries({
-          'Training centre': p.name,
-          'Town / City': p.town,
-          County: p.county,
-          Country: p.country,
-          Postcode: p.postcode,
-          'Accreditation status': p.status,
-          'Valid until': formatDate(p.expires),
-          'Accreditation level': p.level,
-          'Referral code': p.referralCode,
-        }).map(([k, v]) => (
-          <div key={k}>
-            <dt>{k}</dt>
-            <dd>{v || '—'}</dd>
-          </div>
-        ))}
-      </dl>
-      {p.referralCode && p.referralActive && (
-        <p>
-          <a
-            className="reference"
-            href={'https://beautyguild.com/Join/' + encodeURIComponent(p.referralCode)}
-            target="_blank"
-            rel="noreferrer"
-          >
-            View school referral landing page <ArrowRight size={15} />
-          </a>
-        </p>
-      )}
-      {p.wordpressUrl && (
-        <p>
-          <a className="reference" href={p.wordpressUrl} target="_blank" rel="noreferrer">
-            View public school page <ArrowRight size={15} />
-          </a>
-        </p>
-      )}
-      <div className="school-dialog-head">
-        <h3>Profile content</h3>
-        {INTEGRATIONS.schoolWrites && (
-          <button type="button" className="btn btn-primary" onClick={() => setEditing(v => !v)}>
-            {editing ? 'Cancel' : 'Edit profile'}
-          </button>
-        )}
-      </div>
-      {editing ? (
-        <SchoolProfileForm schoolId={schoolId} initial={p} onDone={onDone} />
-      ) : (
-        <dl className="detail-list">
-          {Object.entries({
-            'Main contact': p.contactName,
-            Website: p.website,
-            'About the school': p.about,
-            Facebook: p.facebook,
-            Instagram: p.instagram,
-            TikTok: p.tiktok,
-            LinkedIn: p.linkedIn,
-            Facilities: p.facilities?.length ? p.facilities.map(k => FACILITY_LABELS[k] || k).join(', ') : null,
-          }).map(([k, v]) => (
-            <div key={k}>
-              <dt>{k}</dt>
-              <dd>{v || '—'}</dd>
-            </div>
-          ))}
-        </dl>
-      )}
-    </>
-  );
-}
 export function InvoiceTable({ rows }) {
   const [selected, setSelected] = useState(null);
   return (
@@ -322,7 +225,7 @@ function SchoolSection({ id, section }) {
   const x = state.value;
   switch (section) {
     case 'profile':
-      return <SchoolProfile data={x} schoolId={id} editing={editing} setEditing={setEditing} onDone={saved} />;
+      return <SchoolProfilePanel data={x} schoolId={id} onDone={saved} />;
     case 'courses':
       return (
         <>
