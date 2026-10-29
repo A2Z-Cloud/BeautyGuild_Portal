@@ -20,6 +20,7 @@
     "functions/beauty_guild_api/src/insurance.js",
     "functions/beauty_guild_api/src/config.js",
     "functions/beauty_guild_api/src/metadataContract.js",
-    "functions/beauty_guild_api/src/staff.js"
+    "functions/beauty_guild_api/src/staff.js",
+    "functions/beauty_guild_api/src/cancellations.js"
   ]
 }
