@@ -5,7 +5,7 @@
 //
 // Money comes from Stripe (the checkout session's metadata, which holds the amounts exactly as paid); dates, the premium rows and the payment
 // frequency come from the CRM. When the two disagree, or a fact cannot be verified, the quote is REFUSED with a named reason in `blocking`
-// rather than guessed (spec D12). This first slice supports a first-term annual payer; a monthly payer, a renewed term, a renewal policy, an
+// rather than guessed (spec D12). It supports a first-term yearly or monthly payer; a renewed term, a renewal policy, an
 // ended or mixed subscription and a policy changed since purchase are all refused for now.
 const crypto = require('node:crypto');
 const { HttpError } = require('./errors');
@@ -119,13 +119,7 @@ function createCancellationQuotes({ enabled, call, stripeGet, staffContact, now 
           'A renewal policy already exists for this membership. Renewals are not handled here yet.',
         );
       const freq = text(ins.paymentFrequency).toLowerCase();
-      if (freq === 'monthly')
-        blockedBy(
-          blocking,
-          'MONTHLY_NOT_SUPPORTED_YET',
-          'This policy is paid monthly. Monthly payers are not handled here yet: process in the CRM.',
-        );
-      else if (freq !== 'annual')
+      if (freq !== 'annual' && freq !== 'monthly')
         blockedBy(blocking, 'PAYMENT_FREQUENCY_UNKNOWN', 'The policy payment frequency is not Annual or Monthly.');
       const nets = (ins.covers || []).map(c => c.netPence);
       if (!nets.length || nets.some(n => n == null))
@@ -137,6 +131,7 @@ function createCancellationQuotes({ enabled, call, stripeGet, staffContact, now 
       if (!policySessionId) blockedBy(blocking, 'NO_PAYMENT_RECORD', 'The policy has no payment recorded in Stripe.');
       policyFacts = {
         id: ins.id,
+        billing: /** @type {'monthly' | 'annual'} */ (freq === 'monthly' ? 'monthly' : 'annual'),
         start: text(ins.startDate),
         end: text(ins.endDate),
         crmPremiumNetPence: (ins.covers || []).every(c => c.netPence != null)
@@ -159,7 +154,6 @@ function createCancellationQuotes({ enabled, call, stripeGet, staffContact, now 
         end: m.endDate,
         policySessionId,
       });
-      const sessions = found.sessions;
       if (found.status === 'none')
         blockedBy(
           blocking,
@@ -170,38 +164,94 @@ function createCancellationQuotes({ enabled, call, stripeGet, staffContact, now 
         blockedBy(blocking, 'AMBIGUOUS_PAYMENT', 'More than one Stripe payment matches this membership term.');
       else {
         const s = found.session;
-        if (text(s.metadata.subscription_type) !== 'annual')
+        const monthly = text(s.metadata.subscription_type) === 'monthly';
+        if (text(s.metadata.subscription_type) !== 'annual' && !monthly)
           blockedBy(
             blocking,
-            'MONTHLY_NOT_SUPPORTED_YET',
-            'This membership is paid monthly. Monthly payers are not handled here yet: process in the CRM.',
+            'PAYMENT_FREQUENCY_UNKNOWN',
+            'The membership payment frequency could not be read from Stripe.',
           );
-        membershipPaidPence = gbpToPence(s.metadata.base_membership_amount);
-        if (membershipPaidPence == null)
-          blockedBy(blocking, 'AMOUNT_UNREADABLE', 'The membership fee paid could not be read from Stripe.');
+        if (policyFacts && policyFacts.billing !== (monthly ? 'monthly' : 'annual'))
+          blockedBy(
+            blocking,
+            'FREQUENCY_MISMATCH',
+            'The CRM says the policy is paid ' +
+              policyFacts.billing +
+              ' but Stripe says the membership is paid ' +
+              (monthly ? 'monthly' : 'annually') +
+              '.',
+          );
         if (s.subscription) subscriptionIds.push(s.subscription);
+        let policySub = s.subscription;
+        let ps = null;
         if (policyFacts) {
-          const ps = sessions.find(x => x.id === policySessionId);
+          ps = found.sessions.find(x => x.id === policySessionId);
           if (!ps || ps.payment_status !== 'paid')
             blockedBy(blocking, 'NO_PAYMENT_RECORD', 'The policy payment in Stripe was not found or is not paid.');
-          else {
-            // The policy's session holds the premium and IPT as paid. The CRM rows must agree, or the policy has changed since purchase.
-            const paidNet = gbpToPence(ps.metadata.insurance_net_amount);
-            const paidIpt = gbpToPence(ps.metadata.insurance_ipt_amount);
-            if (paidNet == null || paidIpt == null)
-              blockedBy(blocking, 'AMOUNT_UNREADABLE', 'The premium paid could not be read from Stripe.');
-            else if (
-              policyFacts.crmPremiumNetPence !== paidNet ||
-              (policyFacts.crmIptPence != null && policyFacts.crmIptPence !== paidIpt)
-            )
-              blockedBy(
-                blocking,
-                'AMOUNTS_DISAGREE',
-                'The policy premium in the CRM does not match what was paid in Stripe. The policy may have been changed since purchase.',
-              );
-            else insurancePaid = { netPence: paidNet, iptPence: paidIpt };
-            if (ps.subscription && !subscriptionIds.includes(ps.subscription)) subscriptionIds.push(ps.subscription);
+          else if (ps.subscription) {
+            policySub = ps.subscription;
+            if (!subscriptionIds.includes(ps.subscription)) subscriptionIds.push(ps.subscription);
           }
+        }
+        // What was paid. A yearly payer paid the whole fee and premium at once, as the session recorded it. A monthly payer's is read from the
+        // paid instalments (invoice lines), because only some of the year has been paid.
+        let paidMembership = null;
+        let paidPremium = null;
+        if (!blocking.length && monthly) {
+          const forMembership = await payments.monthlyPaid({ subscriptionId: s.subscription });
+          const forPolicy =
+            policySub === s.subscription ? forMembership : await payments.monthlyPaid({ subscriptionId: policySub });
+          if (forMembership.instalments === 0 || (policyFacts && forPolicy.instalments === 0))
+            blockedBy(blocking, 'NO_PAYMENT_RECORD', 'No paid instalment was found in Stripe for this membership.');
+          paidMembership = forMembership.membershipPence;
+          paidPremium = { netPence: forPolicy.premiumNetPence, iptPence: forPolicy.iptPence };
+          for (const u of new Set([...forMembership.unplaced, ...forPolicy.unplaced]))
+            warnings.push({
+              code: 'UNPLACED_LINE',
+              message: 'A paid line could not be placed and is not counted: ' + u + '.',
+            });
+          if (forMembership.notRefundedPence)
+            warnings.push({
+              code: 'KEPT_FEES',
+              message: 'The joining fee, admin fees, extras and employee fees paid are not refunded here.',
+            });
+          if (effectiveDate > today)
+            warnings.push({
+              code: 'FUTURE_INSTALMENTS',
+              message: 'Instalments due before the effective date are not counted: only what has been paid so far.',
+            });
+          warnings.push({
+            code: 'MONTHLY',
+            message:
+              'Paid monthly: the refund is limited to what has been paid so far (' +
+              forMembership.instalments +
+              ' instalment(s)).',
+          });
+        } else if (!blocking.length) {
+          paidMembership = gbpToPence(s.metadata.base_membership_amount);
+        }
+        membershipPaidPence = paidMembership;
+        if (membershipPaidPence == null)
+          blockedBy(blocking, 'AMOUNT_UNREADABLE', 'The membership fee paid could not be read from Stripe.');
+        if (policyFacts && ps && ps.payment_status === 'paid') {
+          // The policy's session holds the premium and IPT for the YEAR as bought. The CRM rows must agree, or the policy has changed since purchase.
+          const yearNet = gbpToPence(ps.metadata.insurance_net_amount);
+          const yearIpt = gbpToPence(ps.metadata.insurance_ipt_amount);
+          if (yearNet == null || yearIpt == null)
+            blockedBy(blocking, 'AMOUNT_UNREADABLE', 'The premium paid could not be read from Stripe.');
+          else if (
+            policyFacts.crmPremiumNetPence !== yearNet ||
+            (policyFacts.crmIptPence != null && policyFacts.crmIptPence !== yearIpt)
+          )
+            blockedBy(
+              blocking,
+              'AMOUNTS_DISAGREE',
+              'The policy premium in the CRM does not match what was paid in Stripe. The policy may have been changed since purchase.',
+            );
+          else if (!blocking.length)
+            insurancePaid = monthly
+              ? { yearNetPence: yearNet, netPence: paidPremium.netPence, iptPence: paidPremium.iptPence }
+              : { yearNetPence: yearNet, netPence: yearNet, iptPence: yearIpt };
         }
       }
     }
@@ -248,10 +298,12 @@ function createCancellationQuotes({ enabled, call, stripeGet, staffContact, now 
         membership: { paidPence: membershipPaidPence, overridePence },
         insurance: policyFacts
           ? {
-              billing: 'annual',
+              billing: policyFacts.billing,
               start: policyFacts.start,
               end: policyFacts.end,
-              premiumNetPence: insurancePaid.netPence,
+              // A yearly payer: the premium paid is the premium. A monthly payer: the premium for the year, and what has been paid of it.
+              premiumNetPence: insurancePaid.yearNetPence,
+              paidNetPence: insurancePaid.netPence,
               paidIptPence: insurancePaid.iptPence,
             }
           : null,

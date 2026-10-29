@@ -208,6 +208,43 @@ test('a refund that fails leaves a resumable record; a repeat or a retry carries
   );
 });
 
+test('a monthly payer: the refund is spread over the paid instalments, newest first, never more than each payment', async () => {
+  const MONTHLY = {
+    id: 'pol1',
+    Application_Status: 'Active',
+    Policy_Type: 'Non Salon',
+    Policy_Start_Date: iso(0),
+    Policy_End_Date: iso(364),
+    Contact: { id: IDS.me },
+    Membership: { id: DEAL },
+    Payment_Frequency: 'Monthly',
+  };
+  // Cooling off: everything paid so far (£31.98) comes back, across the three instalments: £12.16, £12.16 and £7.66 of the oldest (£22.16).
+  const w = cancelWorld({ monthly: true, over: { policy: MONTHLY } });
+  await withStaff(
+    w,
+    async ({ call }) => {
+      const r = await confirmAfterQuote(call, ASK({ effectiveDate: iso(0) }));
+      assert.equal(r.status, 201, JSON.stringify(r.body));
+      assert.equal(r.body.netRefundPence, 3198);
+      assert.deepEqual(
+        w.refunds.map(x => [x.payment_intent, x.amount]),
+        [
+          ['pi_3', 1216],
+          ['pi_2', 1216],
+          ['pi_1', 766],
+        ],
+      );
+    },
+    ON,
+  );
+  assert.equal(
+    w.refunds.reduce((t, x) => t + x.amount, 0),
+    3198,
+  );
+  assert.equal(w.subscriptionDeletes.length, 1, 'the remaining monthly payments stop');
+});
+
 test('a refund larger than the payments allow is refused before any refund is made', async () => {
   const w = cancelWorld({ invoiceAmount: 1000 });
   await withStaff(

@@ -47,6 +47,7 @@ function world({
   schools = [],
   previousDeal = {},
   associateSession = null,
+  associateInvoices = null,
 } = {}) {
   const state = { stripePosts: [], crmPosts: [], liveSessions: [], couponPosts: [] };
   const json = (body, status = 200) => ({ status, ok: status < 400, json: async () => body });
@@ -87,6 +88,11 @@ function world({
       return json({ data: [{ id: 'sub_prev' }] });
     if (associateSession && url.startsWith('https://api.stripe.com/v1/checkout/sessions?'))
       return json({ data: [associateSession] });
+    // A monthly Associate: its paid instalments, whose lines name a recurring membership price.
+    if (associateInvoices && url.startsWith('https://api.stripe.com/v1/invoices?'))
+      return json({ data: associateInvoices });
+    if (associateInvoices && url.includes('/v1/prices/price_assoc_mem'))
+      return json({ id: 'price_assoc_mem', lookup_key: 'MEM-ASSOC-Y', recurring: { interval: 'month' } });
     if (url === 'https://api.stripe.com/v1/coupons') {
       state.couponPosts.push({ params: new URLSearchParams(init.body) });
       return json({ id: 'coupon_test_' + state.couponPosts.length });

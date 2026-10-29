@@ -44,7 +44,78 @@ function createPaymentFacts({ stripeGet }) {
     return { status: 'ok', session: mine[0], sessions };
   }
 
-  return { findMembershipSession, candidateSessions };
+  // ---- What a monthly payer has paid so far, from the subscription's paid invoices ----
+  // A price (with its product) read once and held for this call. Invoice lines name a price by id; the price holds the lookup key, whether it
+  // recurs and (through its product) the price list code, whatever the Stripe API version's line shape.
+  const priceCache = new Map();
+  async function priceOf(id) {
+    if (!priceCache.has(id)) priceCache.set(id, await stripeGet('/prices/' + uri(id) + '?expand[]=product'));
+    return priceCache.get(id);
+  }
+  // The price id on an invoice line: older API versions put the price on the line, newer ones under `pricing.price_details`.
+  const priceIdOf = line => {
+    const direct = line.price;
+    if (direct) return typeof direct === 'string' ? direct : text(direct.id);
+    const nested = line.pricing && line.pricing.price_details && line.pricing.price_details.price;
+    return nested ? (typeof nested === 'string' ? nested : text(nested.id)) : '';
+  };
+  async function linesOf(invoice) {
+    const inline = invoice.lines && invoice.lines.data;
+    if (inline && !(invoice.lines && invoice.lines.has_more)) return inline;
+    const all = await stripeGet('/invoices/' + uri(invoice.id) + '/lines?limit=100');
+    return (all && all.data) || [];
+  }
+
+  /**
+   * What a monthly payer has paid so far for a subscription, split by what it was for. Membership fee instalments, premium and IPT are what a
+   * cancellation or upgrade refunds or credits; the joining fee, add-ons, extra branches, employee fees and the monthly admin fee never are.
+   * A line that cannot be placed is listed in `unplaced` (shown as a warning, never counted). Reads only.
+   * @returns {Promise<{ instalments: number, membershipPence: number, premiumNetPence: number, iptPence: number, notRefundedPence: number, unplaced: string[] }>}
+   */
+  async function monthlyPaid({ subscriptionId }) {
+    const invoices = await stripeGet('/invoices?limit=24&status=paid&subscription=' + uri(subscriptionId));
+    const out = {
+      instalments: 0,
+      membershipPence: 0,
+      premiumNetPence: 0,
+      iptPence: 0,
+      notRefundedPence: 0,
+      unplaced: [],
+    };
+    for (const invoice of (invoices && invoices.data) || []) {
+      if (!(invoice.amount_paid > 0)) continue;
+      out.instalments += 1;
+      for (const line of await linesOf(invoice)) {
+        const amount = Number.isSafeInteger(line.amount) ? line.amount : 0;
+        const id = priceIdOf(line);
+        const price = id ? await priceOf(id) : null;
+        const sku = text(
+          (price && price.lookup_key) ||
+            (price && price.product && price.product.metadata && price.product.metadata.sku),
+        );
+        const recurs = Boolean(price && price.recurring);
+        const kind = classifySku(sku, recurs);
+        if (kind === 'membership') out.membershipPence += amount;
+        else if (kind === 'premium') out.premiumNetPence += amount;
+        else if (kind === 'ipt') out.iptPence += amount;
+        else if (kind === 'kept') out.notRefundedPence += amount;
+        else out.unplaced.push(sku || text(line.description) || 'a line with no price list code');
+      }
+    }
+    return out;
+  }
+
+  return { findMembershipSession, candidateSessions, monthlyPaid };
 }
 
-module.exports = { createPaymentFacts, gbpToPence, text };
+// What a price list code is, for what a cancellation refunds. The member's own membership fee recurs monthly; the same code on a one-off line is a
+// named employee's fee, which is kept.
+function classifySku(sku, recurs) {
+  if (/^MEM-(ASSOC|FULLNS|FULLS)-Y$/.test(sku)) return recurs ? 'membership' : 'kept';
+  if (sku === 'INS-IPT') return 'ipt';
+  if (/^(INS|CALC)-/.test(sku)) return 'premium';
+  if (/^(MEM-JOIN|MEM-ADMIN|MEM-BRANCH|MEM-BUNDLE|MEM-CERT|MEM-BADGE|MEM-STICKER|FEE-)/.test(sku)) return 'kept';
+  return 'unplaced';
+}
+
+module.exports = { createPaymentFacts, gbpToPence, text, classifySku };

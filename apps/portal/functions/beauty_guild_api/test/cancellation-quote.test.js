@@ -150,30 +150,123 @@ test('the same input gives the same hash, and a different date gives a different
   );
 });
 
-test('a monthly payer is refused for now, before any Stripe call', async () => {
-  const w = cancelWorld({
-    over: {
-      policy: {
-        id: 'pol1',
-        Application_Status: 'Active',
-        Policy_Type: 'Non Salon',
-        Policy_Start_Date: iso(0),
-        Policy_End_Date: iso(364),
-        Contact: { id: ME },
-        Membership: { id: DEAL },
-        Payment_Frequency: 'Monthly',
-      },
+const MONTHLY_POLICY = {
+  id: 'pol1',
+  Application_Status: 'Active',
+  Policy_Type: 'Non Salon',
+  Policy_Start_Date: iso(0),
+  Policy_End_Date: iso(364),
+  Contact: { id: ME },
+  Membership: { id: DEAL },
+  Payment_Frequency: 'Monthly',
+};
+const monthlyWorld = (extra = {}) => cancelWorld({ monthly: true, over: { policy: MONTHLY_POLICY }, ...extra });
+
+test('a monthly payer: the refund is limited to what the paid instalments came to (3 paid), and read only', async () => {
+  const w = monthlyWorld();
+  await withStaff(
+    w,
+    async ({ call }) => {
+      const r = await call('/staff/cancellation/quote', ASK());
+      assert.equal(r.status, 200, JSON.stringify(r.body));
+      assert.equal(r.body.quotable, true, JSON.stringify(r.body.blocking));
+      const q = r.body.quote;
+      assert.equal(q.insurance.billing, 'monthly');
+      assert.equal(q.membership.paidPence, 3 * 459, 'the membership fee shares paid, not the joining or admin fee');
+      assert.equal(q.insurance.premiumPaidPence, 3 * 542);
+      assert.equal(q.insurance.iptPaidPence, 3 * 65);
+      // 30 of 365 days used: £65.00 x 30 / 365 rounds up to £5.35; £16.26 paid less that is £10.91; IPT 12% of it is £1.30.
+      assert.deepEqual([q.insurance.premiumRefundPence, q.insurance.iptRefundPence], [1091, 130]);
+      assert.deepEqual([q.feeAppliedPence, q.netRefundPence], [1000, 221]);
+      assert.ok(r.body.warnings.some(x => x.code === 'MONTHLY' && /3 instalment/.test(x.message)));
+      assert.ok(r.body.warnings.some(x => x.code === 'KEPT_FEES'));
     },
-  });
-  await blockedWith(w, ASK(), 'MONTHLY_NOT_SUPPORTED_YET');
-  assert.equal(w.stripeCalls.length, 0);
+    ON,
+  );
+  assert.equal(w.writes.length, 0);
+  assert.ok(w.stripeCalls.every(c => c.method === 'GET'));
 });
 
-test('a membership paid monthly in Stripe is refused for now', async () => {
+test('a monthly payer in cooling off gets everything paid so far back, with no fee', async () => {
+  await withStaff(
+    monthlyWorld(),
+    async ({ call }) => {
+      const q = (await call('/staff/cancellation/quote', ASK({ effectiveDate: iso(0) }))).body.quote;
+      assert.equal(q.coolingOff, true);
+      assert.equal(q.membership.refundPence, 3 * 459);
+      assert.equal(q.netRefundPence, 3 * 459 + 3 * 542 + 3 * 65);
+      assert.equal(q.feeAppliedPence, 0);
+    },
+    ON,
+  );
+});
+
+test('a monthly Associate with no policy: the override is limited to what was paid in instalments', async () => {
+  await withStaff(
+    cancelWorld({ monthly: true, over: ASSOCIATE }),
+    async ({ call }) => {
+      const none = await call('/staff/cancellation/quote', ASK({ scenario: 'cancel_associate' }));
+      assert.deepEqual([none.body.quote.membership.paidPence, none.body.quote.netRefundPence], [1377, 0]);
+      const ok = await call(
+        '/staff/cancellation/quote',
+        ASK({ scenario: 'cancel_associate', membershipRefundPence: 1377, overrideReason: 'Goodwill' }),
+      );
+      assert.equal(ok.body.quote.netRefundPence, 1377);
+      const tooMuch = await call(
+        '/staff/cancellation/quote',
+        ASK({ scenario: 'cancel_associate', membershipRefundPence: 1378, overrideReason: 'x' }),
+      );
+      assert.equal(tooMuch.status, 422);
+      assert.equal(tooMuch.body.code, 'OVERRIDE_TOO_HIGH');
+    },
+    ON,
+  );
+});
+
+test('paid lines are placed by their price list code, whatever the Stripe line shape, with many lines, and one-offs are kept', async () => {
+  const same = async world => {
+    let q;
+    await withStaff(world, async ({ call }) => (q = (await call('/staff/cancellation/quote', ASK())).body), ON);
+    return q;
+  };
+  const old = await same(monthlyWorld());
+  // The newer API's line shape (the price under pricing.price_details).
+  const next = await same(monthlyWorld({ lineShape: 'new' }));
+  assert.deepEqual(next.quote, old.quote);
+  // More lines than the invoice carries inline: the rest are read from the invoice's lines.
+  const more = await same(monthlyWorld({ linesHasMore: true }));
+  assert.deepEqual(more.quote, old.quote);
+  // A named employee's fee (the same code, not recurring) and a line that cannot be placed are never counted as the membership fee.
+  const odd = await same(
+    monthlyWorld({
+      extraLines: [
+        ['price_employee', 5500],
+        ['price_unknown', 700],
+      ],
+    }),
+  );
+  assert.equal(odd.quote.membership.paidPence, 1377);
+  assert.ok(odd.warnings.some(w => w.code === 'UNPLACED_LINE'));
+});
+
+test('a monthly payer whose frequency the CRM and Stripe disagree on, or with no paid instalment, is refused', async () => {
+  await blockedWith(cancelWorld({ over: { policy: MONTHLY_POLICY } }), ASK(), 'FREQUENCY_MISMATCH');
   await blockedWith(
-    cancelWorld({ session: { metadata: { subscription_type: 'monthly' } } }),
+    monthlyWorld({ over: { policy: { ...MONTHLY_POLICY, Payment_Frequency: 'Annual' } } }),
     ASK(),
-    'MONTHLY_NOT_SUPPORTED_YET',
+    'FREQUENCY_MISMATCH',
+  );
+  await blockedWith(monthlyWorld({ instalments: 0 }), ASK(), 'NO_PAYMENT_RECORD');
+});
+
+test('instalments due before a future effective date are not counted, and the quote says so', async () => {
+  await withStaff(
+    monthlyWorld(),
+    async ({ call }) => {
+      const r = await call('/staff/cancellation/quote', ASK({ effectiveDate: iso(60) }));
+      assert.ok(r.body.warnings.some(w => w.code === 'FUTURE_INSTALMENTS'));
+    },
+    ON,
   );
 });
 
