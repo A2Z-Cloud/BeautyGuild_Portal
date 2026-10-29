@@ -372,8 +372,44 @@
     finally{state.savingReview=false;render();}
   }
 
+  function membershipServiceDashboard(entity,record){
+    if(![M.PROFILE,M.DEAL].includes(entity)||!state.contact)return '';
+    const c=state.contact,contactId=String(c.id);
+    const deals=allFor(M.DEAL).slice().sort((a,b)=>String(b.Modified_Time||b.Created_Time||'').localeCompare(String(a.Modified_Time||a.Created_Time||'')));
+    const profiles=allFor(M.PROFILE),policies=allFor(M.POLICY);
+    const currentProfile=profiles.find(x=>String(x.Current_Membership_Status||'').toLowerCase()==='current')||profiles[0];
+    const activeDeal=entity===M.DEAL?record:deals.find(x=>String(x.Payment_Status||'').toLowerCase()==='paid')||deals[0];
+    const restrict=deals.filter(x=>x.Banned_From_Membership||x.Banned_From_Insurance||x.Has_Insurance_Issue);
+    const pick=(r,fields)=>{const k=fields.find(f=>r?.[f]!==undefined&&r[f]!==null&&r[f]!=='');return k?txt(r[k]):'Not recorded';};
+    const recordLink=(module,r,label)=>r?.id?'<button type="button" class="button secondary" data-action="select" data-entity="'+esc(module)+'" data-id="'+esc(r.id)+'">'+esc(label)+'</button>':'';
+    const row=(title,detail,action)=>'<div class="membership-service-row"><div><strong>'+esc(title)+'</strong><p>'+esc(detail)+'</p></div>'+action+'</div>';
+    const coverage=policies.filter(x=>!activeDeal?.id||String(x.Membership?.id||x.Deal?.id||'')===String(activeDeal.id));
+    const shown=coverage.length?coverage:policies;
+    const extensions=allFor(M.ADDON);
+    return '<section class="membership-workspace" aria-label="Membership management"><header class="membership-workspace-heading"><div><span class="v12-kicker">MEMBERSHIP MANAGEMENT</span><h3>Customer relationship and services</h3><p>'+esc(rowTitle(M.CONTACT,c))+' · Data from linked CRM records</p></div>'+recordLink(M.CONTACT,c,'Customer profile')+'</header>'+
+      (restrict.length?'<p class="v12-warning">Membership or insurance restrictions are present on a linked transaction. Review before processing a change.</p>':'')+
+      '<div class="membership-health-grid">'+
+      '<div><span>Member status</span><strong>'+esc(pick(currentProfile,['Current_Membership_Status','Membership_Status']))+'</strong><small>'+esc(pick(currentProfile,['Current_Member_Type','Membership_Type']))+'</small></div>'+
+      '<div><span>Membership payment</span><strong>'+esc(pick(activeDeal,['Payment_Status']))+'</strong><small>'+esc(pick(activeDeal,['Stage','Purchase_Type']))+'</small></div>'+
+      '<div><span>Renewal / expiry</span><strong>'+esc(pick(activeDeal,['Expiry_Date','Renewal_Date','End_Date']))+'</strong><small>'+deals.length+' linked membership transaction(s)</small></div>'+
+      '<div><span>Insurance</span><strong>'+shown.length+' linked policy record(s)</strong><small>Policy status and payment remain independent</small></div></div>'+
+      '<div class="membership-service-grid"><section><h4>Membership transactions</h4>'+
+        (deals.length?deals.map(d=>row(pick(d,['Deal_Name','Name']), 'Payment: '+pick(d,['Payment_Status'])+' · '+pick(d,['Stage'])+' · Expires: '+pick(d,['Expiry_Date','Renewal_Date']),recordLink(M.DEAL,d,'View transaction'))).join(''):'<p class="v12-muted">No membership transactions returned from CRM.</p>')+
+        '<div class="membership-service-actions">'+recordLink(M.PROFILE,currentProfile,'View member profile')+'</div></section>'+
+      '<section><h4>Insurance and changes</h4>'+
+        (shown.length?shown.map(p=>row(pick(p,['Policy_Number','Name']), 'Cover: '+pick(p,['Policy_Status','Application_Status'])+' · Payment: '+pick(p,['Payment_Status'])+' · Ends: '+pick(p,['Policy_End_Date','End_Date']),recordLink(M.POLICY,p,'View policy / MTA'))).join(''):'<p class="v12-muted">No linked insurance policies returned from CRM.</p>')+
+        '<p class="v12-muted">Open a policy to review current cover, request an MTA, quote and save the revision.</p></section>'+
+      '<section><h4>Membership extensions</h4>'+
+        (extensions.length?extensions.map(x=>row(pick(x,['Name','Extension_Name','Product_Name']), 'Status: '+pick(x,['Status','Payment_Status'])+' · '+pick(x,['Quantity']),recordLink(M.ADDON,x,'Open extension'))).join(''):'<p class="v12-muted">No extensions loaded for this membership. See the transaction’s related lists for the authoritative record set.</p>')+
+      '</section><section><h4>Renewal and service actions</h4>'+
+        '<p class="v12-muted">Renewals and upgrades follow the existing application and checkout logic. Payment is verified from CRM after Creator processes the Stripe event.</p>'+
+        '<div class="membership-service-actions">'+
+          '<button type="button" class="button primary" data-action="journey-start" data-kind="membership">New membership / renewal</button>'+
+          recordLink(M.DEAL,activeDeal,'Review current transaction')+
+        '</div></section></div></section>';
+  }
   function sectionView(kind){const config={membership:{primary:[M.PROFILE,M.DEAL],groups:[[M.PROFILE,M.DEAL],[M.ADDON]]},insurance:{primary:[M.POLICY],groups:[[M.POLICY],[M.EXT,M.PERSON],[M.PREMISES,M.DECLARATION],[M.REVISION]]},accreditation:{primary:[M.ACC],groups:[[M.ACC,M.CENTRE],[M.QUAL,M.OFFER],[M.TUTOR,M.ACCLINK],[M.ACCEXT]]}}[kind];if(!config)return'';
-    const f=state.focus;if(!f||state.focusEntityView!==kind)return browserList(kind,state.browseFilter==='attention');if(window.BGCRM12)return `<button class="button secondary" type="button" data-action="back-to-list" data-kind="${kind}">${icon('arrow-left')} All ${kind} records</button>`+contextBar(false)+focusPanel(f.entity,f.record);
+    const f=state.focus;if(!f||state.focusEntityView!==kind)return browserList(kind,state.browseFilter==='attention');if(window.BGCRM12)return `<button class="button secondary" type="button" data-action="back-to-list" data-kind="${kind}">${icon('arrow-left')} All ${kind} records</button>`+contextBar(false)+(kind==='membership'?membershipServiceDashboard(f.entity,f.record):'')+focusPanel(f.entity,f.record);
     const relatedEntities=config.groups.flat().filter(e=>e!==f.entity&&(allFor(e).length||state.errors[e]));const rowGroups=relatedEntities.length?`<div class="related-grid">${relatedEntities.map(e=>listPanel(e,allFor(e))).join('')}</div>`:empty('No additional linked records','The available CRM data does not include additional related records for this application.');
     return `<button class="button secondary" type="button" data-action="back-to-list" data-kind="${kind}">${icon('arrow-left')} All ${kind} records</button>${contextBar(false)}${reviewKind(f.entity)?processingPanel(f.entity,f.record):''}${focusPanel(f.entity,f.record)}<h3 class="section-title">Linked records</h3>${rowGroups}`;
   }
