@@ -210,12 +210,29 @@
       '<ol class="staff-timeline">'+(content||'<li class="v12-muted">No dated activity is available for this record.</li>')+'</ol>'+
       '<button type="button" class="button secondary" data-action="v12-timeline-refresh">Refresh timeline</button></section>';
   }
+  function membershipOverview(entity,r){
+    if(!['Deals','Membership'].includes(entity))return '';
+    const profile=entity==='Membership';
+    const groups=profile?[
+      ['Membership', [['Membership type',['Current_Member_Type','Member_Type','Membership_Type']],['Membership status',['Current_Membership_Status','Membership_Status']],['Membership number',['Membership_Number','Member_Number','Name']],['Primary branch',['Primary_Branch','Branch']]]],
+      ['Dates and relationship',[['Joined',['Date_Joined','Join_Date','Member_Since']],['Renewal / expiry',['Renewal_Date','Expiry_Date','End_Date']],['Customer',['Contact','Contact_Name']],['Last updated',['Modified_Time']]]]
+    ]:[
+      ['Membership', [['Membership type',['Membership_Type','Member_Type','Level']],['Purchase type',['Purchase_Type']],['Primary branch',['Branch','Primary_Branch']],['Application stage',['Stage','Application_Status']]]],
+      ['Payment and cover',[['Payment status',['Payment_Status']],['Payment method',['Payment_Method','Payment_Type']],['Start date',['Start_Date','Membership_Start_Date']],['Expiry / renewal',['Expiry_Date','Renewal_Date','End_Date']]]]
+    ];
+    const row=(label,keys)=>{
+      const found=keys.find(k=>r[k]!==undefined&&r[k]!==null&&r[k]!=='');
+      return '<div class="staff-member-fact"><span>'+safe(label)+'</span><strong>'+safe(found?format(found,r[found]):'Not recorded')+'</strong></div>';
+    };
+    return '<section class="staff-member-overview" aria-label="Membership summary"><div class="staff-member-intro"><div><span class="v12-kicker">MEMBERSHIP AT A GLANCE</span><h3>'+safe(profile?'Member profile':'Membership transaction')+'</h3><p>Relevant information from the CRM record. Open All CRM fields for the full data.</p></div></div><div class="staff-member-grid">'+groups.map(([title,fields])=>'<section class="staff-member-group"><h4>'+safe(title)+'</h4>'+fields.map(x=>row(x[0],x[1])).join('')+'</section>').join('')+'</div></section>';
+  }
   function detailPage(entity,record,ctx){
     focusedRecord={entity,record};
-    const id=String(record.id),key=entity+':'+id,selection=chosen.get(key)||'details';
+    const id=String(record.id),key=entity+':'+id,selection=chosen.get(key)||(entity==='Deals'||entity==='Membership'?'overview':'details');
     const relations=relationList(entity),meta=metaCache.get(entity)||{};
     let main='';
-    if(selection==='details'){
+    if(selection==='overview'&&['Deals','Membership'].includes(entity))main=membershipOverview(entity,record);
+    else if(selection==='details'){
       const showEmpty=fieldModes.get(key)===true;
       main='<div class="v12-record-toolbar"><div class="v12-tabs"><button class="'+(!showEmpty?'selected':'')+'" data-action="v12-all" data-show="false">Populated fields</button><button class="'+(showEmpty?'selected':'')+'" data-action="v12-all" data-show="true">All CRM fields</button></div></div>';
       main+=layoutSections(entity,record).map(g=>'<section class="v12-detail-section"><h3>'+safe(g.title)+'</h3>'+fieldRows(entity,record,g.keys,showEmpty)+'</section>').join('');
@@ -226,7 +243,7 @@
     }else{main=relationContent(entity,record,selection,ctx.crm,ctx.rerender);}
     const extraAction=global.BGStaffAddons?.action(entity,record)||'';
     const header='<header class="v12-record-head"><div><span class="v12-kicker">'+safe(appNames[entity]||pretty(entity))+'</span><h2>'+safe(ctx.title(entity,record))+'</h2><p>'+safe(ctx.summary(entity,record)||'')+'</p></div><div class="v12-status-row">'+statusBar(entity,record)+'</div></header>';
-    const navigation=[['details','Details'],['timeline','Timeline'],['processing','Processing']].map(p=>'<button class="v12-side-link '+(selection===p[0]?'active':'')+'" data-action="v12-tab" data-tab="'+p[0]+'">'+safe(p[1])+'</button>').join('');
+    const navigation=[...(['Deals','Membership'].includes(entity)?[['overview','Membership overview']]:[]),['details','All CRM fields'],['timeline','Timeline'],['processing','Processing']].map(p=>'<button class="v12-side-link '+(selection===p[0]?'active':'')+'" data-action="v12-tab" data-tab="'+p[0]+'">'+safe(p[1])+'</button>').join('');
     const related=relations.map(r=>{
       const cache=relatedCache.get(relationKey(entity,id,r.id));
       const loaded=cache?.pages?.get(cache.page||1);
@@ -234,7 +251,7 @@
       return '<button class="v12-side-link '+(selection===r.id?'active':'')+'" data-action="v12-tab" data-tab="'+safe(r.id)+'"><span>'+safe(r.label)+'</span>'+count+'</button>';
     }).join('');
     const metaText=meta.loading?'CRM layout metadata loading…':meta.problems?.length?'Some CRM metadata could not be loaded; fields and relationships may be incomplete.':'CRM layout and field labels';
-    return '<div class="v12-record">'+header+'<div class="v12-actions">'+ctx.actions(entity,id)+extraAction+'</div><div class="v12-record-layout"><div class="v12-main">'+main+'<p class="v12-meta-note">'+safe(metaText)+'</p></div><aside class="v12-side" aria-label="Record sections and related lists"><h3>Record</h3>'+navigation+'<h3>Related Lists</h3>'+related+'</aside></div></div>';
+    return '<div class="v12-record">'+header+'<div class="v12-member-actions"><div class="v12-member-primary-actions">'+ctx.actions(entity,id)+'</div>'+(extraAction?'<div class="v12-member-service-actions"><span>Membership services</span>'+extraAction+'</div>':'')+'</div><div class="v12-record-layout"><div class="v12-main">'+main+'<p class="v12-meta-note">'+safe(metaText)+'</p></div><aside class="v12-side" aria-label="Record sections and related lists"><h3>Record</h3>'+navigation+'<h3>Related Lists</h3>'+related+'</aside></div></div>';
   }
   async function action(el,focus,crm,rerender){
     if(!focus)return false;
@@ -246,8 +263,8 @@
       rerender();return true;
     }
     if(a==='v12-tab'){
-      const tab=el.dataset.tab;if(!['details','timeline','processing'].includes(tab)&&!relationList(entity).some(x=>x.id===tab))return true;
-      chosen.set(key,tab);rerender();if(!['details','timeline','processing'].includes(tab))await loadRelation(entity,record.id,tab,crm,rerender);return true;
+      const tab=el.dataset.tab;if(!['details','overview','timeline','processing'].includes(tab)&&!relationList(entity).some(x=>x.id===tab))return true;
+      chosen.set(key,tab);rerender();if(!['details','overview','timeline','processing'].includes(tab))await loadRelation(entity,record.id,tab,crm,rerender);return true;
     }
     if(a==='v12-all'){fieldModes.set(key,el.dataset.show==='true');rerender();return true;}
     if(a==='v12-rel-refresh'||a==='v12-rel-page'){
