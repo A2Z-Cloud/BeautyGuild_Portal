@@ -28,6 +28,14 @@ export const planSummary = quote => {
   };
 };
 
+// An upgrade from Associate: the unused part of the Associate membership fee, credited against what is charged now. `totalPence` is already net of it.
+export const upgradeCredit = quote => {
+  const u = quote?.upgrade;
+  return u && u.appliedPence > 0
+    ? { pence: u.appliedPence, netPence: u.netPence, unusedDays: u.unusedDays, termDays: u.termDays }
+    : null;
+};
+
 // A school referral code that took the joining fee off: the line to show struck through and marked as waived. A guest's is indicative.
 export const waivedLine = quote => {
   const d = quote?.discount;

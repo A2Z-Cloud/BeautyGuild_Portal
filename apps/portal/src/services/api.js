@@ -76,6 +76,9 @@ export const INTEGRATIONS = Object.freeze({
   membershipChanges: billingOn && import.meta.env.VITE_PORTAL_MEMBERSHIP_CHANGES === 'true',
   // Changing an insurance policy part way through the term (R3-4). Off until the function's switches and Creator are ready.
   insuranceChanges: billingOn && recordsOn && import.meta.env.VITE_PORTAL_INSURANCE_CHANGES === 'true',
+  // Upgrading an Associate membership to Full with insurance, crediting the unused Associate fee. Off until the function's
+  // PORTAL_MEMBERSHIP_UPGRADE_ENABLED is on and Creator ends the old Associate subscription (docs/delivery/cancellations-refunds-spec.md).
+  membershipUpgrade: billingOn && recordsOn && import.meta.env.VITE_PORTAL_MEMBERSHIP_UPGRADE === 'true',
   publicQuotes: publicQuotesOn,
   policyIssuance: false,
   workdrive: documentsOn,

@@ -30,6 +30,9 @@ export VITE_PUBLIC_SCHOOL_VERIFICATION=true
 # Insurance changes (MTA R3-4) on the Development client. The server switches (PORTAL_INSURANCE_CHANGES_*) are separate, and a change
 # only saves or takes payment when those are on too. Membership changes (VITE_PORTAL_MEMBERSHIP_CHANGES) stay off here for now.
 export VITE_PORTAL_INSURANCE_CHANGES=true
+# Associate to Full upgrade with the unused fee credited. Off unless asked for: build with VITE_PORTAL_MEMBERSHIP_UPGRADE=true scripts/deploy-client.sh, and only
+# once the function's PORTAL_MEMBERSHIP_UPGRADE_ENABLED is on (a client with it on and a function with it off just shows the full price).
+export VITE_PORTAL_MEMBERSHIP_UPGRADE="${VITE_PORTAL_MEMBERSHIP_UPGRADE:-false}"
 
 # vite build (not npm run build) so the flags above are exactly what is compiled; public/client-package.json is copied into dist/ by the build.
 npx vite build

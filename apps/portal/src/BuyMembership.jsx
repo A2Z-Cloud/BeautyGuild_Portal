@@ -72,6 +72,8 @@ export default function BuyMembership() {
   const [who, setWho] = useState({ state: 'loading', firstName: '', lastName: '' });
   // Renewing or upgrading needs the member's own account; a guest is always buying new.
   const previousId = who.state === 'out' ? '' : query.get('renew') || '';
+  // An upgrade from Associate (switched on separately): Full membership with insurance, with the unused Associate fee credited by the server.
+  const upgrading = Boolean(previousId) && changeType === 'upgrade' && INTEGRATIONS.membershipUpgrade;
   // The answers are kept in this tab, so a visitor can leave to sign in or sign up and come back to them. Consent is never restored.
   const [f, setF] = useStoredState(
     'membership',
@@ -88,6 +90,11 @@ export default function BuyMembership() {
     },
     x => ({ ...x, accepted: false, start: x.start && x.start >= startLimits().min ? x.start : '' }),
   );
+  // An upgrade is to Full with insurance, so an Associate choice kept from an earlier visit is cleared and insurance is on.
+  useEffect(() => {
+    if (upgrading && (f.level === 'associate' || !f.insurance))
+      setF(old => ({ ...old, level: old.level === 'associate' ? '' : old.level, insurance: true }));
+  }, [upgrading]); // eslint-disable-line react-hooks/exhaustive-deps
   const [kept, setKept] = useStoredState('membership_insurance', { iv: {}, country: '' });
   const iv = kept.iv,
     country = kept.country;
@@ -318,12 +325,20 @@ export default function BuyMembership() {
                 to pay, and your answers are kept while you do.
               </Notice>
             )}
+            {upgrading && (
+              <Notice title="Upgrade to Full membership with insurance">
+                Choose your Full membership level and answer the insurance questions, as you would to get an insurance
+                quote. We credit the unused part of your Associate membership fee, so you only pay the difference. Your
+                Associate membership carries on until your new membership starts, and the new membership runs for a full
+                year.
+              </Notice>
+            )}
             <section className="surface padded buy-section">
               <h2>About Your Work</h2>
               <fieldset className="buy-fieldset">
                 <legend>Your membership</legend>
                 <div className="buy-options">
-                  {LEVELS.map(([id, name, hint]) => (
+                  {LEVELS.filter(([id]) => !upgrading || id !== 'associate').map(([id, name, hint]) => (
                     <label key={id} className={'radio-choice' + (f.level === id ? ' selected' : '')}>
                       <input type="radio" name="level" checked={f.level === id} onChange={() => set({ level: id })} />
                       <span>
@@ -368,21 +383,23 @@ export default function BuyMembership() {
                   {[
                     [true, 'Yes, include insurance', 'Add insurance cover to your membership.'],
                     [false, 'No, membership only', 'Continue with membership without insurance.'],
-                  ].map(([yes, name, hint]) => (
-                    <label key={name} className={'radio-choice' + (f.insurance === yes ? ' selected' : '')}>
-                      <input
-                        type="radio"
-                        name="insurance"
-                        checked={f.insurance === yes}
-                        disabled={yes && f.level === 'associate'}
-                        onChange={() => set({ insurance: yes })}
-                      />
-                      <span>
-                        <strong>{name}</strong>
-                        <small>{hint}</small>
-                      </span>
-                    </label>
-                  ))}
+                  ]
+                    .filter(([yes]) => !upgrading || yes)
+                    .map(([yes, name, hint]) => (
+                      <label key={name} className={'radio-choice' + (f.insurance === yes ? ' selected' : '')}>
+                        <input
+                          type="radio"
+                          name="insurance"
+                          checked={f.insurance === yes}
+                          disabled={yes && f.level === 'associate'}
+                          onChange={() => set({ insurance: yes })}
+                        />
+                        <span>
+                          <strong>{name}</strong>
+                          <small>{hint}</small>
+                        </span>
+                      </label>
+                    ))}
                 </div>
                 {f.level === 'associate' && (
                   <p className="muted">

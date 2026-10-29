@@ -8,6 +8,7 @@ import { CourseCatalogue } from './components/CourseCatalogue.jsx';
 import { MyServiceRecords, useServiceRecords, isExpired } from './MyServiceRecords.jsx';
 import { AccreditationStatusBanner, useAccreditationState } from './AccreditationStatus.jsx';
 import { MANAGE_TEXT } from './accreditationState.js';
+import { upgradableRecord, upgradeLink } from './membershipUpgrade.js';
 const paths = {
   membership: ['Membership option', 'Applicant details', 'Review information'],
   accreditation: ['Your training centre', 'Courses and tutors', 'Review information'],
@@ -21,6 +22,9 @@ export default function ServiceHome({ kind }) {
     applyOnline = kind === 'accreditation' && INTEGRATIONS.crmAccreditation;
   const records = useServiceRecords(kind),
     has = Boolean(records?.length);
+  // An Associate member cannot buy insurance on its own: their route to cover is to upgrade to Full with insurance (the same quote journey).
+  const memberships = useServiceRecords(kind === 'insurance' && INTEGRATIONS.membershipUpgrade ? 'membership' : '');
+  const upgradable = upgradableRecord(memberships, new Date().toISOString().slice(0, 10));
   const accState = useAccreditationState(); // eslint-disable-line react-hooks/rules-of-hooks
   const accHolds = kind === 'accreditation' && accState && accState.key !== 'none';
   const current = records?.find(r => !isExpired(r));
@@ -52,6 +56,10 @@ export default function ServiceHome({ kind }) {
       >
         {kind === 'membership' && INTEGRATIONS.stripeCheckout ? (
           membershipButton
+        ) : kind === 'insurance' && INTEGRATIONS.stripeCheckout && upgradable ? (
+          <Link className="btn btn-primary" to={upgradeLink(upgradable.id)}>
+            Get an insurance quote <ArrowRight size={16} />
+          </Link>
         ) : kind === 'insurance' && INTEGRATIONS.stripeCheckout ? (
           <Link className="btn btn-primary" to="/insurance/buy">
             {has ? 'Buy another policy' : 'Buy insurance'} <ArrowRight size={16} />
