@@ -25,6 +25,9 @@
     "functions/beauty_guild_api/src/cancellationQuote.js",
     "functions/beauty_guild_api/src/stripeRead.js",
     "functions/beauty_guild_api/src/paymentFacts.js",
-    "functions/beauty_guild_api/src/creditCoupon.js"
+    "functions/beauty_guild_api/src/creditCoupon.js",
+    "functions/beauty_guild_api/src/cancellationConfirm.js",
+    "functions/beauty_guild_api/src/stripeWrite.js",
+    "functions/beauty_guild_api/src/crmWrite.js"
   ]
 }

@@ -154,6 +154,25 @@ Response `200`:
 
 Other errors: 422 `INVALID_REQUEST`, 404 `NOT_FOUND`, 502 `STRIPE_UNAVAILABLE`, 503 `NOT_AVAILABLE` while `PORTAL_CANCELLATIONS_ENABLED` is off (default).
 
+### `POST /staff/cancellation` (confirm) and `POST /staff/cancellation/retry`
+**This changes things.** It records the cancellation in the CRM, ends the Stripe subscription(s) and creates the refunds. Off unless **both** `PORTAL_CANCELLATIONS_ENABLED` and `PORTAL_CANCELLATION_WRITES_ENABLED` are `true`, and **test mode only** (any key but `sk_test_` is a `503 NOT_AVAILABLE`).
+
+Body: the same as `/staff/cancellation/quote`, plus `confirmNetRefundPence` (the net figure staff saw, in pence) and `inputsHash` (from the quote). The function **recomputes** and refuses with `409 QUOTE_CHANGED` (and the new quote in `details`) unless both match exactly; `409 NOT_QUOTABLE` (reasons in `details.blocking`) if it can no longer be cancelled here.
+
+Order, and why it is safe:
+1. **The CRM record is created first** (status `Pending`). If that fails, nothing else happens and Stripe is never touched.
+2. Each Stripe subscription is **ended at the effective date** (`cancel_at` with `proration_behavior=none`; if the date is today, an immediate cancel with `prorate=false`, `invoice_now=false`). Already ending counts as done. The record becomes `Subscription Ended`.
+3. **Refunds**, newest payment first, each refund's amount limited to what is left on that payment. A shortfall is found **before any refund is created** (`409 REFUND_EXCEEDS_PAYMENTS`). Each refund has an idempotency key (`cancel-{recordId}-{paymentIntent}-{amount}`) and metadata `cancellation_id`, `contact_id`, `scenario`.
+4. The record becomes `Completed` (or `Refund Failed` if Stripe reports a refund failed) and a CRM Note names the staff member.
+
+**Safe to repeat.** Sending the same request again finds the record by `inputsHash` and returns it (`200`, `created: false`) without a second refund. If a step failed (`502` with `details: { cancellationId, status, step }`), repeating the confirm, or `POST /staff/cancellation/retry` with `{ "cancellationId": "..." }`, **resumes from the plan stored on the record** (a new quote would now be refused because the subscription is already ending). An ended subscription is never ended twice and an existing refund is never repeated.
+
+Response `201` (`200` when it already existed): `{ requestId, contact, cancellationId, created, status, netRefundPence, steps: [...], refunds: [{ id, amountPence, status }] }`.
+
+**What it does not do.** It never changes the Deal or the policy (a status change can fire CRM workflows the Guild must check first): a CRM workflow on the cancellation record is to do that. It does not create the Associate membership for a downgrade, send any email or document, or write to Books (Creator does, from the Stripe refund events).
+
+**The CRM module it needs (not created yet; names are UNCONFIRMED and live in one place, `src/cancellationConfirm.js`).** Module `Membership_Cancellations` with: `Name`, `Contact` (lookup), `Membership` (lookup to Deals), `Scenario`, `Cancellation_Status` (Pending, Subscription Ended, Refund Failed, Completed), `Effective_Date`, `Cooling_Off` (boolean), `Lines_JSON` and `Plan_JSON` (long text), `Inputs_Hash` (text, **unique**), `Membership_Refund`, `Premium_Refund`, `IPT_Refund`, `Fee_Applied`, `Net_Refund` (currency), `Override_Reason`, `Requested_By`, `Error_Detail`, `Stripe_Subscription_IDs`, `Stripe_Refund_IDs` (text). Until it exists, a confirm fails at step 1 with `502 CRM_UNAVAILABLE` and does nothing else.
+
 ### `POST /staff/payment-link`
 Creates the portal's own Stripe Checkout Session for the customer and returns its URL for the staff member to send. **Nothing is sent from here.** Same body as `POST /staff/quote` (`contactId`, the service inputs) **plus `accepted: "yes"`**: paying needs the customer's acceptance of the Code of Ethics and terms, exactly as online, so the widget must capture it from the customer. It is the portal's checkout, so every rule, price, risk check, CRM record and the Creator metadata contract are the same as when the customer pays online and Creator handles the payment as it does today.
 

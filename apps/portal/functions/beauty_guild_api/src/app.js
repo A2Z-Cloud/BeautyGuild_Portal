@@ -18,6 +18,9 @@ const { createRiskChecks } = require('./riskChecks');
 const { createCreatorReader } = require('./creatorReports');
 const { createStripeReader } = require('./stripeRead');
 const { createCancellationQuotes } = require('./cancellationQuote');
+const { createCancellationConfirm } = require('./cancellationConfirm');
+const { createStripeWriter } = require('./stripeWrite');
+const { createCrmWriter } = require('./crmWrite');
 const { readBuildInfo } = require('./buildInfo');
 
 const TEXT_MIN = 3;
@@ -213,20 +216,38 @@ function createApp({
     listCourses: req => courses.listActiveGti(req),
     sleep: accreditationSleep,
   });
+  // The staff cancellation quote (read only) and confirm (ends the Stripe subscription and refunds). Confirm needs its own switch, a test key and the
+  // CRM cancellation module (cancellationConfirm.js); the quote it relies on is the one above.
+  const crmRead = createCrmClient({ getCrmHeaders, crmApiDomain: config.crmApiDomain, fetchImpl }).call;
+  const staffCancellationQuote = createCancellationQuotes({
+    enabled: config.cancellationsEnabled,
+    call: crmRead,
+    stripeGet: createStripeReader({ stripeKey: config.stripeSecretKey, fetchImpl }),
+    staffContact: checkout.staffContact,
+    now,
+  });
+  const cancellationConfirm = createCancellationConfirm({
+    enabled: config.cancellationsEnabled && config.cancellationWritesEnabled,
+    stripeKey: config.stripeSecretKey,
+    call: crmRead,
+    crmWriter: createCrmWriter({ getCrmHeaders, crmApiDomain: config.crmApiDomain, fetchImpl }),
+    stripeGet: createStripeReader({ stripeKey: config.stripeSecretKey, fetchImpl }),
+    stripeWriter: createStripeWriter({ stripeKey: config.stripeSecretKey, fetchImpl }),
+    quoteFor: staffCancellationQuote,
+    now,
+    log,
+  });
+  const staffActions = {
+    ...checkout,
+    staffCancellationQuote,
+    staffCancellationConfirm: cancellationConfirm.confirm,
+    staffCancellationRetry: cancellationConfirm.retry,
+  };
   registerStaffRoutes(app, {
     enabled: config.staffApiEnabled,
     secrets: config.staffApiSecrets,
     roles: config.staffApiRoles,
-    actions: {
-      ...checkout,
-      staffCancellationQuote: createCancellationQuotes({
-        enabled: config.cancellationsEnabled,
-        call: createCrmClient({ getCrmHeaders, crmApiDomain: config.crmApiDomain, fetchImpl }).call,
-        stripeGet: createStripeReader({ stripeKey: config.stripeSecretKey, fetchImpl }),
-        staffContact: checkout.staffContact,
-        now,
-      }),
-    },
+    actions: staffActions,
     draftsRouter: drafts.router,
     windowSeconds: config.staffApiWindowSeconds,
     getCrmHeaders,
