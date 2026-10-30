@@ -27,7 +27,8 @@ const DESCRIPTIONS = {
   previous_subscription_id:
     "Only on an upgrade with a credit: the Associate membership's Stripe subscription, which Creator ends at `membership_start` once this payment is verified (the old Associate must not renew).",
   change_type: '`new`, `renewal` or `upgrade` for a purchase; `mta` for a change to a current membership.',
-  membership_level: '`associate`, `full_non_salon` or `full_salon`.',
+  membership_level:
+    '`associate`, `full_non_salon` or `full_salon`, and from the combined flow `international` (a member based outside the UK, price `MEM-INTL-Y`, no insurance).',
   primary_branch: 'The main branch: `beauty`, `holistic`, `nails` or `hair`.',
   secondary_branches: 'Comma separated additional branches. Empty if none.',
   addons: 'JSON of the add-on quantities, for example `{"badge":1}`. `{}` if none.',

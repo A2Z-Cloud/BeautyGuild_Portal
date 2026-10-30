@@ -19,7 +19,7 @@ Every session has: `email`, `name`, `currency`, `status`, `source`, `type`, `con
 | `existing_membership` | always | JSON of the current membership (type, start_date, expiry_date, deal_id) when renewing or upgrading. Empty for a new member. |
 | `previous_membership_id` | always | The Deal being renewed or upgraded. Empty for a new membership. |
 | `change_type` | always | `new`, `renewal` or `upgrade` for a purchase; `mta` for a change to a current membership. |
-| `membership_level` | always | `associate`, `full_non_salon` or `full_salon`. |
+| `membership_level` | always | `associate`, `full_non_salon` or `full_salon`, and from the combined flow `international` (a member based outside the UK, price `MEM-INTL-Y`, no insurance). |
 | `primary_branch` | always | The main branch: `beauty`, `holistic`, `nails` or `hair`. |
 | `secondary_branches` | always | Comma separated additional branches. Empty if none. |
 | `addons` | always | JSON of the add-on quantities, for example `{"badge":1}`. `{}` if none. |
@@ -71,7 +71,7 @@ Every session has: `email`, `name`, `currency`, `status`, `source`, `type`, `con
 | `existing_membership` | always | JSON of the current membership (type, start_date, expiry_date, deal_id) when renewing or upgrading. Empty for a new member. |
 | `previous_membership_id` | always | The Deal being renewed or upgraded. Empty for a new membership. |
 | `change_type` | always | `new`, `renewal` or `upgrade` for a purchase; `mta` for a change to a current membership. |
-| `membership_level` | always | `associate`, `full_non_salon` or `full_salon`. |
+| `membership_level` | always | `associate`, `full_non_salon` or `full_salon`, and from the combined flow `international` (a member based outside the UK, price `MEM-INTL-Y`, no insurance). |
 | `primary_branch` | always | The main branch: `beauty`, `holistic`, `nails` or `hair`. |
 | `secondary_branches` | always | Comma separated additional branches. Empty if none. |
 | `addons` | always | JSON of the add-on quantities, for example `{"badge":1}`. `{}` if none. |
