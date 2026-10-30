@@ -164,3 +164,25 @@ Added 29 October 2026, behind `PORTAL_MEMBERSHIP_UPGRADE_ENABLED` (off by defaul
 - **The quote** gains an `upgrade` object: `{ creditPence, appliedPence, netPence, unusedDays, termDays, associateEnds }`, and `totalPence` is already the net.
 - **Stripe.** The credit is one `amount_off` coupon (`once`, one redemption, "Associate membership credit") on the Checkout Session; the Associate fee is credited, **not refunded in cash**.
 - **Metadata** (`membership_insurance` only, optional): `upgrade_credit` (GBP, gross) and `previous_subscription_id` (the Associate's Stripe subscription, which **Creator ends at `membership_start`** once the payment is verified). See [stripe-metadata.md](stripe-metadata.md).
+
+## Combined membership flow: answers instead of a level
+
+Behind `PORTAL_COMBINED_FLOW_ENABLED` (off by default; the switch is in `scripts/deploy-functions.sh`'s allow list). Design: `docs/delivery/combined-membership-flow-spec.md`.
+
+With the switch on, `service=membership` on every customer and staff route (quote, pay, staff quote and payment link) takes `answers: { country, insuranceRequired, working }` and **no `level`**. The server decides the level with `decideMembership` (`src/membershipDecision.js`) and returns it in `quote.decision`:
+
+```json
+{ "level": "full_non_salon", "insurance": true, "route": "non_salon", "steps": ["about_you", "how_you_work", "..."], "message": null }
+```
+
+| Answers | Level |
+|---|---|
+| `country` outside the UK, England, Scotland, Wales, Northern Ireland (the Channel Islands, the Isle of Man, Ireland and Other included) | `international`, no insurance, `message` set, yearly only |
+| UK, `insuranceRequired` no | `associate`, no insurance (any insurance details sent are dropped) |
+| UK, yes, `working` one of `insWorkingFromHome`, `insMobile`, `insRentedRoom`, `insSubcontractor` | `full_non_salon` with insurance |
+| UK, yes, `working` `insSalon` | `full_salon` with insurance |
+
+Refusals (all 422): `LEVEL_NOT_CHOSEN_BY_CLIENT` (a `level` was sent), `MISSING_ANSWER`, `INVALID_WORKING` (more than one answer, an unknown one, or insurance flags that disagree with `working`), `COUNTRY_MISMATCH` (a separate `country` differs from the answers), `BILLING_NOT_AVAILABLE` (monthly for International). Upgrades still go through the existing upgrade check, which refuses a non-Full level. With the switch off nothing changes: a `level` is sent and `answers` is ignored.
+
+`membership_level` in the Stripe metadata may now be `international` (price `MEM-INTL-Y`, £55.00 with £38.00 zero-rated).
+
