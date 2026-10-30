@@ -16,20 +16,9 @@ const WORKING = Object.freeze({
   insSalon: 'salon',
 });
 
-// The UK group is the United Kingdom, the Channel Islands and the Isle of Man (the wording of the insurance declaration). Ireland and Other are outside it.
-const UK_GROUP = new Set([
-  'united kingdom',
-  'uk',
-  'great britain',
-  'england',
-  'scotland',
-  'wales',
-  'northern ireland',
-  'channel islands',
-  'jersey',
-  'guernsey',
-  'isle of man',
-]);
+// The UK group is the four nations and the United Kingdom itself, the same set the accreditation journey treats as UK. The Channel Islands, the Isle of Man,
+// Ireland and Other are outside it: those members join as International (Guild, 30 October 2026).
+const UK_GROUP = new Set(['united kingdom', 'uk', 'great britain', 'england', 'scotland', 'wales', 'northern ireland']);
 
 const STEPS_SIMPLE = Object.freeze(['about_you', 'membership_details', 'extras', 'review']);
 const STEPS_FULL = Object.freeze([
