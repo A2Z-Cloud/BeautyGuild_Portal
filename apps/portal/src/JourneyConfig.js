@@ -224,7 +224,17 @@ export const COUNTRY_OPTIONS = [
 // Membership and insurance are UK-only products today - scoped to the short list that was here before
 // (expanding to the full COUNTRY_OPTIONS below is accreditation-specific, since that's the only journey
 // that takes international applicants/training centres).
-const UK = ['United Kingdom', 'England', 'Scotland', 'Wales', 'Northern Ireland', 'Ireland', 'France', 'Spain', 'Other'];
+const UK = [
+  'United Kingdom',
+  'England',
+  'Scotland',
+  'Wales',
+  'Northern Ireland',
+  'Ireland',
+  'France',
+  'Spain',
+  'Other',
+];
 // Maps a country name from address lookup onto the form's dropdown ("Other" when not listed).
 export function countryOption(name) {
   const wanted = String(name || '')

@@ -48,6 +48,14 @@ const ITEMS = Object.freeze({
     interval: 'year',
     zeroRatedPence: 3800,
   },
+  // The yearly price for a member based outside the UK (Guild, 30 October 2026), recorded as International. Yearly only: there is no monthly price.
+  // Books describes it as £38.00 of the £55.00 zero-rated, the same as the other levels, with the VAT option and rate left on the item.
+  membership_international_annual: {
+    name: 'International Member membership (annual)',
+    code: 'MEM-INTL-Y',
+    interval: 'year',
+    zeroRatedPence: 3800,
+  },
   membership_full_non_salon_annual: {
     name: 'Full Member (Non-Salon) membership (annual)',
     code: 'MEM-FULLNS-Y',
@@ -86,6 +94,7 @@ const ADDONS = Object.freeze({
 });
 const LEVELS = Object.freeze({
   associate: 'Associate Member',
+  international: 'International Member',
   full_non_salon: 'Full Member (Non-Salon)',
   full_salon: 'Full Member (Salon)',
 });
