@@ -4,7 +4,7 @@ Written 24 October 2026 so the Creator work can be picked up later. The portal s
 
 ## 1. Where things stand
 
-**Portal (Development, `main` plus [PR 65](https://github.com/A2Z-Cloud/BeautyGuild_Portal/pull/65), which is deployed but not yet merged)**
+**Portal (Development, `main`)**
 - Price list v2 is built. Prices are found in Stripe by **lookup key** (the price list code), so a price change is a new Stripe price and no deployment.
 - Every membership level is £55 (£38.00 zero-rated, £14.17 standard-rated, £2.83 VAT). Named employees pay a £55 membership fee as well as any premium.
 - **Monthly plans:** the yearly price plus a £1.50 monthly admin fee, divided by 12, each payment rounded up. The joining fee and add-ons are charged once, in full, on the first payment (changed 27 October, MTA-D22), so there is no schedule and the monthly amount is the same at every renewal.
@@ -38,7 +38,7 @@ Forms already built: **Stripe Webhook Log**, **Invoice Records**, **Subscription
 - `invoice_payment.paid` is a separate event Creator's endpoint does not listen to. It is not needed.
 
 ## 3. What Creator must handle (check against the V1 handler)
-See section 5 of the [Creator handover](creator-handover-price-list-v2.md). In short: `subscription_type` (`annual` or `monthly`) on membership and accreditation; monthly lines are **monthly shares** and the amount drops at payment 13 when there were year-one lines; insurance on its own is now `mode=subscription`; `named_employee_membership` (JSON) is new and sits outside IPT; `contact_id` is now set for new customers too; every renewal arrives as `invoice.paid`.
+See section 5 of the [Creator handover](creator-handover-price-list-v2.md). In short: `subscription_type` (`annual` or `monthly`) on membership and accreditation; on a monthly plan the lines that renew are **monthly shares**, the joining fee and add-ons are **full amounts on the first payment only**, and every later payment and renewal is the same (no drop at payment 13, no schedule); insurance on its own is now `mode=subscription`; `named_employee_membership` (JSON) is new and sits outside IPT; `contact_id` is now set for new customers too; every renewal arrives as `invoice.paid`.
 
 **Splitting a membership into the two Books items:** take 38/55 of the membership line as the zero-rated item and the rest as the standard-rated item (VAT is 20% of that), putting any rounding on the standard line, so the invoice total always equals Stripe's.
 
@@ -49,7 +49,6 @@ See section 5 of the [Creator handover](creator-handover-price-list-v2.md). In s
 - Renewals charge the same amounts as year one (no re-rating), and renew a year after payment, not after the chosen policy start date (up to 30 days apart).
 - International Accreditation: zero-rated or outside the scope of VAT (finance)? Currently Zero Rate in Books. The IPT item should post to an IPT payable account (name needed).
 - Creator should record failed payments and cancellations as statuses only for now.
-- The portal function's own Stripe webhook is registered for test mode only.
 
 ## 5. Next steps, in order
 1. **Receiver, log only.** A new Creator function (appendix A) that verifies nothing it cannot (the endpoint may not expose the signature header; the fetch is the defence), saves one log row per Event ID, and returns 200. Register it as a **second** Stripe test endpoint with the same events including `invoice.paid`. Leave the V1 endpoint alone until cutover.
