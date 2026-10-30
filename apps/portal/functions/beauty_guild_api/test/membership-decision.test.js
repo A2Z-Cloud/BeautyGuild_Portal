@@ -11,7 +11,7 @@ const refused = (answers, code) =>
   );
 
 test('outside the UK group is International, with no insurance, whatever else was answered', () => {
-  for (const country of ['France', 'Ireland', 'Other', 'United States']) {
+  for (const country of ['France', 'Ireland', 'Other', 'United States', 'Jersey', 'Guernsey', 'Isle of Man']) {
     const d = decideMembership({ country, insuranceRequired: true, working: 'insSalon' });
     assert.equal(d.level, 'international', country);
     assert.equal(d.insurance, false);
@@ -76,20 +76,11 @@ test('a missing answer is refused rather than guessed', () => {
   refused({ country: 'England', insuranceRequired: true, working: [] }, 'MISSING_ANSWER');
 });
 
-test('the UK group is the UK, the Channel Islands and the Isle of Man, in any case', () => {
-  for (const c of [
-    'United Kingdom',
-    'england',
-    'SCOTLAND',
-    'Wales',
-    'Northern Ireland',
-    'Jersey',
-    'Guernsey',
-    'Isle of Man',
-    'Channel Islands',
-  ])
+test('the UK group is the United Kingdom and its four nations, in any case; the Islands are International', () => {
+  for (const c of ['United Kingdom', 'england', 'SCOTLAND', 'Wales', 'Northern Ireland'])
     assert.equal(inUkGroup(c), true, c);
-  for (const c of ['Ireland', 'France', 'Other', '', undefined]) assert.equal(inUkGroup(c), false, String(c));
+  for (const c of ['Ireland', 'France', 'Other', 'Jersey', 'Guernsey', 'Isle of Man', 'Channel Islands', '', undefined])
+    assert.equal(inUkGroup(c), false, String(c));
 });
 
 test('International has its own yearly price: lookup key MEM-INTL-Y, £38 zero-rated like the other levels', () => {

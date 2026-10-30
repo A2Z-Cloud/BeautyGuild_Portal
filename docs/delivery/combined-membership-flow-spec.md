@@ -26,7 +26,8 @@ Scope: Beauty Guild Portal V2 (customer app and `beauty_guild_api`), the CRM sta
 
 The country list is the same list the accreditation journey uses (`COUNTRY_OPTIONS`, decided 30 October). The membership and insurance forms already read it, so no second list is created.
 
-The UK group is the United Kingdom, the Channel Islands and the Isle of Man, the same rule as the existing insurance declaration ("domiciled in the United Kingdom of Great Britain and Northern Ireland, the Channel Islands or Isle of Man"). In the list that means United Kingdom, England, Scotland, Wales and Northern Ireland. Jersey, Guernsey and the Isle of Man are in the rule (the function's `territory()` already recognises them) but are not entries in `COUNTRY_OPTIONS`, so today those customers can only pick Other and would be routed as International. Ireland is outside the UK group, and so is Other. Decision needed: add Jersey, Guernsey and Isle of Man to the shared list (accreditation would see them too).
+The UK group is the United Kingdom, England, Scotland, Wales and Northern Ireland, the same set the accreditation journey treats as UK (`UK_COUNTRIES`). Jersey, Guernsey and the Isle of Man are added to the shared list and are International, like Ireland and Other (decided 30 October). They are therefore offered no insurance online, and the "no insurance abroad" message applies to them.
+
 
 Country decides the branch of the flow. The declaration itself (domiciled and over 18) stays where it is, on the insurance step, so age is not mixed into routing.
 
@@ -63,7 +64,7 @@ Today the question is "Select every way that you work" and allows several answer
 
 All of this lives in one function, `decideMembership(answers)`, in the function code (`membershipDecision.js`). It takes `{ country, insuranceRequired, working }` and returns `{ level, insurance, route, skipSteps, message }`, or an error naming the missing or invalid answer. The portal, the staff API and the draft routes all call it. No client sends a level any more, so they cannot disagree.
 
-Unit tests cover every row of the matrix, an unknown country, a missing answer, a mixed working answer, and each UK group member.
+Unit tests cover every row of the matrix, an unknown country, a missing answer, a mixed working answer, each UK group member, and Jersey, Guernsey and the Isle of Man as International.
 
 ## 3. The customer journey
 
@@ -121,7 +122,7 @@ A client flag `VITE_PORTAL_COMBINED_FLOW` and a function switch `PORTAL_COMBINED
 1. **Upgrade from Associate to Full.** Unchanged in money terms (credit coupon, `previous_subscription_id`). The flow skips the questions it already knows: country comes from the Contact and must be in the UK group, insurance required is Yes, and the member answers how they work.
 2. **Quote route.** The staff and customer quote routes take answers, not a level (section 7). The upgrade request carries `previousId` as now.
 3. **International members cannot upgrade.** The upgrade check looks at country as well as membership type, and refuses `UPGRADE_NOT_AVAILABLE` for International. If an International member moves to the UK group, they renew as a new membership by the matrix. They do not upgrade mid-term.
-4. **Cancellations and refunds.** The cancellation engine must recognise `MEM-INTL-Y` as a membership SKU (the SKU classifier in `paymentFacts.js`). It follows the Associate rules: no policy, no IPT. Required decision: does the £10 cancellation fee apply to International? Assume no, as for Associate, until the Guild says otherwise.
+4. **Cancellations and refunds.** The cancellation engine must recognise `MEM-INTL-Y` as a membership SKU (the SKU classifier in `paymentFacts.js`) and an International membership type. The Guild confirmed on 30 October that the £10 cancellation fee applies to International, unlike Associate. So an International cancellation is not the Associate rule: it needs a pro-rata refund of the unused membership fee, with the £10 netted off it, as for Full. The rest of the rule needs confirming (section 11, item 1). Until it is, the engine refuses an International membership rather than guess.
 5. **Joining fee, vouchers and discounts.** Unchanged. The joining fee gap rule already counts International.
 
 ## 7. API changes in `beauty_guild_api`
@@ -142,7 +143,7 @@ Little changes in shape. The metadata contract stays the same apart from one new
 3. An International purchase has `insurance_requested=false`, no insurance keys and no Policy. Check the handler does not assume a Policy for every membership.
 4. On a monthly plan the membership line code is the level. International is yearly only, so this does not arise, but the handler must not fail on the code `MEM-INTL-Y`.
 5. Upgrades: Creator ends the old Associate subscription at `membership_start` using `previous_subscription_id` (decision D11, agreed 30 October). International never upgrades.
-6. Cancellations (Creator side, when built): treat International like Associate.
+6. Cancellations (Creator side, when built): treat International like Full for the refund and the £10 fee, with no policy or IPT. Exact rule to follow section 6.4.
 7. No change to Creator is needed for the decision itself, the extras step, or the layout. The status `Customer joined as Associate` is written by the portal, not Creator.
 
 ## 9. Manage membership redesigned like school management
@@ -166,7 +167,7 @@ Use the same shell as school management (`school-layout`, `school-nav`, `surface
 - **Your cover and Changes and history** are the existing cover and change history panels, unchanged in content.
 - **Documents** adds the membership documents, now reachable from the manage page, as school management does for accreditation.
 - **Invoices** is the existing table.
-- **Add another policy** (decided 30 October) quotes and buys a further policy from here, for an active Full member in the UK group. It uses the existing insurance steps and the existing `insurance` service with the membership as context, with no membership fee and no joining fee. The standalone insurance form for non-members stays removed. The policy asks "How you work" again, as a new premises may differ, and follows its own answer. The membership level does not change until renewal, and the member is told so. The server refuses it for Associate, International, non-UK or inactive memberships.
+- **Add another policy** (decided 30 October) quotes and buys a further policy from here, for an active Full member in the UK group. It uses the existing insurance steps and the existing `insurance` service with the membership as context, with no membership fee and no joining fee. The standalone insurance form for non-members stays removed. The policy asks "How you work" again, as a new premises may differ, and follows its own answer. The membership level stays as it is, unless the member upgrades it, or the renewal upgrades it (decided 30 October: a Non-Salon member who answered salon on a policy is moved to Full Salon at renewal). The member is told this when they buy the policy. The server refuses it for Associate, International, non-UK or inactive memberships.
 - **Actions** show only what the member can do. Renew shows from 60 days before expiry or after it. Upgrade shows for an active UK Associate. Cancel shows only with the cancellation switches on, and opens the cancellation quote.
 - On a phone the left navigation becomes a horizontal scrolling tab bar, as school management does.
 - Routes become `/membership/manage/:id/:section`, with the old `?tab=` links redirecting to the matching section so saved links and emails keep working.
@@ -198,10 +199,15 @@ Decided on 30 October 2026:
 - Creator ends the old Associate subscription on upgrade (D11).
 - The country list is the accreditation list.
 
+Also decided on 30 October:
+- The £10 cancellation fee applies to International (6.4).
+- A second policy with a different "How you work" answer leaves the membership level alone until the member upgrades or the renewal upgrades it (9.2).
+- Jersey, Guernsey and the Isle of Man are added to the country list and are International (2.1).
+
 Still open:
-1. **Cancellation fee for International** (6.4). Assumed none, as for Associate. Until it is confirmed the cancellation engine refuses an International membership rather than guess.
-2. **Jersey, Guernsey and Isle of Man** are not in `COUNTRY_OPTIONS` (2.1). Add them to the shared list, or accept that those customers pick Other.
-3. **Level on a second policy.** If a Non-Salon member answers salon on a second policy, the policy follows the answer and the membership level stays until renewal (9.2). Needs the Guild to confirm.
+1. **International cancellation refund rule.** With the £10 fee applying, International cannot follow the Associate rule (no automatic refund). Is it a pro-rata refund of the unused membership fee less £10, as for Full? Is there a 14 day cooling off, counted from the membership start (Full counts it from the insurance start)?
+2. **Renewal upgrade.** At renewal the level is recomputed from the current policy answers (3.4). Confirm that the renewal quote shows the higher price before the member pays, and that a Full Salon policy answer is the trigger.
+3. **Insurance declaration wording.** The existing declaration mentions the Channel Islands and the Isle of Man as domiciles. They are now International and never reach it, so the Guild may want the wording changed to match.
 4. **Moving between the UK and abroad:** renew by the matrix, with no mid-term change. Confirm.
 5. **Wording** from the customer: the corrected Associate text and the final "no insurance abroad" message.
 
