@@ -1,6 +1,6 @@
 # Creator payments app: where we are and what is next
 
-Written 24 October 2026 so the Creator work can be picked up later. The portal side is done and deployed to Development (Stripe test mode only). The Creator app is a **new app built from scratch**, separate from the V1 Creator app, and it only covers **payments**. Mid-term changes (section 6), cancellations and vouchers are separate pieces of the full Creator scope. The portal side of mid-term changes is built and deployed to Development, switched off; section 6 is what Creator must do for it.
+Written 24 October 2026 so the Creator work can be picked up later. The portal side is done and deployed to Development (Stripe test mode only). The Creator app is a **new app built from scratch**, separate from the V1 Creator app, and it only covers **payments**. Mid-term changes (section 6), cancellations and vouchers are separate pieces of the full Creator scope. **Cancellations, downgrades, upgrades and refunds are specified in [cancellations-refunds-spec.md](cancellations-refunds-spec.md)** (draft, 29 October 2026). The portal side of mid-term changes is built and deployed to Development, switched off; section 6 is what Creator must do for it.
 
 ## 1. Where things stand
 
