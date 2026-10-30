@@ -16,6 +16,8 @@ const { createCreditCoupon } = require('./creditCoupon');
 const { createPaymentFacts, gbpToPence } = require('./paymentFacts');
 const { createStripeReader } = require('./stripeRead');
 const { levelOf } = require('./cancellationQuote');
+const { decideMembership, WORKING } = require('./membershipDecision');
+const insuranceModule = require('./insurance');
 const { upgradeCredit: computeUpgradeCredit } = require('./cancellations');
 const plans = require('./plans');
 const { createDiscounts } = require('./discounts');
@@ -49,6 +51,7 @@ function registerCheckoutRoutes(
     revisionNamePrefix = '',
     staffPaymentLinksEnabled = false,
     membershipUpgradeEnabled = false,
+    combinedFlowEnabled = false,
     // Reads voucher use history from Creator (creatorReports.js). Without it a voucher fails closed, as the use history cannot be checked.
     creatorReader = undefined,
     enabled,
@@ -278,7 +281,35 @@ function registerCheckoutRoutes(
   async function build(req, input, options = {}) {
     return applyUpgradeCredit(await buildPriced(req, input, options));
   }
+  // With the combined flow on, a membership's level comes only from the customer's answers (membershipDecision.js): a client that sends a level is
+  // refused, and the insurance details and country must agree with the decision. Off, nothing here runs and a level is chosen as before.
+  function applyDecision(input) {
+    if (!combinedFlowEnabled || input.service !== 'membership') return input;
+    if (input.level)
+      throw new HttpError(
+        422,
+        'LEVEL_NOT_CHOSEN_BY_CLIENT',
+        'Your membership is decided from your answers. Send your answers, not a level.',
+      );
+    const decision = decideMembership(input.answers);
+    const country = String(input.answers.country).trim();
+    if (input.country && input.country.trim().toLowerCase() !== country.toLowerCase())
+      throw new HttpError(422, 'COUNTRY_MISMATCH', 'The country does not match your answers.');
+    if (decision.level === 'international' && input.billing === 'monthly')
+      throw new HttpError(422, 'BILLING_NOT_AVAILABLE', 'International membership is paid yearly.');
+    let insurance = decision.insurance ? input.insurance : null;
+    if (insurance) {
+      // The insurance answers carry how the customer works as flags: exactly the decided one, and no other.
+      const ins = insuranceModule.clean(insurance);
+      const chosen = Object.keys(WORKING).filter(k => ins[k]);
+      const wanted = [String(Array.isArray(input.answers.working) ? input.answers.working[0] : input.answers.working)];
+      if (chosen.length !== 1 || chosen[0] !== wanted[0])
+        throw new HttpError(422, 'INVALID_WORKING', 'How you work must match your answers.');
+    }
+    return { ...input, level: decision.level, country, insurance, decision };
+  }
   async function buildPriced(req, input, { guest = false, createContact = false, staff = null } = {}) {
+    input = applyDecision(input);
     const service = SERVICES[input.service];
     if (!service) throw new HttpError(422, 'INVALID_REQUEST', 'Choose something to pay for.');
     // Creator does not handle this payment type yet, so it stays off until the switch is turned on (PORTAL_MEMBERSHIP_CHANGES_ENABLED).
@@ -309,6 +340,7 @@ function registerCheckoutRoutes(
       upgradeCredit: membershipUpgradeEnabled ? upgradeCreditFor : null,
     });
     if (prepared.alreadyPaid) return { service, contact, alreadyPaid: true };
+    if (input.decision) prepared.decision = input.decision;
     // An insurance change is payable only when the writes and the payment switches are both on (docs/delivery/mta-r3-plan.md, the gate).
     if (input.service === 'insurance_change')
       prepared.payable = insuranceChangesWritesEnabled && insuranceChangesPaymentEnabled;
@@ -556,6 +588,17 @@ function registerCheckoutRoutes(
           totalPence: b.totalPence,
           mode: b.mode,
           payable: !b.prepared.blocked && b.prepared.payable !== false,
+          ...(b.prepared.decision
+            ? {
+                decision: {
+                  level: b.prepared.decision.level,
+                  insurance: b.prepared.decision.insurance,
+                  route: b.prepared.decision.route,
+                  steps: b.prepared.decision.steps,
+                  message: b.prepared.decision.message,
+                },
+              }
+            : {}),
           ...(b.prepared.details ? { details: b.prepared.details } : {}),
           ...(b.prepared.revisionDetails ? { revisions: b.prepared.revisionDetails } : {}),
           ...(b.prepared.blocked ? { blocked: b.prepared.blocked } : {}),
@@ -622,6 +665,7 @@ function registerCheckoutRoutes(
     code: String(src.code || '').slice(0, 60),
     addons: src.addons && typeof src.addons === 'object' ? src.addons : parseAddons(src.addons),
     level: String(src.level || ''),
+    answers: src.answers && typeof src.answers === 'object' && !Array.isArray(src.answers) ? src.answers : null,
     branch: String(src.branch || ''),
     branches: src.branches || '',
     billing: String(src.billing || ''),

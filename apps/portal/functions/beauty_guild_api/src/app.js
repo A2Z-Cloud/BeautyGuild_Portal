@@ -189,6 +189,7 @@ function createApp({
     revisionNamePrefix: config.revisionNamePrefix,
     staffPaymentLinksEnabled: config.staffPaymentLinksEnabled,
     membershipUpgradeEnabled: config.membershipUpgradeEnabled,
+    combinedFlowEnabled: config.combinedFlowEnabled,
     creatorReader: createCreatorReader({
       getCreatorHeaders,
       creatorApiDomain: config.creatorApiDomain,

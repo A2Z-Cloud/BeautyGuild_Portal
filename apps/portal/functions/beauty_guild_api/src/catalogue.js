@@ -539,7 +539,8 @@ SERVICES.membership = {
   async prepare({ req, crm, contact, input, user, risk, discounts, upgradeCredit = null }) {
     const level = String(input.level || ''),
       branch = String(input.branch || '');
-    if (level === 'international')
+    // International is never chosen: only the combined flow's decision (membershipDecision.js) produces it.
+    if (level === 'international' && !input.decision)
       bad('International membership has no fixed price. Please contact the Guild to join.');
     if (!LEVELS[level]) bad('Choose a membership level.');
     if (!BRANCHES[branch]) bad('Choose your professional branch.');

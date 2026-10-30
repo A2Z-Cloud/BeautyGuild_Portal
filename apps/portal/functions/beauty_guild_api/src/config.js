@@ -62,6 +62,8 @@ function loadConfig(env = process.env) {
     // Associate to Full upgrade with the unused Associate fee credited (docs/delivery/cancellations-refunds-spec.md, section 3.6). Off unless 'true';
     // off, an upgrade is priced exactly as before (the full Full price, no credit).
     membershipUpgradeEnabled: env.PORTAL_MEMBERSHIP_UPGRADE_ENABLED === 'true',
+    // The combined membership and insurance flow: the level is decided from the customer's answers, not chosen (docs/delivery/combined-membership-flow-spec.md).
+    combinedFlowEnabled: env.PORTAL_COMBINED_FLOW_ENABLED === 'true',
     // Staff cancellation CONFIRM: ends the Stripe subscription and creates refunds (spec section 6.1). Needs PORTAL_CANCELLATIONS_ENABLED too, a test key,
     // and the CRM cancellation module. Off unless 'true'.
     cancellationWritesEnabled: env.PORTAL_CANCELLATION_WRITES_ENABLED === 'true',
