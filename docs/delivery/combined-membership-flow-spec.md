@@ -24,7 +24,11 @@ Scope: Beauty Guild Portal V2 (customer app and `beauty_guild_api`), the CRM sta
 | 2 | Do you require insurance? | Country is in the UK group | On the About You page. |
 | 3 | How do you work? | Insurance required | Now a single choice (2.3). |
 
-The UK group is the United Kingdom, the Channel Islands and the Isle of Man. This is the same rule as the existing insurance declaration ("domiciled in the United Kingdom of Great Britain and Northern Ireland, the Channel Islands or Isle of Man"). Country decides the branch of the flow. The declaration itself (domiciled and over 18) stays where it is, on the insurance step, so age is not mixed into routing.
+The country list is the same list the accreditation journey uses (`COUNTRY_OPTIONS`, decided 30 October). The membership and insurance forms already read it, so no second list is created.
+
+The UK group is the United Kingdom, the Channel Islands and the Isle of Man, the same rule as the existing insurance declaration ("domiciled in the United Kingdom of Great Britain and Northern Ireland, the Channel Islands or Isle of Man"). In the list that means United Kingdom, England, Scotland, Wales and Northern Ireland. Jersey, Guernsey and the Isle of Man are in the rule (the function's `territory()` already recognises them) but are not entries in `COUNTRY_OPTIONS`, so today those customers can only pick Other and would be routed as International. Ireland is outside the UK group, and so is Other. Decision needed: add Jersey, Guernsey and Isle of Man to the shared list (accreditation would see them too).
+
+Country decides the branch of the flow. The declaration itself (domiciled and over 18) stays where it is, on the insurance step, so age is not mixed into routing.
 
 ### 2.2 Decision matrix
 
@@ -43,14 +47,14 @@ Today the question is "Select every way that you work" and allows several answer
 
 - The portal asks one question with radio choices: work from home, mobile basis, sole occupier and self-employed, or own/operate a salon.
 - The server rejects a request with more than one answer, or with a salon answer together with any other (`INVALID_WORKING`).
-- Saved drafts and records that hold several answers are asked this question again on resume. The first answer is not guessed.
+- Saved drafts and records that hold several answers are asked this question again on resume. The first answer is not guessed. The Guild confirmed on 30 October that existing data is fine, so there is no data clean-up before release.
 - The CRM field that holds the answers (`insWorking`) keeps its array shape, with one entry, so nothing in the CRM or Creator changes shape.
 
 ### 2.4 International membership
 
 - A catalogue item `membership_international_annual` is added: lookup key and code `MEM-INTL-Y`, yearly, £55.00. The Stripe price already exists in the test account (`price_1UTnTG10QCT3po6rpgmWqWXk`, product "International Member - Annual Membership", metadata `code` `MEM-INTL-Y`).
 - VAT is the same split as the other levels: £38.00 of the £55.00 is zero-rated and the rest standard-rated (`zeroRatedPence: 3800`). The Books item description says this, and that the VAT option and rate stay on the item in case VAT rules change.
-- Yearly only, because no monthly price exists. International members are not offered monthly billing. If the customer wants monthly, a monthly price is needed in Stripe first.
+- Yearly only, because no monthly price exists. International members are not offered monthly billing (confirmed 30 October). If monthly is wanted later, a monthly price is needed in Stripe first.
 - The server stops refusing `international` as a level, but only when the decision function returns it. A client can no longer choose it.
 - Metadata `membership_level` gains the value `international` (section 8).
 - International members cannot buy insurance and cannot upgrade to Full with insurance (section 6.3).
@@ -108,7 +112,7 @@ Both paths keep the CRM record. Required: confirm the portal's CRM write permiss
 | `/insurance/buy`, `/insurance/new` | Redirect to the combined flow (the form is disabled) |
 | `/insurance` service page | Redirects to the Membership and Insurance page |
 | Associate "Get an insurance quote" link | The upgrade flow, as now (section 6) |
-| "Buy another policy" (Full members) | Open decision, section 11 |
+| "Buy another policy" (Full members) | Moves to manage membership, "Add another policy" (decided 30 October, section 9.2) |
 
 A client flag `VITE_PORTAL_COMBINED_FLOW` and a function switch `PORTAL_COMBINED_FLOW_ENABLED` switch the new flow on, so it can be turned off while the old routes remain. The old standalone code is removed only after UAT passes.
 
@@ -137,7 +141,7 @@ Little changes in shape. The metadata contract stays the same apart from one new
 2. Books items for International are `MEM-INTL-Y-ZERO` (£38.00 zero-rated) and `MEM-INTL-Y-STD`, as for the other levels. `MEM-INTL-Y` is already in the handover list of catalogue prices. Confirm both Books SKUs exist and that the "Stripe to Books" mapping covers them.
 3. An International purchase has `insurance_requested=false`, no insurance keys and no Policy. Check the handler does not assume a Policy for every membership.
 4. On a monthly plan the membership line code is the level. International is yearly only, so this does not arise, but the handler must not fail on the code `MEM-INTL-Y`.
-5. Upgrades: still end the old Associate subscription at `membership_start` using `previous_subscription_id` (decision D11, still open). International never upgrades.
+5. Upgrades: Creator ends the old Associate subscription at `membership_start` using `previous_subscription_id` (decision D11, agreed 30 October). International never upgrades.
 6. Cancellations (Creator side, when built): treat International like Associate.
 7. No change to Creator is needed for the decision itself, the extras step, or the layout. The status `Customer joined as Associate` is written by the portal, not Creator.
 
@@ -154,7 +158,7 @@ Use the same shell as school management (`school-layout`, `school-nav`, `surface
 - **Header:** eyebrow `MEMBERSHIP`, the membership title, and a line of level, status and expiry (for example "Full Member (Non-Salon) · Active · to 30 Nov 2026").
 - **Left navigation, grouped:**
   - Membership: Overview, Branches and extras
-  - Insurance (only when there is a policy): Your cover, Changes and history
+  - Insurance (only when there is a policy): Your cover, Changes and history, and Add another policy
   - Records: Documents, Invoices
   - Actions: Renew, Upgrade (Associate, UK only), Cancel (when cancellations are on)
 - **Overview** replaces the raw Details dump with labelled fields: level, status, start and end dates, billing (annual or monthly), primary branch, referral and reference. Raw CRM keys are never shown. It also shows what needs attention: renewal due, payment failed, change awaiting payment.
@@ -162,6 +166,7 @@ Use the same shell as school management (`school-layout`, `school-nav`, `surface
 - **Your cover and Changes and history** are the existing cover and change history panels, unchanged in content.
 - **Documents** adds the membership documents, now reachable from the manage page, as school management does for accreditation.
 - **Invoices** is the existing table.
+- **Add another policy** (decided 30 October) quotes and buys a further policy from here, for an active Full member in the UK group. It uses the existing insurance steps and the existing `insurance` service with the membership as context, with no membership fee and no joining fee. The standalone insurance form for non-members stays removed. The policy asks "How you work" again, as a new premises may differ, and follows its own answer. The membership level does not change until renewal, and the member is told so. The server refuses it for Associate, International, non-UK or inactive memberships.
 - **Actions** show only what the member can do. Renew shows from 60 days before expiry or after it. Upgrade shows for an active UK Associate. Cancel shows only with the cancellation switches on, and opens the cancellation quote.
 - On a phone the left navigation becomes a horizontal scrolling tab bar, as school management does.
 - Routes become `/membership/manage/:id/:section`, with the old `?tab=` links redirecting to the matching section so saved links and emails keep working.
@@ -175,24 +180,30 @@ The school profile (PR 113) set the visual pattern: identity hero, tabbed conten
 The staff widget "follows the portal" (customer decision, 30 October). The decision function is shared, so the widget cannot hold its own rules.
 
 1. **Quote and payment link routes.** `/staff/quote`, `/staff/payment-link`, `/staff/membership-options`, the draft routes and `/staff/cover` take `answers` for a membership. `level` is no longer sent by the widget. The responses carry `decision` so the widget can show "Full Member (Non-Salon), with insurance" without logic of its own.
-2. **Assisted creation (widget spec section 6).** The membership and standalone insurance forms merge into one staff form with the same questions in the same order: country, insurance required, how you work. The staff declarations step stays. The separate "insurance" service for new purchases is removed with the portal's standalone form.
+2. **Assisted creation (widget spec section 6).** The membership and standalone insurance forms merge into one staff form with the same questions in the same order: country, insurance required, how you work. The staff declarations step stays. The separate "insurance" service for new customers is removed with the portal's standalone form. The `insurance` service stays only for "Add another policy" on an existing Full member's record.
 3. **Staff API doc and the widget spec** are updated (staff-api.md, SPECIFICATION.md sections 6.1 and 6.4, and the build brief). The cross-system cancellation spec and the widget cancellations note refer to levels, so they follow.
 4. **The CRM function (Deluge).** The named actions that send `level` change to send the answers. The action names and signing stay the same. The widget needs the updated function body, as for the previous staff API changes.
 5. **Existing drafts.** Staff drafts with a mix of working answers get the same re-ask as customers (2.3).
-6. **Insurance only for existing members.** If a Full member needs a second policy (section 11), the staff route has to offer the same thing, so the decision there is shared.
+6. **Another policy for an existing member.** The staff quote and payment-link routes accept `service=insurance` only with the membership as context, under the same eligibility rules as the portal (9.2).
 7. **UAT.** The widget scenarios for assisted membership and insurance, the staff quote tests (`staff-routes.test.js`) and the widget mock tests are rewritten for the answers input.
 
-## 11. Open decisions
+## 11. Decisions
 
-1. **A second policy for a Full member.** With no standalone insurance form, where does a Full member buy another policy (for example for a new premises)? Suggested: from manage membership, in the Insurance group. The customer must confirm they want this at all.
-2. **Monthly billing for International.** Not available until a monthly Stripe price exists. Confirm yearly only is acceptable.
-3. **Cancellation fee for International** (6.4).
-4. **Wording:** the "no insurance abroad" message, and the corrected Associate wording, from the customer.
-5. **Country mapping:** the Channel Islands and Isle of Man entries in the country list must map to the UK group. Confirm the list entries.
-6. **CRM:** picklist value `Customer joined as Associate` present and writable by the portal (section 4).
-7. **International member moving to the UK**, and a UK Associate moving abroad: renew by the matrix, no mid-term change. Confirm.
-8. **Salon plus other premises answers** are now not allowed. Confirm no existing customer data has a mix that would block renewal.
-9. **Creator** decision D11 (who ends the old Associate subscription on upgrade) still needs an owner and date.
+Decided on 30 October 2026:
+- A second policy is quoted and bought from manage membership (9.2).
+- International is yearly only.
+- The "no insurance abroad" message is a placeholder constant until the customer sends wording.
+- `Customer joined as Associate` is the Application Status value. Still to confirm in Development: the portal can write it.
+- Existing data is fine, so there is no clean-up of mixed working answers.
+- Creator ends the old Associate subscription on upgrade (D11).
+- The country list is the accreditation list.
+
+Still open:
+1. **Cancellation fee for International** (6.4). Assumed none, as for Associate. Until it is confirmed the cancellation engine refuses an International membership rather than guess.
+2. **Jersey, Guernsey and Isle of Man** are not in `COUNTRY_OPTIONS` (2.1). Add them to the shared list, or accept that those customers pick Other.
+3. **Level on a second policy.** If a Non-Salon member answers salon on a second policy, the policy follows the answer and the membership level stays until renewal (9.2). Needs the Guild to confirm.
+4. **Moving between the UK and abroad:** renew by the matrix, with no mid-term change. Confirm.
+5. **Wording** from the customer: the corrected Associate text and the final "no insurance abroad" message.
 
 ## 12. Delivery plan
 
