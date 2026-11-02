@@ -27,6 +27,7 @@ const { branchCouponPlan, createBranchCoupon } = require('./branchCoupon');
 const { fitToStripeLimit, filledCount, MAX_FILLED_KEYS } = require('./metadataContract');
 
 const STRIPE = 'https://api.stripe.com/v1';
+const JOINED_AS_ASSOCIATE = 'Customer joined as Associate';
 const ID = /^\d{10,25}$/;
 // Stripe will not take a charge under 30p; below 50p a pro-rated line is not worth taking online.
 const MIN_PRORATA_PENCE = 50;
@@ -910,6 +911,30 @@ function registerCheckoutRoutes(
         return res.json({ checkoutUrl: session.url, reused: true });
       await crmUpdate(req, 'Insurance_Policy', id, { Application_Status: 'Expired' });
       throw new HttpError(409, 'QUOTE_EXPIRED', EXPIRED);
+    }),
+  );
+  // A customer whose insurance was referred or stopped chooses to join as an Associate instead (docs/delivery/combined-membership-flow-spec.md,
+  // section 4). The referred insurance record stays, with its Application Status set to say so, so the Insurance team stops chasing. Only the
+  // customer's own Referred record, and only with the combined flow on. Asking twice is harmless.
+  router.post(
+    '/join-as-associate',
+    send(async (req, res) => {
+      if (!combinedFlowEnabled) throw new HttpError(503, 'NOT_AVAILABLE', 'This is not available online yet.');
+      if (!limiter(req.portalUser.id))
+        throw new HttpError(429, 'RATE_LIMIT', 'Too many requests. Please wait a moment and try again.');
+      const id = String(req.body?.policyId || '');
+      if (!ID.test(id)) throw new HttpError(404, 'NOT_FOUND', 'Application not found.');
+      const contact = await resolveContact(req, crm, req.portalUser);
+      const policy = (
+        await crm(req, 'Insurance_Policy/' + id + '?fields=' + encodeURIComponent('Contact,Application_Status'))
+      )[0];
+      if (!policy || String(policy.Contact?.id) !== String(contact.id))
+        throw new HttpError(404, 'NOT_FOUND', 'Application not found.');
+      if (policy.Application_Status === JOINED_AS_ASSOCIATE) return res.json({ joined: true });
+      if (policy.Application_Status !== 'Referred')
+        throw new HttpError(409, 'NOT_REFERRED', 'This application is not waiting for the Insurance team.');
+      await crmUpdateStrict(req, 'Insurance_Policy', id, { Application_Status: JOINED_AS_ASSOCIATE });
+      res.json({ joined: true });
     }),
   );
   // Pays for what the request describes: creates the Stripe Checkout Session and returns its URL. `staff` is set only by the staff payment link

@@ -177,6 +177,9 @@ export const portalApi = Object.freeze({
   publicQuote: async body =>
     publicHttp ? (await publicHttp('/public/quote', { method: 'POST', body })).quote : unavailable('Pricing'),
   submit: async () => unavailable('CRM submission'),
+  // After insurance is referred or stopped: join as an Associate instead. Writes the status on the referred record (needs the combined flow switch on the server).
+  joinAsAssociate: async policyId =>
+    (await billingReq('/join-as-associate', { method: 'POST', body: { policyId } })).joined === true,
   startCheckout: async body => billingReq('/', { method: 'POST', body }),
   // Saves a change as a request for the office (a referral) or as a quoted revision, without paying.
   saveInsuranceChange: async body => billingReq('/insurance-change/revision', { method: 'POST', body }),

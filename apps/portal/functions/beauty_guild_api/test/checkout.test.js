@@ -1738,11 +1738,11 @@ test('a payable insurance quote stores the session id, quoted amount and expiry 
     assert.ok(expires > 23 * 3600 && expires < 24 * 3600, 'Stripe sessions last under 24 hours');
   });
 });
-async function resumeCase(w, policy, body = { policyId: POLICY }) {
+async function resumeCase(w, policy, body = { policyId: POLICY }, path = '/resume', env = {}) {
   w.policy = policy;
   let out;
   const app = createApp({
-    config: loadConfig({ ...ENV }),
+    config: loadConfig({ ...ENV, ...env }),
     getCurrentUser: async () => ({ id: 'user-1', email: 'alice@example.test' }),
     getCrmHeaders: async () => ({ Authorization: 'Bearer t' }),
     fetchImpl: w.fetchImpl,
@@ -1751,7 +1751,7 @@ async function resumeCase(w, policy, body = { policyId: POLICY }) {
     const s = app.listen(0, '127.0.0.1', () => resolve(s));
   });
   try {
-    const r = await fetch('http://127.0.0.1:' + server.address().port + '/portal/checkout/resume', {
+    const r = await fetch('http://127.0.0.1:' + server.address().port + '/portal/checkout' + path, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -2172,4 +2172,47 @@ test('a member who pays monthly has Payment_Frequency Monthly on the policy, a y
       MEM_ENV,
     );
   }
+});
+
+// ---- Joining as an Associate after insurance is referred or stopped (combined flow, spec section 4) ----
+const JOIN = ['/join-as-associate', { PORTAL_COMBINED_FLOW_ENABLED: 'true' }];
+const joinCase = (w, policy, body) => resumeCase(w, policy, body, JOIN[0], JOIN[1]);
+const joinedWrites = w => w.crmPuts.filter(c => c.body.data[0].Application_Status === 'Customer joined as Associate');
+test('join as Associate sets the Application Status on your own referred record', async () => {
+  const w = world();
+  const r = await joinCase(w, { Contact: { id: ME }, Application_Status: 'Referred' });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.deepEqual(r.body, { joined: true });
+  assert.equal(joinedWrites(w).length, 1);
+  assert.ok(joinedWrites(w)[0].url.includes('Insurance_Policy/' + POLICY));
+});
+test('join as Associate is harmless a second time and writes nothing more', async () => {
+  const w = world();
+  const r = await joinCase(w, { Contact: { id: ME }, Application_Status: 'Customer joined as Associate' });
+  assert.equal(r.status, 200);
+  assert.equal(joinedWrites(w).length, 0);
+});
+test("join as Associate refuses someone else's record, a record that is not referred, and a bad id", async () => {
+  for (const [policy, body, status, code] of [
+    [{ Contact: { id: 'someone-else' }, Application_Status: 'Referred' }, undefined, 404, 'NOT_FOUND'],
+    [{ Contact: { id: ME }, Application_Status: 'Ready for Payment' }, undefined, 409, 'NOT_REFERRED'],
+    [{ Contact: { id: ME }, Application_Status: 'Referred' }, { policyId: 'abc' }, 404, 'NOT_FOUND'],
+  ]) {
+    const w = world();
+    const r = await joinCase(w, policy, body);
+    assert.equal(r.status, status, JSON.stringify(r.body));
+    assert.equal(r.body.code || r.body.error?.code, code);
+    assert.equal(joinedWrites(w).length, 0);
+  }
+});
+test('join as Associate is off unless the combined flow switch is on', async () => {
+  const w = world();
+  const r = await resumeCase(
+    w,
+    { Contact: { id: ME }, Application_Status: 'Referred' },
+    undefined,
+    '/join-as-associate',
+  );
+  assert.equal(r.status, 503);
+  assert.equal(joinedWrites(w).length, 0);
 });
