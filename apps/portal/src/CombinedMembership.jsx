@@ -8,6 +8,8 @@ import { INTEGRATIONS, portalApi } from './services/api.js';
 import PricePanel from './PricePanel.jsx';
 import { useStoredState } from './storedState.js';
 import { referralFrom, sameAnswers } from './referral.js';
+import SaveApplication, { useSaveApplication } from './SaveApplication.jsx';
+import { combinedDraft } from './savedDraft.js';
 import { dueToday, offersCode } from './priceSummary.js';
 import { COUNTRY_OPTIONS } from './JourneyConfig.js';
 import { countryFor } from './prefill.js';
@@ -186,6 +188,19 @@ export default function CombinedMembership() {
   const referral = plan.insurance && sameAnswers(sent.outcome, answersKey) ? sent.outcome : null;
   const showCode = !previousId && (offersCode(priced) || Boolean(f.code));
 
+  const saver = useSaveApplication({
+    signedIn: who.state === 'in',
+    route: '/membership/buy',
+    canSave: Boolean(f.country),
+    hint: 'Choose where you are based before saving.',
+    build: () => ({
+      ...combinedDraft({ f, d, iv }),
+      names: {
+        firstName: (d.firstName || who.firstName || '').trim(),
+        lastName: (d.lastName || who.lastName || '').trim(),
+      },
+    }),
+  });
   const go = target => {
     set({ step: target });
     window.scrollTo?.({ top: 0, behavior: 'smooth' });
@@ -795,8 +810,10 @@ export default function CombinedMembership() {
                 </section>
               )}
               {nav}
+              {!previousId && <SaveApplication saver={saver} className="save-main" />}
             </div>
             <div className="buy-side">
+              {!previousId && <SaveApplication saver={saver} className="save-side" />}
               <PricePanel
                 quote={priced}
                 loading={iq.loading}

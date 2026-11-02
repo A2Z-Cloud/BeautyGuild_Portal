@@ -28,7 +28,10 @@ export default function SavedDrafts() {
     try {
       const full = await portalApi.getDraft(d.service, d.id);
       // Join and Buy insurance drafts reopen their page with the answers restored; older step-by-step drafts and accreditation keep their form.
-      const page = d.service !== 'accreditation' && INTEGRATIONS.stripeCheckout ? restoreDraftToTab(full) : null;
+      const page =
+        d.service !== 'accreditation' && INTEGRATIONS.stripeCheckout
+          ? restoreDraftToTab(full, undefined, { combined: INTEGRATIONS.combinedFlow })
+          : null;
       if (page) return navigate(page);
       restoreDraft(full);
       navigate('/' + (d.service === 'combined' ? 'membership' : d.service) + '/new');
