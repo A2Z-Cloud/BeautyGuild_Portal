@@ -17,6 +17,7 @@ A compact, portal-aligned workspace **inside Zoho CRM** for finding, understandi
 | Vouchers, referral codes, waivers | Pricing engine is built in the portal (off by default). Staff waivers work on the quote; vouchers need a Creator reader. Widget panel **not built** |
 | Payment link | **Not built, and not in V1.2.** Waits for Creator V2 |
 | Staff-assisted mid-term adjustments | Future ([STAFF-ASSISTED-MTA.md](STAFF-ASSISTED-MTA.md)) |
+| Cancellations, downgrades, upgrades and refunds | **Not built; specified.** Widget scope in [CANCELLATIONS-AND-UPGRADES.md](CANCELLATIONS-AND-UPGRADES.md); the cross-system spec (Stripe, Creator, CRM, Books) is `docs/delivery/cancellations-refunds-spec.md` on `main` |
 | UAT and sign-off | None |
 
 **Warnings.** *Create CRM Contact* writes a real CRM Contact. The workflow-field editor writes with workflows triggered. Test in a CRM sandbox or Development only.
@@ -32,9 +33,10 @@ A compact, portal-aligned workspace **inside Zoho CRM** for finding, understandi
 | [WORKFLOW-FIELD-EDITING.md](WORKFLOW-FIELD-EDITING.md) | Governance of the inline workflow-field editor and Creator status ownership |
 | [PORTAL-DEFS-SYNC.md](PORTAL-DEFS-SYNC.md) | Keeping the widget's copy of Portal V2 journey logic in step |
 | [STAFF-ASSISTED-MTA.md](STAFF-ASSISTED-MTA.md) | Future staff-assisted mid-term adjustments |
+| [CANCELLATIONS-AND-UPGRADES.md](CANCELLATIONS-AND-UPGRADES.md) | What the widget must do for cancel, downgrade, upgrade and refunds (not built) |
 | [SLATE-DEPLOYMENT.md](SLATE-DEPLOYMENT.md), [INSTALLATION.md](INSTALLATION.md) | Hosting, installation and the test plan |
 
-On `main` (not on this branch): `docs/api-contracts/staff-api.md` (the wire contract and test vectors) and `docs/delivery/staff-api-handoff.md` (what to build and how to test), `docs/delivery/vouchers-staff-route-spec.md`, `docs/delivery/vouchers-creator-spec.md`, `docs/delivery/mta-r3-plan.md`, `docs/delivery/creator-payments-app.md`, `docs/api-contracts/stripe-metadata.md`.
+On `main` (not on this branch): `docs/delivery/cancellations-refunds-spec.md` (cancellations and refunds), `docs/api-contracts/staff-api.md` (the wire contract and test vectors) and `docs/delivery/staff-api-handoff.md` (what to build and how to test), `docs/delivery/vouchers-staff-route-spec.md`, `docs/delivery/vouchers-creator-spec.md`, `docs/delivery/mta-r3-plan.md`, `docs/delivery/creator-payments-app.md`, `docs/api-contracts/stripe-metadata.md`.
 
 ## Rules
 
