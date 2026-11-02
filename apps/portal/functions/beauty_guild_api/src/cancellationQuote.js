@@ -19,8 +19,15 @@ const uri = encodeURIComponent;
 const text = v => (v == null ? '' : String(v).trim());
 const sum = rows => rows.reduce((t, n) => t + n, 0);
 
-// A membership type is Associate or Full ("Associate Member", "Full Member (Non-Salon)").
-const levelOf = type => (/associate/i.test(text(type)) ? 'associate' : /full/i.test(text(type)) ? 'full' : null);
+// A membership type is Associate, International or Full ("Associate Member", "International Member", "Full Member (Non-Salon)").
+const levelOf = type =>
+  /associate/i.test(text(type))
+    ? 'associate'
+    : /international/i.test(text(type))
+      ? 'international'
+      : /full/i.test(text(type))
+        ? 'full'
+        : null;
 // What a price list code is, from its prefix. The accreditation family must never be cancelled by a membership cancellation.
 const skuFamily = sku =>
   /^ACC-/.test(sku) ? 'accreditation' : /^MEM-|^INS-|^CALC-|^FEE-/.test(sku) ? 'membership_or_insurance' : 'other';
@@ -77,6 +84,9 @@ function createCancellationQuotes({ enabled, call, stripeGet, staffContact, now 
       throw new HttpError(422, 'SCENARIO_MISMATCH', 'This is an Associate membership: use cancel as an Associate.');
     if (level === 'full' && scenario === 'cancel_associate')
       throw new HttpError(422, 'SCENARIO_MISMATCH', 'This is a Full membership: use cancel or downgrade.');
+    // International follows the Full rules (spec 6.4), but it has no Associate level to downgrade to.
+    if (level === 'international' && scenario !== 'cancel_full')
+      throw new HttpError(422, 'SCENARIO_MISMATCH', 'This is an International membership: use cancel.');
     if (!/^active$/i.test(text(m.status)))
       blockedBy(blocking, 'NOT_ACTIVE', 'This membership is not active, so it cannot be cancelled here.');
     if (!DATE.test(text(m.startDate)) || !DATE.test(text(m.endDate)))
@@ -111,6 +121,12 @@ function createCancellationQuotes({ enabled, call, stripeGet, staffContact, now 
           blocking,
           'SCENARIO_MISMATCH',
           'An Associate membership has no insurance, but this one has a policy.',
+        );
+      if (level === 'international')
+        blockedBy(
+          blocking,
+          'SCENARIO_MISMATCH',
+          'An International membership has no insurance, but this one has a policy.',
         );
       if (ins.renewal)
         blockedBy(
@@ -295,7 +311,12 @@ function createCancellationQuotes({ enabled, call, stripeGet, staffContact, now 
       quote = engine.cancellationQuote({
         scenario,
         effectiveDate,
-        membership: { paidPence: membershipPaidPence, overridePence },
+        // With no policy, the 14 day cooling off counts from the membership start (International, spec 6.4).
+        membership: {
+          paidPence: membershipPaidPence,
+          overridePence,
+          ...(level === 'international' ? { coolingOffStart: text(m.startDate) } : {}),
+        },
         insurance: policyFacts
           ? {
               billing: policyFacts.billing,

@@ -294,3 +294,35 @@ test('the same input always gives the same answer and the input is not changed',
   });
   assert.deepEqual(cancellationQuote(input), cancellationQuote(input));
 });
+
+test('Cancel International (no policy): the fee comes off a pro-rata membership refund, and there is no fee inside 14 days of the membership start', () => {
+  const base = { scenario: 'cancel_full', effectiveDate: '2026-07-18' };
+  // Past cooling off, an override of the membership fee is refunded less the £10 fee, as for Full.
+  const late = cancellationQuote({
+    ...base,
+    membership: { paidPence: 5500, overridePence: 3000, coolingOffStart: '2026-05-18' },
+  });
+  assert.equal(late.coolingOff, false);
+  assert.deepEqual(
+    [late.insurance, late.grossRefundPence, late.feeAppliedPence, late.netRefundPence],
+    [null, 3000, 1000, 2000],
+  );
+  // Inside cooling off (counted from the membership start) the whole fee comes back with no fee.
+  const early = cancellationQuote({
+    ...base,
+    effectiveDate: '2026-06-01',
+    membership: { paidPence: 5500, coolingOffStart: '2026-05-18' },
+  });
+  assert.equal(early.coolingOff, true);
+  assert.deepEqual([early.grossRefundPence, early.feeAppliedPence, early.netRefundPence], [5500, 0, 5500]);
+  assert.equal(
+    cancellationQuote({
+      ...base,
+      effectiveDate: '2026-06-02',
+      membership: { paidPence: 5500, coolingOffStart: '2026-05-18' },
+    }).coolingOff,
+    false,
+  );
+  // Without a start date given, a membership with no policy behaves as before.
+  assert.equal(cancellationQuote({ ...base, membership: { paidPence: 5500 } }).coolingOff, false);
+});
