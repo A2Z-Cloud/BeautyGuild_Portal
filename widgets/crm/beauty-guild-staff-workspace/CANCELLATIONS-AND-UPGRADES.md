@@ -14,6 +14,12 @@ Three of the four scenarios exist **only in the CRM**, so they are widget work. 
 | **S3 Cancel Full** | The cancel panel with the server's refund breakdown, the date, confirm, and the documents and email status |
 | **S4 Downgrade Full to Associate** | The same panel as S3, with the new Associate term shown |
 
+### Levels after the combined membership flow
+The combined membership flow (`docs/delivery/combined-membership-flow-spec.md`, decided 30 October 2026) adds a fourth level, **International** (yearly only, no insurance), and removes any level input from the widget. For this note:
+- **International follows the same rules as Full** (decided 30 October): the cancellation panel treats it as S3 with the £10 fee. There is no downgrade from International (it is not insured), so S4 is not offered. The server's refusal of International in the cancellation engine is a gap to close with the Creator and cancellation work (combined spec step 7) before the panel can offer it.
+- **No level is chosen or sent.** Anywhere this note says Associate or Full it is the server's decided or stored level, shown as returned. The upgrade (S2) sends answers (section 3).
+- A member moving between the UK and abroad renews by the matrix; it is not a mid-term change and not a cancellation scenario.
+
 ### The rule that does not change
 **The widget never calculates a refund, a credit, a fee or a date.** It sends the staff member's inputs to the server and shows exactly what comes back. No figure shown on screen is computed in the browser.
 
@@ -46,7 +52,7 @@ After a cancellation the panel shows the cancellation record: status, the refund
 
 The same journey the member gets online, started by staff for a chosen Contact who holds an active Associate membership:
 1. Choose the Contact and their Associate membership, then **Upgrade to Membership with Insurance**.
-2. The insurance questions and start date (up to 30 days ahead; the Associate continues until that date), as in the existing assisted creation.
+2. The insurance questions and start date (up to 30 days ahead; the Associate continues until that date), as in the combined assisted form (spec section 6.1). The country is already known to be in the UK group and insurance is required, so the form asks only how the member works. The widget sends `answers: { country, insuranceRequired: "yes", working }` and **no level**; the server decides Full Non-Salon or Full Salon, and an answer that would not give a Full membership is refused as an upgrade (`UPGRADE_NOT_AVAILABLE`).
 3. A **quote summary**: the insurance quote, the Full membership, **less the refund due on the Associate membership**, and the **total to pay today**, all from the server.
 4. A **payment link** for the net (the existing `payment_link` action, which needs the customer's acceptance of the Code of Ethics and terms, captured from the customer). Vouchers and waivers are not allowed on a link yet.
 5. No cancellation email and no documents for the Associate. The member receives the normal full membership acceptance email once they pay.
@@ -63,7 +69,7 @@ The CRM function maps an action name to one fixed route (STAFF-API-AND-IDENTITY.
 | `cancellation_confirm` | `POST /staff/cancellation` | Same body plus `confirmNetRefundPence` and `inputsHash` from the quote. Safe to repeat |
 | `cancellations_list` | `GET /staff/cancellations?contactId=...` | A Contact's cancellation records |
 | `cancellation_retry` | `POST /staff/cancellation/retry` | Body `cancellationId`. Resumes a failed refund |
-| `quote`, `payment_link` | existing | The upgrade, with service `membership_upgrade` and `previousId` (the Associate membership) |
+| `quote`, `payment_link` | existing | The upgrade: service `membership` (there is no separate upgrade service in the built code), `previousId` (the Associate membership) and `answers`, never `level` |
 
 Nothing is called until the switch is on (`PORTAL_CANCELLATIONS_ENABLED`, off by default); the widget must show a clear "not available yet" state for a `503 NOT_AVAILABLE`.
 
