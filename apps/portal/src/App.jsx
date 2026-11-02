@@ -131,7 +131,7 @@ export default function App() {
           <Route path="/schools/:id/:section" element={<SchoolWorkspace />} />
           <Route path="/invoices" element={<AccountInvoices />} />
           <Route path="/documents" element={<AccountDocuments />} />
-          <Route path="/membership/manage/:id" element={<MembershipManagement />} />
+          <Route path="/membership/manage/:id/:section?" element={<MembershipManagement />} />
           <Route path="/membership/manage/:id/changes/new" element={<InsuranceChange />} />
           <Route path="/records/:kind/:id" element={<RecordDetail />} />
           <Route path="/membership/:id" element={<RecordDetail kindOverride="membership" />} />

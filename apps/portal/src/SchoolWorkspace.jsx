@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, useParams, useSearchParams } from 'react-router-dom';
 import {
-  ArrowLeft,
   ArrowRight,
+  ArrowUpRight,
   Building2,
   BookOpen,
   CalendarDays,
@@ -12,13 +12,28 @@ import {
   Receipt,
   MapPin,
   ShieldCheck,
+  ClipboardList,
+  History,
+  LockKeyhole,
+  RefreshCw,
 } from 'lucide-react';
 import { PageHeading, Notice, Status } from './UiParts.jsx';
 import { formatDate } from './format.js';
 import { INTEGRATIONS, portalApi } from './services/api.js';
 import { DocumentsPanel } from './DocumentsPanel.jsx';
-import { MembershipCoverPanel } from './MembershipCover.jsx';
+import { ChangeHistory, CoverSummary } from './MembershipCover.jsx';
+import { GUILD_PHONE } from './insuranceInputs.js';
+import { upgradeLink } from './membershipUpgrade.js';
+import {
+  attentionItems,
+  headerLine,
+  manageActions,
+  overviewFields,
+  resolveSection,
+  sectionFromTab,
+} from './membershipManage.js';
 import { QualificationForm, SessionForm, TutorForm, BookingForm } from './SchoolActionForms.jsx';
+import ManagementLayout from './ManagementLayout.jsx';
 import SchoolProfilePanel from './SchoolProfilePanel.jsx';
 import SchoolVerification from './SchoolVerification.jsx';
 import CourseGroups from './components/CourseGroups.jsx';
@@ -50,6 +65,10 @@ const GROUPS = [
   },
 ];
 const sections = GROUPS.flatMap(g => g.items);
+const SCHOOL_GROUPS = GROUPS.map(g => ({
+  label: g.label,
+  items: g.items.map(([key, label, icon]) => ({ key, label, icon })),
+}));
 function useLoad(load, keys) {
   const [data, setData] = useState({ loading: true, error: '', value: null });
   useEffect(() => {
@@ -453,56 +472,33 @@ export function SchoolWorkspace() {
   const section = sections.some(s => s[0] === requested) ? requested : 'profile';
   const current = useLoad(() => portalApi.listSchools(), [id]);
   const school = current.value?.find(s => s.id === id);
+  const notice = !INTEGRATIONS.schoolServices ? (
+    <Notice title="Coming soon">Managing your school online is coming soon.</Notice>
+  ) : current.loading ? (
+    <p>Loading school…</p>
+  ) : current.error ? (
+    <Notice title="Unable to load school">{current.error}</Notice>
+  ) : !school ? (
+    <Notice title="School unavailable">No school linked to your account matches this reference.</Notice>
+  ) : null;
   return (
-    <div className="page">
-      <Link to="/schools" className="back-link">
-        <ArrowLeft size={16} /> Back to schools
-      </Link>
-      <PageHeading
-        eyebrow="SCHOOL MANAGEMENT"
-        title={school?.name || 'Training centre'}
-        description={school ? school.level + ' · ' + school.status : 'Manage your school'}
-      />
-      {!INTEGRATIONS.schoolServices ? (
-        <Notice title="Coming soon">Managing your school online is coming soon.</Notice>
-      ) : current.loading ? (
-        <p>Loading school…</p>
-      ) : current.error ? (
-        <Notice title="Unable to load school">{current.error}</Notice>
-      ) : !school ? (
-        <Notice title="School unavailable">No school linked to your account matches this reference.</Notice>
+    <ManagementLayout
+      back={{ to: '/schools', label: 'Back to schools' }}
+      eyebrow="SCHOOL MANAGEMENT"
+      title={school?.name || 'Training centre'}
+      description={school ? school.level + ' · ' + school.status : 'Manage your school'}
+      navLabel="School sections"
+      groups={SCHOOL_GROUPS}
+      active={section}
+      hrefFor={key => '/schools/' + id + '/' + key}
+      notice={notice}
+    >
+      {section === 'documents' ? (
+        <DocumentsPanel kind="accreditation" id={id} />
       ) : (
-        <div className="school-layout">
-          <nav aria-label="School sections" className="school-nav">
-            {GROUPS.map(g => (
-              <div className="school-nav-group" key={g.label}>
-                <span className="school-nav-label">{g.label}</span>
-                <div className="school-nav-links">
-                  {g.items.map(([key, label, Icon]) => (
-                    <Link
-                      key={key}
-                      className={key === section ? 'active' : ''}
-                      aria-current={key === section ? 'page' : undefined}
-                      to={'/schools/' + id + '/' + key}
-                    >
-                      <Icon size={16} aria-hidden="true" />
-                      {label}
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </nav>
-          <section className="surface padded school-workspace-panel">
-            {section === 'documents' ? (
-              <DocumentsPanel kind="accreditation" id={id} />
-            ) : (
-              <SchoolSection key={id + '/' + section} id={id} section={section} />
-            )}
-          </section>
-        </div>
+        <SchoolSection key={id + '/' + section} id={id} section={section} />
       )}
-    </div>
+    </ManagementLayout>
   );
 }
 export function AccountInvoices() {
@@ -528,114 +524,197 @@ export function AccountInvoices() {
     </div>
   );
 }
+// What the member sees first: what needs attention, then the labelled facts about the membership. Nothing here is editable, because membership
+// details change through renewals and changes, so it carries the same "managed by the Guild" note as the school profile.
+function MembershipOverview({ cover, record, today }) {
+  if (cover.loading && record.loading) return <p>Loading membership…</p>;
+  if (cover.error && record.error) return <Notice title="Unavailable">{record.error}</Notice>;
+  const membership = cover.value?.membership,
+    row = record.value;
+  const attention = attentionItems(
+    {
+      membership: { endDate: membership?.endDate || row?.endDate },
+      paymentStatus: row?.paymentStatus,
+      revisions: cover.value?.revisions?.items,
+    },
+    today,
+  );
+  return (
+    <>
+      <h2>Overview</h2>
+      {attention.length > 0 && (
+        <div className="manage-attention" role="status">
+          <strong>Needs your attention</strong>
+          <ul>
+            {attention.map(text => (
+              <li key={text}>{text}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <dl className="detail-list">
+        {overviewFields(membership, row).map(f => (
+          <div key={f.label}>
+            <dt>{f.label}</dt>
+            <dd>{f.value}</dd>
+          </div>
+        ))}
+      </dl>
+      <div className="manage-locked">
+        <LockKeyhole size={18} aria-hidden="true" /> These details change when you renew or make a change, so they
+        cannot be edited here. To correct something, call the Guild on {GUILD_PHONE}.
+      </div>
+    </>
+  );
+}
 export function MembershipManagement() {
-  const { id } = useParams(),
-    [query, setQuery] = useSearchParams(),
-    tab = query.get('tab') || 'details';
+  const { id, section: requested } = useParams(),
+    [query] = useSearchParams();
+  const cover = useLoad(() => portalApi.getMembershipCover(id), [id]);
   const extension = useLoad(() => portalApi.getMembershipExtensions(id), [id]);
   const invoices = useLoad(() => portalApi.getMembershipInvoices(id), [id]);
   const record = useLoad(() => portalApi.getRecord('membership', id), [id]);
+  // Links from before the redesign used ?tab=; they land on the matching section.
+  const legacy = !requested && sectionFromTab(query.get('tab'));
+  if (legacy) return <Navigate to={'/membership/manage/' + id + '/' + legacy} replace />;
+  const today = new Date().toISOString().slice(0, 10),
+    membership = cover.value?.membership,
+    row = record.value;
+  // The insurance sections stay until the cover has loaded and shows no policy (Associate and International hold none).
+  const hasPolicy = cover.loading || cover.error ? true : Boolean(cover.value?.includesInsurance);
+  const section = resolveSection(requested, hasPolicy);
+  const facts = {
+    type: membership?.type || row?.type,
+    status: membership?.status || row?.status,
+    endDate: membership?.endDate || row?.endDate,
+  };
+  const actions = manageActions(facts, {
+    today,
+    canBuy: INTEGRATIONS.stripeCheckout,
+    upgradeOn: INTEGRATIONS.membershipUpgrade,
+  });
+  const groups = [
+    {
+      label: 'Membership',
+      items: [
+        { key: 'overview', label: 'Overview', icon: ClipboardList },
+        { key: 'extras', label: 'Branches and extras', icon: MapPin },
+      ],
+    },
+    ...(hasPolicy
+      ? [
+          {
+            label: 'Insurance',
+            items: [
+              { key: 'cover', label: 'Your cover', icon: ShieldCheck },
+              { key: 'history', label: 'Changes and history', icon: History },
+            ],
+          },
+        ]
+      : []),
+    {
+      label: 'Records',
+      items: [
+        ...(INTEGRATIONS.workdrive && INTEGRATIONS.crmRecords
+          ? [{ key: 'documents', label: 'Documents', icon: FileText }]
+          : []),
+        { key: 'invoices', label: 'Invoices', icon: Receipt },
+      ],
+    },
+    ...(actions.length
+      ? [
+          {
+            label: 'Actions',
+            items: actions.map(a =>
+              a === 'renew'
+                ? { key: 'renew', label: 'Renew membership', icon: RefreshCw, to: '/membership/buy?renew=' + id }
+                : { key: 'upgrade', label: 'Upgrade to Full', icon: ArrowUpRight, to: upgradeLink(id) },
+            ),
+          },
+        ]
+      : []),
+  ];
   return (
-    <div className="page">
-      <Link to="/records" className="back-link">
-        <ArrowLeft size={16} /> Back to records
-      </Link>
-      <PageHeading
-        eyebrow="GUILD MEMBERSHIP"
-        title={record.value?.title || 'Membership details'}
-        description="Membership details, your cover, change history, purchased add-ons and invoices."
-      />
-      {!INTEGRATIONS.schoolServices ? (
-        <Notice title="Coming soon">Your membership services will appear here soon.</Notice>
+    <ManagementLayout
+      back={{ to: '/records', label: 'Back to records' }}
+      eyebrow="MEMBERSHIP"
+      title={membership?.title || row?.title || 'Membership details'}
+      description={headerLine(facts) || 'Manage your membership'}
+      navLabel="Membership sections"
+      groups={groups}
+      active={section}
+      hrefFor={key => '/membership/manage/' + id + '/' + key}
+      notice={
+        !INTEGRATIONS.schoolServices ? (
+          <Notice title="Coming soon">Your membership services will appear here soon.</Notice>
+        ) : null
+      }
+    >
+      {section === 'overview' ? (
+        <MembershipOverview cover={cover} record={record} today={today} />
+      ) : section === 'extras' ? (
+        <>
+          <h2>Branches and extras</h2>
+          {extension.loading ? (
+            <p>Loading extras…</p>
+          ) : extension.error ? (
+            <Notice title="Unavailable">{extension.error}</Notice>
+          ) : (
+            <>
+              {membership?.branches?.length > 0 && (
+                <p>Branches on this membership: {membership.branches.join(', ')}.</p>
+              )}
+              <SimpleTable
+                rows={extension.value || []}
+                columns={[
+                  col('type', 'Extra'),
+                  col('branch', 'Branch'),
+                  col('quantity', 'Quantity'),
+                  col('finalPrice', 'Amount'),
+                  col('status', 'Status'),
+                ]}
+              />
+              {INTEGRATIONS.stripeCheckout && (
+                <p>
+                  {INTEGRATIONS.membershipChanges ? (
+                    <Link className="btn btn-primary" to={'/pay/membership_change/' + id}>
+                      Add a branch or buy add-ons
+                    </Link>
+                  ) : (
+                    <Link className="btn btn-primary" to={'/pay/membership_addon/' + id}>
+                      Buy add-ons
+                    </Link>
+                  )}
+                </p>
+              )}
+            </>
+          )}
+        </>
+      ) : section === 'cover' ? (
+        <>
+          <h2>Your cover</h2>
+          <CoverSummary state={cover} id={id} />
+        </>
+      ) : section === 'history' ? (
+        <>
+          <h2>Changes and history</h2>
+          <ChangeHistory state={cover} />
+        </>
+      ) : section === 'documents' ? (
+        <DocumentsPanel kind="membership" id={id} />
       ) : (
         <>
-          {INTEGRATIONS.stripeCheckout && (
-            <p>
-              <Link className="btn btn-secondary" to={'/membership/buy?renew=' + id}>
-                Renew membership
-              </Link>
-            </p>
+          <h2>Invoices</h2>
+          {invoices.loading ? (
+            <p>Loading invoices…</p>
+          ) : invoices.error ? (
+            <Notice title="Unavailable">{invoices.error}</Notice>
+          ) : (
+            <InvoiceTable rows={invoices.value || []} />
           )}
-          <nav className="school-tabs">
-            <button className={tab === 'details' ? 'active' : ''} onClick={() => setQuery({ tab: 'details' })}>
-              Details
-            </button>
-            <button className={tab === 'cover' ? 'active' : ''} onClick={() => setQuery({ tab: 'cover' })}>
-              Your cover
-            </button>
-            <button className={tab === 'history' ? 'active' : ''} onClick={() => setQuery({ tab: 'history' })}>
-              Change history
-            </button>
-            <button className={tab === 'addons' ? 'active' : ''} onClick={() => setQuery({ tab: 'addons' })}>
-              Add-ons
-            </button>
-            <button className={tab === 'invoices' ? 'active' : ''} onClick={() => setQuery({ tab: 'invoices' })}>
-              Invoices
-            </button>
-          </nav>
-          <section className="surface padded">
-            {tab === 'details' ? (
-              record.error ? (
-                <Notice title="Unavailable">{record.error}</Notice>
-              ) : record.loading ? (
-                <p>Loading membership…</p>
-              ) : (
-                <dl className="detail-list">
-                  {Object.entries(record.value || {}).map(([k, v]) => (
-                    <div key={k}>
-                      <dt>{k}</dt>
-                      <dd>{v == null ? '—' : String(v)}</dd>
-                    </div>
-                  ))}
-                </dl>
-              )
-            ) : tab === 'cover' ? (
-              <MembershipCoverPanel id={id} view="cover" />
-            ) : tab === 'history' ? (
-              <MembershipCoverPanel id={id} view="history" />
-            ) : tab === 'addons' ? (
-              extension.loading ? (
-                <p>Loading add-ons…</p>
-              ) : extension.error ? (
-                <Notice title="Unavailable">{extension.error}</Notice>
-              ) : (
-                <>
-                  <SimpleTable
-                    rows={extension.value || []}
-                    columns={[
-                      col('type', 'Add-on'),
-                      col('branch', 'Branch'),
-                      col('quantity', 'Quantity'),
-                      col('finalPrice', 'Amount'),
-                      col('status', 'Status'),
-                    ]}
-                  />
-                  {INTEGRATIONS.stripeCheckout && (
-                    <p>
-                      {INTEGRATIONS.membershipChanges ? (
-                        <Link className="btn btn-primary" to={'/pay/membership_change/' + id}>
-                          Add a branch or buy add-ons
-                        </Link>
-                      ) : (
-                        <Link className="btn btn-primary" to={'/pay/membership_addon/' + id}>
-                          Buy add-ons
-                        </Link>
-                      )}
-                    </p>
-                  )}
-                </>
-              )
-            ) : invoices.loading ? (
-              <p>Loading invoices…</p>
-            ) : invoices.error ? (
-              <Notice title="Unavailable">{invoices.error}</Notice>
-            ) : (
-              <InvoiceTable rows={invoices.value || []} />
-            )}
-          </section>
         </>
       )}
-    </div>
+    </ManagementLayout>
   );
 }
 

@@ -389,7 +389,7 @@ export default function InsuranceChange() {
 
   return (
     <div className="page narrow-page">
-      <Link to={'/membership/manage/' + id + '?tab=cover'} className="back-link">
+      <Link to={'/membership/manage/' + id + '/cover'} className="back-link">
         <ArrowLeft size={16} /> Back to your cover
       </Link>
       <PageHeading
