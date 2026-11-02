@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Notice } from './UiParts.jsx';
 import { formatDate } from './format.js';
 import { Link } from 'react-router-dom';
@@ -32,6 +32,49 @@ function Table({ columns, rows }) {
         </tbody>
       </table>
     </div>
+  );
+}
+
+const POLICY_FILTERS = [
+  ['all', 'All'],
+  ['in_force', 'In force'],
+  ['pending', 'Pending'],
+  ['ended', 'Ended'],
+];
+const POLICY_GROUP_TEXT = { in_force: 'In force', pending: 'Pending', ended: 'Ended' };
+// Every policy on the membership, including quotes and drafts that are not cover yet, with a filter by state.
+function PolicyList({ policies }) {
+  const [filter, setFilter] = useState('all');
+  if (!policies || !policies.length) return null;
+  const rows = filter === 'all' ? policies : policies.filter(p => p.group === filter);
+  return (
+    <>
+      <h3>Your policies</h3>
+      <label className="filter-wrap">
+        <span>Show</span>
+        <select aria-label="Filter policies" value={filter} onChange={e => setFilter(e.target.value)}>
+          {POLICY_FILTERS.map(([key, label]) => (
+            <option key={key} value={key}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </label>
+      {rows.length ? (
+        <Table
+          rows={rows}
+          columns={[
+            { label: 'Policy', value: r => ROUTES[r.route] || r.type || 'Insurance' },
+            { label: 'Status', value: r => (r.status || '—') + ' (' + POLICY_GROUP_TEXT[r.group] + ')' },
+            { label: 'Starts', value: r => formatDate(r.startDate) },
+            { label: 'Ends', value: r => formatDate(r.endDate) },
+            { label: 'Payment', value: r => r.paymentFrequency || '—' },
+          ]}
+        />
+      ) : (
+        <p className="school-empty-text">No policies match this filter.</p>
+      )}
+    </>
   );
 }
 
@@ -138,6 +181,7 @@ export function CoverSummary({ state, id }) {
             )}
         </>
       )}
+      <PolicyList policies={cover.policies} />
       {INTEGRATIONS.insuranceChanges && insurance && eligibility(cover).online ? (
         <p>
           <Link className="btn btn-primary" to={'/membership/manage/' + id + '/changes/new'}>

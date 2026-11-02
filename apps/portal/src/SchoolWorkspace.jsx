@@ -27,7 +27,6 @@ import { upgradeLink } from './membershipUpgrade.js';
 import {
   attentionItems,
   headerLine,
-  holdsInsurance,
   manageActions,
   overviewFields,
   resolveSection,
@@ -581,10 +580,7 @@ export function MembershipManagement() {
   const today = new Date().toISOString().slice(0, 10),
     membership = cover.value?.membership,
     row = record.value;
-  // The insurance sections stay unless the membership is one that holds no policy (Associate and International).
-  const hasPolicy =
-    cover.loading || cover.error ? true : holdsInsurance(membership?.type || row?.type, cover.value?.includesInsurance);
-  const section = resolveSection(requested, hasPolicy);
+  const section = resolveSection(requested);
   const facts = {
     type: membership?.type || row?.type,
     status: membership?.status || row?.status,
@@ -603,17 +599,13 @@ export function MembershipManagement() {
         { key: 'extras', label: 'Branches and extras', icon: MapPin },
       ],
     },
-    ...(hasPolicy
-      ? [
-          {
-            label: 'Insurance',
-            items: [
-              { key: 'cover', label: 'Your cover', icon: ShieldCheck },
-              { key: 'history', label: 'Changes and history', icon: History },
-            ],
-          },
-        ]
-      : []),
+    {
+      label: 'Insurance',
+      items: [
+        { key: 'cover', label: 'Your cover', icon: ShieldCheck },
+        { key: 'history', label: 'Changes and history', icon: History },
+      ],
+    },
     {
       label: 'Records',
       items: [

@@ -12,12 +12,6 @@ export const sectionFromTab = tab => LEGACY_TABS[tab] || null;
 
 // The section to show: the requested one if it exists and applies, otherwise the overview. `hasPolicy` is false only once the cover has loaded
 // and shows no policy (Associate and International hold none), so a section is never hidden just because the cover is still loading.
-// Whether to show the insurance sections. Associate and International hold no policy by design. Any other membership expects one, so
-// the sections stay even when no policy is in force yet (the cover page then says so) instead of appearing and then vanishing.
-export function holdsInsurance(type, includesInsurance) {
-  if (includesInsurance) return true;
-  return !/associate|international/i.test(String(type || ''));
-}
 export function resolveSection(requested, hasPolicy = true) {
   if (!SECTION_KEYS.includes(requested)) return 'overview';
   return !hasPolicy && POLICY_SECTIONS.includes(requested) ? 'overview' : requested;

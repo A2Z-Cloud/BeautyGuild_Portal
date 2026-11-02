@@ -198,6 +198,14 @@ test('an Associate membership has no insurance, and a quote waiting for payment 
       assert.equal(r.body.cover.includesInsurance, false);
       assert.equal(r.body.cover.insurance, null);
       assert.equal(r.body.cover.revisions.items.length, 0);
+      assert.deepEqual(
+        r.body.cover.policies.map(x => [x.status, x.group, x.current]).sort(),
+        [
+          ['Ready for Payment', 'pending', false],
+          ['Referred', 'pending', false],
+        ],
+        'quotes and referrals are listed, grouped as pending, but are not cover',
+      );
     },
   );
 });

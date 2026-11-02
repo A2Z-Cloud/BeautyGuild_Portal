@@ -7,7 +7,6 @@ import {
   manageActions,
   overviewFields,
   renewalOpen,
-  holdsInsurance,
   resolveSection,
   sectionFromTab,
 } from './membershipManage.js';
@@ -124,13 +123,4 @@ test('attention items', () => {
     ),
     ['A payment has not gone through.', 'A change to your cover is waiting for payment.'],
   );
-});
-
-test('the insurance sections stay for a membership that expects a policy, even before one is in force', () => {
-  assert.equal(holdsInsurance('Full Member (Non-Salon)', false), true);
-  assert.equal(holdsInsurance('Full Member (Salon)', false), true);
-  assert.equal(holdsInsurance(null, false), true);
-  assert.equal(holdsInsurance('Associate Member', false), false);
-  assert.equal(holdsInsurance('International Member', false), false);
-  assert.equal(holdsInsurance('Associate Member', true), true);
 });
