@@ -94,6 +94,8 @@ const byDial = [...DIALS].sort((a, b) => b[2].length - a[2].length);
 
 export const flagOf = iso => String.fromCodePoint(...[...iso].map(c => 0x1f1e6 + c.charCodeAt(0) - 65));
 export const dialLabel = ([iso, name, dial]) => flagOf(iso) + ' +' + dial + ' ' + name;
+// What the closed country code box shows: the flag and the code.
+export const compactDial = ([iso, , dial]) => flagOf(iso) + ' +' + dial;
 // The ISO code of the entry that suits a country name; the United Kingdom when the country is unknown or not chosen.
 export function isoForCountry(name) {
   const wanted = String(name || '')
