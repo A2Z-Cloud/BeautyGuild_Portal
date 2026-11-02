@@ -14,6 +14,12 @@ const lookupId = v => (v && typeof v === 'object' ? String(v.id || '') : text(v)
 
 // A policy that is not (yet) cover: a quote, a referral, or one that has run out. Anything else is shown as the member's cover.
 const NOT_IN_FORCE = new Set(['Draft', 'Ready for Payment', 'Referred', 'Expired']);
+// How the list of the membership's policies groups them: in force, pending (a quote, a draft or a referral) or ended.
+const PENDING_STATUSES = new Set(['Draft', 'Ready for Payment', 'Referred']);
+const policyGroup = p => {
+  const status = text(p.Application_Status);
+  return status === 'Expired' ? 'ended' : PENDING_STATUSES.has(status) ? 'pending' : 'in_force';
+};
 // A cover row or person that has been replaced, cancelled or not yet confirmed is not part of the current cover.
 const NOT_CURRENT = new Set(['draft', 'cancelled', 'canceled', 'superseded', 'replaced', 'expired', 'removed']);
 const current = row => !NOT_CURRENT.has(text(row.Status).toLowerCase());
@@ -103,6 +109,10 @@ async function loadCover({ call, req, contactId, dealId, isDraft, today = new Da
     ),
   ]);
 
+  // Every policy on this membership, whatever its state, so the page can list and filter them. Only an in-force one is the member's cover.
+  const own = policies.filter(
+    p => lookupId(p.Contact) === String(contactId) && lookupId(p.Membership) === String(dealId),
+  );
   const inForce = policies
     .filter(
       p =>
@@ -234,6 +244,19 @@ async function loadCover({ call, req, contactId, dealId, isDraft, today = new Da
     // An Associate membership has no insurance: the page says so and offers to add it.
     includesInsurance: Boolean(insurance),
     insurance,
+    policies: own
+      .map(p => ({
+        id: String(p.id),
+        type: text(p.Policy_Type) || null,
+        route: policyRoute(p.Policy_Type),
+        status: text(p.Application_Status) || null,
+        group: policyGroup(p),
+        startDate: p.Policy_Start_Date || null,
+        endDate: p.Policy_End_Date || null,
+        paymentFrequency: text(p.Payment_Frequency) || null,
+        current: Boolean(policy) && p === policy,
+      }))
+      .sort((a, b) => text(b.startDate).localeCompare(text(a.startDate))),
     revisions: {
       available: revisionRows.available,
       items: revisionRows.items
