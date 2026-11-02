@@ -58,6 +58,7 @@ Use the workbook `Books-Items-and-Mapping-v2.xlsx`, tabs **Items** (53 items, SK
 - Accreditation with Associate membership (`ACC-ASSOC`, £409) is three Books items: Standard Accreditation (£295 + VAT) and the two Associate membership items.
 - Insurance premiums are VAT exempt, with Insurance Premium Tax as its own line. The IPT item is `INS-IPT` (not a tax in Books).
 - On a monthly plan the lines that renew are the yearly amount divided by 12, so the invoice line rate is the monthly share, not the Books item rate. The joining fee and add-ons are on the first invoice only, at the full Books item rate. The monthly admin fee Books item (`MEM-ADMIN`) is £1.25 plus VAT, which is the £1.50 Stripe price.
+- **International membership** (`MEM-INTL-Y`, £55.00 yearly, combined flow, decided 30 October 2026) is two Books items as for the other levels: `MEM-INTL-Y-ZERO` (£38.00, zero-rated) and `MEM-INTL-Y-STD` (£14.17 plus VAT). `MEM-INTL-Y` is already in the catalogue price list above. Please confirm both Books SKUs exist and that the **Stripe to Books** tab covers them.
 - Rounding: the payment is rounded up, so the lines that renew are shares that add up to the payment exactly (the extra pence sit on the larger lines). No separate rounding line is needed.
 
 ## 5. What Creator needs to do (to check against what it does today)
@@ -72,7 +73,9 @@ Use the workbook `Books-Items-and-Mapping-v2.xlsx`, tabs **Items** (53 items, SK
 8. **Cancellation:** `customer.subscription.deleted` now ends a monthly or renewing policy. Decide whether that lapses the membership and policy.
 9. **Contact:** `contact_id` is now set for new customers too (the portal creates the Contact at payment or referral). Do not create a second Contact.
 10. **Joining fee:** `joining_fee_amount` is `0.00` when no fee is due (a membership still running, or starting within a month of the last one ending). It is charged again after a longer gap, on a new purchase and a renewal alike, so do not assume a renewal never carries it.
-11. **Mid-term changes** (`insurance_change`, `membership_change`) are off by default. What Creator must do for them is in section 6 of `creator-payments-app.md`.
+11. **International membership (combined flow, off until UAT).** `membership_level` can now be `international` (a member based outside the UK). (a) Map it to the International membership type on the Deal and membership record; that type already exists, because the accreditation bundle uses it. (b) An International purchase has `insurance_requested=false`, no insurance keys and **no policy**, so do not assume every membership has a policy. (c) The membership line code is `MEM-INTL-Y`; International is yearly only, so there is no monthly plan, but the handler must not fail on that code. (d) Cancellations, when Creator handles them: treat International like Full for the pro-rata refund and the £10 fee, with no policy, insurance premium or IPT. International never upgrades.
+12. **Upgrade from Associate to Full** (`change_type=upgrade`, existing behaviour, now confirmed as decision D11 on 30 October): when `previous_subscription_id` is present, end the old Associate subscription at `membership_start` once the new payment is verified, so the old Associate does not renew.
+13. **Mid-term changes** (`insurance_change`, `membership_change`) are off by default. What Creator must do for them is in section 6 of `creator-payments-app.md`.
 
 ## 6. How to test
 
@@ -83,6 +86,8 @@ Use the Development portal (`/app/`), Stripe test mode, and the Stripe test card
 | Monthly Associate, new member (£16.09) | One subscription, no phases; first invoice £16.09 (£6.09 ongoing plus the £10.00 joining fee in full); every later invoice £6.09; CRM Deal active |
 | Monthly Associate renewing, with a badge (£10.09) | First invoice £10.09 (£6.09 ongoing plus the £4.00 badge in full); every later invoice £6.09 |
 | Annual Associate with a badge (£69.00) | Subscription yearly; badge is a one-off; invoice split into £38.00 zero-rated, £14.17 standard-rated and the badge |
+| Annual International member (combined flow) | `membership_level=international`, `insurance_requested=false`, one `MEM-INTL-Y` line, split into `MEM-INTL-Y-ZERO` and `MEM-INTL-Y-STD`; Deal and membership of type International; no policy and no error about a missing policy |
+| Upgrade Associate to Full | New Full membership starts at `membership_start`; the old Associate subscription (`previous_subscription_id`) is ended then and does not renew |
 | Annual Full non-salon with insurance | Yearly subscription with membership, premiums and IPT as yearly lines; policy active |
 | Insurance only, an existing member | `mode=subscription`; policy active; does not create a second Contact |
 | Named employee (non-salon) | £55 fee outside IPT; premium plus fee on the invoice |
