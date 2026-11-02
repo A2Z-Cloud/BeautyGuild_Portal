@@ -111,7 +111,7 @@ function createPaymentFacts({ stripeGet }) {
 // What a price list code is, for what a cancellation refunds. The member's own membership fee recurs monthly; the same code on a one-off line is a
 // named employee's fee, which is kept.
 function classifySku(sku, recurs) {
-  if (/^MEM-(ASSOC|FULLNS|FULLS)-Y$/.test(sku)) return recurs ? 'membership' : 'kept';
+  if (/^MEM-(ASSOC|FULLNS|FULLS|INTL)-Y$/.test(sku)) return recurs ? 'membership' : 'kept';
   if (sku === 'INS-IPT') return 'ipt';
   if (/^(INS|CALC)-/.test(sku)) return 'premium';
   if (/^(MEM-JOIN|MEM-ADMIN|MEM-BRANCH|MEM-BUNDLE|MEM-CERT|MEM-BADGE|MEM-STICKER|FEE-)/.test(sku)) return 'kept';

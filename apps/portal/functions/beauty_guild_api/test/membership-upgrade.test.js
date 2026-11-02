@@ -141,6 +141,8 @@ test('anything that is not an active, annual Associate membership with a confirm
     );
   // The membership being upgraded is a Full membership.
   await refused(world({ deals: [FULL], previousDeal: FULL, associateSession: ASSOCIATE_SESSION }), asked());
+  // An International membership never upgrades (spec 6.3).
+  await refused(upgrading({ previousDeal: { ...UPGRADING, Membership_Type: 'International Member' } }), asked());
   // Not Active.
   await refused(upgrading({ previousDeal: { ...UPGRADING, Stage: 'Expired' } }), asked());
   // No insurance, or an upgrade to Associate.

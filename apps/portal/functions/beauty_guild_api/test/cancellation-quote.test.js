@@ -407,3 +407,72 @@ test('off by default, refused without a valid signature, and a Stripe outage is 
     ON,
   );
 });
+
+// An International member: no policy, MEM-INTL-Y, the Full rules (spec 6.4) with cooling off counted from the membership start.
+const INTERNATIONAL = {
+  deal: {
+    id: DEAL,
+    Deal_Name: 'International Member',
+    Stage: 'Active',
+    Membership_Type: 'International Member',
+    Start_Date: iso(-20),
+    Expiry_Date: iso(345),
+    Contact_Name: { id: ME },
+  },
+  policies: [],
+};
+const INTL_SESSION = {
+  metadata: {
+    membership_start: iso(-20),
+    membership_expiry: iso(345),
+    subscription_type: 'annual',
+    base_membership_amount: '55.00',
+  },
+};
+const INTL_SUB = { items: { data: [{ price: { lookup_key: 'MEM-INTL-Y' } }] } };
+
+test('Cancel International: quoted like a Full with no policy, the £10 fee netted off an override, and downgrade or Associate cancel refused', async () => {
+  const w = () => cancelWorld({ over: INTERNATIONAL, session: INTL_SESSION, subscription: INTL_SUB });
+  await withStaff(
+    w(),
+    async ({ call }) => {
+      const r = await call('/staff/cancellation/quote', ASK());
+      assert.equal(r.status, 200, JSON.stringify(r.body));
+      assert.equal(r.body.quotable, true, JSON.stringify(r.body.blocking));
+      assert.equal(r.body.facts.membership.level, 'international');
+      assert.deepEqual(
+        [r.body.quote.insurance, r.body.quote.coolingOff, r.body.quote.netRefundPence, r.body.quote.feeAppliedPence],
+        [null, false, 0, 0],
+      );
+      const withOverride = await call(
+        '/staff/cancellation/quote',
+        ASK({ membershipRefundPence: 3000, overrideReason: 'Goodwill' }),
+      );
+      assert.deepEqual([withOverride.body.quote.feeAppliedPence, withOverride.body.quote.netRefundPence], [1000, 2000]);
+      // Inside 14 days of the membership start: everything back, no fee.
+      const cooling = await call('/staff/cancellation/quote', ASK({ effectiveDate: iso(-10) }));
+      assert.deepEqual(
+        [cooling.body.quote.coolingOff, cooling.body.quote.netRefundPence, cooling.body.quote.feeAppliedPence],
+        [true, 5500, 0],
+      );
+      for (const scenario of ['downgrade_full', 'cancel_associate']) {
+        const bad = await call('/staff/cancellation/quote', ASK({ scenario }));
+        assert.equal(bad.status, 422);
+        assert.equal(bad.body.code, 'SCENARIO_MISMATCH');
+      }
+    },
+    ON,
+  );
+  // An International membership that somehow has a policy is refused, not guessed.
+  await blockedWith(
+    cancelWorld({ session: INTL_SESSION, subscription: INTL_SUB, over: { deal: { ...INTERNATIONAL.deal } } }),
+    ASK(),
+    'SCENARIO_MISMATCH',
+  );
+});
+
+test('a monthly line or one-off line with the International code is placed like the other membership codes', () => {
+  const { classifySku } = require('../src/paymentFacts');
+  assert.equal(classifySku('MEM-INTL-Y', true), 'membership');
+  assert.equal(classifySku('MEM-INTL-Y', false), 'kept');
+});

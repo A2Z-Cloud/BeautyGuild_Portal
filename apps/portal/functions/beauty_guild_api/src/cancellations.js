@@ -105,7 +105,7 @@ function membershipRefund({ paidPence, overridePence }) {
  * The whole cancel, downgrade or Associate cancel: what is refunded, the fee, and the net (spec 3.4 and 3.5).
  * `membership.paidPence` is the membership fee paid (not the joining fee or admin fees). `insurance` is null when there is no policy.
  * @param {{ scenario: string, effectiveDate: string,
- *   membership: { paidPence: number, overridePence?: number | null },
+ *   membership: { paidPence: number, overridePence?: number | null, coolingOffStart?: string },
  *   insurance?: null | { billing: 'annual' | 'monthly', start: string, end: string, premiumNetPence: number, paidNetPence?: number, paidIptPence?: number } }} input
  */
 function cancellationQuote({ scenario, effectiveDate, membership, insurance = null }) {
@@ -171,6 +171,9 @@ function cancellationQuote({ scenario, effectiveDate, membership, insurance = nu
   }
 
   const paidPence = pence(membership?.paidPence, 'membership.paidPence');
+  // No policy, but a membership start given (International): the cooling off counts from the membership start.
+  if (!insurance && scenario !== 'cancel_associate' && membership.coolingOffStart)
+    coolingOff = isCoolingOff({ start: membership.coolingOffStart, effective: effectiveDate });
   let mem;
   if (coolingOff) {
     // Cooling off refunds the whole membership fee. A staff override is not needed and is ignored.
