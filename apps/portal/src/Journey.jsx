@@ -192,6 +192,18 @@ export function Journey({ kind }) {
   const last = index === visible.length - 1;
   const [errors, setErrors] = useState({});
   const [manualAddress, setManualAddress] = useState({});
+  // null until known. The account checkpoint is only for visitors who are not signed in.
+  const [signedIn, setSignedIn] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    portalApi
+      .getIdentity()
+      .then(() => alive && setSignedIn(true))
+      .catch(() => alive && setSignedIn(false));
+    return () => {
+      alive = false;
+    };
+  }, []);
   const [saving, setSaving] = useState(false),
     [saveStatus, setSaveStatus] = useState(''),
     [submitted, setSubmitted] = useState(null);
@@ -460,7 +472,12 @@ export function Journey({ kind }) {
             {last ? (
               <>
                 <ReviewDetails steps={visible} values={values} kind={kind} />
-                <CheckpointNotice kind={kind} />
+                {signedIn === false && <CheckpointNotice kind={kind} />}
+                {signedIn && (
+                  <p className="muted" role="status">
+                    You are signed in. Check your answers, then continue.
+                  </p>
+                )}
               </>
             ) : (
               <>

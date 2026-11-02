@@ -2,7 +2,7 @@ import React from 'react';
 import { BadgeCheck, BookOpen, ShieldCheck, ArrowUpRight } from 'lucide-react';
 import CoursePicker from './components/CoursePicker.jsx';
 import { startLimits } from './startDate.js';
-import { DIALS, dialLabel, isoForCountry, splitPhone, joinPhone } from './phones.js';
+import { DIALS, dialLabel, compactDial, isoForCountry, splitPhone, joinPhone } from './phones.js';
 
 export function Logo() {
   return (
@@ -55,17 +55,23 @@ function PhoneInput({ common, value, onChange, countryName, placeholder }) {
   const set = (nextIso, local) => onChange(joinPhone(nextIso, local));
   return (
     <div className="phone-input">
-      <select
-        aria-label={(common['aria-label'] || common.name) + ' country code'}
-        value={iso}
-        onChange={e => set(e.target.value, parsed.local)}
-      >
-        {DIALS.map(d => (
-          <option key={d[0]} value={d[0]}>
-            {dialLabel(d)}
-          </option>
-        ))}
-      </select>
+      {/* The list names each country; the closed box shows only the flag and code. The select sits invisibly over the label. */}
+      <span className="phone-code">
+        <span className="phone-code-label" aria-hidden="true">
+          {compactDial(DIALS.find(d => d[0] === iso) || DIALS[0])}
+        </span>
+        <select
+          aria-label={(common['aria-label'] || common.name) + ' country code'}
+          value={iso}
+          onChange={e => set(e.target.value, parsed.local)}
+        >
+          {DIALS.map(d => (
+            <option key={d[0]} value={d[0]}>
+              {dialLabel(d)}
+            </option>
+          ))}
+        </select>
+      </span>
       <input
         {...common}
         type="tel"
