@@ -400,15 +400,19 @@ export function AccountManagement() {
               <p>Subscription, policies, accreditations and invoices will be loaded securely from the backend.</p>
               <div className="account-options">
                 <Link className="account-option" to="/membership">
-                  <strong>Membership</strong>
-                  <span>Explore membership services</span>
+                  <strong>{INTEGRATIONS.combinedFlow ? 'Membership and Insurance' : 'Membership'}</strong>
+                  <span>
+                    {INTEGRATIONS.combinedFlow ? 'Explore membership and insurance' : 'Explore membership services'}
+                  </span>
                   <ArrowRight size={16} />
                 </Link>
-                <Link className="account-option" to="/insurance">
-                  <strong>Insurance</strong>
-                  <span>Explore insurance services</span>
-                  <ArrowRight size={16} />
-                </Link>
+                {!INTEGRATIONS.combinedFlow && (
+                  <Link className="account-option" to="/insurance">
+                    <strong>Insurance</strong>
+                    <span>Explore insurance services</span>
+                    <ArrowRight size={16} />
+                  </Link>
+                )}
                 <Link className="account-option" to="/accreditation">
                   <strong>Accreditation</strong>
                   <span>Explore centre accreditation</span>
