@@ -222,6 +222,11 @@ Each piece is its own pull request, merged and deployed in this order. Switches 
 6. **Staff widget and the CRM function** (answers input, merged form, spec updates).
 7. **Creator** (section 8) and the updated UAT workbook.
 
+Delivery notes (2 November 2026):
+- Step 4 is PR 120 and step 5 is the manage membership redesign. Both are behind or beside the switches described above.
+- Step 5 leaves out three things from section 9.2 until their server parts exist: **Add another policy** (needs the server eligibility rule and the `insurance` service with membership context, so it is its own piece of work), **Cancel** (there is no customer cancellation route yet, only the staff one), and the Overview fields **billing (annual or monthly)**, **primary branch** and **referral**, which the record API does not return yet. The Overview shows level, status, dates, branches, payment status and reference.
+- The mobile navigation wraps as chips, exactly as school management does today, rather than scrolling sideways.
+
 Tests: unit tests for the matrix and every error; API tests for each route with answers and for the refusal of `level`; client tests for step lists per outcome and the help text checklist; the existing cancellation, upgrade and staff suites updated and green; a Development run of one purchase per outcome in Stripe test mode (International, Associate, Full Non-Salon, Full Salon) and one referral that ends in "Join as Associate".
 
 Risks: changing the question to a single choice affects saved drafts and renewals (re-ask rule); losing help text in the move (checklist); staff and customer drifting apart (one function); International pricing and VAT depending on Books staying as described (the VAT split is a single constant per item).

@@ -3886,3 +3886,36 @@ iframe {
     grid-template-columns: 1fr;
   }
 }
+
+/* ---- Manage membership: what needs attention, and the read-only note (same look as the school profile's) ---- */
+.manage-attention {
+  border: 1px solid #f3c9dd;
+  background: #fff6fa;
+  border-radius: 12px;
+  padding: 13px 16px;
+  margin: 14px 0 18px;
+  font-size: 13px;
+  color: #5c3a4d;
+}
+.manage-attention ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+}
+.manage-locked {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border-radius: 10px;
+  background: #f7f1f8;
+  color: #63466d;
+  line-height: 1.6;
+  font-size: 12px;
+  padding: 13px 15px;
+  margin-top: 22px;
+}
+.manage-locked svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}

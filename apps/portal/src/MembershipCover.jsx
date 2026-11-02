@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { Notice } from './UiParts.jsx';
 import { formatDate } from './format.js';
 import { Link } from 'react-router-dom';
-import { INTEGRATIONS, portalApi } from './services/api.js';
+import { INTEGRATIONS } from './services/api.js';
 import { eligibility } from './insuranceChangeForm.js';
 import { canUpgrade, upgradeLink } from './membershipUpgrade.js';
 
@@ -173,21 +173,4 @@ export function ChangeHistory({ state }) {
       ]}
     />
   );
-}
-
-// Loads the cover only when the member opens one of these tabs, not every time the membership page opens.
-export function MembershipCoverPanel({ id, view }) {
-  const [state, setState] = useState({ loading: true, error: '', value: null });
-  useEffect(() => {
-    let active = true;
-    setState({ loading: true, error: '', value: null });
-    portalApi
-      .getMembershipCover(id)
-      .then(value => active && setState({ loading: false, error: '', value }))
-      .catch(e => active && setState({ loading: false, error: e.message, value: null }));
-    return () => {
-      active = false;
-    };
-  }, [id]);
-  return view === 'history' ? <ChangeHistory state={state} /> : <CoverSummary state={state} id={id} />;
 }
