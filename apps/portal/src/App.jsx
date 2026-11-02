@@ -13,6 +13,7 @@ import { PaymentPreview, PaymentReturn } from './PaymentPreview.jsx';
 import { INTEGRATIONS } from './services/api.js';
 import { CourseCatalogue } from './components/CourseCatalogue.jsx';
 import BuyMembership from './BuyMembership.jsx';
+import CombinedMembership from './CombinedMembership.jsx';
 import BuyInsurance from './BuyInsurance.jsx';
 import ErrorBoundary from './ErrorBoundary.jsx';
 import CheckoutPage from './CheckoutPage.jsx';
@@ -99,7 +100,10 @@ export default function App() {
             }
           />
           <Route path="/accreditation" element={<ServiceHome kind="accreditation" />} />
-          <Route path="/membership/buy" element={<BuyMembership />} />
+          <Route
+            path="/membership/buy"
+            element={INTEGRATIONS.combinedFlow ? <CombinedMembership /> : <BuyMembership />}
+          />
           <Route
             path="/insurance/buy"
             element={

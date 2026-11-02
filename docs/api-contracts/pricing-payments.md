@@ -186,3 +186,7 @@ Refusals (all 422): `LEVEL_NOT_CHOSEN_BY_CLIENT` (a `level` was sent), `MISSING_
 
 `membership_level` in the Stripe metadata may now be `international` (price `MEM-INTL-Y`, £55.00 with £38.00 zero-rated).
 
+
+### `POST /portal/checkout/join-as-associate`
+
+Used by the combined journey when a customer's insurance is referred or stopped and they choose "Join as Associate instead" (spec section 4). Body `{ "policyId": "<reference from the REFERRAL_REQUIRED details>" }`. Needs a signed-in customer and `PORTAL_COMBINED_FLOW_ENABLED` (otherwise 503 `NOT_AVAILABLE`). The record must be the customer's own (404 `NOT_FOUND` otherwise) and have Application Status `Referred` (409 `NOT_REFERRED` otherwise); the server sets Application Status to `Customer joined as Associate` and returns `{ "joined": true }`. Asking again for a record already joined also returns `{ "joined": true }` and writes nothing. The record is kept, so the Insurance team's history is not lost.

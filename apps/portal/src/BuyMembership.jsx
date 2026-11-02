@@ -20,6 +20,17 @@ import { toRequest, visibleFields } from './insuranceInputs.js';
 import { BlockedNotice, InsuranceForm, ReferralPanel, useInsuranceQuote } from './InsuranceForm.jsx';
 import AddressLookup from './components/AddressLookup.jsx';
 import { BRANCHES } from './branches.js';
+import {
+  ADDITIONAL_BRANCHES_TEXT,
+  BRANCH_TEXT,
+  EXTRAS_INTRO_TEXT,
+  EXTRAS_ORDER_TEXT,
+  EXTRAS_TEXT,
+  INSURANCE_TEXT,
+  SCHOOL_CODE_TEXT,
+  UPGRADE_TEXT,
+  startDateText,
+} from './membershipText.js';
 import { EMPTY_DETAILS, DETAIL_LABELS, detailsRequest, missingDetails, tradingNameOf } from './membershipDetails.js';
 
 const LEVELS = [
@@ -33,18 +44,12 @@ const ADDONS = [
   ['badge', 'Badge'],
   ['sticker', 'Window sticker'],
 ];
-const INSURANCE_TEXT =
-  'Our standard insurance policy covers you for treatment, public and product liability. This covers any injuries caused to your clients by the treatments you provide, accidental damage to property that doesn’t belong to you and any accidental injury to your customers, visitors, people you visit or members of the public. It would include things like slips and trips. You will be able to add on additional covers you may require, later on.';
-const BRANCH_TEXT =
-  'There are 4 branches of Guild membership. Select the branch which is best suited to your qualifications and the area you work in. Please note, the branch you choose does not affect your insurance where applicable and the membership element is not regulated by the Financial Conduct Authority.';
-const EXTRAS_TEXT =
-  'On completion of your application, your Membership Certificate will be available to download for free from your account, along with the relevant Guild logos which you can use on your website and social media.';
 const money = pence => '£' + (pence / 100).toFixed(2);
 
 // Buy or renew a membership. The server decides every amount from the Stripe prices; this page
 // only sends choices, shows the server's summary, and sends the member to Stripe.
 // A required details field. A missing one is outlined and named, with the reason announced to screen readers.
-function DetailField({ name, label, value, onChange, error, hint, autoComplete }) {
+export function DetailField({ name, label, value, onChange, error, hint, autoComplete }) {
   const id = 'd-' + name;
   return (
     <div className={'field' + (error ? ' invalid' : '')}>
@@ -325,14 +330,7 @@ export default function BuyMembership() {
                 to pay, and your answers are kept while you do.
               </Notice>
             )}
-            {upgrading && (
-              <Notice title="Upgrade to Full membership with insurance">
-                Choose your Full membership level and answer the insurance questions, as you would to get an insurance
-                quote. We credit the unused part of your Associate membership fee, so you only pay the difference. Your
-                Associate membership carries on until your new membership starts, and the new membership runs for a full
-                year.
-              </Notice>
-            )}
+            {upgrading && <Notice title="Upgrade to Full membership with insurance">{UPGRADE_TEXT}</Notice>}
             <section className="surface padded buy-section">
               <h2>About Your Work</h2>
               <fieldset className="buy-fieldset">
@@ -417,11 +415,7 @@ export default function BuyMembership() {
                   max={startLimits().max}
                   onChange={e => set({ start: e.target.value === startLimits().min ? '' : e.target.value })}
                 />
-                <small>
-                  Starts today unless you choose a later date, up to {START_WINDOW_DAYS} days ahead.
-                  {f.insurance ? ' Your insurance starts on the same date.' : ''} You pay now, and it shows as Coming
-                  soon until it starts.
-                </small>
+                <small>{startDateText(START_WINDOW_DAYS, f.insurance)}</small>
               </div>
               <fieldset className="buy-fieldset">
                 <legend>Pay</legend>
@@ -552,9 +546,7 @@ export default function BuyMembership() {
             <section className="surface padded buy-section">
               <h2>Personalise Your Membership</h2>
               <h3 className="buy-subtitle">Additional Branches</h3>
-              <p className="muted">
-                If you would like to add any additional branches, these are chargeable at £15 per branch
-              </p>
+              <p className="muted">{ADDITIONAL_BRANCHES_TEXT}</p>
               <fieldset className="buy-fieldset">
                 <legend className="sr-only">Additional Branches</legend>
                 {BRANCHES.filter(b => b.id !== f.branch).map(b => (
@@ -569,14 +561,9 @@ export default function BuyMembership() {
                 ))}
               </fieldset>
               <h3 className="buy-subtitle">Membership Extras</h3>
-              <p className="muted">
-                Showcase your professional credentials, strengthen client confidence and proudly display your Guild
-                membership with our range of membership extras.
-              </p>
+              <p className="muted">{EXTRAS_INTRO_TEXT}</p>
               <p className="muted">{EXTRAS_TEXT}</p>
-              <p className="muted">
-                You can order any of the following marketing and branding items from the options below:
-              </p>
+              <p className="muted">{EXTRAS_ORDER_TEXT}</p>
               {ADDONS.map(([key, label]) => (
                 <label key={key} className="addon-row">
                   <span>{label}</span>
@@ -634,10 +621,7 @@ export default function BuyMembership() {
                             }
                           }}
                         />
-                        <small>
-                          If your school gave you its Accreditation Reference (for example ACC-0140), enter it to have
-                          your joining fee waived.
-                        </small>
+                        <small>{SCHOOL_CODE_TEXT}</small>
                       </div>
                       <button
                         type="button"
