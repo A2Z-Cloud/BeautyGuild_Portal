@@ -1,6 +1,7 @@
 import { clearStored, readStored, writeStored } from './storedState.js';
 import { CONFIRMATIONS } from './insuranceInputs.js';
 import { startLimits } from './startDate.js';
+import { WORKING_OPTIONS, inUkGroup } from './membershipPlan.js';
 
 // Save and finish later for the Join the Guild and Buy insurance pages. The answers go to the CRM against the signed-in account
 // (portalApi drafts); the tab keeps only a small reference to the draft. Agreement boxes and insurance confirmations are never saved
@@ -40,6 +41,9 @@ const session = () => {
 export const safeEntries = e => {
   const o = { ...(e || {}) };
   if (o.membership && typeof o.membership === 'object') o.membership = { ...o.membership, accepted: false };
+  if (o.combined && typeof o.combined === 'object') o.combined = { ...o.combined, accepted: false };
+  if (o.combined_insurance?.iv)
+    o.combined_insurance = { ...o.combined_insurance, iv: noConfirmations(o.combined_insurance.iv) };
   if (o.membership_insurance?.iv)
     o.membership_insurance = { ...o.membership_insurance, iv: noConfirmations(o.membership_insurance.iv) };
   if (o.insurance?.values) o.insurance = { ...o.insurance, values: noConfirmations(o.insurance.values) };
@@ -160,20 +164,66 @@ export const joinDraft = ({ f, d, iv, country }) => {
     answers: f.insurance ? { membership, insurance: { iv: noConfirmations(iv), country } } : { membership },
   };
 };
+// What the combined journey saves: the answers that decide the membership (country, insurance required, how you work), the rest of the
+// membership choices and details, and the insurance answers when insurance is needed (a combined draft). No level is saved, because the
+// server decides it from the answers. `c` (not `f`) marks the shape, so the old page and the new one can tell each other's drafts apart.
+export const combinedDraft = ({ f, d, iv }) => {
+  const insured = f.insuranceRequired === 'yes' && inUkGroup(f.country);
+  const membership = {
+    c: {
+      country: f.country || '',
+      insuranceRequired: f.insuranceRequired || '',
+      working: f.working || '',
+      branch: f.branch,
+      branches: f.branches,
+      billing: f.billing,
+      addons: f.addons,
+      start: f.start || '',
+      ...(f.code ? { code: f.code } : {}),
+    },
+    d,
+  };
+  return {
+    service: insured ? 'combined' : 'membership',
+    answers: insured ? { membership, insurance: { iv: noConfirmations(iv), country: f.country } } : { membership },
+  };
+};
+// A draft saved by the old page (it has a level) opened in the combined journey: the level becomes answers. A mix of ways of working was
+// allowed then and is not now, so it is asked again (spec 2.3).
+export function combinedFromLegacy(f, insurance) {
+  const insured = Boolean(insurance) && f.insurance !== false && /^full/.test(f.level || '');
+  const list = Array.isArray(insurance?.iv?.insWorking) ? insurance.iv.insWorking : [];
+  const only = list.length === 1 && WORKING_OPTIONS.some(o => o.value === list[0]) ? list[0] : '';
+  return {
+    country: insurance?.country || '',
+    insuranceRequired: insured ? 'yes' : 'no',
+    working: insured ? only : '',
+    branch: f.branch,
+    branches: f.branches || [],
+    billing: f.billing || 'annual',
+    addons: f.addons || {},
+    start: f.start || '',
+    ...(f.code ? { code: f.code } : {}),
+  };
+}
 export const buyDraft = ({ values, country, start }) => ({
   service: 'insurance',
   answers: { insurance: { iv: noConfirmations(values), country, start: start || '' } },
 });
 
 // Turns a draft from the CRM into the tab's stored answers. Returns the page to open, or null for a draft made by the older step-by-step form.
-export function restoreDraftToTab(draft, storage) {
+// With `combined` the Join page is the combined journey: its own drafts restore into it and an older draft is converted. Without it, a draft the
+// combined journey saved cannot be opened (the switch was turned off after saving), so it is left alone.
+export function restoreDraftToTab(draft, storage, { combined = false } = {}) {
   const a = draft?.answers,
+    m = a?.membership,
+    isNew = Boolean(m?.c),
     page =
       draft?.service === 'insurance'
         ? a?.insurance?.iv
           ? '/insurance/buy'
           : null
-        : a?.membership?.f
+        : (isNew ? combined : m?.f)
           ? '/membership/buy'
           : null;
   if (!page) return null;
@@ -186,8 +236,17 @@ export function restoreDraftToTab(draft, storage) {
       { values: noConfirmations(iv), country: country || '', start: validStart(start) },
       storage,
     );
+  } else if (combined) {
+    const c = isNew ? m.c : combinedFromLegacy(m.f, draft.service === 'combined' ? a.insurance : null);
+    writeStored('combined', { ...c, step: 'about_you', accepted: false, start: validStart(c.start) }, storage);
+    writeStored('membership_details', m.d || {}, storage);
+    if (draft.service === 'combined' && a.insurance?.iv) {
+      // How you work is kept in `working`, not in the insurance answers, so it is not restored twice.
+      const { insWorking, ...rest } = noConfirmations(a.insurance.iv); // eslint-disable-line no-unused-vars
+      writeStored('combined_insurance', { iv: rest }, storage);
+    }
   } else {
-    const { f, d } = a.membership,
+    const { f, d } = m,
       insured = draft.service === 'combined' && a.insurance;
     writeStored(
       'membership',
