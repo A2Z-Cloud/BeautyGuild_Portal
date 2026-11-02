@@ -101,6 +101,19 @@ Off unless `PORTAL_STAFF_API_ENABLED` is `true`. Every route needs the signed he
 
 Limits: 300 requests a minute per caller, 20 failures a minute, 60 quote or save calls a minute per staff user, bodies up to 256 KB. Every failure of the signature, the time, the nonce, the user or the role returns the **same** `401 STAFF_AUTH_FAILED`.
 
+### 6.1a Membership requests with `answers` (combined membership flow, 2 November 2026)
+
+**The CRM function does not change.** It takes `action` and `body`, maps the action to a fixed route and signs the body exactly as given (section 3), so it never reads `level` or `answers`. The same four actions and the same signing stay. The change is in the **widget**, which builds the body, and in the **Catalyst function**, which reads it.
+
+For `quote` (and `payment-link` when it is switched on) with `service: "membership"`:
+
+| Switch | Body the widget sends | Server behaviour |
+| --- | --- | --- |
+| `PORTAL_COMBINED_FLOW_ENABLED` off (today) | `level` as before; `answers` ignored | Unchanged |
+| On | `answers: { country, insuranceRequired, working }` and **no `level`** | The level is decided by `decideMembership` and returned in `quote.decision`. A `level` is refused: `422 LEVEL_NOT_CHOSEN_BY_CLIENT`. Other refusals: `MISSING_ANSWER`, `INVALID_WORKING`, `COUNTRY_MISMATCH`, `BILLING_NOT_AVAILABLE` (monthly for International) |
+
+Staff and customer share the code (`applyDecision` in `checkout.js`, reached through `staffBuild`), so they cannot disagree. The shapes are in `docs/api-contracts/pricing-payments.md` (Combined membership flow) and `docs/api-contracts/staff-api.md`. **Not built:** the staff rule that `service=insurance` needs the membership as context (Add another policy), and staff tests of the `answers` input in `staff-routes.test.js`.
+
 ### 6.2 Still to design and build
 
 | Route | Method | Purpose | Writes |
