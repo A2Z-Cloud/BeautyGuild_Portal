@@ -79,6 +79,9 @@ export const INTEGRATIONS = Object.freeze({
   // Upgrading an Associate membership to Full with insurance, crediting the unused Associate fee. Off until the function's
   // PORTAL_MEMBERSHIP_UPGRADE_ENABLED is on and Creator ends the old Associate subscription (docs/delivery/cancellations-refunds-spec.md).
   membershipUpgrade: billingOn && recordsOn && import.meta.env.VITE_PORTAL_MEMBERSHIP_UPGRADE === 'true',
+  // One Membership and Insurance journey in place of separate membership and insurance pages (docs/delivery/combined-membership-flow-spec.md).
+  // Off until the function's PORTAL_COMBINED_FLOW_ENABLED is on: a client with it on and a function with it off still sends a level.
+  combinedFlow: billingOn && import.meta.env.VITE_PORTAL_COMBINED_FLOW === 'true',
   publicQuotes: publicQuotesOn,
   policyIssuance: false,
   workdrive: documentsOn,

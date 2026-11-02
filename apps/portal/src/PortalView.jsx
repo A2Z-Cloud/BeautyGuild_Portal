@@ -23,6 +23,7 @@ import {
 import { DEMO_USER } from './data/demo.js';
 import { Logo, PreviewLabel } from './UiParts.jsx';
 import { DATA_MODE, INTEGRATIONS, portalApi } from './services/api.js';
+import { COMBINED_TITLE, navItems } from './combinedFlow.js';
 
 // Shows the signed-in member in the top bar. The check runs once per page load and any failure
 // (not signed in, SDK unavailable) simply leaves the "Sign in" link showing.
@@ -75,7 +76,7 @@ const secondary = [
 function NavItems({ items, onNavigate, collapsed }) {
   return (
     <div className="nav-group">
-      {items
+      {navItems(items, INTEGRATIONS.combinedFlow)
         .filter(i => !i.when || i.when())
         .map(({ label, path, icon: Icon, end }) => (
           <NavLink
@@ -98,7 +99,7 @@ function currentTitle(path) {
   const key = path.split('/').filter(Boolean)[0];
   return (
     {
-      membership: 'Membership',
+      membership: INTEGRATIONS.combinedFlow ? COMBINED_TITLE : 'Membership',
       insurance: 'Insurance',
       accreditation: 'Accreditation',
       records: 'My records',

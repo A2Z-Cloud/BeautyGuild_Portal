@@ -8,6 +8,7 @@ import IntegrationStatus from './components/IntegrationStatus.jsx';
 import { DATA_MODE, INTEGRATIONS } from './services/api.js';
 import { RecordsSummary } from './LiveRecords.jsx';
 import { Notice, PageHeading } from './UiParts.jsx';
+import { liveServices } from './combinedFlow.js';
 const LIVE_SERVICES = [
   {
     kind: 'membership',
@@ -41,7 +42,7 @@ export default function Dashboard() {
           description="Manage your membership, insurance and training centre accreditation in one place."
         />
         <div className="services-grid">
-          {LIVE_SERVICES.map(s =>
+          {liveServices(LIVE_SERVICES, INTEGRATIONS.combinedFlow).map(s =>
             s.kind === 'accreditation' && INTEGRATIONS.crmRecords ? (
               <AccreditationDashboardCard key={s.kind} service={s} />
             ) : (

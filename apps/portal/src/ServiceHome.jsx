@@ -9,6 +9,7 @@ import { MyServiceRecords, useServiceRecords, isExpired } from './MyServiceRecor
 import { AccreditationStatusBanner, useAccreditationState } from './AccreditationStatus.jsx';
 import { MANAGE_TEXT } from './accreditationState.js';
 import { upgradableRecord, upgradeLink } from './membershipUpgrade.js';
+import { COMBINED_DESCRIPTION, COMBINED_TITLE } from './combinedFlow.js';
 const paths = {
   membership: ['Membership option', 'Applicant details', 'Review information'],
   accreditation: ['Your training centre', 'Courses and tutors', 'Review information'],
@@ -17,13 +18,21 @@ const paths = {
 // Shown to someone with no membership (MEM-031, MEM-032).
 export const NO_MEMBERSHIP_TEXT =
   "You don't currently have a Guild membership. Choose Associate Membership, or Full Membership with insurance, and start enjoying exclusive member perks, discounts and support.";
+// The combined page says what the member can do without choosing a level: the answers decide it.
+export const NO_MEMBERSHIP_TEXT_COMBINED = COMBINED_DESCRIPTION;
+
 export default function ServiceHome({ kind }) {
   const service = DEMO_SERVICES.find(s => s.kind === kind),
     applyOnline = kind === 'accreditation' && INTEGRATIONS.crmAccreditation;
   const records = useServiceRecords(kind),
     has = Boolean(records?.length);
   // An Associate member cannot buy insurance on its own: their route to cover is to upgrade to Full with insurance (the same quote journey).
-  const memberships = useServiceRecords(kind === 'insurance' && INTEGRATIONS.membershipUpgrade ? 'membership' : '');
+  const combined = kind === 'membership' && INTEGRATIONS.combinedFlow;
+  const memberships = useServiceRecords(
+    (kind === 'insurance' || combined) && INTEGRATIONS.membershipUpgrade ? 'membership' : '',
+  );
+  // With the combined flow the member's policies sit on the same page as their membership.
+  const policies = useServiceRecords(combined ? 'insurance' : '');
   const upgradable = upgradableRecord(memberships, new Date().toISOString().slice(0, 10));
   const accState = useAccreditationState(); // eslint-disable-line react-hooks/rules-of-hooks
   const accHolds = kind === 'accreditation' && accState && accState.key !== 'none';
@@ -43,19 +52,28 @@ export default function ServiceHome({ kind }) {
     <div className="page">
       <PageHeading
         eyebrow="GUILD SERVICES"
-        title={service.title}
+        title={combined ? COMBINED_TITLE : service.title}
         description={
-          kind === 'accreditation' && (has || accHolds)
-            ? MANAGE_TEXT
-            : has
-              ? ''
-              : kind === 'membership'
-                ? NO_MEMBERSHIP_TEXT
-                : service.description
+          combined && !has
+            ? NO_MEMBERSHIP_TEXT_COMBINED
+            : kind === 'accreditation' && (has || accHolds)
+              ? MANAGE_TEXT
+              : has
+                ? ''
+                : kind === 'membership'
+                  ? NO_MEMBERSHIP_TEXT
+                  : service.description
         }
       >
         {kind === 'membership' && INTEGRATIONS.stripeCheckout ? (
-          membershipButton
+          <>
+            {membershipButton}
+            {combined && upgradable && (
+              <Link className="btn btn-secondary" to={upgradeLink(upgradable.id)}>
+                Upgrade to Membership with Insurance <ArrowRight size={16} />
+              </Link>
+            )}
+          </>
         ) : kind === 'insurance' && INTEGRATIONS.stripeCheckout && upgradable ? (
           <Link className="btn btn-primary" to={upgradeLink(upgradable.id)}>
             Get an insurance quote <ArrowRight size={16} />
@@ -73,6 +91,7 @@ export default function ServiceHome({ kind }) {
       </PageHeading>
       {kind === 'accreditation' && <AccreditationStatusBanner state={accState} />}
       <MyServiceRecords kind={kind} rows={records} />
+      {combined && <MyServiceRecords kind="insurance" rows={policies} />}
       {!has && (
         <div className={'service-banner ' + service.theme}>
           <div>
