@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { insuranceRedirect } from './combinedFlow.js';
 import PortalView from './PortalView.jsx';
 import Dashboard from './Dashboard.jsx';
 import ServiceHome from './ServiceHome.jsx';
@@ -48,6 +49,12 @@ function GtiCourses() {
     </div>
   );
 }
+// With the combined flow on, the standalone insurance pages send people to the membership journey and keep any query string.
+function InsuranceRedirect({ children }) {
+  const { pathname, search } = useLocation();
+  const to = insuranceRedirect(pathname, INTEGRATIONS.combinedFlow);
+  return to ? <Navigate to={to + search} replace /> : children;
+}
 function NotFound() {
   return (
     <div className="page narrow-page">
@@ -83,17 +90,38 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/membership" element={<ServiceHome kind="membership" />} />
-          <Route path="/insurance" element={<ServiceHome kind="insurance" />} />
+          <Route
+            path="/insurance"
+            element={
+              <InsuranceRedirect>
+                <ServiceHome kind="insurance" />
+              </InsuranceRedirect>
+            }
+          />
           <Route path="/accreditation" element={<ServiceHome kind="accreditation" />} />
           <Route path="/membership/buy" element={<BuyMembership />} />
-          <Route path="/insurance/buy" element={<BuyInsurance />} />
+          <Route
+            path="/insurance/buy"
+            element={
+              <InsuranceRedirect>
+                <BuyInsurance />
+              </InsuranceRedirect>
+            }
+          />
           <Route
             path="/membership/new"
             element={
               INTEGRATIONS.stripeCheckout ? <Navigate to="/membership/buy" replace /> : <Journey kind="membership" />
             }
           />
-          <Route path="/insurance/new" element={<Journey kind="insurance" />} />
+          <Route
+            path="/insurance/new"
+            element={
+              <InsuranceRedirect>
+                <Journey kind="insurance" />
+              </InsuranceRedirect>
+            }
+          />
           <Route path="/accreditation/new" element={<Journey kind="accreditation" />} />
           <Route path="/verify" element={<PublicSchoolVerification />} />
           <Route path="/verify/:number" element={<PublicSchoolVerification />} />
