@@ -34,6 +34,7 @@ export default function ServiceHome({ kind }) {
   // With the combined flow the member's policies sit on the same page as their membership.
   const policies = useServiceRecords(combined ? 'insurance' : '');
   const upgradable = upgradableRecord(memberships, new Date().toISOString().slice(0, 10));
+  const ownMembership = memberships?.find(r => !isExpired(r));
   const accState = useAccreditationState(); // eslint-disable-line react-hooks/rules-of-hooks
   const accHolds = kind === 'accreditation' && accState && accState.key !== 'none';
   const current = records?.find(r => !isExpired(r));
@@ -78,9 +79,17 @@ export default function ServiceHome({ kind }) {
           <Link className="btn btn-primary" to={upgradeLink(upgradable.id)}>
             Get an insurance quote <ArrowRight size={16} />
           </Link>
+        ) : kind === 'insurance' && INTEGRATIONS.stripeCheckout && has ? (
+          // One policy at a time: a member with a policy changes it from their membership instead of buying another.
+          <Link
+            className="btn btn-primary"
+            to={ownMembership ? '/membership/manage/' + encodeURIComponent(ownMembership.id) + '/cover' : '/records'}
+          >
+            Change your cover <ArrowRight size={16} />
+          </Link>
         ) : kind === 'insurance' && INTEGRATIONS.stripeCheckout ? (
           <Link className="btn btn-primary" to="/insurance/buy">
-            {has ? 'Buy another policy' : 'Buy insurance'} <ArrowRight size={16} />
+            Buy insurance <ArrowRight size={16} />
           </Link>
         ) : (
           <Link className="btn btn-primary" to={'/' + kind + '/new'}>

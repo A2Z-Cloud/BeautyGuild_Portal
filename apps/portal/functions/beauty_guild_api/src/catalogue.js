@@ -463,6 +463,14 @@ const NEEDS_FULL = () =>
     'INSURANCE_NEEDS_FULL_MEMBERSHIP',
     'Insurance is included with Full membership. You can add it when you join as a Full member or when you upgrade your membership.',
   );
+// One policy at a time on a membership (decided 3 November). To change cover the member changes their policy, or upgrades if they are Associate.
+const ONE_POLICY = () =>
+  new HttpError(
+    409,
+    'POLICY_ALREADY_EXISTS',
+    'You already have a policy on this membership. To change your cover, use Change your cover in your membership.',
+  );
+const POLICY_NOT_IN_FORCE = new Set(['Draft', 'Ready for Payment', 'Referred', 'Expired']);
 // What the member typed on the Join page, kept short enough for Stripe metadata. Empty values are left out.
 const tidy = (v, n = 100) =>
   String(v || '')
@@ -504,6 +512,14 @@ SERVICES.insurance = {
     if (!name && !input.quote) bad('Enter your first name and surname.');
     const member = contact ? await activeMembership(req, crm, contact.id) : null;
     if (!member || !isFullType(member.type)) throw NEEDS_FULL();
+    // A quote or draft that is not yet cover does not count, so the member can finish a policy they have started.
+    const held = await crm(
+      req,
+      'Insurance_Policy/search?criteria=' +
+        encodeURIComponent('((Contact:equals:' + contact.id + ')and(Membership:equals:' + member.id + '))') +
+        '&fields=Application_Status',
+    );
+    if (held.some(p => !POLICY_NOT_IN_FORCE.has(String(p.Application_Status || '').trim()))) throw ONE_POLICY();
     const { start, end } = resolveStart(input.start, 'insurance');
     const ins = await insuranceLines({ req, contact, input, member, risk, start, end });
     return {

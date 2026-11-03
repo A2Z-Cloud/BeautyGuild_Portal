@@ -47,6 +47,7 @@ function world(opts = {}) {
     sessions: opts.sessions || {},
     acc: { Applicant_Contact: { id: ME }, Accreditation_Level: 'Standard', Payment_Status: 'Unpaid', ...opts.acc },
     deals: opts.deals || [],
+    policies: opts.policies || [],
     priceOverride: opts.priceOverride || {},
   };
   const json = (body, status = 200) => ({ status, ok: status < 400, json: async () => body });
@@ -89,6 +90,7 @@ function world(opts = {}) {
     }
     if (url.includes('Contacts/search'))
       return json({ data: [{ id: ME, Email: 'alice@example.test', First_Name: 'Alice', Last_Name: 'Test' }] });
+    if (url.includes('Insurance_Policy/search')) return json({ data: state.policies });
     if (url.includes('Insurance_Policy/') && (init.method || 'GET') === 'GET')
       return state.policy ? json({ data: [{ id: POLICY, ...state.policy }] }) : json({ data: [] });
     if (url.includes('Training_Centre_Accred/' + ACC)) return json({ data: [{ id: ACC, ...state.acc }] });
@@ -1221,6 +1223,19 @@ test('standalone insurance needs a current Full membership: none, Associate, exp
   await withApp(salon, async ({ post }) => assert.equal((await post(INSURE)).status, 201));
   const noContact = unlinked(world({ deals: [FULL_DEAL] }));
   await withApp(noContact, async ({ post }) => assert.equal((await post(INSURE)).status, 409));
+});
+test('a second standalone policy is refused while one is in force, but a draft or an ended policy does not block it', async () => {
+  const blocked = world({ deals: [FULL_DEAL], policies: [{ id: '1', Application_Status: 'Active' }] });
+  await withApp(blocked, async ({ post }) => {
+    const r = await post(INSURE);
+    assert.equal(r.status, 409);
+    assert.equal(r.body.code, 'POLICY_ALREADY_EXISTS');
+    assert.equal(blocked.stripePosts.length, 0);
+  });
+  for (const status of ['Draft', 'Ready for Payment', 'Referred', 'Expired']) {
+    const free = world({ deals: [FULL_DEAL], policies: [{ id: '1', Application_Status: status }] });
+    await withApp(free, async ({ post }) => assert.equal((await post(INSURE)).status, 201, status));
+  }
 });
 test('membership with insurance is refused for the Associate level, which has no insurance', async () => {
   const w = unlinked(world({ priceOverride: RECURRING }));
