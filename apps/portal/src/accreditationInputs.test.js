@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { validate } from './logic.mjs';
-import { JOURNEYS, COUNTRY_OPTIONS } from './JourneyConfig.js';
+import { JOURNEYS, COUNTRY_OPTIONS, ACCREDITATION_COUNTRIES } from './JourneyConfig.js';
 import {
   firstIncompleteStep,
   resolveFields,
@@ -14,7 +14,6 @@ import {
 } from './accreditationInputs.js';
 import { phoneIssue, splitPhone, joinPhone, isoForCountry } from './phones.js';
 import { groupCourses } from './courseGroups.js';
-import { startLimits } from './startDate.js';
 
 const steps = JOURNEYS.accreditation.steps;
 const fields = steps.flatMap(s => s.fields);
@@ -47,7 +46,6 @@ const complete = () => ({
   qualifiedSixMonths: 'yes',
   teachingQualification: 'yes',
   evidenceAvailable: 'yes',
-  startDate: startLimits().min,
   terms: true,
 });
 
@@ -110,19 +108,18 @@ test('the centre country decides UK or international, not the home address', () 
   assert.equal(isUkCentre({ country: 'United Kingdom', contactCountry: 'France' }), true);
 });
 
-test('declarations must all be Yes, with the reason shown, and the start date is limited to one month ahead (AL-ACC-046)', () => {
+test('declarations must all be Yes, with the reason shown, and no start date is asked for (UAT round 1)', () => {
   const declarations = steps.find(s => s.id === 'declarations').fields;
   assert.ok(declarations.filter(f => f.mustBe === 'yes' && f.noMessage).length === 3);
   assert.ok(errorsFor('declarations', { ...complete(), teachingQualification: 'no' }).teachingQualification);
-  const { min, max } = startLimits(),
-    day = Date.now() + 40 * 864e5;
-  assert.deepEqual(errorsFor('declarations', complete()), {});
-  assert.ok(
-    errorsFor('declarations', { ...complete(), startDate: new Date(day).toISOString().slice(0, 10) }).startDate,
+  assert.equal(
+    declarations.some(f => f.name === 'startDate'),
+    false,
   );
-  assert.ok(errorsFor('declarations', { ...complete(), startDate: '2020-01-01' }).startDate);
-  assert.deepEqual(errorsFor('declarations', { ...complete(), startDate: max }), {});
-  assert.ok(max > min);
+  assert.deepEqual(errorsFor('declarations', complete()), {});
+  assert.match(DECLARATIONS_WARNING, /01332 224830 between 9am and 5pm on weekdays/);
+  const noLinks = Object.fromEntries(declarations.filter(f => f.noLink).map(f => [f.name, f.noLink]));
+  assert.deepEqual(noLinks, { qualifiedSixMonths: '/gti-courses', teachingQualification: '/gti-courses' });
 });
 
 test('mobile is the required number, the centre needs an email and mobile, and phone numbers must be a real length (AL-ACC-011)', () => {
@@ -144,6 +141,9 @@ test('mobile is the required number, the centre needs an email and mobile, and p
   assert.equal(byName('courseIds').type, 'courses');
   assert.ok(errorsFor('courses', { courseIds: [] }).courseIds);
   assert.deepEqual(errorsFor('courses', { courseIds: ['3000000000001'] }), {});
+  // An Other course typed in place of a ticked GTi course also lets the step through.
+  assert.deepEqual(errorsFor('courses', { courseIds: [], otherCourse: 'Korean Eyelash Extensions' }), {});
+  assert.ok(errorsFor('courses', { courseIds: [], otherCourse: '   ' }).courseIds);
 });
 
 test('resuming rebuilds the form: unlisted countries become Other, old dates and titles are cleaned', () => {
@@ -154,11 +154,16 @@ test('resuming rebuilds the form: unlisted countries become Other, old dates and
   assert.equal(out.country, 'Other');
   assert.equal(out.countryOther, 'Narnia');
   assert.equal(out.contactCountry, 'United Kingdom');
-  assert.equal(out.startDate, '');
+  assert.equal(out.startDate, undefined, 'the start date is no longer asked for or kept');
   assert.equal(out.title, 'Mrs');
   assert.equal(restoreAccreditationAnswers({ title: 'Prof.' }, COUNTRY_OPTIONS).title, '');
-  const keep = startLimits().min;
-  assert.equal(restoreAccreditationAnswers({ startDate: keep }, COUNTRY_OPTIONS).startDate, keep);
+  for (const nation of ['England', 'scotland', 'Wales', 'Northern Ireland'])
+    assert.equal(restoreAccreditationAnswers({ country: nation }, ACCREDITATION_COUNTRIES).country, 'United Kingdom');
+  assert.deepEqual(
+    ACCREDITATION_COUNTRIES.filter(c => /^(England|Scotland|Wales|Northern Ireland)$/.test(c)),
+    [],
+  );
+  assert.equal(ACCREDITATION_COUNTRIES.filter(c => c === 'United Kingdom').length, 1);
 });
 
 test('resume goes to the first step with a missing answer, or the review when complete', () => {

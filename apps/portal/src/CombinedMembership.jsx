@@ -551,7 +551,7 @@ export default function CombinedMembership() {
                       <p className="error" role="alert">
                         Still to complete:{' '}
                         {Object.keys(missing)
-                          .map(k => DETAIL_LABELS[k].toLowerCase())
+                          .map(k => DETAIL_LABELS[k].charAt(0).toUpperCase() + DETAIL_LABELS[k].slice(1).toLowerCase())
                           .join(', ')}
                         .
                       </p>

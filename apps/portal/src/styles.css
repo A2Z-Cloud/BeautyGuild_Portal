@@ -2015,7 +2015,7 @@ small {
 /* Milestone 2 read integrations and Catalyst sign-in */
 .address-lookup {
   grid-column: 1/-1;
-  margin: -10px 0 12px;
+  margin: 4px 0 12px;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -3762,12 +3762,13 @@ iframe {
 .membership-journey .buy-section .radio-choice {
   border: 1px solid #ee3e96;
 }
-.membership-journey .buy-section .field.invalid input {
-  border: 2px solid #b3261e;
+.membership-journey .buy-section .field.invalid input,
+.membership-journey .buy-section .field.invalid select {
+  border: 2px solid #a3125a;
 }
 .membership-journey .buy-section .field .error,
 .membership-journey .buy-section p.error {
-  color: #b3261e;
+  color: #a3125a;
   font-weight: 600;
 }
 .membership-journey .buy-section p.error {
@@ -3967,4 +3968,29 @@ iframe {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+}
+
+/* The review step groups answers by step, each with its own Edit button. */
+.review-section {
+  margin-top: 18px;
+}
+.review-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid #eadfe7;
+  padding-bottom: 6px;
+}
+.review-section-head h4 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.course-help h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+.course-help .field {
+  margin-top: 12px;
 }

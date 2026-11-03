@@ -589,6 +589,28 @@ test('the start date must be within one month ahead and not in the past', () => 
   assert.equal(readAnswers(answers({ startDate: '' })).startDate, day(0));
 });
 
+test('no start date is needed: an application without one starts today', () => {
+  const a = answers({});
+  delete a.startDate;
+  assert.equal(readAnswers(a).startDate, day(0));
+});
+
+test('an Other course lets an application go ahead with no GTi course, but only when the field is configured (UAT round 1)', () => {
+  const none = answers({ courseIds: [], otherCourse: 'Korean Eyelash Extensions' });
+  // Not configured: the text is ignored, so a GTi course is still needed.
+  assert.throws(() => readAnswers(none, { final: true }), /at least one GTi course/);
+  assert.equal(readAnswers(none).otherCourse, '');
+  // Configured: the text counts, and is trimmed and kept.
+  const m = readAnswers(none, { final: true, otherCourseField: 'Other_Course' });
+  assert.equal(m.otherCourse, 'Korean Eyelash Extensions');
+  assert.deepEqual(m.courseIds, []);
+  // Configured but nothing chosen or typed: still refused, with the wording that mentions the other course.
+  assert.throws(
+    () => readAnswers(answers({ courseIds: [], otherCourse: '  ' }), { final: true, otherCourseField: 'Other_Course' }),
+    /enter the course you want accredited/,
+  );
+});
+
 test('it fails closed when the CRM stage list lacks Draft or Awaiting Payment', async () => {
   const crm = fakeCrm({
     stages: { fields: [{ api_name: 'Application_Stage', pick_list_values: [{ actual_value: 'Draft' }] }] },

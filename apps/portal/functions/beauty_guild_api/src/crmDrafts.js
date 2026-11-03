@@ -219,7 +219,12 @@ function registerDraftRoutes(
     }
   };
   // Accreditation keeps its V1 record set (no Journey_ID or Notes); see accreditationDrafts.js.
-  const accreditation = createAccreditation({ request, listCourses, ...(sleep ? { sleep } : {}) });
+  const accreditation = createAccreditation({
+    request,
+    listCourses,
+    otherCourseField: config.accreditationOtherCourseField || '',
+    ...(sleep ? { sleep } : {}),
+  });
   const findByJourney = async (req, module, journeyId, contactId) => {
     const r = await request(req, 'GET', module + '/search?criteria=' + quote('(Journey_ID:equals:' + journeyId + ')'));
     const rows = (r.data || []).filter(v => v.Journey_ID === journeyId);

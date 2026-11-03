@@ -269,7 +269,16 @@ export function Field({ field, value, onChange, error, values = {}, locked = fal
     );
   else if (field.type === 'tutors')
     control = <TutorRows field={field} value={value} count={values[field.countFrom]} onChange={onChange} />;
-  else if (field.type === 'courses') control = <CoursePicker value={value} onChange={v => onChange(field.name, v)} />;
+  else if (field.type === 'courses')
+    control = (
+      <CoursePicker
+        value={value}
+        onChange={v => onChange(field.name, v)}
+        otherName={field.otherName}
+        otherValue={field.otherName ? values[field.otherName] : ''}
+        onOtherChange={v => onChange(field.otherName, v)}
+      />
+    );
   else if (field.type === 'date') {
     const { min, max } = startLimits();
     control = <input {...common} type="date" value={value || ''} min={min} max={max} onChange={update} />;
@@ -312,6 +321,12 @@ export function Field({ field, value, onChange, error, values = {}, locked = fal
       {field.noMessage && value === 'no' && (
         <small className="field-warning" role="alert">
           {field.noMessage}
+          {field.noLink && (
+            <>
+              {' '}
+              <Link to={field.noLink}>See the GTi courses</Link>
+            </>
+          )}
         </small>
       )}
       {field.hint && <small>{field.hint}</small>}

@@ -1,7 +1,6 @@
 // The accreditation application questions, from the V1 wizard and the UAT decisions (AL-ACC-016, 025, 030, 032, 046, 059).
 // The server maps these answers onto the same CRM records V1 writes (functions/beauty_guild_api/src/accreditationDrafts.js).
 import { UK_COUNTRIES } from './logic.mjs';
-import { startLimits } from './startDate.js';
 import { LEGAL_LINKS } from './legal.js';
 
 const f = (name, label, type = 'text', required = true, extra = {}) => ({ name, label, type, required, ...extra });
@@ -43,21 +42,24 @@ export const DECLARATIONS = [
   [
     'qualifiedSixMonths',
     'I am qualified in the subjects I wish to teach and have held my qualifications for at least 6 months.',
-    'You need to be qualified in the areas you want to teach and have at least 6 months of experience in each subject or treatment.',
+    'You need to be qualified in the areas you want to teach and have at least 6 months of experience in each subject or treatment. See our GTi course list for courses that can help.',
+    '/gti-courses',
   ],
   [
     'teachingQualification',
     'I hold a recognised teaching qualification.',
     'You need to hold a recognised teaching qualification to apply for accreditation. We recommend the GTi Teaching Certificate.',
+    '/gti-courses',
   ],
   [
     'evidenceAvailable',
     'I will be able to provide copies of my qualifications if required at any point.',
     'You must hold copies of your qualifications if you wish to apply for Guild Accreditation.',
+    null,
   ],
 ];
 export const DECLARATIONS_WARNING =
-  'All declarations must be confirmed as "Yes" to apply for GTi accreditation. If you need to discuss anything, please call us on 01332 224830.';
+  'All declarations must be confirmed as "Yes" to apply for GTi accreditation. Please call our office to discuss on 01332 224830 between 9am and 5pm on weekdays.';
 
 export function accreditationSteps(countries) {
   const country = (name, label, extra = {}) => f(name, label, 'select', true, { options: list(countries), ...extra });
@@ -104,7 +106,7 @@ export function accreditationSteps(countries) {
     {
       id: 'centre',
       title: 'Training centre',
-      description: 'The country of your centre decides whether UK or international accreditation applies.',
+      description: 'Tell us about the centre where you teach.',
       fields: [
         f('copyHome', 'Use my own details', 'copyHome', false),
         f('centre', 'Training school name'),
@@ -135,20 +137,23 @@ export function accreditationSteps(countries) {
       description:
         'Tell us who else teaches for your school. We invite each tutor to join the Guild and link them to your school.',
       fields: [
-        yn('otherTutors', 'Do you use other tutors?'),
+        yn('otherTutors', 'Do you have any additional tutors?'),
         yn(
           'tutorQualified',
-          'Do your other tutors hold the relevant qualifications and have at least six months of experience?',
+          'Do your tutors hold a teaching qualification and the relevant qualifications in the subjects they wish to teach for at least 6 months?',
           { when: yes('otherTutors') },
         ),
-        f('tutorCount', 'How many other tutors?', 'number', true, { when: yes('otherTutors'), max: 20 }),
+        f('tutorCount', 'How many additional tutors do you have?', 'number', true, {
+          when: yes('otherTutors'),
+          max: 20,
+        }),
         f('tutors', 'Your tutors', 'tutors', true, {
           when: v => v.otherTutors === 'yes' && Number(v.tutorCount) >= 1,
           countFrom: 'tutorCount',
           hint: 'Each tutor is invited to join the Guild.',
         }),
-        yn('additionalVenues', 'Do you teach at additional venues?', {
-          hint: 'Additional venues are added separately from your school page.',
+        yn('additionalVenues', 'Do you offer training at additional venues?', {
+          hint: 'Additional venue details can be added once your application has been verified.',
         }),
       ],
     },
@@ -157,22 +162,35 @@ export function accreditationSteps(countries) {
       title: 'Courses',
       description:
         'This is the complete list of GTi courses available to Guild accredited schools. Select every course you wish to offer, provided you hold the right qualifications and experience and can meet the requirements for that course. Use View course requirements to check each one first.',
-      fields: [f('courseIds', 'Select the GTi courses you wish to teach', 'courses', true)],
+      // A course typed under "Other" counts in place of a ticked GTi course (only shown when the Other course switch is on).
+      fields: [
+        f(
+          'courseIds',
+          'Select the GTi courses you wish to teach',
+          'courses',
+          v => !String(v.otherCourse || '').trim(),
+          {
+            otherName: 'otherCourse',
+          },
+        ),
+      ],
     },
     {
       id: 'declarations',
-      title: 'Declarations and start date',
-      description: 'Confirm the training and qualification standards, and choose when your accreditation starts.',
+      title: 'Declarations',
+      description:
+        'Confirm the training and qualification standards. Your accreditation starts when the Guild verifies it.',
       fields: [
-        ...DECLARATIONS.map(([name, label, message]) => yn(name, label, { mustBe: 'yes', noMessage: message })),
-        f('startDate', 'Start date', 'date', true, { limit: 'start', hint: 'Today, or up to one month ahead.' }),
+        ...DECLARATIONS.map(([name, label, message, link]) =>
+          yn(name, label, { mustBe: 'yes', noMessage: message, ...(link ? { noLink: link } : {}) }),
+        ),
         f('terms', 'I accept the Terms of Business and the Privacy Policy.', 'checkbox', true, { links: LEGAL_LINKS }),
       ],
     },
     {
       id: 'review',
       title: 'Review and submit',
-      description: 'Check your answers. Submitting sends your application to the Guild and takes you to payment.',
+      description: 'Check your answers. Continuing saves your application and takes you to payment.',
       fields: [],
     },
   ];
@@ -180,7 +198,7 @@ export function accreditationSteps(countries) {
 
 // An application restored from the CRM shows a country the form does not list as "Other" plus its name, and drops a start date
 // that has passed.
-export function restoreAccreditationAnswers(answers, countries, now = Date.now()) {
+export function restoreAccreditationAnswers(answers, countries) {
   const a = { ...(answers || {}) };
   for (const [key, other] of [
     ['country', 'countryOther'],
@@ -188,7 +206,11 @@ export function restoreAccreditationAnswers(answers, countries, now = Date.now()
   ]) {
     const wanted = String(a[key] || '').trim();
     if (!wanted) continue;
-    const match = countries.find(c => c !== 'Other' && c.toLowerCase() === wanted.toLowerCase());
+    // A saved England, Scotland, Wales or Northern Ireland is the United Kingdom, which is all the form lists.
+    const named = ['england', 'scotland', 'wales', 'northern ireland', 'uk'].includes(wanted.toLowerCase())
+      ? 'United Kingdom'
+      : wanted;
+    const match = countries.find(c => c !== 'Other' && c.toLowerCase() === named.toLowerCase());
     if (match) a[key] = match;
     else {
       a[key] = 'Other';
@@ -199,7 +221,7 @@ export function restoreAccreditationAnswers(answers, countries, now = Date.now()
     const t = String(a.title).replace(/\.$/, '').trim().toLowerCase();
     a.title = ['Mr', 'Mrs', 'Miss', 'Ms', 'Mx', 'Dr'].find(x => x.toLowerCase() === t) || '';
   }
-  if (a.startDate && a.startDate < startLimits(now).min) a.startDate = '';
+  delete a.startDate; // The Guild starts the accreditation when it verifies the application.
   return a;
 }
 // Where to resume: the first step that still has a required answer missing, or the review step when everything is complete.

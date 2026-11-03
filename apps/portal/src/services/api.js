@@ -68,6 +68,9 @@ export const INTEGRATIONS = Object.freeze({
   crmDrafts: draftsOn,
   // The accreditation application writes the V1 record set, so it has its own switch on top of saved drafts.
   crmAccreditation: draftsOn && import.meta.env.VITE_PORTAL_CRM_ACCREDITATION === 'true',
+  // A course that is not a GTi course, typed on the Courses step. Off until the Guild creates the CRM field and the function's
+  // ACC_OTHER_COURSE_FIELD names it (docs/delivery/uat-round1-fixes-spec.md).
+  otherCourse: draftsOn && import.meta.env.VITE_PORTAL_OTHER_COURSE === 'true',
   crmContactMapping: recordsOn,
   pricing: false,
   underwriting: false,

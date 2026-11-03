@@ -224,6 +224,9 @@ export const COUNTRY_OPTIONS = [
   'Zimbabwe',
   'Other',
 ];
+// Accreditation asks for the country only: England, Scotland, Wales and Northern Ireland are all the United Kingdom.
+const UK_NATIONS = ['England', 'Scotland', 'Wales', 'Northern Ireland'];
+export const ACCREDITATION_COUNTRIES = COUNTRY_OPTIONS.filter(o => !UK_NATIONS.includes(o));
 // Membership and insurance are UK-only products today - scoped to the short list that was here before
 // (expanding to the full COUNTRY_OPTIONS below is accreditation-specific, since that's the only journey
 // that takes international applicants/training centres).
@@ -245,6 +248,15 @@ export function countryOption(name) {
     .toLowerCase();
   if (!wanted) return '';
   return COUNTRY_OPTIONS.find(o => o.toLowerCase() === wanted) || 'Other';
+}
+// The same for accreditation, whose list has no England, Scotland, Wales or Northern Ireland: they come back as the United Kingdom.
+export function accreditationCountryOption(name) {
+  const wanted = String(name || '')
+    .trim()
+    .toLowerCase();
+  if (!wanted) return '';
+  if (UK_NATIONS.some(n => n.toLowerCase() === wanted)) return 'United Kingdom';
+  return ACCREDITATION_COUNTRIES.find(o => o.toLowerCase() === wanted) || 'Other';
 }
 const yes = name => v => v[name] === 'yes';
 const salon = v => (v.workingMethods || []).includes('salon');
@@ -347,7 +359,7 @@ export const JOURNEYS = {
     title: 'Accreditation',
     kicker: 'TRAINING CENTRE ACCREDITATION',
     intro: 'Training centre, tutor, course and evidence declarations.',
-    steps: accreditationSteps(COUNTRY_OPTIONS),
+    steps: accreditationSteps(ACCREDITATION_COUNTRIES),
   },
   insurance: {
     title: 'Insurance',

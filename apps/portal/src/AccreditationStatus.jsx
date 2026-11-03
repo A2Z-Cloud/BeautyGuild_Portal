@@ -50,6 +50,18 @@ export function AccreditationStatusBanner({ state }) {
 // The Accreditation card on the dashboard: it says where the member's application stands and links to the next step.
 export function AccreditationDashboardCard({ service }) {
   const state = useAccreditationState();
+  // Until the member's applications arrive the card says so, instead of inviting them to apply and then changing its mind.
+  if (state === null && INTEGRATIONS.crmRecords)
+    return (
+      <div className={'service-card ' + service.theme} aria-busy="true">
+        <span className="service-icon">
+          <IconFor kind="accreditation" />
+        </span>
+        <small>GUILD SERVICES</small>
+        <strong>{service.title}</strong>
+        <p>Checking your accreditation…</p>
+      </div>
+    );
   const active = state && state.key !== 'none';
   const go =
     active && state.key !== 'approved'
