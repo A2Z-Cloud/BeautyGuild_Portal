@@ -527,17 +527,17 @@ function draftAnswers(j){
  if(j.kind==='insurance')return {insurance:{iv,country:a.country||'',start:a.start||''}};
  const addons={};
  for(const key of ['bundle','certificate','badge','sticker']){const n=Number(a['addon_'+key]||0);if(Number.isInteger(n)&&n>0)addons[key]=n;}
- const f={answers:{country:a.country||'',insuranceRequired:a.insuranceRequired||'',working:a.working||''},branch:a.branch||'',branches:a.branches||[],billing:isUk(a.country)?(a.billing||'annual'):'annual',addons,insurance:requestedInsurance(a),start:a.start||'',previousId:a.previousId||'',changeType:a.changeType||'',...(a.code?{code:a.code}:{})};
+ const c={country:a.country||'',insuranceRequired:a.insuranceRequired||'',working:a.working||'',branch:a.branch||'',branches:a.branches||[],billing:isUk(a.country)?(a.billing||'annual'):'annual',addons,start:a.start||'',previousId:a.previousId||'',changeType:a.changeType||'',...(a.code?{code:a.code}:{})};
  const d={firstName:a.firstName||'',lastName:a.lastName||'',email:a.email||'',tradingName:a.tradingName||'',mobile:a.mobile||'',address1:a.address1||'',address2:a.address2||'',town:a.town||'',county:a.county||'',postcode:a.postcode||'',country:a.country||''};
- return {membership:{f,d},...(f.insurance?{insurance:{iv:{...iv,insWorking:a.working?[a.working]:[]},country:a.country||''}}:{})};
+ return {membership:{c,d},...(requestedInsurance(a)?{insurance:{iv:{...iv,insWorking:a.working?[a.working]:[]},country:a.country||''}}:{})};
 }
 function restoreAnswers(d){
  const a=d?.answers||{};
  if(d.service==='accreditation')return {...a};
  if(d.service==='insurance'&&a.insurance?.iv)return {...a.insurance.iv,country:a.insurance.country||'',start:a.insurance.start||''};
- if(a.membership?.f){
-   const f=a.membership.f,d=a.membership.d||{},ins=a.insurance;
-   const answer=f.answers||{};const legacyWorking=Array.isArray(ins?.iv?.insWorking)&&ins.iv.insWorking.length===1?ins.iv.insWorking[0]:'';
+ if(a.membership?.c||a.membership?.f){
+   const f=a.membership.c||a.membership.f,d=a.membership.d||{},ins=a.insurance;
+   const answer=f.answers||f;const legacyWorking=Array.isArray(ins?.iv?.insWorking)&&ins.iv.insWorking.length===1?ins.iv.insWorking[0]:'';
    return {...d,...(ins?.iv||{}),branch:f.branch,branches:f.branches,billing:f.billing,start:f.start,previousId:f.previousId||'',changeType:f.changeType||'',code:f.code||'',country:answer.country||ins?.country||d.country||'',insuranceRequired:answer.insuranceRequired||(ins?'yes':'no'),working:answer.working||(ins?.iv?.insWorking?.length>1?'':legacyWorking),insWorking:answer.working?[answer.working]:(legacyWorking?[legacyWorking]:[]),...Object.fromEntries(Object.entries(f.addons||{}).map(([k,v])=>['addon_'+k,v]))};
  }
  return {...a};
