@@ -152,3 +152,16 @@ body.staff-dev-tools #staff-api-open{display:inline-flex}
 .process-entry--insurance .entry-icon{background:#fff;color:#725399}
 .process-entry .button{background:#ffffffcc}
 .journey-type-card:focus-visible,.process-entry .button:focus-visible{outline:2px solid #be2d78;outline-offset:2px}
+
+
+/* Operational UAT: operational CRM records only. Business transaction code is retained, not exposed. */
+[data-view="create"], #staff-api-open, .create-cta,
+[data-action^="journey-"],[data-action^="membership-cancel-"],
+[data-action="membership-renew"],[data-action="membership-upgrade"],
+[data-staff-action="mta"],[data-staff-action="discount"] { display:none !important; }
+.browse-controls select[data-crm-view]{min-height:38px;max-width:290px;width:100%;border:1px solid #d9dce3;border-radius:8px;padding:8px 10px;background:#fff;color:#26323d;font:inherit}
+.browse-controls [data-crm-view]:focus-visible{outline:2px solid #9c357e;outline-offset:2px}
+.uat-field-editors{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:10px}
+.uat-field-row{display:flex;flex-direction:column;gap:5px;min-width:0}
+.uat-field-row>label{font-size:12px;font-weight:600;color:#344054}
+.uat-field-row select{min-height:40px;width:100%;max-width:100%;padding:8px;border:1px solid #d8dce4;border-radius:8px;background:#fff}
