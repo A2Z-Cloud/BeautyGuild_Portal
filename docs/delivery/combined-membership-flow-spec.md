@@ -113,7 +113,7 @@ Both paths keep the CRM record. Required: confirm the portal's CRM write permiss
 | `/insurance/buy`, `/insurance/new` | Redirect to the combined flow (the form is disabled) |
 | `/insurance` service page | Redirects to the Membership and Insurance page |
 | Associate "Get an insurance quote" link | The upgrade flow, as now (section 6) |
-| "Buy another policy" (Full members) | Moves to manage membership, "Add another policy" (decided 30 October, section 9.2) |
+| "Buy another policy" (Full members) | Becomes "Change your cover", which opens the membership's cover page. One policy at a time (decided 3 November, section 9.2) |
 
 A client flag `VITE_PORTAL_COMBINED_FLOW` and a function switch `PORTAL_COMBINED_FLOW_ENABLED` switch the new flow on, so it can be turned off while the old routes remain. The old standalone code is removed only after UAT passes.
 
@@ -159,7 +159,7 @@ Use the same shell as school management (`school-layout`, `school-nav`, `surface
 - **Header:** eyebrow `MEMBERSHIP`, the membership title, and a line of level, status and expiry (for example "Full Member (Non-Salon) · Active · to 30 Nov 2026").
 - **Left navigation, grouped:**
   - Membership: Overview, Branches and extras
-  - Insurance (only when there is a policy): Your cover, Changes and history, and Add another policy
+  - Insurance (only when there is a policy): Your cover and Changes and history (no second policy: section 9.2)
   - Records: Documents, Invoices
   - Actions: Renew, Upgrade (Associate, UK only), Cancel (when cancellations are on)
 - **Overview** replaces the raw Details dump with labelled fields: level, status, start and end dates, billing (annual or monthly), primary branch, referral and reference. Raw CRM keys are never shown. It also shows what needs attention: renewal due, payment failed, change awaiting payment.
@@ -167,7 +167,7 @@ Use the same shell as school management (`school-layout`, `school-nav`, `surface
 - **Your cover and Changes and history** are the existing cover and change history panels, unchanged in content.
 - **Documents** adds the membership documents, now reachable from the manage page, as school management does for accreditation.
 - **Invoices** is the existing table.
-- **Add another policy** (decided 30 October) quotes and buys a further policy from here, for an active Full member in the UK group. It uses the existing insurance steps and the existing `insurance` service with the membership as context, with no membership fee and no joining fee. The standalone insurance form for non-members stays removed. The policy asks "How you work" again, as a new premises may differ, and follows its own answer. The membership level stays as it is, unless the member upgrades it, or the renewal upgrades it (decided 30 October: a Non-Salon member who answered salon on a policy is moved to Full Salon at renewal). The member is told this when they buy the policy. The server refuses it for Associate, International, non-UK or inactive memberships.
+- **One policy at a time** (decided 3 November, replacing the 30 October "Add another policy"). A membership has one policy in force at a time. To change cover the member changes the policy (Changes and history), or an Associate upgrades to Full. A new policy is bought only at renewal or when the last one has ended. The server refuses a second standalone policy while one is in force (`POLICY_ALREADY_EXISTS`); a draft, a Ready for Payment quote, a referral or an ended policy does not block one. The standalone insurance service stays only for a Full member whose policy has ended.
 - **Actions** show only what the member can do. Renew shows from 60 days before expiry or after it. Upgrade shows for an active UK Associate. Cancel shows only with the cancellation switches on, and opens the cancellation quote.
 - On a phone the left navigation becomes a horizontal scrolling tab bar, as school management does.
 - Routes become `/membership/manage/:id/:section`, with the old `?tab=` links redirecting to the matching section so saved links and emails keep working.
@@ -181,11 +181,11 @@ The school profile (PR 113) set the visual pattern: identity hero, tabbed conten
 The staff widget "follows the portal" (customer decision, 30 October). The decision function is shared, so the widget cannot hold its own rules.
 
 1. **Quote and payment link routes.** `/staff/quote`, `/staff/payment-link`, `/staff/membership-options`, the draft routes and `/staff/cover` take `answers` for a membership. `level` is no longer sent by the widget. The responses carry `decision` so the widget can show "Full Member (Non-Salon), with insurance" without logic of its own.
-2. **Assisted creation (widget spec section 6).** The membership and standalone insurance forms merge into one staff form with the same questions in the same order: country, insurance required, how you work. The staff declarations step stays. The separate "insurance" service for new customers is removed with the portal's standalone form. The `insurance` service stays only for "Add another policy" on an existing Full member's record.
+2. **Assisted creation (widget spec section 6).** The membership and standalone insurance forms merge into one staff form with the same questions in the same order: country, insurance required, how you work. The staff declarations step stays. The separate "insurance" service for new customers is removed with the portal's standalone form. The `insurance` service stays only for a Full member whose policy has ended (one policy at a time, section 9.2).
 3. **Staff API doc and the widget spec** are updated (staff-api.md, SPECIFICATION.md sections 6.1 and 6.4, and the build brief). The cross-system cancellation spec and the widget cancellations note refer to levels, so they follow.
 4. **The CRM function (Deluge).** The named actions that send `level` change to send the answers. The action names and signing stay the same. The widget needs the updated function body, as for the previous staff API changes.
 5. **Existing drafts.** Staff drafts with a mix of working answers get the same re-ask as customers (2.3).
-6. **Another policy for an existing member.** The staff quote and payment-link routes accept `service=insurance` only with the membership as context, under the same eligibility rules as the portal (9.2).
+6. **Another policy for an existing member.** The staff quote and payment-link routes accept `service=insurance` only with the membership as context, under the same eligibility rules as the portal (9.2), including one policy at a time.
 7. **UAT.** The widget scenarios for assisted membership and insurance, the staff quote tests (`staff-routes.test.js`) and the widget mock tests are rewritten for the answers input.
 
 ## 11. Decisions
@@ -224,7 +224,7 @@ Each piece is its own pull request, merged and deployed in this order. Switches 
 
 Delivery notes (2 November 2026):
 - Step 4 is PR 120 and step 5 is the manage membership redesign. Both are behind or beside the switches described above.
-- Step 5 leaves out three things from section 9.2 until their server parts exist: **Add another policy** (needs the server eligibility rule and the `insurance` service with membership context, so it is its own piece of work), **Cancel** (there is no customer cancellation route yet, only the staff one), and the Overview fields **billing (annual or monthly)**, **primary branch** and **referral**, which the record API does not return yet. The Overview shows level, status, dates, branches, payment status and reference.
+- Step 5 leaves out three things from section 9.2 until their server parts exist: **Add another policy** (dropped on 3 November: one policy at a time), **Cancel** (there is no customer cancellation route yet, only the staff one), and the Overview fields **billing (annual or monthly)**, **primary branch** and **referral**, which the record API does not return yet. The Overview shows level, status, dates, branches, payment status and reference.
 - The mobile navigation wraps as chips, exactly as school management does today, rather than scrolling sideways.
 
 - Step 3 (the combined journey, `CombinedMembership.jsx`) differs from section 3.1 in two ways. The **primary branch** question is on About you, not Membership details, because the server cannot price a membership without a branch and a Full member would otherwise see no price until the sixth step. **Save and finish later** works in the combined journey with no server change: the draft routes store the answers as an opaque blob and never read a level (this corrects section 7, which listed them). The combined journey saves its own answers, and an older draft with a level is converted when it is opened (a mix of ways of working is asked again). Step 3 also adds `POST /portal/checkout/join-as-associate`, the server write behind "Join as Associate instead" (`docs/api-contracts/pricing-payments.md`).
