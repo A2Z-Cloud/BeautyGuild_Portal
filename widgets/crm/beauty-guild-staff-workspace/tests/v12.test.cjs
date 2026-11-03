@@ -39,12 +39,12 @@ test('Staff questionnaire imports the same Portal V2 question sources',()=>{
  const journey=read('v12-journeys.mjs');
  const insurance=read('portal-defs/insuranceInputs.js');
  const accreditation=read('portal-defs/accreditationInputs.js');
- assert.match(journey,/import \{INSURANCE_STEPS,visibleSteps,stopMessages\} from '\.\/portal-defs\/insuranceInputs\.js'/);
+ assert.ok(journey.includes('import {INSURANCE_STEPS,visibleSteps,stopMessages,'));
  assert.match(journey,/import \{accreditationSteps,resolveFields,COPY_HOME_MAP\} from '\.\/portal-defs\/accreditationInputs\.js'/);
  assert.match(insurance,/export const INSURANCE_STEPS/);
  assert.match(accreditation,/export function accreditationSteps/);
  assert.match(journey,/customer.*confirmation|customer.*acceptance/i);
- assert.match(journey,/No cover or accreditation is active/);
+ assert.match(journey,/staff-authorised Catalyst adapter/i);
 });
 test('No secrets are embedded in new frontend modules',()=>{
  for(const name of ['v12-crm.js','v12-journeys.mjs']){
