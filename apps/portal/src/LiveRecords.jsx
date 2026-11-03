@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { portalApi } from './services/api.js';
-import { Notice, PageHeading, Status, IconFor } from './UiParts.jsx';
+import { ErrorNotice, Notice, PageHeading, Status, IconFor } from './UiParts.jsx';
 import { comingSoon, formatDate, serviceLabel } from './format.js';
 import { DocumentsPanel } from './DocumentsPanel.jsx';
 export function LiveRecords() {
@@ -40,7 +40,7 @@ export function LiveRecords() {
       {data.busy ? (
         <p role="status">Loading your records…</p>
       ) : data.error ? (
-        <Notice title="Unable to load records">{data.error}</Notice>
+        <ErrorNotice title="Unable to load records" error={data.error} />
       ) : (
         <section className="surface">
           {data.rows.length ? (

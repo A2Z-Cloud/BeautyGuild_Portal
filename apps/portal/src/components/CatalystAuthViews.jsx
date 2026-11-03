@@ -151,7 +151,7 @@ export function CatalystAccountOverview() {
         <div>
           <small className="eyebrow">YOUR ACCOUNT</small>
           <h1>My account</h1>
-          <p>Your Guild account details. Editing your profile online is coming soon.</p>
+          <p>Your Guild account details.</p>
         </div>
       </div>
       {result.loading && <p role="status">Checking your signed-in session…</p>}
@@ -177,10 +177,11 @@ export function CatalystAccountOverview() {
             </div>
           </dl>
           <div className="notice">
-            <strong>Your membership details are coming soon</strong>
+            <strong>Your membership, insurance and accreditation</strong>
             <span>
-              We are still linking accounts to Guild membership records. Until then, your membership, insurance and
-              accreditation details are not available online.
+              Find them on the <Link to="/membership">Membership and Insurance</Link> and{' '}
+              <Link to="/accreditation">Accreditation</Link> pages. New here?{' '}
+              <Link to="/membership/buy">Join the Guild</Link>.
             </span>
           </div>
           <section className="account-password" aria-labelledby="password-heading">
