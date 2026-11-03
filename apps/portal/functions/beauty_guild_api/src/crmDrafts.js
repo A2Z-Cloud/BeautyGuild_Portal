@@ -320,16 +320,21 @@ function registerDraftRoutes(
       answers: body.answers,
     };
   };
-  const CREATES_CONTACT = ['membership', 'insurance', 'combined'];
+  const CREATES_CONTACT = ['membership', 'insurance', 'combined', 'accreditation'];
   const withAuth =
-    (fn, { createFor = false, emptyIfUnlinked = false } = {}) =>
+    (fn, { createFor = false, emptyIfUnlinked = false, service } = {}) =>
     async (req, res, next) => {
       try {
         if (!enabled) fail('DRAFTS_DISABLED', 'CRM drafts are not enabled.', 503);
         try {
           req.draftContact = await contact(req, {
-            create: createFor && CREATES_CONTACT.includes(req.body?.service),
-            names: req.body?.contact,
+            create: createFor && CREATES_CONTACT.includes(service || req.body?.service),
+            // An accreditation applicant names themselves in the first step, so the new Contact carries that name.
+            names:
+              req.body?.contact ||
+              ((service || req.body?.service) === 'accreditation'
+                ? { firstName: req.body?.answers?.firstName, lastName: req.body?.answers?.lastName }
+                : undefined),
           });
         } catch (e) {
           if (emptyIfUnlinked && e?.code === 'CONTACT_UNLINKED') return res.json({ drafts: [] });
@@ -462,11 +467,14 @@ function registerDraftRoutes(
   // Finishes the application: the same records as a save, then the stage moves to Awaiting Payment so checkout can take payment.
   router.post(
     '/accreditation/submit',
-    withAuth(async (req, res) => {
-      gateAccreditation();
-      const d = validateDraft({ ...req.body, service: 'accreditation' });
-      res.json(await accreditation.submit(req, { ...req.body, ...d }, req.draftContact, req.body.id));
-    }),
+    withAuth(
+      async (req, res) => {
+        gateAccreditation();
+        const d = validateDraft({ ...req.body, service: 'accreditation' });
+        res.json(await accreditation.submit(req, { ...req.body, ...d }, req.draftContact, req.body.id));
+      },
+      { createFor: true, service: 'accreditation' },
+    ),
   );
   router.get(
     '/:service/:id',
