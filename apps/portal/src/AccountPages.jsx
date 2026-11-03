@@ -14,7 +14,8 @@ const validReturn = path =>
 function useReturn() {
   const [params] = useSearchParams();
   const route = validReturn(params.get('returnTo'));
-  const intent = params.get('intent') === 'save' ? 'save' : 'complete';
+  const asked = params.get('intent');
+  const intent = asked === 'save' || asked === 'start' ? asked : 'complete';
   const tail = '?returnTo=' + encodeURIComponent(route) + '&intent=' + intent;
   return { route, intent, tail };
 }
@@ -58,19 +59,35 @@ export function AccountCheckpoint() {
   return (
     <Shell
       eyebrow="YOUR ACCOUNT"
-      title={intent === 'save' ? 'Save and finish later' : 'One more step before you finish'}
+      title={
+        intent === 'save'
+          ? 'Save and finish later'
+          : intent === 'start'
+            ? 'Your account comes first'
+            : 'One more step before you finish'
+      }
       description={
         intent === 'save'
           ? 'Sign in or create an account to save your progress.'
-          : 'Sign in or create an account to continue.'
+          : intent === 'start'
+            ? 'Your application is made in your own Guild account. Sign in, or create one with your name and email.'
+            : 'Sign in or create an account to continue.'
       }
     >
       <div className="auth-card">
-        <span className="eyebrow">{intent === 'save' ? 'SAVE APPLICATION' : 'ACCOUNT CHECKPOINT'}</span>
+        <span className="eyebrow">
+          {intent === 'save' ? 'SAVE APPLICATION' : intent === 'start' ? 'YOUR ACCOUNT' : 'ACCOUNT CHECKPOINT'}
+        </span>
         <h2>How would you like to continue?</h2>
-        <Notice title="You need an account to save">
-          Saving keeps your answers so you can finish later. It does not submit your application or take payment.
-        </Notice>
+        {intent === 'start' ? (
+          <Notice title="Why we ask first">
+            We use the email you sign up with for your application and your Guild record, so you only enter it once.
+          </Notice>
+        ) : (
+          <Notice title="You need an account to save">
+            Saving keeps your answers so you can finish later. It does not submit your application or take payment.
+          </Notice>
+        )}
         <div className="account-options">
           <Link className="account-option" to={'/signup' + tail}>
             <UserPlus size={25} />
@@ -86,8 +103,9 @@ export function AccountCheckpoint() {
           </Link>
         </div>
         <div className="checkpoint-footer">
-          <Link className="back-link" to={route}>
-            <ArrowLeft size={16} /> Return to your {service} answers
+          <Link className="back-link" to={intent === 'start' ? '/' + service : route}>
+            <ArrowLeft size={16} />{' '}
+            {intent === 'start' ? 'Back to ' + service : 'Return to your ' + service + ' answers'}
           </Link>
           {!INTEGRATIONS.catalystAuth && (
             <Link className="auth-inline-link" to={'/checkout-preview/' + service}>

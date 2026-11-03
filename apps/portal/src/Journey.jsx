@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, ArrowRight, CreditCard, FileText, LockKeyhole, MapPin, Save, ShieldAlert } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { JOURNEYS, countryOption } from './JourneyConfig.js';
 import { Field, Notice, PageHeading, Stages } from './UiParts.jsx';
 import {
@@ -20,6 +20,7 @@ import AddressLookup from './components/AddressLookup.jsx';
 import { INTEGRATIONS, portalApi } from './services/api.js';
 import { prefillFor } from './prefill.js';
 import { isLocked } from './fieldLock.js';
+import { needsAccountFirst, accountFirstPath } from './accountGate.js';
 
 // Accreditation only: the fields a postcode lookup fills in, hidden behind a "look up my address" view until
 // either the lookup can't find it (the applicant asks for manual entry) or the country isn't the UK, where
@@ -451,6 +452,7 @@ export function Journey({ kind }) {
   const hiddenInLookupMode = new Set(
     Object.keys(ADDRESS_BLOCK_SIBLINGS).flatMap(key => (isLookupMode(key) ? ADDRESS_BLOCK_SIBLINGS[key] : [])),
   );
+  if (needsAccountFirst({ kind, live, signedIn })) return <Navigate to={accountFirstPath(kind)} replace />;
   if (submitted)
     return (
       <div className="page journey-page">
