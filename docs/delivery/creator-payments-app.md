@@ -114,6 +114,21 @@ Daily, find revisions with status Scheduled and `Requested_Effective_Date` on or
 ### 6.8 Tests (Development, Stripe test mode)
 One revision paid now; a basket of two dates paid in one checkout (two revisions applied in date order, one `FEE-MTA` each); a future-dated revision that stays Scheduled and applies on its date; a swap that ends the old row and starts the new one; a repeated and an out-of-order event (applied once); an amount mismatch (nothing changes, exception logged); an expired session (back to Quoted); and a branch bought as a membership change. After each, check the live policy status and Payment_Status are untouched and that no activation or document workflow fired.
 
+## 7. UAT round 1: items Creator must pick up (for QA)
+
+Added 3 November 2026 from the Guild's comments on S01, S02, S10, S12 and S17 (see [uat-round1-fixes-spec.md](uat-round1-fixes-spec.md)). Each row is something the portal cannot fix. Please test each on Development in Stripe test mode and say when it passes.
+
+| # | Item | What the Guild saw | What Creator should do | QA check |
+|---|---|---|---|---|
+| 7.1 | Accreditation status after payment | A new accreditation showed as Verified straight after payment. It should say Pending verification. | A payment must not set `Accreditation_Status` to Verified. Set the payment status and leave verification to the Guild. The portal only reads the status. | Pay for a new accreditation. The CRM status is not Verified and the portal says it is being reviewed. |
+| 7.2 | Accreditation dates | The Guild wants the accreditation to start when they verify it, not on the application date. The portal no longer asks for a start date and sends today's date. | Treat `Valid_From` and `Valid_To` as provisional until verification. Decide who sets the real dates and when. | The agreed dates appear on verification. |
+| 7.3 | International accreditation payment | Choosing international (£350, or £405 with International membership) stuck on "Opening payment securely". It worked on a second try from the Accreditation page. | Check the `accreditation` session for an international level (`ACC-INTL`, `ACC-INTL-MEM`), including VAT-free handling and the International membership line. | Pay an international application first time, both with and without membership. |
+| 7.4 | Additional venue payment | S12 could not be tested because the portal had no Add a venue button. It is added in the same release as this note. | Handle `type=additional_venue` end to end: invoice, CRM update (add the venue to the accreditation), Books push. Venues are £60 a year and a single payment today (see section 4, open decision). | From a verified test school press Add a venue, pay £60, and the venue appears on the school with an invoice. |
+| 7.5 | One-off purchase types not yet verified | Section 1 lists a one-off additional venue and monthly accreditation as not verified. | Verify both with a real test payment. | Both complete with no error and the right invoice. |
+| 7.6 | Monthly Associate lines | Stripe shows "Associate Member membership (monthly)" £4.59 and "Monthly Payment Admin Fee" £1.50 as two lines. The Guild wants one line at £6.09 a month. | Agree whether the portal can send a single £6.09 line and give the admin fee in `monthly_plan` metadata, so the `MEM-ADMIN` Books item is still posted. We will not change this until Creator agrees. | Same invoice and Books posting as today, with one line on the Stripe page. |
+| 7.7 | Yearly "per month" text | Stripe shows "£354.00 per year, £29.50/month billed annually" on accreditation. The Guild does not want the monthly figure. | Check whether this is Stripe's own display for a yearly subscription. If it is, tell us the options (leave it, or take accreditation as a one-off payment). | A decision recorded here. |
+| 7.8 | Test subscriptions | Stripe cancels test subscriptions after 90 days (Helen's showed "Auto-cancels 1 Feb 2027"). | Nothing to fix. Do not treat these cancellations as live cancellations in Creator. Test data from this round will be removed. | A test subscription cancelled by Stripe does not set a customer as cancelled in the CRM. |
+
 ## Appendix A: V2 receiver (log only)
 Adjust the field link names to the form (V1 used `status_field` for Status).
 
