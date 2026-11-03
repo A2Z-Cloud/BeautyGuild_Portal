@@ -18,7 +18,7 @@ test('outside the UK group is International, with no insurance, whatever else wa
     assert.equal(d.route, null);
     assert.equal(d.ukGroup, false);
     assert.equal(d.message, INTERNATIONAL_NO_INSURANCE_TEXT);
-    assert.deepEqual(d.steps, ['about_you', 'membership_details', 'extras', 'review']);
+    assert.deepEqual(d.steps, ['about_you', 'extras', 'review']);
   }
 });
 

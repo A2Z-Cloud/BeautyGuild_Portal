@@ -20,7 +20,8 @@ const WORKING = Object.freeze({
 // Ireland and Other are outside it: those members join as International (Guild, 30 October 2026).
 const UK_GROUP = new Set(['united kingdom', 'uk', 'great britain', 'england', 'scotland', 'wales', 'northern ireland']);
 
-const STEPS_SIMPLE = Object.freeze(['about_you', 'membership_details', 'extras', 'review']);
+// No Membership details step for Associate and International: the membership starts on payment and the pay frequency is chosen on the price panel.
+const STEPS_SIMPLE = Object.freeze(['about_you', 'extras', 'review']);
 const STEPS_FULL = Object.freeze([
   'about_you',
   'how_you_work',

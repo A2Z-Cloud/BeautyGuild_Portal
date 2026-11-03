@@ -17,7 +17,8 @@ export const inUkGroup = country =>
 export const INTERNATIONAL_NO_INSURANCE_TEXT =
   'Insurance is not available outside the UK, so you will join as an International member without insurance.';
 
-export const STEPS_SIMPLE = ['about_you', 'membership_details', 'extras', 'review'];
+// Associate and International: no Membership details step. The start date is the day of payment and the pay frequency is chosen on the price panel.
+export const STEPS_SIMPLE = ['about_you', 'extras', 'review'];
 export const STEPS_FULL = [
   'about_you',
   'how_you_work',
@@ -35,7 +36,7 @@ export const STEP_TITLES = {
   cover_options: 'Cover options',
   declarations: 'Declarations',
   membership_details: 'Membership details',
-  extras: 'Extras',
+  extras: 'Personalise your membership',
   review: 'Review and pay',
 };
 
@@ -101,14 +102,46 @@ export function insuranceStepErrors(key, values) {
   return errors;
 }
 
-export function aboutYouErrors({ country, insuranceRequired, branch }, { askInsurance = true } = {}) {
+export function aboutYouErrors({ country, insuranceRequired, interests }, { askInsurance = true } = {}) {
   const errors = {};
   if (!String(country || '').trim()) errors.country = 'Choose where you are based.';
   else if (askInsurance && inUkGroup(country) && !insuranceRequired)
     errors.insuranceRequired = 'Tell us whether you require insurance.';
-  if (!branch) errors.branch = 'Choose your primary branch.';
+  if (!Array.isArray(interests) || !interests.length) errors.interests = 'Choose at least one interest.';
   return errors;
 }
+// The branch is chosen on Personalise your membership.
+export const extrasErrors = ({ branch }) => (branch ? {} : { branch: 'Choose your membership branch.' });
+
+// What the member is interested in. Training has no branch of its own.
+export const INTERESTS = [
+  { id: 'beauty', name: 'Beauty' },
+  { id: 'holistic', name: 'Holistic' },
+  { id: 'nails', name: 'Nails' },
+  { id: 'hair', name: 'Hair' },
+  { id: 'training', name: 'Training' },
+];
+// The first branch ticked from the interests, in this order (the Guild, UAT round 1). Training is not a branch.
+export const BRANCH_PRIORITY = ['beauty', 'holistic', 'nails', 'hair'];
+export const defaultBranch = (interests = []) => BRANCH_PRIORITY.find(id => interests.includes(id)) || '';
+// The branches that match an interest but are not yet chosen, offered as suggestions.
+export const suggestedBranches = (interests = [], { branch, branches = [] } = {}) =>
+  BRANCH_PRIORITY.filter(id => interests.includes(id) && id !== branch && !branches.includes(id));
+// One list of branches: the first ticked is the included one, any after it are the additional (£15) ones. Unticking the first promotes the next.
+export function toggleBranchChoice({ branch = '', branches = [] }, id) {
+  if (id === branch) return { branch: branches[0] || '', branches: branches.slice(1) };
+  if (branches.includes(id)) return { branch, branches: branches.filter(b => b !== id) };
+  return branch ? { branch, branches: [...branches, id] } : { branch: id, branches };
+}
+// England, Scotland, Wales and Northern Ireland are the United Kingdom in the country list.
+export const ukOnce = country =>
+  ['england', 'scotland', 'wales', 'northern ireland'].includes(
+    String(country || '')
+      .trim()
+      .toLowerCase(),
+  )
+    ? 'United Kingdom'
+    : country;
 
 // The next and previous step key within the steps shown; an unknown key counts as the first step.
 export function stepIndex(steps, key) {

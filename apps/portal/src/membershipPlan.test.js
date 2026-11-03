@@ -17,6 +17,11 @@ import {
   outcomeText,
   planFor,
   stepIndex,
+  defaultBranch,
+  extrasErrors,
+  suggestedBranches,
+  toggleBranchChoice,
+  ukOnce,
 } from './membershipPlan.js';
 import { INSURANCE_STEPS } from './insuranceInputs.js';
 import { HELP_TEXTS } from './membershipText.js';
@@ -108,14 +113,58 @@ test('how you work needs a choice, and the salon questions appear only for salon
   assert.ok(!names({ insWorking: ['insMobile'] }).includes('insTurnover'));
   assert.ok(names({ insWorking: ['insSalon'] }).includes('insTurnover'));
 });
-test('About you needs a country, an insurance answer for the UK, and a branch', () => {
-  assert.deepEqual(Object.keys(aboutYouErrors({})), ['country', 'branch']);
-  assert.deepEqual(Object.keys(aboutYouErrors({ country: 'England', branch: 'x' })), ['insuranceRequired']);
-  assert.deepEqual(aboutYouErrors({ country: 'France', branch: 'x' }), {});
-  assert.deepEqual(aboutYouErrors({ country: 'England', branch: 'x' }, { askInsurance: false }), {});
+test('About you needs a country, an insurance answer for the UK, and an interest', () => {
+  const i = ['nails'];
+  assert.deepEqual(Object.keys(aboutYouErrors({})), ['country', 'interests']);
+  assert.deepEqual(Object.keys(aboutYouErrors({ country: 'England', interests: i })), ['insuranceRequired']);
+  assert.deepEqual(aboutYouErrors({ country: 'France', interests: i }), {});
+  assert.deepEqual(aboutYouErrors({ country: 'England', interests: i }, { askInsurance: false }), {});
+  assert.ok(aboutYouErrors({ country: 'France', interests: [] }).interests);
+});
+test('the branch is chosen on Personalise your membership', () => {
+  assert.ok(extrasErrors({}).branch);
+  assert.deepEqual(extrasErrors({ branch: 'beauty' }), {});
+});
+test('the first branch follows the interests in the Guild order, and Training has no branch', () => {
+  assert.equal(defaultBranch(['hair', 'nails']), 'nails');
+  assert.equal(defaultBranch(['hair', 'beauty', 'holistic', 'nails']), 'beauty');
+  assert.equal(defaultBranch(['holistic', 'hair']), 'holistic');
+  assert.equal(defaultBranch(['training']), '');
+  assert.equal(defaultBranch([]), '');
+  assert.deepEqual(suggestedBranches(['hair', 'beauty', 'training'], { branch: 'beauty', branches: [] }), ['hair']);
+  assert.deepEqual(suggestedBranches(['hair', 'beauty'], { branch: 'beauty', branches: ['hair'] }), []);
+});
+test('one branch list: the first ticked is included, the rest are additional, unticking the first promotes the next', () => {
+  assert.deepEqual(toggleBranchChoice({ branch: '', branches: [] }, 'nails'), { branch: 'nails', branches: [] });
+  assert.deepEqual(toggleBranchChoice({ branch: 'nails', branches: [] }, 'hair'), {
+    branch: 'nails',
+    branches: ['hair'],
+  });
+  assert.deepEqual(toggleBranchChoice({ branch: 'nails', branches: ['hair'] }, 'hair'), {
+    branch: 'nails',
+    branches: [],
+  });
+  assert.deepEqual(toggleBranchChoice({ branch: 'nails', branches: ['hair', 'beauty'] }, 'nails'), {
+    branch: 'hair',
+    branches: ['beauty'],
+  });
+  assert.deepEqual(toggleBranchChoice({ branch: 'nails', branches: [] }, 'nails'), { branch: '', branches: [] });
+});
+test('England, Scotland, Wales and Northern Ireland are the United Kingdom in the list', () => {
+  for (const c of ['England', 'scotland', 'Wales', 'Northern Ireland']) assert.equal(ukOnce(c), 'United Kingdom');
+  assert.equal(ukOnce('France'), 'France');
+  assert.equal(ukOnce(''), '');
+  assert.equal(inUkGroup(ukOnce('England')), true);
+});
+test('Associate and International have no Membership details step; Full membership keeps it', () => {
+  assert.equal(STEPS_SIMPLE.includes('membership_details'), false);
+  assert.deepEqual(planFor({ country: 'France' }).steps, ['about_you', 'extras', 'review']);
+  assert.deepEqual(planFor({ country: 'England', insuranceRequired: 'no' }).steps, ['about_you', 'extras', 'review']);
+  assert.equal(planFor({ country: 'England', insuranceRequired: 'yes' }).steps.includes('membership_details'), true);
+  assert.equal(STEP_TITLES.extras, 'Personalise your membership');
 });
 test('an unknown step counts as the first', () => {
-  assert.equal(stepIndex(STEPS_SIMPLE, 'extras'), 2);
+  assert.equal(stepIndex(STEPS_SIMPLE, 'extras'), 1);
   assert.equal(stepIndex(STEPS_SIMPLE, 'declarations'), 0);
 });
 test('content checklist: every help text is defined once and used by the combined journey', () => {

@@ -7,8 +7,8 @@ export const BRANCH_TEXT =
   'There are 4 branches of Guild membership. Select the branch which is best suited to your qualifications and the area you work in. Please note, the branch you choose does not affect your insurance where applicable and the membership element is not regulated by the Financial Conduct Authority.';
 export const EXTRAS_TEXT =
   'On completion of your application, your Membership Certificate will be available to download for free from your account, along with the relevant Guild logos which you can use on your website and social media.';
-export const ADDITIONAL_BRANCHES_TEXT =
-  'If you would like to add any additional branches, these are chargeable at £15 per branch';
+export const ADDITIONAL_BRANCHES_TEXT = 'Additional branches are charged at £15 each.';
+export const BUNDLE_INCLUDES_TEXT = 'Includes Membership Certificate, Badge and Window Sticker';
 export const EXTRAS_INTRO_TEXT =
   'Showcase your professional credentials, strengthen client confidence and proudly display your Guild membership with our range of membership extras.';
 export const EXTRAS_ORDER_TEXT =
