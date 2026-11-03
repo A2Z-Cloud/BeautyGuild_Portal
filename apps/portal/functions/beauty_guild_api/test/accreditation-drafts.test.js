@@ -729,3 +729,47 @@ test('a phone number must be a real length: UK 9 or more digits after the countr
   assert.throws(() => readAnswers(answers({ mobile: '+971 1' })), /mobile number/i);
   assert.throws(() => readAnswers(answers({ mobile: '+44 77x0 900123' })), /mobile number/i);
 });
+
+test('a first accreditation save for a signed-in person with no Contact creates one from the applicant name, then reuses it', async () => {
+  const NEW = { id: 'cat-9', email: 'new.applicant@example.test' };
+  const crm = fakeCrm({ contacts: [] });
+  await withApp(
+    crm,
+    async call => {
+      const first = await call(
+        '/portal/drafts/',
+        send('POST', body({ ...answers(), firstName: 'Nia', lastName: 'Newman' })),
+      );
+      assert.equal(first.status, 201);
+      // Tutors listed on the application also get Contacts, so count the applicant's own.
+      const mine = () =>
+        crm.calls.filter(
+          c => c.method === 'POST' && /\/crm\/v3\/Contacts$/.test(c.u) && c.body.data[0].Email === NEW.email,
+        );
+      const made = mine();
+      assert.equal(made.length, 1);
+      assert.deepEqual(made[0].body.data[0], { First_Name: 'Nia', Last_Name: 'Newman', Email: NEW.email });
+      const again = await call(
+        '/portal/drafts/accreditation/submit',
+        send('POST', body({ ...answers(), firstName: 'Nia', lastName: 'Newman' }, { id: first.body.draft.id })),
+      );
+      assert.equal(again.status, 200);
+      assert.equal(mine().length, 1);
+    },
+    { user: NEW },
+  );
+});
+
+test('an accreditation read, change or discard never creates a Contact', async () => {
+  const crm = fakeCrm({ contacts: [] });
+  await withApp(
+    crm,
+    async call => {
+      await call('/portal/drafts/accreditation/4000000000001', { method: 'GET' });
+      await call('/portal/drafts/accreditation/4000000000001', send('PUT', body()));
+      await call('/portal/drafts/accreditation/4000000000001', { method: 'DELETE' });
+    },
+    { user: { id: 'cat-9', email: 'new.applicant@example.test' } },
+  );
+  assert.equal(crm.calls.filter(c => c.method === 'POST' && /\/crm\/v3\/Contacts$/.test(c.u)).length, 0);
+});
