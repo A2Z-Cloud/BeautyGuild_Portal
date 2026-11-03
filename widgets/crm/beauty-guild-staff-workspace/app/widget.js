@@ -786,7 +786,8 @@
     if(!BROWSE_MODULE[kind])return;
     const data=browseData(kind);
     if(reset){data.rows=[];data.next=1;data.hasMore=true;data.loaded=false;data.error='';data.serverActive=false;data.serverRows=[];data.generation=(data.generation||0)+1;state.pages['browse:'+kind]=1;}
-    if(data.loading||(!data.hasMore&&data.loaded))return;
+    if(data.loading){data.reloadPending=data.reloadPending||reset;return;}
+    if(!data.hasMore&&data.loaded)return;
     const generation=data.generation||0,selectedId=data.cvid||'';
     data.loading=true;data.error='';state.browseKind=kind;if(window.BGCRM12)window.BGCRM12.prime(BROWSE_MODULE[kind],ZOHO.CRM,render);
     if(!data.loaded)state.busy=true;
@@ -806,7 +807,7 @@
       if(selectedId&&data.next>20)data.hasMore=false;
       if(kind!=='customers')enrichCustomerRows(kind,rows.slice(0,15)).catch(()=>{});
     }catch(err){if(generation===(data.generation||0)){data.error=String(err.message||err);data.loaded=true;data.hasMore=false;}}
-    finally{data.loading=false;state.busy=false;render();}
+    finally{data.loading=false;state.busy=false;render();if(data.reloadPending){data.reloadPending=false;loadBrowse(kind).catch(e=>setNotice('CRM view could not refresh: '+String(e.message||e),'error'));}}
   }
   async function searchBrowse(kind,{more=false}={}){
     const data=browseData(kind),term=(state.browseSearch||'').trim();
