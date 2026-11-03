@@ -1,20 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, ArrowRight, CreditCard, FileText, LockKeyhole, MapPin, Save, ShieldAlert } from 'lucide-react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
-import { JOURNEYS, countryOption } from './JourneyConfig.js';
+import { JOURNEYS, accreditationCountryOption, countryOption } from './JourneyConfig.js';
 import { Field, Notice, PageHeading, Stages } from './UiParts.jsx';
-import {
-  centreCountry,
-  isUkCentre,
-  isUkContact,
-  resolveFields,
-  COPY_HOME_MAP,
-  DECLARATIONS_WARNING,
-} from './accreditationInputs.js';
+import { isUkCentre, isUkContact, resolveFields, COPY_HOME_MAP, DECLARATIONS_WARNING } from './accreditationInputs.js';
 import { LEGAL } from './legal.js';
 import { PolicyDocuments } from './LegalLinks.jsx';
-import { startLimits } from './startDate.js';
-import { accreditationType, validate } from './logic.mjs';
+import { validate } from './logic.mjs';
 import { usePreviewState } from './journeys/previewState.jsx';
 import AddressLookup from './components/AddressLookup.jsx';
 import { INTEGRATIONS, portalApi } from './services/api.js';
@@ -45,7 +37,7 @@ const reviewValue = (f, value) =>
             )
             .join(', ')
         : String(value);
-function ReviewDetails({ steps, values, kind }) {
+function ReviewDetails({ steps, values, kind, onEdit }) {
   const all = steps.flatMap(s => s.fields).filter(f => !f.when || f.when(values));
   const entries = all.filter(
     f =>
@@ -64,15 +56,6 @@ function ReviewDetails({ steps, values, kind }) {
         <h3>Your answers</h3>
         <span>Not yet submitted</span>
       </div>
-      {kind === 'accreditation' && centreCountry(values) && (
-        <div className="classification">
-          <strong>{accreditationType(centreCountry(values))}</strong>
-          <small>
-            Your centre's country decides which accreditation route applies. The Guild confirms eligibility and prices
-            when your application is reviewed.
-          </small>
-        </div>
-      )}
       {kind === 'membership' && (
         <Notice title="Membership and fees">
           Your membership type, joining fee, optional cover and any monthly instalments will be confirmed by the Guild.
@@ -95,14 +78,39 @@ function ReviewDetails({ steps, values, kind }) {
         </div>
       )}
       {kind === 'insurance' && <PolicyDocuments values={values} />}
-      <dl className="review-list">
-        {entries.map(f => (
-          <div key={f.name}>
-            <dt>{f.label}</dt>
-            <dd>{reviewValue(f, values[f.name])}</dd>
-          </div>
-        ))}
-      </dl>
+      {onEdit ? (
+        steps.map((step, position) => {
+          const rows = entries.filter(f => step.fields.includes(f));
+          if (!rows.length) return null;
+          return (
+            <section className="review-section" key={step.id}>
+              <div className="review-section-head">
+                <h4>{step.title}</h4>
+                <button type="button" className="text-button" onClick={() => onEdit(position)}>
+                  Edit
+                </button>
+              </div>
+              <dl className="review-list">
+                {rows.map(f => (
+                  <div key={f.name}>
+                    <dt>{f.label}</dt>
+                    <dd>{reviewValue(f, values[f.name])}</dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
+          );
+        })
+      ) : (
+        <dl className="review-list">
+          {entries.map(f => (
+            <div key={f.name}>
+              <dt>{f.label}</dt>
+              <dd>{reviewValue(f, values[f.name])}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
       <div className="review-docs">
         <h3>
           <FileText size={18} /> Information and documents
@@ -193,6 +201,8 @@ export function Journey({ kind }) {
   const current = visible[index];
   const last = index === visible.length - 1;
   const [errors, setErrors] = useState({});
+  // Set by an Edit button on the review step, so the next button there brings the person back to the review.
+  const [returnToReview, setReturnToReview] = useState(false);
   const [manualAddress, setManualAddress] = useState({});
   // null until known. The account checkpoint is only for visitors who are not signed in.
   const [signedIn, setSignedIn] = useState(null),
@@ -220,7 +230,6 @@ export function Journey({ kind }) {
   // changed, which also switches that address off the UK postcode-lookup view onto plain manual fields).
   useEffect(() => {
     if (kind !== 'accreditation') return;
-    if (!values.startDate) setAnswer(kind, 'startDate', startLimits().min);
     if (!values.contactCountry) setAnswer(kind, 'contactCountry', 'United Kingdom');
     if (!values.country) setAnswer(kind, 'country', 'United Kingdom');
   }, [kind]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -343,6 +352,11 @@ export function Journey({ kind }) {
         ...(old?.related ? { related: old.related } : {}),
       });
       clearAnswers(kind);
+      // Straight to payment: the application is saved, so there is nothing more to confirm first.
+      if (INTEGRATIONS.stripeCheckout && result?.id) {
+        navigate('/pay/accreditation/' + encodeURIComponent(result.id));
+        return;
+      }
       setSubmitted(result);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (e) {
@@ -372,6 +386,11 @@ export function Journey({ kind }) {
     if (last) {
       if (kind === 'accreditation' && live) submit();
       else checkpoint('complete');
+      return;
+    }
+    if (returnToReview) {
+      setReturnToReview(false);
+      move(visible.length - 1);
       return;
     }
     move(index + 1);
@@ -427,6 +446,8 @@ export function Journey({ kind }) {
   const applyAddress = (key, address) => {
     const map = addressBindings[key];
     if (!map) return;
+    // Show every address line once one is chosen, so the person can check and change it.
+    if (kind === 'accreditation') setManualAddress(m => ({ ...m, [key]: true }));
     for (const [from, to] of Object.entries(map)) {
       const source =
         from === 'line1'
@@ -436,7 +457,12 @@ export function Journey({ kind }) {
             : from === 'line3'
               ? 'addressLine3'
               : from;
-      const resolved = from === 'country' ? countryOption(address.country) : address[source];
+      const resolved =
+        from === 'country'
+          ? kind === 'accreditation'
+            ? accreditationCountryOption(address.country)
+            : countryOption(address.country)
+          : address[source];
       if (resolved && typeof resolved === 'string') update(to, resolved);
       if (from === 'country' && resolved === 'Other' && address.country) update(to + 'Other', address.country);
     }
@@ -466,7 +492,11 @@ export function Journey({ kind }) {
       <Link className="back-link" to={'/' + kind}>
         <ArrowLeft size={17} /> Back to {config.title.toLowerCase()}
       </Link>
-      <PageHeading eyebrow={config.kicker} title={config.title + ' application'} description={config.intro}>
+      <PageHeading
+        eyebrow={kind === 'accreditation' ? undefined : config.kicker}
+        title={config.title + ' application'}
+        description={kind === 'accreditation' ? undefined : config.intro}
+      >
         <span className="journey-counter">
           Step {index + 1} of {visible.length}
         </span>
@@ -477,11 +507,14 @@ export function Journey({ kind }) {
           out of date.
         </p>
       )}
-      <Notice title={live ? 'Save your application' : 'Applications are opening soon'}>
-        {live
-          ? 'Saving keeps your answers so you can finish later. It does not submit your application or take payment.'
-          : 'You can complete this form to see the questions, but your answers are not submitted or saved, and nothing is charged.'}
-      </Notice>
+      {/* Accreditation says this in the side panel, so it is not repeated above every step. */}
+      {kind !== 'accreditation' && (
+        <Notice title={live ? 'Save your application' : 'Applications are opening soon'}>
+          {live
+            ? 'Saving keeps your answers so you can finish later. It does not submit your application or take payment.'
+            : 'You can complete this form to see the questions, but your answers are not submitted or saved, and nothing is charged.'}
+        </Notice>
+      )}
       <div className="journey-shell">
         <section className="journey-card">
           <Stages steps={visible} current={index} />
@@ -491,7 +524,19 @@ export function Journey({ kind }) {
             <p className="journey-intro">{current.description}</p>
             {last ? (
               <>
-                <ReviewDetails steps={visible} values={values} kind={kind} />
+                <ReviewDetails
+                  steps={visible}
+                  values={values}
+                  kind={kind}
+                  onEdit={
+                    kind === 'accreditation'
+                      ? position => {
+                          setReturnToReview(true);
+                          move(position);
+                        }
+                      : undefined
+                  }
+                />
                 {signedIn === false && <CheckpointNotice kind={kind} />}
                 {signedIn && (
                   <p className="muted" role="status">
@@ -583,7 +628,13 @@ export function Journey({ kind }) {
                   ) && <Notice title="All declarations are needed">{DECLARATIONS_WARNING}</Notice>}
               </>
             )}
-            {last && saveStatus && <Notice title="Application not submitted">{saveStatus}</Notice>}
+            {last && saveStatus && (
+              <Notice
+                title={kind === 'accreditation' ? 'We could not save your application' : 'Application not submitted'}
+              >
+                {saveStatus}
+              </Notice>
+            )}
             <div className="journey-footer">
               <div className="journey-footer-left">
                 {index > 0 ? (
@@ -598,10 +649,14 @@ export function Journey({ kind }) {
                 {last
                   ? kind === 'accreditation' && live
                     ? saving
-                      ? 'Submitting…'
-                      : 'Submit application'
+                      ? 'Saving…'
+                      : INTEGRATIONS.stripeCheckout
+                        ? 'Continue to payment'
+                        : 'Save application'
                     : 'Continue to account'
-                  : 'Continue'}
+                  : returnToReview
+                    ? 'Back to review'
+                    : 'Continue'}
                 <ArrowRight size={16} />
               </button>
             </div>

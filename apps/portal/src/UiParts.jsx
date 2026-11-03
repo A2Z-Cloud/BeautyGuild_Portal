@@ -312,6 +312,12 @@ export function Field({ field, value, onChange, error, values = {}, locked = fal
       {field.noMessage && value === 'no' && (
         <small className="field-warning" role="alert">
           {field.noMessage}
+          {field.noLink && (
+            <>
+              {' '}
+              <Link to={field.noLink}>See the GTi courses</Link>
+            </>
+          )}
         </small>
       )}
       {field.hint && <small>{field.hint}</small>}

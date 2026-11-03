@@ -2015,7 +2015,7 @@ small {
 /* Milestone 2 read integrations and Catalyst sign-in */
 .address-lookup {
   grid-column: 1/-1;
-  margin: -10px 0 12px;
+  margin: 4px 0 12px;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -3967,4 +3967,21 @@ iframe {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+}
+
+/* The review step groups answers by step, each with its own Edit button. */
+.review-section {
+  margin-top: 18px;
+}
+.review-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid #eadfe7;
+  padding-bottom: 6px;
+}
+.review-section-head h4 {
+  margin: 0;
+  font-size: 15px;
 }
