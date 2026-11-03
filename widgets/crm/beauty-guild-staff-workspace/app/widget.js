@@ -534,7 +534,7 @@
         '<p class="v12-muted">Renewals and upgrades follow the existing application and checkout logic. Payment is verified from CRM after Creator processes the Stripe event.</p>'+
         '<div class="membership-service-actions">'+
           (activeDeal?.id?'<button type="button" class="button secondary" data-action="membership-cancel-open" data-id="'+esc(activeDeal.id)+'">Cancellation / downgrade quote</button>':'')+
-          '<button type="button" class="button primary" data-action="journey-start" data-kind="membership">New membership</button>'+ (activeDeal?.id?'<button type="button" class="button secondary" data-action="membership-renew" data-id="'+esc(activeDeal.id)+'">Renew membership</button><button type="button" class="button secondary" data-action="membership-upgrade" data-id="'+esc(activeDeal.id)+'">Upgrade membership</button>':'')+
+          '<button type="button" class="button primary" data-action="journey-start" data-kind="membership">New membership</button>'+ (activeDeal?.id?'<button type="button" class="button secondary" data-action="membership-renew" data-id="'+esc(activeDeal.id)+'">Renew membership</button>'+(/associate/i.test(String(currentProfile?.Current_Member_Type||activeDeal?.Membership_Type||''))&&/^(united kingdom|england|scotland|wales|northern ireland)$/i.test(String(c.Correspondence_Country||c.Mailing_Country||c.Country||'').trim())?'<button type="button" class="button secondary" data-action="membership-upgrade" data-id="'+esc(activeDeal.id)+'">Upgrade to Full with insurance</button>':''):'')+
           recordLink(M.DEAL,activeDeal,'Review current transaction')+
         '</div></section></div></section>';
   }
@@ -553,25 +553,7 @@
   };
   const J=(name,label,type='text',options=null,required=false,when=null)=>({name,label,type,options,required,when});
   const JOURNEY_FLOW={
-    membership:{title:'Membership',description:'Join, renew or upgrade using the Guild membership journey.',steps:[
-      {title:'Membership options',description:'Choose the Guild membership requested by the customer.',fields:[
-        J('membershipLevel','Membership level','select',[['associate','Associate Member'],['full_non_salon','Full Member (Non-Salon)'],['full_salon','Full Member (Salon)']],true),
-        J('membershipBranch','Primary Guild branch','select',[['beauty','Beauty'],['holistic','Holistic'],['nails','Nails'],['hair','Hairdressers and Barbers']],true),
-        J('billing','Payment frequency','radio',[['annual','Annual'],['monthly','Monthly']],true),
-        J('joinType','Application type','radio',[['new','New member'],['renewal','Renewal'],['upgrade','Upgrade']],true)]},
-      {title:'Applicant details',description:'Check the customer and business details to be used for the membership.',fields:[
-        J('businessName','Business or trading name'),J('address1','Address line 1'),J('town','Town / city'),J('postcode','Postcode'),J('country','Country','select',JOPTIONS.countries)]},
-      {title:'Additional branches and add-ons',description:'Optional extras available in Portal V2.',fields:[
-        J('additionalBranches','Additional Guild branches','multi',[['beauty','Beauty'],['holistic','Holistic'],['nails','Nails'],['hair','Hair']]),
-        J('addonCertificate','Membership certificate','checkbox'),J('addonBadge','Badge','checkbox'),J('addonSticker','Window sticker','checkbox'),J('addonBundle','Membership bundle','checkbox'),
-        J('insuranceWanted','Add insurance','radio',JOPTIONS.yn,true)]},
-      {title:'Insurance requirements',description:'The insurance questionnaire is completed using the existing Portal V2 journey when requested.',when:a=>a.insuranceWanted==='yes',fields:[
-        J('insWorking','How you work','multi',[['insWorkingFromHome','Working from home'],['insMobile','Mobile practitioner'],['insRentedRoom','Rented treatment room'],['insSubcontractor','Self-employed subcontractor'],['insSalon','Salon owner']],true),
-        J('insTurnover','Annual turnover','select',[['100000','Up to £100,000'],['175000','£100,001 to £175,000'],['250000','£175,001 to £250,000']]),
-        J('insTeachingCover','Teaching cover','select',[['none','Not required'],['standard','Standard teaching cover'],['additional','Additional teaching cover']])]},
-      {title:'Declarations',description:'Staff record responses; the production journey must retain the required customer confirmations.',fields:[
-        J('codeAccepted','Code of Ethics confirmed','radio',JOPTIONS.yn,true),J('termsAccepted','Terms and privacy confirmed','radio',JOPTIONS.yn,true),J('startDate','Requested membership start date','date')]}
-    ]},
+    membership:{title:'Membership and Insurance',description:'The staff-assisted combined application uses the Portal V2 membership decision and pricing service.',steps:[]},
     insurance:{title:'Insurance',description:'Use the existing Guild insurance quotation questions and referral process.',steps:[
       {title:'How you work',description:'Select each relevant way the applicant works.',fields:[
         J('insWorking','How you work','multi',[['insWorkingFromHome','I work from home'],['insMobile','I work on a mobile basis'],['insRentedRoom','I rent a treatment room'],['insSubcontractor','I am a self-employed subcontractor'],['insSalon','I own or operate a salon']],true),
@@ -620,7 +602,7 @@
     return `<label class="journey-field" for="${id}"><span>${esc(f.label)}${f.required?' *':''}</span>${input}</label>`;
   }
   function visibleJourneySteps(){const j=state.journey;return(j&&JOURNEY_FLOW[j.kind]?.steps||[]).filter(x=>!x.when||x.when(j.answers));}
-  function renderJourney(){initJourney();const j=state.journey;if(j.kind&&j.step>=0){if(window.BGJourney12)return window.BGJourney12.render(j);return '<section class="journey-shell"><div class="journey-validation" role="alert">The current application form did not load. Refresh the Staff Workspace and check the Portal V2 form module. Your entries cannot be saved until it loads.</div></section>';}if(!j.kind){return `<section class="journey-shell"><div class="journey-top-nav"><button type="button" class="button secondary journey-top-back" data-action="journey-exit">← Back to workspace</button></div><div class="journey-heading"><span class="process-kicker">NEW APPLICATION</span><h2>Select application type</h2><p>Start a staff-assisted Guild application for an existing or new CRM customer.</p></div><div class="journey-draft-entry"><strong>Resume an existing application</strong><p>Choose a customer below, or use the current CRM customer, to retrieve their saved applications.</p><button type="button" class="button secondary" data-action="journey-find-drafts">Find draft applications</button></div><div class="journey-type-grid">${Object.entries(JOURNEY_FLOW).map(([kind,c])=>`<button class="journey-type-card journey-type-card--${kind}" data-action="journey-type" data-kind="${kind}"><strong>${esc(c.title)}</strong><small>${esc(c.description)}</small><span>Start journey →</span></button>`).join('')}</div></section>`;}
+  function renderJourney(){initJourney();const j=state.journey;if(j.kind&&j.step>=0){if(window.BGJourney12)return window.BGJourney12.render(j);return '<section class="journey-shell"><div class="journey-validation" role="alert">The current application form did not load. Refresh the Staff Workspace and check the Portal V2 form module. Your entries cannot be saved until it loads.</div></section>';}if(!j.kind){return `<section class="journey-shell"><div class="journey-top-nav"><button type="button" class="button secondary journey-top-back" data-action="journey-exit">← Back to workspace</button></div><div class="journey-heading"><span class="process-kicker">NEW APPLICATION</span><h2>Select application type</h2><p>Start a staff-assisted Guild application for an existing or new CRM customer.</p></div><div class="journey-draft-entry"><strong>Resume an existing application</strong><p>Choose a customer below, or use the current CRM customer, to retrieve their saved applications.</p><button type="button" class="button secondary" data-action="journey-find-drafts">Find draft applications</button></div><div class="journey-type-grid">${Object.entries(JOURNEY_FLOW).filter(([kind])=>kind!=='insurance').map(([kind,c])=>`<button class="journey-type-card journey-type-card--${kind}" data-action="journey-type" data-kind="${kind}"><strong>${esc(c.title)}</strong><small>${esc(c.description)}</small><span>Start journey →</span></button>`).join('')}</div></section>`;}
     const cfg=JOURNEY_FLOW[j.kind],steps=visibleJourneySteps(),index=Math.min(j.step,steps.length);const current=steps[index],isContact=index<0,atPay=index>=steps.length;
     const labels=['Customer',...steps.map(x=>x.title),'Payment'];const active=isContact?0:atPay?labels.length-1:index+1;
     const bar=`<div class="journey-progress">${labels.map((l,i)=>`<span class="${i===active?'current':i<active?'done':''}">${i+1}. ${esc(l)}</span>`).join('')}</div>`;
@@ -802,7 +784,7 @@
     else if(action==='browse-filter'){state.browseFilter=el.dataset.filter==='attention'?'attention':'all';state.pages['browse:'+state.browseKind]=1;render();}
     else if(action==='back-to-list'){state.focus=null;state.focusEntityView=null;state.view=el.dataset.kind==='customers'?'overview':el.dataset.kind||'insurance';state.contact=state.view==='overview'?null:state.contact;render();}
     else if(action==='coming-soon'||action==='journey-start'){state.view='create';initJourney(el.dataset.kind);render();}
-    else if(action==='journey-type'){state.journey.kind=el.dataset.kind;state.journey.step=-1;state.journey.answers={};render();if(el.dataset.kind==='accreditation'&&window.BGJourney12)window.BGJourney12.loadCourses(ZOHO.CRM,render).catch(e=>setNotice('Course catalogue could not load: '+String(e.message||e),'error'));}
+    else if(action==='journey-type'){if(el.dataset.kind==='insurance'){setNotice('New customers use the combined Membership and Insurance journey.','error');return;}state.journey.kind=el.dataset.kind;state.journey.step=-1;state.journey.answers={};render();if(el.dataset.kind==='accreditation'&&window.BGJourney12)window.BGJourney12.loadCourses(ZOHO.CRM,render).catch(e=>setNotice('Course catalogue could not load: '+String(e.message||e),'error'));}
     else if(action==='journey-next'){const j=state.journey;if(j?.step===-1&&j.contact&&window.BGJourney12){try{j.contact=await getRecord(M.CONTACT,j.contact.id);state.contact=j.contact;}catch(e){j.formError='Unable to load complete CRM Contact details: '+String(e.message||e);render();return;}window.BGJourney12.prefill(j);}advanceJourney(1);}
     else if(action==='journey-membership-options'){
       const j=state.journey;
@@ -820,8 +802,11 @@
     else if(action==='membership-renew'||action==='membership-upgrade'){
       const deal=allFor(M.DEAL).find(x=>String(x.id)===String(el.dataset.id));
       if(!deal||!state.contact?.id){setNotice('Select an existing membership and its customer.','error');return;}
+      const upgrading=action==='membership-upgrade';
+      const type=String(allFor(M.PROFILE).find(p=>p.Current_Membership_Status==='Current')?.Current_Member_Type||deal.Membership_Type||'');
+      if(upgrading&&!/associate/i.test(type)){setNotice('Only eligible Associate memberships can use this upgrade journey.','error');return;}
       state.view='create';initJourney('membership');state.journey.contact={...state.contact};state.journey.step=0;
-      state.journey.answers={previousId:String(deal.id),changeType:action==='membership-upgrade'?'upgrade':'renewal',purchaseType:action==='membership-upgrade'?'upgrade':'renewal'};
+      state.journey.answers={previousId:String(deal.id),changeType:upgrading?'upgrade':'renewal',purchaseType:upgrading?'upgrade':'renewal',...(upgrading?{insuranceRequired:'yes'}:{})};
       window.BGJourney12?.prefill(state.journey);render();
       setNotice('The existing membership is linked. Complete the membership questions and obtain an authoritative quote before taking payment.','info');
     }
@@ -846,8 +831,8 @@
       try{
         const out=await window.BGStaffApi.call('drafts_get',{contactId:String(j.contact.id),service,id});
         const d=out?.draft;if(!d?.answers)throw Error('The draft response cannot be restored.');
-        j.kind=d.service==='combined'?'membership':d.service;j.answers=window.BGJourney12.restoreAnswers(d);j.customerAccepted=false;j.liveQuote=null;j.lastQuoteInputs=null;
-        j.step=Math.max(0,Number(d.step)||0);j.remote={id:String(d.id),service:d.service,journeyId:d.journeyId,revision:d.revision};
+        j.kind=['combined','membership'].includes(d.service)?'membership':d.service;j.answers=window.BGJourney12.restoreAnswers(d);j.customerAccepted=false;j.liveQuote=null;j.lastQuoteInputs=null;
+        j.step=Math.max(0,Math.min(Number(d.step)||0,window.BGJourney12.config(j.kind,j.answers).length));j.remote={id:String(d.id),service:d.service,journeyId:d.journeyId,revision:d.revision};
       }catch(e){j.draftsError=String(e.message||e);}
       finally{j.draftsBusy=false;render();}
     }
@@ -882,7 +867,7 @@
       const j=state.journey;if(!j?.contact?.id||!j.kind||j.draftsBusy)return;
       j.draftsBusy=true;j.draftsError='';j.draftsMessage='';render();
       try{
-        const service=j.kind==='membership'&&j.answers.insurance==='yes'?'combined':j.kind;
+        const service=j.remote?.service||(j.kind==='membership'?'membership':j.kind);
         const request={contactId:String(j.contact.id),service,answers:window.BGJourney12.draftAnswers(j),step:Math.max(0,j.step),journeyId:j.remote?.journeyId||window.crypto?.randomUUID?.()};
         if(!request.journeyId)throw Error('Secure journey ID generation is unavailable.');
         if(j.remote){if(j.remote.service!==service)throw Error('Application type changed. Discard the previous draft or start a new application before saving.');request.id=j.remote.id;request.revision=j.remote.revision;}
