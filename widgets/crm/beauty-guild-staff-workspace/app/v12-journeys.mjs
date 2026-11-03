@@ -380,6 +380,7 @@ function prefill(j){
   county:c.Correspondence_County||c.Mailing_State,postcode:c.Correspondence_Postcode||c.Mailing_Zip,
   contactCountry:c.Correspondence_Country||c.Mailing_Country,country:c.Correspondence_Country||c.Mailing_Country};
  for(const [k,value]of Object.entries(src)){if(!nonblank(a[k])&&nonblank(value))a[k]=value;}
+ if(j.kind==='membership'&&a.working)a.insWorking=[a.working];
  j.answers=a;
 }
 const pounds=p=>Number.isFinite(Number(p))?'£'+(Number(p)/100).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2}):'Not provided';
@@ -471,6 +472,11 @@ function setField(j,el){
   const a=Array.isArray(j.answers[k])?[...j.answers[k]]:[];
   j.answers[k]=el.checked?[...new Set([...a,el.value])]:a.filter(x=>x!==el.value);
  }else j.answers[k]=el.value;
+ if(j.kind==='membership'){
+  if(k==='working')j.answers.insWorking=el.value?[el.value]:[];
+  if(k==='country'&&!isUk(el.value)){j.answers.insuranceRequired='';j.answers.working='';j.answers.insWorking=[];j.answers.billing='annual';}
+  if(k==='insuranceRequired'&&el.value!=='yes'){j.answers.working='';j.answers.insWorking=[];}
+ }
  invalidateQuote(j);delete j.v12Errors?.[k];j.formError='';
  return true;
 }
@@ -507,9 +513,9 @@ function advance(j,delta){
  const errors=validatePortal(fields.filter(f=>f.type!=='courses'),j.answers);
  if(fields.some(f=>f.type==='courses'&&f.required)&&(!courseSource.loaded||courseSource.error||courseSource.incomplete))errors.courseIds='A complete, authorised GTi course catalogue is required before continuing.';
  const stops=j.kind!=='accreditation'?stopMessages(j.answers):[];
- if(stops.length)j.formError=stops[0];
+ if(stops.length&&j.kind!=='membership' || stops.length&&requestedInsurance(j.answers))j.formError=stops[0];
  if(Object.keys(errors).length){j.v12Errors=errors;j.formError=j.formError||'Complete the highlighted required fields before continuing.';return false;}
- if(stops.length)return false;
+ if(stops.length&&(j.kind!=='membership'||requestedInsurance(j.answers)))return false;
  j.v12Errors={};j.formError='';j.step=Math.min(steps.length,j.step+1);return true;
 }
 const CONSENT_KEYS=['accepted','termsAccepted','insInformationAccurate','insEthicsAccepted','insDemandsNeedsAccepted','insNonAdvisedAccepted'];
@@ -532,7 +538,7 @@ function restoreAnswers(d){
  if(a.membership?.f){
    const f=a.membership.f,d=a.membership.d||{},ins=a.insurance;
    const answer=f.answers||{};const legacyWorking=Array.isArray(ins?.iv?.insWorking)&&ins.iv.insWorking.length===1?ins.iv.insWorking[0]:'';
-   return {...d,...(ins?.iv||{}),branch:f.branch,branches:f.branches,billing:f.billing,start:f.start,previousId:f.previousId||'',changeType:f.changeType||'',code:f.code||'',country:answer.country||ins?.country||d.country||'',insuranceRequired:answer.insuranceRequired||(ins?'yes':'no'),working:answer.working||(ins?.iv?.insWorking?.length>1?'':legacyWorking),...Object.fromEntries(Object.entries(f.addons||{}).map(([k,v])=>['addon_'+k,v]))};
+   return {...d,...(ins?.iv||{}),branch:f.branch,branches:f.branches,billing:f.billing,start:f.start,previousId:f.previousId||'',changeType:f.changeType||'',code:f.code||'',country:answer.country||ins?.country||d.country||'',insuranceRequired:answer.insuranceRequired||(ins?'yes':'no'),working:answer.working||(ins?.iv?.insWorking?.length>1?'':legacyWorking),insWorking:answer.working?[answer.working]:(legacyWorking?[legacyWorking]:[]),...Object.fromEntries(Object.entries(f.addons||{}).map(([k,v])=>['addon_'+k,v]))};
  }
  return {...a};
 }
