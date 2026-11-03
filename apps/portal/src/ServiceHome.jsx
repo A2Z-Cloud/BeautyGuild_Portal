@@ -15,6 +15,8 @@ const paths = {
   accreditation: ['Your training centre', 'Courses and tutors', 'Review information'],
   insurance: ['Business information', 'Cover options', 'Declarations', 'Review information'],
 };
+// The combined Membership and Insurance journey, as the member sees it.
+const COMBINED_PATH = ['About you', 'Membership details', 'Extras', 'Review and pay'];
 // Shown to someone with no membership (MEM-031, MEM-032).
 export const NO_MEMBERSHIP_TEXT =
   "You don't currently have a Guild membership. Choose Associate Membership, or Full Membership with insurance, and start enjoying exclusive member perks, discounts and support.";
@@ -23,7 +25,9 @@ export const NO_MEMBERSHIP_TEXT_COMBINED = COMBINED_DESCRIPTION;
 
 export default function ServiceHome({ kind }) {
   const service = DEMO_SERVICES.find(s => s.kind === kind),
-    applyOnline = kind === 'accreditation' && INTEGRATIONS.crmAccreditation;
+    applyOnline = kind === 'accreditation' && INTEGRATIONS.crmAccreditation,
+    // Membership and insurance open online once checkout is live; accreditation once its CRM drafts are.
+    openOnline = applyOnline || (kind !== 'accreditation' && INTEGRATIONS.stripeCheckout);
   const records = useServiceRecords(kind),
     has = Boolean(records?.length);
   // An Associate member cannot buy insurance on its own: their route to cover is to upgrade to Full with insurance (the same quote journey).
@@ -112,7 +116,11 @@ export default function ServiceHome({ kind }) {
                   ? 'Support for your training centre.'
                   : 'Join the Guild Today'}
             </h2>
-            <p>Look through the questions in our new online application.</p>
+            <p>
+              {openOnline
+                ? 'Answer a few questions in our online application. You can save it and finish later.'
+                : 'Look through the questions in our new online application.'}
+            </p>
           </div>
           <IconFor kind={kind} size={70} />
         </div>
@@ -123,30 +131,40 @@ export default function ServiceHome({ kind }) {
             <small className="eyebrow">THE JOURNEY</small>
             <h2>Here's what to expect</h2>
             <ol className="process">
-              {paths[kind].map((label, i) => (
+              {(combined ? COMBINED_PATH : paths[kind]).map((label, i) => (
                 <li key={label}>
                   <b>{String(i + 1).padStart(2, '0')}</b>
                   <span>
                     <strong>{label}</strong>
                     <small>
-                      {i === paths[kind].length - 1 ? 'Check your answers before you finish' : 'Questions to answer'}
+                      {i === (combined ? COMBINED_PATH : paths[kind]).length - 1
+                        ? 'Check your answers before you finish'
+                        : 'Questions to answer'}
                     </small>
                   </span>
                 </li>
               ))}
             </ol>
-            <Link className="btn btn-primary" to={'/' + kind + '/new'}>
-              View the {kind} form <ArrowRight size={16} />
+            <Link
+              className="btn btn-primary"
+              to={kind === 'membership' && combined ? '/membership/buy' : '/' + kind + '/new'}
+            >
+              {kind === 'membership' && combined
+                ? 'Join the Guild'
+                : openOnline
+                  ? 'Start your application'
+                  : 'View the ' + kind + ' form'}{' '}
+              <ArrowRight size={16} />
             </Link>
           </section>
           <section className="surface padded">
             <small className="eyebrow">BEFORE YOU START</small>
-            {applyOnline ? (
+            {openOnline ? (
               <>
                 <h2>Apply online</h2>
                 <Notice title="Save and finish later">
-                  Sign in to start. You can save your application and finish it later from Saved applications. Nothing
-                  is charged until you choose to pay.
+                  You can save your application and finish it later from Saved applications. Nothing is charged until
+                  you choose to pay.
                 </Notice>
               </>
             ) : (
