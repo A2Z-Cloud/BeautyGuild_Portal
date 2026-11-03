@@ -30,12 +30,12 @@ export VITE_PUBLIC_SCHOOL_VERIFICATION=true
 # Insurance changes (MTA R3-4) on the Development client. The server switches (PORTAL_INSURANCE_CHANGES_*) are separate, and a change
 # only saves or takes payment when those are on too. Membership changes (VITE_PORTAL_MEMBERSHIP_CHANGES) stay off here for now.
 export VITE_PORTAL_INSURANCE_CHANGES=true
-# Associate to Full upgrade with the unused fee credited. Off unless asked for: build with VITE_PORTAL_MEMBERSHIP_UPGRADE=true scripts/deploy-client.sh, and only
-# once the function's PORTAL_MEMBERSHIP_UPGRADE_ENABLED is on (a client with it on and a function with it off just shows the full price).
-export VITE_PORTAL_MEMBERSHIP_UPGRADE="${VITE_PORTAL_MEMBERSHIP_UPGRADE:-false}"
-# One Membership and Insurance card, and the standalone insurance pages redirect into the membership journey. Off unless asked for: build with
-# VITE_PORTAL_COMBINED_FLOW=true scripts/deploy-client.sh, and only once the function's PORTAL_COMBINED_FLOW_ENABLED is on and UAT has passed.
-export VITE_PORTAL_COMBINED_FLOW="${VITE_PORTAL_COMBINED_FLOW:-false}"
+# Associate to Full upgrade with the unused fee credited. On by default (3 November). Build with VITE_PORTAL_MEMBERSHIP_UPGRADE=false scripts/deploy-client.sh to switch it off, and keep it
+# in step with the function's PORTAL_MEMBERSHIP_UPGRADE_ENABLED (a client with it on and a function with it off just shows the full price).
+export VITE_PORTAL_MEMBERSHIP_UPGRADE="${VITE_PORTAL_MEMBERSHIP_UPGRADE:-true}"
+# One Membership and Insurance card, and the standalone insurance pages redirect into the membership journey. On by default (3 November). Build with
+# VITE_PORTAL_COMBINED_FLOW=false scripts/deploy-client.sh to switch it off, and keep it in step with the function's PORTAL_COMBINED_FLOW_ENABLED.
+export VITE_PORTAL_COMBINED_FLOW="${VITE_PORTAL_COMBINED_FLOW:-true}"
 
 # vite build (not npm run build) so the flags above are exactly what is compiled; public/client-package.json is copied into dist/ by the build.
 npx vite build
