@@ -10,10 +10,12 @@ export class ApiError extends Error {
   }
 }
 const allowedMethods = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
+// Shown when the signed-in email has no Guild record. Pages compare against it to show a friendly empty state.
+export const NO_RECORD_MESSAGE =
+  'We could not find a Guild membership record for your email address. If you are new, choose Join the Guild to get started. If you are already a member, please contact the Guild.';
 // Backend codes we recognise get a fixed, customer-friendly message. Unknown codes never show backend text.
 const KNOWN_CODES = Object.freeze({
-  CONTACT_UNLINKED:
-    'We could not find a Guild membership record for your email address. If you are new, choose Join the Guild to get started. If you are already a member, please contact the Guild.',
+  CONTACT_UNLINKED: NO_RECORD_MESSAGE,
   CHECKOUT_UNAVAILABLE: 'Online payment is not available yet. Please contact the Guild.',
   BILLING_DISABLED: 'Online payment is not available yet. Please contact the Guild.',
   PAYMENT_UNAVAILABLE: 'We could not open the secure payment page. Please try again in a moment.',

@@ -1,5 +1,7 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { BadgeCheck, BookOpen, ShieldCheck, ArrowUpRight } from 'lucide-react';
+import { NO_RECORD_MESSAGE } from './services/transport.mjs';
 import CoursePicker from './components/CoursePicker.jsx';
 import { startLimits } from './startDate.js';
 import { DIALS, dialLabel, compactDial, isoForCountry, splitPhone, joinPhone } from './phones.js';
@@ -328,6 +330,17 @@ export function Notice({ title, children }) {
       <span>{children}</span>
     </div>
   );
+}
+// A load error as a notice. Someone with no Guild record yet is not in trouble: they are new, so point them at joining.
+export function ErrorNotice({ title, error }) {
+  if (error === NO_RECORD_MESSAGE)
+    return (
+      <Notice title="Nothing here yet">
+        You do not have any records yet. <Link to="/membership/buy">Join the Guild</Link> to get started. If you are
+        already a member, please contact the Guild.
+      </Notice>
+    );
+  return <Notice title={title}>{error}</Notice>;
 }
 export function Stages({ steps, current }) {
   return (

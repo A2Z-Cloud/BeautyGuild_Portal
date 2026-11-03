@@ -17,7 +17,7 @@ import {
   LockKeyhole,
   RefreshCw,
 } from 'lucide-react';
-import { PageHeading, Notice, Status } from './UiParts.jsx';
+import { PageHeading, Notice, ErrorNotice, Status } from './UiParts.jsx';
 import { formatDate } from './format.js';
 import { INTEGRATIONS, portalApi } from './services/api.js';
 import { DocumentsPanel } from './DocumentsPanel.jsx';
@@ -126,7 +126,7 @@ export function SchoolsList() {
       ) : state.loading ? (
         <p role="status">Loading your schools…</p>
       ) : state.error ? (
-        <Notice title="Schools unavailable">{state.error}</Notice>
+        <ErrorNotice title="Schools unavailable" error={state.error} />
       ) : (
         <div className="school-list">
           {state.value.length ? (
@@ -515,7 +515,7 @@ export function AccountInvoices() {
       ) : state.loading ? (
         <p role="status">Loading invoices…</p>
       ) : state.error ? (
-        <Notice title="Invoices unavailable">{state.error}</Notice>
+        <ErrorNotice title="Invoices unavailable" error={state.error} />
       ) : (
         <section className="surface padded">
           <InvoiceTable rows={state.value} />
@@ -731,7 +731,7 @@ export function AccountDocuments() {
       {docs.loading ? (
         <p role="status">Finding your membership documents…</p>
       ) : docs.error ? (
-        <Notice title="Documents unavailable">{docs.error}</Notice>
+        <ErrorNotice title="Documents unavailable" error={docs.error} />
       ) : docs.value.length ? (
         <DocumentsPanel kind="membership" id={docs.value[0].id} />
       ) : (
