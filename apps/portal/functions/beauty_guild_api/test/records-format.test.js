@@ -60,3 +60,15 @@ test('insurance quotes carry the quoted amount and whether they can still be pai
   assert.equal(mapRecord('insurance', { id: '2', Application_Status: 'Active' }).quotedAmount, null);
   assert.equal(mapRecord('membership', { id: '3', Stage: 'Active' }).quotedAmount, undefined);
 });
+
+test('an accreditation waiting for payment says so, and a paid or draft one does not (UAT round 1)', () => {
+  const row = extra => ({ id: '1', Name: 'ACC - 1', Accreditation_Status: 'Unverified', ...extra });
+  assert.equal(mapRecord('accreditation', row({ Application_Stage: 'Awaiting Payment' })).payableOnline, true);
+  assert.equal(mapRecord('accreditation', row({ Application_Stage: 'Payment Failed' })).payableOnline, true);
+  assert.equal(
+    mapRecord('accreditation', row({ Application_Stage: 'Awaiting Payment', Payment_Status: 'Paid' })).payableOnline,
+    false,
+  );
+  assert.equal(mapRecord('accreditation', row({ Application_Stage: 'Draft' })).payableOnline, false);
+  assert.equal('payableOnline' in mapRecord('membership', { id: '2' }), false);
+});

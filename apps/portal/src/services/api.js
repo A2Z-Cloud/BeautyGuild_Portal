@@ -71,8 +71,6 @@ export const INTEGRATIONS = Object.freeze({
   // A course that is not a GTi course, typed on the Courses step. Off until the Guild creates the CRM field and the function's
   // ACC_OTHER_COURSE_FIELD names it (docs/delivery/uat-round1-fixes-spec.md).
   otherCourse: draftsOn && import.meta.env.VITE_PORTAL_OTHER_COURSE === 'true',
-  // Add a venue on a verified school. Off until Creator handles the additional_venue payment end to end.
-  addVenue: schoolOn && billingOn && import.meta.env.VITE_PORTAL_ADD_VENUE === 'true',
   crmContactMapping: recordsOn,
   pricing: false,
   underwriting: false,

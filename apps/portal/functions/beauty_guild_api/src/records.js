@@ -167,6 +167,12 @@ function insuranceQuoteFields(r) {
     canPay: Boolean(waiting && !lapsed && r.Stripe_Checkout_Session_ID),
   };
 }
+// An accreditation application that has been saved for payment and not paid: the person can go back and pay online.
+const PAYABLE_ACCREDITATION_STAGES = new Set(['Awaiting Payment', 'Payment Failed', 'Payment Processing']);
+const PAID_STATUSES = new Set(['paid', 'succeeded', 'completed', 'payment received']);
+const accreditationPayable = r =>
+  PAYABLE_ACCREDITATION_STAGES.has(String(r.Application_Stage || '')) &&
+  !PAID_STATUSES.has(String(r.Payment_Status || '').toLowerCase());
 function mapRecord(kind, r) {
   const d = DEFINITIONS[kind];
   return {
@@ -181,6 +187,7 @@ function mapRecord(kind, r) {
     paymentStatus: r.Payment_Status || null,
     type: r.Membership_Type || r.Accreditation_Level || r.Policy_Type || null,
     ...(kind === 'insurance' ? insuranceQuoteFields(r) : {}),
+    ...(kind === 'accreditation' ? { payableOnline: accreditationPayable(r) } : {}),
   };
 }
 function registerRecordRoutes(

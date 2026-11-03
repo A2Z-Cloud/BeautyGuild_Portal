@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { portalApi } from './services/api.js';
+import { INTEGRATIONS, portalApi } from './services/api.js';
 import { ErrorNotice, Notice, PageHeading, Status, IconFor } from './UiParts.jsx';
 import { comingSoon, formatDate, serviceLabel } from './format.js';
 import { DocumentsPanel } from './DocumentsPanel.jsx';
@@ -220,6 +220,13 @@ export function LiveRecordDetail({ kindOverride }) {
                 ))}
               </dl>
             </div>
+            {record.kind === 'accreditation' && record.payableOnline && INTEGRATIONS.stripeCheckout && (
+              <p>
+                <Link className="btn btn-primary" to={'/pay/accreditation/' + encodeURIComponent(record.id)}>
+                  Continue to payment
+                </Link>
+              </p>
+            )}
             {record.canPay && (
               <PayQuote
                 record={record}

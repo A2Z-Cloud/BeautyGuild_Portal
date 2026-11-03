@@ -44,7 +44,8 @@ Each row says where it comes from, what changes and how we know it is done.
 |---|---|---|
 | C1 | Each section on the review step has an Edit button that returns to that step. | Edit goes to the step and Back to review is possible without losing answers. |
 | C2 | The review step's button is "Continue to payment". There is no separate "Application submitted" page: after saving, the person goes straight to the payment page. | Pressing it saves and opens `/pay/accreditation/:id`. If saving fails the person stays on the review with the message. |
-| C3 | After "Continue to payment", pressing Back and opening the record offers "Continue to payment" and "Edit application". | The record in My records and in the school page shows both actions while payment is outstanding. |
+| C3 | After "Continue to payment", pressing Back and opening the record offers "Continue to payment". | The record in My records shows a Continue to payment button while payment is outstanding (the school page already had one). |
+| C4 | **Not in this PR:** "Edit application" on a submitted application. The server only lets a Draft be edited, and re-opening an Awaiting Payment application changes what the Guild sees. Needs a decision: re-open to Draft, or edit in place. | Decision recorded with the Guild. |
 
 ### D. Address (S10 step 13)
 
@@ -67,21 +68,24 @@ Each row says where it comes from, what changes and how we know it is done.
 | # | Change | Done when |
 |---|---|---|
 | F1 | The Accreditation card shows a loading state until the school and draft data arrive, not "Apply for accreditation". | No flash of the wrong state. |
-| F2 | Saved applications appear sooner after payment. | The list refreshes when the person returns from payment and retries once if the CRM has not caught up. Some delay can stay: CRM search lags. |
+| F2 | **Not in this PR:** saved applications appear slowly. The list comes from a CRM search, which lags real writes by up to about 30 seconds. | Needs a follow-up: show the application the person just saved from this browser until the search catches up. |
 
 ### G. Associate journey (S01, S02)
 
 | # | Change | Done when |
 |---|---|---|
 | G1 | Validation: the "Still to complete" list starts each item with a capital letter, and the incomplete box has a dark pink border. | Both visible on an empty Next. |
-| G2 | Reproduce the return after creating an account (S01 step 5): the person should land on payment with their answers. | A written finding. Fix only if the cause is ours. The sign-up email link needs a real email, so this is checked in QA. |
+| G2 | **Not in this PR:** the return after creating an account (S01 step 5). The Join flow already sends the person back to `/membership/buy`; losing that place is most likely the sign-up email link. | Reproduce in QA with a real sign-up email and a real inbox. |
 
 ### H. Additional venue (S12)
 
-| # | Change | Done when |
-|---|---|---|
-| H1 | A verified school's Venues tab shows "Add a venue (£60)". It opens the existing `additional_venue` checkout, with the centre chosen. | The price page shows £60 and goes to Stripe. The button is hidden unless the school is verified and the switch is on. |
-| H2 | Whether the payment updates the CRM is Creator's (see Creator QA). | Not part of this PR. |
+**Not in this PR, and bigger than a button.** The £60 checkout pays for a venue record that already exists (`centreId`, a Training_Centres record linked to the accreditation). The portal has no way to create that record: the Add Venue wizard is listed as still missing in `docs/api-contracts/school-management-invoices.md`. So S12 cannot pass until we build:
+
+1. A short form on a verified school's Venues tab: venue name, address, contact details and which of the school's courses run there.
+2. A server route that creates the venue records (Training_Centres, Accreditation_Centre_Link and course offerings) as pending, with the same checks as V1.
+3. The existing `/pay/additional_venue/:recordId?centreId=` payment, then Creator's handling of the paid event (see Creator QA 7.4).
+
+We need the Guild's V1 behaviour for step 2 (what a venue holds, who verifies it) before building. Proposed as its own piece of work.
 
 ## 3. Not in this PR
 
@@ -91,12 +95,11 @@ Each row says where it comes from, what changes and how we know it is done.
 
 ## 4. Switches and dependencies
 
-- Venue button: `VITE_PORTAL_ADD_VENUE` (default on in the deploy script once Creator has tested the venue payment; off until then).
-- Other course: `VITE_PORTAL_OTHER_COURSE` and the server's `ACC_OTHER_COURSE_FIELD`, the CRM field on Training_Centre_Accred that holds the text. Off until the Guild creates the field. If the field is not configured the server ignores the text and the form hides the box.
+- Other course: `VITE_PORTAL_OTHER_COURSE` (client, build time) and the function's `ACC_OTHER_COURSE_FIELD`, the API name of a text field on Training_Centre_Accred that holds the typed course. Both off until the Guild creates the field. If the field is not configured the server ignores the text, and a GTi course is still needed.
 
 ## 5. Tests
 
-- Pure rules: country list, review edit targets, course rule, address merge.
-- Function: course rule with and without an Other course, no start date, other-course field written only when configured.
+- Pure rules: country list and the nations mapped to the United Kingdom, no start date, declaration links, the course rule with and without an Other course.
+- Function: no start date needed, the Other course rule with and without the field configured, and the payable flag on an accreditation record.
 - Build, lint, format and the portal and function test suites, as for every PR.
 - Manual on Development after deploy: the S10 and S17 steps with nothing submitted beyond a draft.
