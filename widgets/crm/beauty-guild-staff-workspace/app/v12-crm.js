@@ -231,8 +231,11 @@
     focusedRecord={entity,record};
     const id=String(record.id),key=entity+':'+id,selection=chosen.get(key)||(entity==='Deals'||entity==='Membership'?'overview':'details');
     const relations=relationList(entity),meta=metaCache.get(entity)||{};
+    const editable=typeof ctx.editableFields==='function'?ctx.editableFields(entity,record):'';
     let main='';
-    if(selection==='overview'&&['Deals','Membership'].includes(entity))main=membershipOverview(entity,record);
+    if(selection==='updates')main='<section class="v12-detail-section"><h3>CRM field updates</h3><p class="v12-muted">Changing these fields runs the configured CRM workflows. Confirm the change before saving.</p>'+(editable||'<p>No authorised inline updates are available for this record.</p>')+'</section>';
+    else 
+if(selection==='overview'&&['Deals','Membership'].includes(entity))main=membershipOverview(entity,record);
     else if(selection==='details'){
       const showEmpty=fieldModes.get(key)===true;
       main='<div class="v12-record-toolbar"><div class="v12-tabs"><button class="'+(!showEmpty?'selected':'')+'" data-action="v12-all" data-show="false">Populated fields</button><button class="'+(showEmpty?'selected':'')+'" data-action="v12-all" data-show="true">All CRM fields</button></div></div>';
@@ -243,9 +246,8 @@
       main='<section class="v12-detail-section"><h3>Processing and decisions</h3>'+fieldRows(entity,record,['Application_Status','Application_Stage','Underwriting_Status','Risk_Status','Sanctions_Status','Payment_Status','Policy_Status','Finance_Sync_Status','Next_Action','Next_Action_Date','Stop_Reason','Manual_Review_Outcome'],true)+'<div class="v12-warning">Risk decisions and payment status must be verified in CRM and the authoritative Catalyst service. This screen does not clear a referral or activate cover.</div></section>'+(typeof ctx.processing==='function'?ctx.processing(entity,record):'');
     }else{main=relationContent(entity,record,selection,ctx.crm,ctx.rerender);}
     const extraAction=ctx.operationalUat?'':(global.BGStaffAddons?.action(entity,record)||'');
-    const editable=typeof ctx.editableFields==='function'?ctx.editableFields(entity,record):'';
     const header='<header class="v12-record-head"><div><span class="v12-kicker">'+safe(appNames[entity]||pretty(entity))+'</span><h2>'+safe(ctx.title(entity,record))+'</h2><p>'+safe(ctx.summary(entity,record)||'')+'</p></div><div class="v12-status-row">'+statusBar(entity,record)+'</div></header>';
-    const navigation=[...(['Deals','Membership'].includes(entity)?[['overview','Membership overview']]:[]),['details','All CRM fields'],['timeline','Activity timeline'],['processing','Processing']].map(p=>'<button class="v12-side-link '+(selection===p[0]?'active':'')+'" data-action="v12-tab" data-tab="'+p[0]+'">'+safe(p[1])+'</button>').join('');
+    const navigation=[...(['Deals','Membership'].includes(entity)?[['overview','Membership overview']]:[]),['details','All CRM fields'],['timeline','Activity timeline'],['processing','Processing'],...(editable?[['updates','Field updates']]:[])].map(p=>'<button class="v12-side-link '+(selection===p[0]?'active':'')+'" data-action="v12-tab" data-tab="'+p[0]+'">'+safe(p[1])+'</button>').join('');
     const related=relations.map(r=>{
       const cache=relatedCache.get(relationKey(entity,id,r.id));
       const loaded=cache?.pages?.get(cache.page||1);
@@ -253,7 +255,7 @@
       return '<button class="v12-side-link '+(selection===r.id?'active':'')+'" data-action="v12-tab" data-tab="'+safe(r.id)+'"><span>'+safe(r.label)+'</span>'+count+'</button>';
     }).join('');
     const metaText=meta.loading?'CRM layout metadata loading…':meta.problems?.length?'Some CRM metadata could not be loaded; fields and relationships may be incomplete.':'CRM layout and field labels';
-    return '<div class="v12-record">'+header+(editable?'<section class="v12-detail-section"><h3>Available CRM field updates</h3><p class="v12-muted">These updates run configured CRM workflows. Confirm a change before saving.</p>'+editable+'</section>':'')+'<div class="v12-member-actions"><div class="v12-member-primary-actions">'+ctx.actions(entity,id)+'</div>'+(extraAction?'<div class="v12-member-service-actions"><span>Membership services</span>'+extraAction+'</div>':'')+'</div><div class="v12-record-layout"><div class="v12-main">'+main+'<p class="v12-meta-note">'+safe(metaText)+'</p></div><aside class="v12-side" aria-label="Record sections and related lists"><h3>Record</h3>'+navigation+'<h3>Related Lists</h3>'+related+'</aside></div></div>';
+    return '<div class="v12-record">'+header+'<div class="v12-member-actions"><div class="v12-member-primary-actions">'+ctx.actions(entity,id)+'</div>'+(extraAction?'<div class="v12-member-service-actions"><span>Membership services</span>'+extraAction+'</div>':'')+'</div><div class="v12-record-layout"><div class="v12-main">'+main+'<p class="v12-meta-note">'+safe(metaText)+'</p></div><aside class="v12-side" aria-label="Record sections and related lists"><h3>Record</h3>'+navigation+'<h3>Related Lists</h3>'+related+'</aside></div></div>';
   }
   async function action(el,focus,crm,rerender){
     if(!focus)return false;
@@ -265,8 +267,8 @@
       rerender();return true;
     }
     if(a==='v12-tab'){
-      const tab=el.dataset.tab;if(!['details','overview','timeline','processing'].includes(tab)&&!relationList(entity).some(x=>x.id===tab))return true;
-      chosen.set(key,tab);rerender();if(!['details','overview','timeline','processing'].includes(tab))await loadRelation(entity,record.id,tab,crm,rerender);return true;
+      const tab=el.dataset.tab;if(!['details','overview','timeline','processing','updates'].includes(tab)&&!relationList(entity).some(x=>x.id===tab))return true;
+      chosen.set(key,tab);rerender();if(!['details','overview','timeline','processing','updates'].includes(tab))await loadRelation(entity,record.id,tab,crm,rerender);return true;
     }
     if(a==='v12-all'){fieldModes.set(key,el.dataset.show==='true');rerender();return true;}
     if(a==='v12-rel-refresh'||a==='v12-rel-page'){
