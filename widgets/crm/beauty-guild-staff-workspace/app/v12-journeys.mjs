@@ -5,36 +5,269 @@ import {INSURANCE_STEPS,visibleSteps,stopMessages,TREATMENT_OPTIONS,toRequest as
 import {accreditationSteps,resolveFields,COPY_HOME_MAP} from './portal-defs/accreditationInputs.js';
 import {validate as validatePortal} from './portal-defs/logic.mjs';
 import {startLimits} from './portal-defs/startDate.js';
-const countries=['United Kingdom','England','Scotland','Wales','Northern Ireland','Ireland','France','Spain','Other'];
+const countries=[
+  'United Kingdom',
+  'England',
+  'Scotland',
+  'Wales',
+  'Northern Ireland',
+  'Ireland',
+  'Afghanistan',
+  'Albania',
+  'Algeria',
+  'Andorra',
+  'Angola',
+  'Antigua and Barbuda',
+  'Argentina',
+  'Armenia',
+  'Australia',
+  'Austria',
+  'Azerbaijan',
+  'Bahamas',
+  'Bahrain',
+  'Bangladesh',
+  'Barbados',
+  'Belarus',
+  'Belgium',
+  'Belize',
+  'Benin',
+  'Bhutan',
+  'Bolivia',
+  'Bosnia and Herzegovina',
+  'Botswana',
+  'Brazil',
+  'Brunei',
+  'Bulgaria',
+  'Burkina Faso',
+  'Burundi',
+  'Cabo Verde',
+  'Cambodia',
+  'Cameroon',
+  'Canada',
+  'Central African Republic',
+  'Chad',
+  'Chile',
+  'China',
+  'Colombia',
+  'Comoros',
+  'Congo (Brazzaville)',
+  'Congo (Kinshasa)',
+  'Costa Rica',
+  'Croatia',
+  'Cuba',
+  'Cyprus',
+  'Czechia',
+  'Denmark',
+  'Djibouti',
+  'Dominica',
+  'Dominican Republic',
+  'Ecuador',
+  'Egypt',
+  'El Salvador',
+  'Equatorial Guinea',
+  'Eritrea',
+  'Estonia',
+  'Eswatini',
+  'Ethiopia',
+  'Fiji',
+  'Finland',
+  'France',
+  'Gabon',
+  'Gambia',
+  'Georgia',
+  'Germany',
+  'Ghana',
+  'Greece',
+  'Grenada',
+  'Guatemala',
+  'Guernsey',
+  'Guinea',
+  'Guinea-Bissau',
+  'Guyana',
+  'Haiti',
+  'Honduras',
+  'Hungary',
+  'Iceland',
+  'India',
+  'Indonesia',
+  'Iran',
+  'Iraq',
+  'Isle of Man',
+  'Israel',
+  'Italy',
+  'Jamaica',
+  'Japan',
+  'Jersey',
+  'Jordan',
+  'Kazakhstan',
+  'Kenya',
+  'Kiribati',
+  'Kosovo',
+  'Kuwait',
+  'Kyrgyzstan',
+  'Laos',
+  'Latvia',
+  'Lebanon',
+  'Lesotho',
+  'Liberia',
+  'Libya',
+  'Liechtenstein',
+  'Lithuania',
+  'Luxembourg',
+  'Madagascar',
+  'Malawi',
+  'Malaysia',
+  'Maldives',
+  'Mali',
+  'Malta',
+  'Marshall Islands',
+  'Mauritania',
+  'Mauritius',
+  'Mexico',
+  'Micronesia',
+  'Moldova',
+  'Monaco',
+  'Mongolia',
+  'Montenegro',
+  'Morocco',
+  'Mozambique',
+  'Myanmar',
+  'Namibia',
+  'Nauru',
+  'Nepal',
+  'Netherlands',
+  'New Zealand',
+  'Nicaragua',
+  'Niger',
+  'Nigeria',
+  'North Korea',
+  'North Macedonia',
+  'Norway',
+  'Oman',
+  'Pakistan',
+  'Palau',
+  'Palestine',
+  'Panama',
+  'Papua New Guinea',
+  'Paraguay',
+  'Peru',
+  'Philippines',
+  'Poland',
+  'Portugal',
+  'Qatar',
+  'Romania',
+  'Russia',
+  'Rwanda',
+  'Saint Kitts and Nevis',
+  'Saint Lucia',
+  'Saint Vincent and the Grenadines',
+  'Samoa',
+  'San Marino',
+  'Sao Tome and Principe',
+  'Saudi Arabia',
+  'Senegal',
+  'Serbia',
+  'Seychelles',
+  'Sierra Leone',
+  'Singapore',
+  'Slovakia',
+  'Slovenia',
+  'Solomon Islands',
+  'Somalia',
+  'South Africa',
+  'South Korea',
+  'South Sudan',
+  'Spain',
+  'Sri Lanka',
+  'Sudan',
+  'Suriname',
+  'Sweden',
+  'Switzerland',
+  'Syria',
+  'Taiwan',
+  'Tajikistan',
+  'Tanzania',
+  'Thailand',
+  'Timor-Leste',
+  'Togo',
+  'Tonga',
+  'Trinidad and Tobago',
+  'Tunisia',
+  'Turkey',
+  'Turkmenistan',
+  'Tuvalu',
+  'Uganda',
+  'Ukraine',
+  'United Arab Emirates',
+  'United States',
+  'Uruguay',
+  'Uzbekistan',
+  'Vanuatu',
+  'Vatican City',
+  'Venezuela',
+  'Vietnam',
+  'Yemen',
+  'Zambia',
+  'Zimbabwe',
+  'Other',
+];
 const branches=[['beauty','Beauty Therapists'],['holistic','Holistic Therapists'],['nails','Nail Technicians'],['hair','Hairdressers & Barbers']];
 const choices=x=>x.map(([value,label])=>({value,label}));
 const field=(name,label,type='text',required=false,more={})=>({name,label,type,required,...more});
 const byName=(name,label,opts,more={})=>field(name,label,'radio',true,{options:choices(opts),...more});
+const UK_GROUP=new Set(['united kingdom','uk','great britain','england','scotland','wales','northern ireland']);
+const isUk=c=>UK_GROUP.has(String(c||'').trim().toLowerCase());
+const workingOptions=INSURANCE_STEPS.flatMap(x=>x.fields||[]).find(x=>x.name==='insWorking')?.options||[];
+const requestedInsurance=a=>isUk(a.country)&&a.insuranceRequired==='yes';
 const membershipBase=[
- {id:'membership',title:'Membership selection',description:'Current Guild membership types, primary branch, insurance and billing frequency.',fields:[
-  byName('level','Membership type',[['associate','Associate Member'],['full_non_salon','Full Member (Non-Salon)'],['full_salon','Full Member (Salon)']]),
-  field('branch','Primary Guild branch','radio',true,{options:choices(branches)}),
+ {id:'about',title:'About you',description:'Country and customer requirements determine the membership. Staff cannot choose the membership level.',fields:[
+  field('country','Where are you based?','select',true,{options:choices(countries.map(c=>[c,c]))}),
+  byName('insuranceRequired','Do you require insurance?',[['yes','Yes'],['no','No']],{when:a=>isUk(a.country)}),
+  field('branch','Primary Guild branch','radio',true,{options:choices(branches)})]},
+ {id:'working',title:'How you work',description:'Choose one way of working. The portal will determine whether Salon or Non-Salon cover applies.',when:a=>requestedInsurance(a),fields:[
+  field('working','How do you work?','radio',true,{options:workingOptions})]},
+ {id:'details',title:'Membership details',description:'Review the member and correspondence details.',fields:[
   byName('purchaseType','Application type',[['new','New member'],['renewal','Renewal'],['upgrade','Upgrade']]),
-  byName('billing','Payment frequency',[['annual','Annually'],['monthly','Monthly']]),
-  byName('insurance','Include insurance',[['yes','Yes, include insurance'],['no','No, membership only']],{when:v=>v.level!=='associate'}),
-  field('start','Start date','date',true,{limit:'start'})]},
- {id:'details',title:'Member and correspondence details',description:'Use the CRM customer record where available; confirm any change with the customer.',fields:[
+  byName('billing','Payment frequency',[['annual','Annually'],['monthly','Monthly']],{when:a=>isUk(a.country)}),
+  field('start','Start date','date',true,{limit:'start'}),
   field('firstName','First name','text',true),field('lastName','Surname','text',true),field('email','Email address','email',true),
   field('tradingName','Trading name','text',true),field('mobile','Mobile','tel',false),
-  field('address1','Address line 1','text',true),field('address2','Address line 2'),field('town','Town or city','text',true),
-  field('county','County'),field('postcode','Postcode','text',true),field('country','Country','select',true,{options:choices(countries.map(c=>[c,c]))})]},
- {id:'extras',title:'Additional branches and add-ons',description:'Membership products are selected here; pricing remains in Catalyst.',fields:[
+  field('address1','Address line 1','text',true),field('address2','Address line 2'),
+  field('town','Town or city','text',true),field('county','County'),field('postcode','Postcode','text',true)]},
+ {id:'extras',title:'Additional branches and add-ons',description:'Membership extras and branches use the existing server pricing.',fields:[
   field('branches','Additional branches','multi',false,{options:choices(branches),excludePrimary:true}),
   ...['bundle','certificate','badge','sticker'].map(x=>field('addon_'+x,({bundle:'Membership bundle',certificate:'Certificate',badge:'Badge',sticker:'Window sticker'})[x],'number',false,{min:0,max:10}))]},
- {id:'terms',title:'Membership declarations',description:'Record whether the customer confirmed the Guild terms and Code of Ethics; staff entry is not independent customer consent.',fields:[
+ {id:'terms',title:'Membership declarations',description:'The customer must personally confirm the Guild terms and Code of Ethics before payment.',fields:[
   field('accepted','Customer confirmed the Guild Terms of Business, Privacy Policy and Code of Ethics','checkbox',true)]}
 ];
+const INSURANCE_GROUPS={
+ business:['people','standardTreatments','treatments','teaching','property'],
+ cover:['equipment','el','contents','money','buildings','bi','propertyAway'],
+ declarations:['declarations','demands']
+};
+function insuranceGroup(key,a){
+ const included=new Set(INSURANCE_GROUPS[key]);
+ return INSURANCE_STEPS.filter(step=>included.has(step.id)&&(!step.when||step.when({...a,insWorking:a.working?[a.working]:[]}))).map(step=>({
+  ...step,fields:(step.fields||[]).filter(f=>f.name!=='insWorking')
+ }));
+}
+function membershipSteps(a){
+ if(!requestedInsurance(a))return membershipBase.filter(step=>step.id!=='working');
+ const byId=id=>membershipBase.find(step=>step.id===id);
+ return [
+  byId('about'),byId('working'),
+  {id:'business',title:'Business and treatments',description:'Insurance business information and treatments.',fields:insuranceGroup('business',a).flatMap(x=>x.fields)},
+  {id:'cover',title:'Insurance cover options',description:'Choose relevant cover using the Portal V2 questions.',fields:insuranceGroup('cover',a).flatMap(x=>x.fields)},
+  {id:'declarations',title:'Insurance declarations',description:'Confirm applicable insurance declarations with the customer.',fields:insuranceGroup('declarations',a).flatMap(x=>x.fields)},
+  byId('details'),byId('extras'),byId('terms')
+ ];
+}
 const insuranceAbout=[{id:'about',title:'Applicant and territory',description:'Customer details and location used by the Insurance quotation.',fields:[
  field('firstName','First name','text',true),field('lastName','Surname','text',true),field('email','Email address','email',true),
  field('mobile','Mobile','tel',false),field('country','Where are you based?','select',true,{options:choices(countries.map(c=>[c,c]))})]}];
 const insuranceStart={id:'start',title:'Cover start date',description:'Requested insurance cover date, up to 30 days ahead.',fields:[field('start','Start date','date',true,{limit:'start'})]};
 function config(kind,answers){
- if(kind==='membership')return [...membershipBase,...(answers.insurance==='yes'&&answers.level!=='associate'?INSURANCE_STEPS:[])];
+ if(kind==='membership')return membershipSteps(answers);
  if(kind==='insurance')return [...insuranceAbout,...INSURANCE_STEPS,insuranceStart];
  if(kind==='accreditation')return accreditationSteps(countries);
  return [];
@@ -153,7 +386,9 @@ const pounds=p=>Number.isFinite(Number(p))?'£'+(Number(p)/100).toLocaleString('
 function quoteSummary(result){
  const q=result?.quote;if(!q)return '';
  const lines=Array.isArray(q.lines)?q.lines:[];
+ const decision=q.decision;
  return '<section class="v12-payment-panel"><h4>'+esc(q.service||'')+' quotation</h4>'+
+ (decision?.level?'<p><strong>Membership: '+esc(String(decision.level).replaceAll('_',' '))+'</strong>'+ (decision.message?' · '+esc(decision.message):'')+'</p>':'')+
  '<p><strong>'+esc(q.alreadyPaid?'Already paid':q.payable?'Payable quotation':'Review required')+'</strong></p>'+
  (q.blocked?'<p class="v12-warning">'+esc(q.blocked.riskMessage||q.blocked.message||q.blocked.reasons?.join(' ')||'Referral or assessment required before payment.')+'</p>':'')+
  '<div class="v12-quote-lines">'+lines.map(l=>'<div><span>'+esc(l.name)+' × '+esc(l.quantity||1)+'</span><strong>'+esc(pounds(l.totalPence))+'</strong></div>').join('')+'</div>'+
@@ -168,7 +403,7 @@ function pricingAside(j){
  const fmt=v=>v===undefined||v===null?'—':pounds(v);
  const kind=j.kind==='membership'?'Membership':j.kind==='insurance'?'Insurance':'Accreditation';
  const sel=j.kind==='membership'
-  ?[a.level?['Member type',String(a.level).replaceAll('_',' ')]:null,a.billing?['Billing',a.billing==='monthly'?'Monthly':'Annual']:null,a.insurance==='yes'?['Insurance','Included']:null,Array.isArray(a.branches)&&a.branches.length?['Extra branches',String(a.branches.length)]:null]
+  ?[j.liveQuote?.quote?.decision?.level?['Member type',String(j.liveQuote.quote.decision.level).replaceAll('_',' ')]:null,a.billing?['Billing',a.billing==='monthly'?'Monthly':'Annual']:null,requestedInsurance(a)?['Insurance','Requested']:null,Array.isArray(a.branches)&&a.branches.length?['Extra branches',String(a.branches.length)]:null]
   :j.kind==='insurance'?[a.start?['Start date',a.start]:null]:[a.billing?['Billing',a.billing]:null];
  const lines=(q&&Array.isArray(q.lines)?q.lines:[]).slice(0,12).map(l=>'<div class="staff-price-line"><span>'+esc(l.name||'Item')+'</span><strong>'+fmt(l.totalPence)+'</strong></div>').join('');
  const selections=sel.filter(Boolean).map(x=>'<div class="staff-price-line"><span>'+esc(x[0])+'</span><strong>'+esc(x[1])+'</strong></div>').join('');
@@ -209,7 +444,7 @@ function render(j){
      (step.demands?'<p class="v12-warning">Staff must obtain and record the customer’s actual confirmation of the demands-and-needs information.</p>':'');
  }
  return '<section class="v12-journey"><header><span class="process-kicker">STAFF-ASSISTED APPLICATION · PORTAL V2 QUESTIONS</span><h2>'+esc(j.kind[0].toUpperCase()+j.kind.slice(1))+'</h2></header>'+
-  '<p class="v12-muted">Staff-assisted application. CRM draft saving is not available until the staff applications API is deployed.</p>'+
+   '<p class="v12-muted">Staff-assisted journey using the shared CRM draft and Portal V2 quotation services.</p>' +
   ctx+crumb+
   (j.kind==='membership'&&j.step>=0?'<section class="v12-journey-tools"><strong>Existing membership changes</strong><p class="v12-muted">For a renewal or upgrade, retrieve eligible options from the selected customer’s existing CRM membership.</p><input id="staff-membership-record-id" inputmode="numeric" placeholder="CRM Membership Deal ID" /><button class="button secondary" type="button" data-action="journey-membership-options" '+(j.membershipOptionsLoading?'disabled':'')+'>Load membership options</button>'+(j.optionsError?'<p role="alert" class="v12-warning">'+esc(j.optionsError)+'</p>':'')+(j.membershipOptions?'<pre class="v12-quote-output">'+esc(JSON.stringify(j.membershipOptions,null,2))+'</pre>':'')+'</section>':'')+
   '<div class="staff-journey-grid"><div class="staff-journey-primary"><div class="v12-journey-body">'+body+'</div></div>'+pricingAside(j)+'</div>'+
@@ -286,9 +521,9 @@ function draftAnswers(j){
  if(j.kind==='insurance')return {insurance:{iv,country:a.country||'',start:a.start||''}};
  const addons={};
  for(const key of ['bundle','certificate','badge','sticker']){const n=Number(a['addon_'+key]||0);if(Number.isInteger(n)&&n>0)addons[key]=n;}
- const f={level:a.level||'',branch:a.branch||'',branches:a.branches||[],billing:a.billing||'annual',addons,insurance:a.insurance==='yes',start:a.start||'',...(a.code?{code:a.code}:{})};
+ const f={answers:{country:a.country||'',insuranceRequired:a.insuranceRequired||'',working:a.working||''},branch:a.branch||'',branches:a.branches||[],billing:isUk(a.country)?(a.billing||'annual'):'annual',addons,insurance:requestedInsurance(a),start:a.start||'',previousId:a.previousId||'',changeType:a.changeType||'',...(a.code?{code:a.code}:{})};
  const d={firstName:a.firstName||'',lastName:a.lastName||'',email:a.email||'',tradingName:a.tradingName||'',mobile:a.mobile||'',address1:a.address1||'',address2:a.address2||'',town:a.town||'',county:a.county||'',postcode:a.postcode||'',country:a.country||''};
- return {membership:{f,d},...(f.insurance?{insurance:{iv,country:a.country||''}}:{})};
+ return {membership:{f,d},...(f.insurance?{insurance:{iv:{...iv,insWorking:a.working?[a.working]:[]},country:a.country||''}}:{})};
 }
 function restoreAnswers(d){
  const a=d?.answers||{};
@@ -296,29 +531,43 @@ function restoreAnswers(d){
  if(d.service==='insurance'&&a.insurance?.iv)return {...a.insurance.iv,country:a.insurance.country||'',start:a.insurance.start||''};
  if(a.membership?.f){
    const f=a.membership.f,d=a.membership.d||{},ins=a.insurance;
-   return {...d,...(ins?.iv||{}),level:f.level,branch:f.branch,branches:f.branches,billing:f.billing,start:f.start,code:f.code||'',insurance:ins?'yes':'no',country:ins?.country||d.country||'',...Object.fromEntries(Object.entries(f.addons||{}).map(([k,v])=>['addon_'+k,v]))};
+   const answer=f.answers||{};const legacyWorking=Array.isArray(ins?.iv?.insWorking)&&ins.iv.insWorking.length===1?ins.iv.insWorking[0]:'';
+   return {...d,...(ins?.iv||{}),branch:f.branch,branches:f.branches,billing:f.billing,start:f.start,previousId:f.previousId||'',changeType:f.changeType||'',code:f.code||'',country:answer.country||ins?.country||d.country||'',insuranceRequired:answer.insuranceRequired||(ins?'yes':'no'),working:answer.working||(ins?.iv?.insWorking?.length>1?'':legacyWorking),...Object.fromEntries(Object.entries(f.addons||{}).map(([k,v])=>['addon_'+k,v]))};
  }
  return {...a};
 }
 function apiRequest(j){
  const a=j?.answers||{},kind=j?.kind;
  if(!j?.contact?.id)throw Error('Select a CRM customer first.');
- const service=kind==='membership'&&a.insurance==='yes'?'membership':kind;
  const addons={};
  for(const x of ['bundle','certificate','badge','sticker']){
-   const quantity=Number(a['addon_'+x]||0);
-   if(Number.isInteger(quantity)&&quantity>0)addons[x]=quantity;
+  const quantity=Number(a['addon_'+x]||0);
+  if(Number.isInteger(quantity)&&quantity>0)addons[x]=quantity;
  }
- const base={contactId:String(j.contact.id),service,level:String(a.level||''),branch:String(a.branch||''),
+ const base={contactId:String(j.contact.id),service:kind,branch:String(a.branch||''),
    branches:Array.isArray(a.branches)?a.branches.join(','):(a.branches||''),
-   billing:String(a.billing||'annual'),addons,start:String(a.start||''),firstName:String(a.firstName||j.contact.First_Name||''),
+   billing:kind==='membership'&&!isUk(a.country)?'annual':String(a.billing||'annual'),
+   addons,start:String(a.start||''),firstName:String(a.firstName||j.contact.First_Name||''),
    lastName:String(a.lastName||j.contact.Last_Name||''),country:String(a.country||''),
-   businessName:String(a.tradingName||a.businessName||''),address1:String(a.address1||''),address2:String(a.address2||''),
-   town:String(a.town||''),county:String(a.county||''),postcode:String(a.postcode||''),code:String(a.code||''),
-   previousId:String(a.previousId||''),changeType:String(a.changeType||''),
-   centreId:String(a.centreId||''),recordId:kind==='accreditation'?String(j.accreditationRecordId||''):String(a.recordId||'')};
- if(kind==='insurance'||kind==='membership'&&a.insurance==='yes')base.insurance=insuranceRequest(a);
- if(kind==='membership'&&a.insurance==='yes')base.service='membership';
+   businessName:String(a.tradingName||a.businessName||''),address1:String(a.address1||''),
+   address2:String(a.address2||''),town:String(a.town||''),county:String(a.county||''),
+   postcode:String(a.postcode||''),code:String(a.code||''),previousId:String(a.previousId||''),
+   changeType:String(a.changeType||''),centreId:String(a.centreId||''),
+   recordId:kind==='accreditation'?String(j.accreditationRecordId||''):String(a.recordId||'')};
+ if(kind==='membership'){
+   if(!a.country)throw Error('Choose where the customer is based.');
+   if(isUk(a.country)&&!['yes','no'].includes(a.insuranceRequired))throw Error('Confirm whether insurance is required.');
+   if(requestedInsurance(a)&&!a.working)throw Error('Choose one way of working.');
+   base.answers={country:a.country};
+   if(isUk(a.country)){
+     base.answers.insuranceRequired=a.insuranceRequired;
+     if(requestedInsurance(a))base.answers.working=a.working;
+   }
+   delete base.level;
+   if(requestedInsurance(a))base.insurance=insuranceRequest({...a,insWorking:[a.working]});
+ }else if(kind==='insurance'){
+   base.insurance=insuranceRequest(a);
+ }
  return base;
 }
 window.BGJourney12={TREATMENT_OPTIONS,apiRequest,draftAnswers,restoreAnswers,config,prefill,render,advance,input,click,loadCourses,courseSource,INSURANCE_STEPS,accreditationSteps};
