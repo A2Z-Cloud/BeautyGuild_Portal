@@ -446,7 +446,7 @@
       c.tab='details';
     }
   }
-  document.addEventListener('click',event=>{
+  if(typeof document!=='undefined')document.addEventListener('click',event=>{
     const action=event.target?.closest?.('[data-action]')?.dataset?.action;
     if(!event.target?.closest?.('#staff-cancellation-dialog'))return;
     if(action==='membership-cancel-tab'){
@@ -462,7 +462,7 @@
     else if(action==='membership-cancel-confirm'){confirmCancellation();event.preventDefault();}
     else if(action==='membership-cancel-retry'){retryCancellation();event.preventDefault();}
   });
-  document.addEventListener('keydown',event=>{
+  if(typeof document!=='undefined')document.addEventListener('keydown',event=>{
     const current=event.target?.closest?.('#staff-cancellation-dialog [role="tab"]');
     if(!current||!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
     const candidates=[...cancellationDialog().querySelectorAll('.staff-cancellation-tab:not(:disabled)')];
