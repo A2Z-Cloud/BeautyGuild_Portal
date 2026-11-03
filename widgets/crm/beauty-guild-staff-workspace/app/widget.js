@@ -1031,7 +1031,7 @@
     else if(action==='paginate'){const key=el.dataset.key,n=Number(el.dataset.page);if(/^(related:[A-Za-z_]+|native:[A-Za-z_]+|browse:(insurance|membership|accreditation|customers)|search|customers)$/.test(key||'')&&Number.isInteger(n)&&n>=1){state.pages[key]=n;render();if(key.startsWith('browse:')){const kind=key.slice(7),d=browseData(kind);enrichCustomerRows(kind,d.rows.slice((n-1)*SIZES.queue,n*SIZES.queue)).catch(()=>{});}}}
     else if(action==='refresh-record')await select(entity,id);
     else if(action==='savereview')await saveReview(entity,id);
-    else if(action==='go-back'){const last=state.history.pop();if(last?.entity)await select(last.entity,last.id);else if(last){state.view=last.view;state.browseKind=last.kind||state.browseKind;state.browseSearch=last.search||'';if(last.page)state.pages['browse:'+state.browseKind]=last.page;render();}}
+    else if(action==='go-back'){const last=state.history.pop();if(last?.entity)await select(last.entity,last.id);else if(last){state.view=last.view;state.browseKind=last.kind||state.browseKind;state.browseSearch=last.search||'';if(last.page)state.pages['browse:'+state.browseKind]=last.page;state.focus=null;state.focusEntityView=null;if(last.view==='overview')state.contact=null;render();}}
     else if(action==='select'){state.history.push(state.focus?{entity:state.focus.entity,id:state.focus.record.id,view:state.view}:{view:state.view,kind:state.browseKind,page:state.pages['browse:'+state.browseKind]||1,search:state.browseSearch});await select(entity,id);}
     else if(action==='open')await openCRM(entity,id);
     else if(action==='edit'){
