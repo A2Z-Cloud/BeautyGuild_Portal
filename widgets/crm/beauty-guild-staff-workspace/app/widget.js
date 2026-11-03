@@ -867,10 +867,10 @@
       const j=state.journey;if(!j?.contact?.id||!j.kind||j.draftsBusy)return;
       j.draftsBusy=true;j.draftsError='';j.draftsMessage='';render();
       try{
-        const service=j.remote?.service||(j.kind==='membership'?'membership':j.kind);
+        const service=j.kind==='membership'?(j.answers.insuranceRequired==='yes'&&/^(united kingdom|uk|great britain|england|scotland|wales|northern ireland)$/i.test(String(j.answers.country||'').trim())?'combined':'membership'):j.kind;
         const request={contactId:String(j.contact.id),service,answers:window.BGJourney12.draftAnswers(j),step:Math.max(0,j.step),journeyId:j.remote?.journeyId||window.crypto?.randomUUID?.()};
         if(!request.journeyId)throw Error('Secure journey ID generation is unavailable.');
-        if(j.remote){if(j.remote.service!==service)throw Error('Application type changed. Discard the previous draft or start a new application before saving.');request.id=j.remote.id;request.revision=j.remote.revision;}
+        if(j.remote){if(j.remote.service!==service)throw Error('The insurance requirement has changed. Save a new draft for this updated application and discard the previous draft if no longer needed.');request.id=j.remote.id;request.revision=j.remote.revision;}
         const out=await window.BGStaffApi.call(j.remote?'drafts_update':'drafts_save',request);
         const d=out?.draft;if(!d?.id||!d?.revision)throw Error('Draft save was not confirmed by the server.');
         j.remote={id:String(d.id),service:d.service||service,journeyId:d.journeyId||request.journeyId,revision:d.revision};
