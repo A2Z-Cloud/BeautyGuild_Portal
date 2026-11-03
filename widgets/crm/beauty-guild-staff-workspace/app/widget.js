@@ -759,13 +759,21 @@
     const fallback=({customers:['Full_Name','Email','Phone','Owner'],membership:['Deal_Name','Stage','Payment_Status','Expiry_Date','Owner'],insurance:['Name','Application_Status','Policy_Status','Payment_Status','Owner'],accreditation:['Name','Application_Stage','Accreditation_Status','Owner']})[kind]||[];
     return [...new Set(['id',...(view?.fields?.length?view.fields:fallback),'Modified_Time'])].filter(f=>/^[A-Za-z_][\w]*$/.test(f)).slice(0,20);
   }
+  function customViewQuery(entity,viewId,columns,page){
+    if(!/^[A-Za-z_][A-Za-z0-9_]*$/.test(entity))throw Error('Invalid CRM module name.');
+    if(!/^\d{8,30}$/.test(String(viewId||'')))throw Error('Invalid CRM custom view ID.');
+    if(!Number.isInteger(page)||page<1||page>20)throw Error('The current custom-view page limit is 2,000 records.');
+    const fields=[...new Set(['id',...(Array.isArray(columns)?columns:[])])];
+    if(fields.some(x=>!/^[A-Za-z_][A-Za-z0-9_]*$/.test(x))||fields.length>20)throw Error('Invalid custom-view column selection.');
+    return 'select '+fields.join(', ')+' from '+entity+'#'+viewId+' where id is not null limit '+((page-1)*100)+', 100';
+  }
   async function getCustomViewPage(kind,page){
     const entity=BROWSE_MODULE[kind],view=selectedCustomView(kind);
     if(!view)throw Error('The selected CRM view could not be verified against CRM metadata.');
     if(typeof api().coql!=='function')throw Error('CRM COQL is not available to retrieve this custom view.');
     const offset=(page-1)*100;if(offset>=2000)throw Error('This view exceeds the current 2,000-record paging window. Open the native CRM view for more records.');
     const cols=crmViewColumns(kind);
-    const query='select '+cols.join(', ')+' from '+entity+'#'+view.id+' where id is not null limit '+offset+', 100';
+    const query=customViewQuery(entity,view.id,cols,page);
     const response=await api().coql({select_query:query});
     if(response?.code&&response.code!=='SUCCESS'&&!Array.isArray(response.data))throw Error(response.message||response.code);
     if(!Array.isArray(response?.data)&&response?.code!=='NO_CONTENT'&&response?.status!==204)throw Error('CRM returned no readable custom-view results.');
@@ -1048,5 +1056,5 @@
   function demoQueue(){throw Error('Demo data is disabled');}
   function demoSearch(){throw Error('Demo data is disabled');}
   if(typeof document!=='undefined')document.addEventListener('DOMContentLoaded',init);
-  if(typeof module!=='undefined'&&module.exports)module.exports={pageItems,SIZES,esc,asRows,matchContext,isQueueItem,refId,queryCriterion,statusClass,contactLookup,reviewKind,reviewSignals,REVIEW_GROUPS,DEMO_RECORDS,M};
+  if(typeof module!=='undefined'&&module.exports)module.exports={isExcludedAction,customViewQuery,pageItems,SIZES,esc,asRows,matchContext,isQueueItem,refId,queryCriterion,statusClass,contactLookup,reviewKind,reviewSignals,REVIEW_GROUPS,DEMO_RECORDS,M};
 })();
