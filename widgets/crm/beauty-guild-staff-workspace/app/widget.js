@@ -832,7 +832,7 @@
         const out=await window.BGStaffApi.call('drafts_get',{contactId:String(j.contact.id),service,id});
         const d=out?.draft;if(!d?.answers)throw Error('The draft response cannot be restored.');
         j.kind=['combined','membership'].includes(d.service)?'membership':d.service;j.answers=window.BGJourney12.restoreAnswers(d);j.customerAccepted=false;j.liveQuote=null;j.lastQuoteInputs=null;
-        j.step=Math.max(0,Math.min(Number(d.step)||0,window.BGJourney12.config(j.kind,j.answers).length));j.remote={id:String(d.id),service:d.service,journeyId:d.journeyId,revision:d.revision};
+        j.step=d.answers?.membership?.f?0:Math.max(0,Math.min(Number(d.step)||0,window.BGJourney12.config(j.kind,j.answers).length));j.remote={id:String(d.id),service:d.service,journeyId:d.journeyId,revision:d.revision};
       }catch(e){j.draftsError=String(e.message||e);}
       finally{j.draftsBusy=false;render();}
     }
