@@ -146,7 +146,7 @@ function linkedLabel(label, links) {
       ),
     );
 }
-export function Field({ field, value, onChange, error, values = {} }) {
+export function Field({ field, value, onChange, error, values = {}, locked = false }) {
   const id = 'field-' + field.name;
   const common = {
     id,
@@ -290,7 +290,7 @@ export function Field({ field, value, onChange, error, values = {} }) {
     control = (
       <input
         {...common}
-        readOnly={Boolean(field.readOnly && value)}
+        readOnly={locked}
         value={value ?? ''}
         type={field.type || 'text'}
         min={field.type === 'number' ? 0 : undefined}
