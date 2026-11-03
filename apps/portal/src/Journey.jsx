@@ -616,7 +616,9 @@ export function Journey({ kind }) {
             <strong>{Math.round(((index + 1) / visible.length) * 100)}% through this journey</strong>
             <p>
               {live
-                ? 'Your answers are kept in this browser while you work. Sign in and choose "Save my application" to keep them for later.'
+                ? signedIn
+                  ? 'Your answers are kept in this browser while you work. Choose "Save my application" to keep them for later.'
+                  : 'Your answers are kept in this browser while you work. Sign in and choose "Save my application" to keep them for later.'
                 : 'Your answers stay in this browser tab only. They are not saved or submitted.'}
             </p>
           </div>
@@ -625,7 +627,9 @@ export function Journey({ kind }) {
             <h3>Save and finish later</h3>
             <p>
               {live
-                ? 'Sign in to save your application and finish it later.'
+                ? signedIn
+                  ? 'Save your application at any point and finish it later from Saved applications.'
+                  : 'Sign in to save your application and finish it later.'
                 : 'You will soon be able to save your application and come back to it later. This is not available yet.'}
             </p>
             <button type="button" className="text-button" disabled={saving} onClick={saveDraft}>
