@@ -122,7 +122,7 @@ function readTutors(rows, { final, otherTutors }) {
   return out;
 }
 // Reads the journey answers into one tidy shape. `final` adds the rules for submitting.
-function readAnswers(a, { final = false, now = Date.now() } = {}) {
+function readAnswers(a, { final = false, now = Date.now(), otherCourseField = '' } = {}) {
   if (!a || typeof a !== 'object' || Array.isArray(a)) fail('INVALID_ANSWERS', 'Application answers are missing.');
   const country = a.country === 'Other' ? str(a.countryOther, 80) : str(a.country, 80);
   const contactCountry = a.contactCountry === 'Other' ? str(a.contactCountryOther, 80) : str(a.contactCountry, 80);
@@ -192,6 +192,7 @@ function readAnswers(a, { final = false, now = Date.now() } = {}) {
     otherVenues: flag(a.additionalVenues),
     termsAccepted: a.terms === true || a.terms === 'true' ? true : a.terms === false ? false : null,
     courseIds: [...new Set(courseIds)],
+    otherCourse: otherCourseField ? str(a.otherCourse, 200) : '',
     startDate,
   };
   if (m.school.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(m.school.email))
@@ -217,7 +218,13 @@ function readAnswers(a, { final = false, now = Date.now() } = {}) {
     if (m.declarations.some(v => v !== true))
       fail('DECLARATIONS_REQUIRED', 'All three declarations must be confirmed to apply for accreditation.');
     if (m.termsAccepted !== true) fail('TERMS_REQUIRED', 'Accept the application terms to continue.');
-    if (!m.courseIds.length) fail('COURSES_REQUIRED', 'Choose at least one GTi course.');
+    if (!m.courseIds.length && !m.otherCourse)
+      fail(
+        'COURSES_REQUIRED',
+        otherCourseField
+          ? 'Choose a GTi course or enter the course you want accredited.'
+          : 'Choose at least one GTi course.',
+      );
     if (m.otherTutors === null || m.otherVenues === null)
       fail('TUTORS_REQUIRED', 'Answer the tutor and venue questions.');
     if (m.otherTutors && (!m.tutors.length || (m.tutorCount && m.tutors.length !== m.tutorCount)))
@@ -229,6 +236,7 @@ function readAnswers(a, { final = false, now = Date.now() } = {}) {
 function createAccreditation({
   request,
   listCourses,
+  otherCourseField = '',
   log = console.log,
   now = Date.now,
   sleep = ms => new Promise(r => setTimeout(r, ms)),
@@ -279,7 +287,12 @@ function createAccreditation({
     stagesChecked = now();
   }
   async function getOwned(req, id, person, { requireDraft = false } = {}) {
-    const row = await get(req, 'Training_Centre_Accred', id, ACC_FIELDS);
+    const row = await get(
+      req,
+      'Training_Centre_Accred',
+      id,
+      ACC_FIELDS + (otherCourseField ? ',' + otherCourseField : ''),
+    );
     if (!row?.id || String(row.Applicant_Contact?.id) !== String(person.id))
       fail('NOT_FOUND', 'Application not found.', 404);
     if (requireDraft && row.Application_Stage !== DRAFT)
@@ -392,6 +405,7 @@ function createAccreditation({
       Accreditation_Status: isNew ? 'Unverified' : undefined,
       Valid_From: m.startDate,
       Valid_To: annualPeriodEnd(m.startDate),
+      ...(otherCourseField ? { [otherCourseField]: m.otherCourse || null } : {}),
       Declaration_1_qualified_for_six_months: yesNo(d1),
       Declaration_2_teaching_qualification: yesNo(d2),
       Declaration_3_evidence_available: yesNo(d3),
@@ -590,7 +604,7 @@ function createAccreditation({
   return {
     async save(req, body, person, existingId) {
       await ensureStages(req);
-      const m = readAnswers(body.answers, { now: now() });
+      const m = readAnswers(body.answers, { now: now(), otherCourseField });
       await verifyCourses(req, m.courseIds);
       const acc = existingId ? await getOwned(req, existingId, person, { requireDraft: true }) : null;
       const out = await persist(req, person, m, acc, body.related || {}, { submit: false });
@@ -614,7 +628,7 @@ function createAccreditation({
           return { accreditation: summary(acc) };
         fail('NOT_DRAFT', 'This application can no longer be edited.', 409);
       }
-      const m = readAnswers(body.answers, { final: true, now: now() });
+      const m = readAnswers(body.answers, { final: true, now: now(), otherCourseField });
       await verifyCourses(req, m.courseIds);
       const out = await persist(req, person, m, acc, body.related || {}, { submit: true });
       return {
@@ -675,6 +689,7 @@ function createAccreditation({
         additionalVenues: fromYesNo(acc.Additional_Centres_Used),
         terms: acc.Terms_Privacy_Accepted === true,
         courseIds: offerings.map(o => String(o.Course?.id)).filter(Boolean),
+        ...(otherCourseField ? { otherCourse: acc[otherCourseField] || '' } : {}),
         startDate: acc.Valid_From || '',
       };
       return {

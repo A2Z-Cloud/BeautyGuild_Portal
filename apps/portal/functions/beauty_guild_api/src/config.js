@@ -123,6 +123,9 @@ function loadConfig(env = process.env) {
     schoolRegistrationModule: String(env.PUBLIC_SCHOOL_REGISTRATION_MODULE || 'Accounts').trim(),
     schoolRegistrationField: String(env.PUBLIC_SCHOOL_REGISTRATION_FIELD || '').trim(),
     schoolActiveStatus: String(env.PUBLIC_SCHOOL_ACTIVE_STATUS || 'Verified').trim(),
+    // The Training_Centre_Accred field that holds a course the school wants accredited that is not a GTi course. Empty: not asked for
+    // or stored, and the application still needs one GTi course.
+    accreditationOtherCourseField: String(env.ACC_OTHER_COURSE_FIELD || '').trim(),
     billingEnabled: env.PORTAL_BILLING_ENABLED === 'true',
     // Lets signed-out visitors price a membership (no account, no CRM access). Needs billing on as well.
     publicQuotesEnabled: env.PUBLIC_QUOTES_ENABLED === 'true',

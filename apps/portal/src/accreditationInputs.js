@@ -162,7 +162,18 @@ export function accreditationSteps(countries) {
       title: 'Courses',
       description:
         'This is the complete list of GTi courses available to Guild accredited schools. Select every course you wish to offer, provided you hold the right qualifications and experience and can meet the requirements for that course. Use View course requirements to check each one first.',
-      fields: [f('courseIds', 'Select the GTi courses you wish to teach', 'courses', true)],
+      // A course typed under "Other" counts in place of a ticked GTi course (only shown when the Other course switch is on).
+      fields: [
+        f(
+          'courseIds',
+          'Select the GTi courses you wish to teach',
+          'courses',
+          v => !String(v.otherCourse || '').trim(),
+          {
+            otherName: 'otherCourse',
+          },
+        ),
+      ],
     },
     {
       id: 'declarations',

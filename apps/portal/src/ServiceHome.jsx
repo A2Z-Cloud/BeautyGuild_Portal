@@ -10,9 +10,22 @@ import { AccreditationStatusBanner, useAccreditationState } from './Accreditatio
 import { MANAGE_TEXT } from './accreditationState.js';
 import { upgradableRecord, upgradeLink } from './membershipUpgrade.js';
 import { COMBINED_DESCRIPTION, COMBINED_TITLE } from './combinedFlow.js';
+// The Guild's own words for the accreditation introduction (UAT round 1, S10 step 1).
+export const ACCREDITATION_INTRO = {
+  eyebrow: 'GUILD ACCREDITATION',
+  heading: "Let's get your training centre accredited",
+  lead: 'Apply online for Guild Accreditation for your training centre and courses.',
+  text: "Tell us about your training centre, the courses you want to offer and the tutors who will teach them. We'll guide you through each stage.",
+  stepsHeading: "What you'll need to do",
+  steps: [
+    ['Your training centre', 'Enter your business details and contact information.'],
+    ['Courses and tutors', 'Choose your courses and provide details of your tutors and their qualifications.'],
+    ['Review your application', 'Check your information before continuing.'],
+  ],
+};
 const paths = {
   membership: ['Membership option', 'Applicant details', 'Review information'],
-  accreditation: ['Your training centre', 'Courses and tutors', 'Review information'],
+  accreditation: ACCREDITATION_INTRO.steps.map(([label]) => label),
   insurance: ['Business information', 'Cover options', 'Declarations', 'Review information'],
 };
 // The combined Membership and Insurance journey, as the member sees it.
@@ -108,18 +121,23 @@ export default function ServiceHome({ kind }) {
       {!has && (
         <div className={'service-banner ' + service.theme}>
           <div>
-            <small className="eyebrow">A SIMPLER JOURNEY</small>
+            <small className="eyebrow">
+              {kind === 'accreditation' ? ACCREDITATION_INTRO.eyebrow : 'A SIMPLER JOURNEY'}
+            </small>
             <h2>
               {kind === 'insurance'
                 ? 'Cover that works around you.'
                 : kind === 'accreditation'
-                  ? 'Support for your training centre.'
+                  ? ACCREDITATION_INTRO.heading
                   : 'Join the Guild Today'}
             </h2>
+            {kind === 'accreditation' && <p>{ACCREDITATION_INTRO.lead}</p>}
             <p>
-              {openOnline
-                ? 'Answer a few questions in our online application. You can save it and finish later.'
-                : 'Look through the questions in our new online application.'}
+              {kind === 'accreditation'
+                ? ACCREDITATION_INTRO.text
+                : openOnline
+                  ? 'Answer a few questions in our online application. You can save it and finish later.'
+                  : 'Look through the questions in our new online application.'}
             </p>
           </div>
           <IconFor kind={kind} size={70} />
@@ -129,7 +147,7 @@ export default function ServiceHome({ kind }) {
         <div className="two-cols">
           <section className="surface padded">
             <small className="eyebrow">THE JOURNEY</small>
-            <h2>Here's what to expect</h2>
+            <h2>{kind === 'accreditation' ? ACCREDITATION_INTRO.stepsHeading : "Here's what to expect"}</h2>
             <ol className="process">
               {(combined ? COMBINED_PATH : paths[kind]).map((label, i) => (
                 <li key={label}>
@@ -137,9 +155,11 @@ export default function ServiceHome({ kind }) {
                   <span>
                     <strong>{label}</strong>
                     <small>
-                      {i === (combined ? COMBINED_PATH : paths[kind]).length - 1
-                        ? 'Check your answers before you finish'
-                        : 'Questions to answer'}
+                      {kind === 'accreditation'
+                        ? ACCREDITATION_INTRO.steps[i][1]
+                        : i === (combined ? COMBINED_PATH : paths[kind]).length - 1
+                          ? 'Check your answers before you finish'
+                          : 'Questions to answer'}
                     </small>
                   </span>
                 </li>

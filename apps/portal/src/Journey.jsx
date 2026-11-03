@@ -21,9 +21,14 @@ const ADDRESS_BLOCK_SIBLINGS = {
   postcode: ['address1', 'address2', 'address3', 'town', 'county'],
   centrePostcode: ['centreAddress1', 'centreAddress2', 'centreAddress3', 'centreTown', 'centreCounty'],
 };
-const reviewValue = (f, value) =>
+const reviewValue = (f, value, values = {}) =>
   f.type === 'courses'
-    ? value.length + (value.length === 1 ? ' course selected' : ' courses selected')
+    ? [
+        value.length ? value.length + (value.length === 1 ? ' course selected' : ' courses selected') : '',
+        values.otherCourse ? 'Other: ' + values.otherCourse : '',
+      ]
+        .filter(Boolean)
+        .join('. ')
     : f.type === 'radio' && f.options
       ? f.options.find(o => o.value === value)?.label || value
       : Array.isArray(value)
@@ -45,7 +50,7 @@ function ReviewDetails({ steps, values, kind, onEdit }) {
       values[f.name] !== undefined &&
       values[f.name] !== '' &&
       values[f.name] !== false &&
-      !(Array.isArray(values[f.name]) && !values[f.name].length),
+      !(Array.isArray(values[f.name]) && !values[f.name].length && !(f.otherName && values[f.otherName])),
   );
   const concern =
     kind === 'insurance' &&
@@ -94,7 +99,7 @@ function ReviewDetails({ steps, values, kind, onEdit }) {
                 {rows.map(f => (
                   <div key={f.name}>
                     <dt>{f.label}</dt>
-                    <dd>{reviewValue(f, values[f.name])}</dd>
+                    <dd>{reviewValue(f, values[f.name], values)}</dd>
                   </div>
                 ))}
               </dl>
@@ -106,7 +111,7 @@ function ReviewDetails({ steps, values, kind, onEdit }) {
           {entries.map(f => (
             <div key={f.name}>
               <dt>{f.label}</dt>
-              <dd>{reviewValue(f, values[f.name])}</dd>
+              <dd>{reviewValue(f, values[f.name], values)}</dd>
             </div>
           ))}
         </dl>

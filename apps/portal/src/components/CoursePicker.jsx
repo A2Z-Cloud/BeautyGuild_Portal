@@ -4,9 +4,10 @@ import CourseGroups from './CourseGroups.jsx';
 
 // Pick GTi courses from the live catalogue, grouped by treatment group. The value is the list of CRM course ids; the server
 // checks each one against the active GTi list before anything is saved.
-export default function CoursePicker({ value, onChange }) {
+export default function CoursePicker({ value, onChange, otherName, otherValue = '', onOtherChange }) {
   const [state, setState] = useState({ loading: true, items: [], error: '' });
   const selected = Array.isArray(value) ? value.map(String) : [];
+  const showOther = Boolean(otherName) && INTEGRATIONS.otherCourse;
   useEffect(() => {
     if (!INTEGRATIONS.courses) {
       setState({ loading: false, items: [], error: 'The course list is not available yet. Please try again later.' });
@@ -52,8 +53,9 @@ export default function CoursePicker({ value, onChange }) {
           />
         </>
       )}
-      <details className="course-help">
-        <summary>Can't find the course you want to teach?</summary>
+      {/* Always shown: the Guild does not want this hidden behind an arrow. */}
+      <div className="course-help">
+        <h3>Can't find the course you want to teach?</h3>
         <p>
           Most Guild Accredited Schools deliver courses using our ready-made GTi course programmes, which include the
           required theory and provide a simple route to offering Guild-recognised training.
@@ -61,10 +63,24 @@ export default function CoursePicker({ value, onChange }) {
         <p>
           If you offer a course that isn't available as a GTi course, you may be able to apply to have your own course
           accredited by the Guild. Your course materials and supporting documentation will need to be submitted
-          separately for assessment and additional accreditation fees may apply. Call our accreditation team on 01332
-          224830 for more information.
+          separately for assessment and additional accreditation fees may apply.{' '}
+          {showOther
+            ? 'Please enter the course title you wish to be accredited.'
+            : 'Call our accreditation team on 01332 224830 for more information.'}
         </p>
-      </details>
+        {showOther && (
+          <div className="field">
+            <label htmlFor="other-course">Other course</label>
+            <input
+              id="other-course"
+              type="text"
+              maxLength={200}
+              value={otherValue}
+              onChange={e => onOtherChange(e.target.value)}
+            />
+          </div>
+        )}
+      </div>
     </div>
   );
 }

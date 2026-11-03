@@ -132,7 +132,9 @@ export function PaymentReturn() {
         </Notice>
       ) : (
         <Notice title="Payment received">
-          We are confirming your payment with the Guild. Your records update shortly and we will confirm by email.
+          {params.get('service') === 'accreditation'
+            ? 'We have received your payment and will be in touch in relation to your application shortly.'
+            : 'We are confirming your payment with the Guild. Your records update shortly and we will confirm by email.'}
         </Notice>
       )}
       <Link className="btn btn-secondary" to="/records">

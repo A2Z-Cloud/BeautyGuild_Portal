@@ -141,6 +141,9 @@ test('mobile is the required number, the centre needs an email and mobile, and p
   assert.equal(byName('courseIds').type, 'courses');
   assert.ok(errorsFor('courses', { courseIds: [] }).courseIds);
   assert.deepEqual(errorsFor('courses', { courseIds: ['3000000000001'] }), {});
+  // An Other course typed in place of a ticked GTi course also lets the step through.
+  assert.deepEqual(errorsFor('courses', { courseIds: [], otherCourse: 'Korean Eyelash Extensions' }), {});
+  assert.ok(errorsFor('courses', { courseIds: [], otherCourse: '   ' }).courseIds);
 });
 
 test('resuming rebuilds the form: unlisted countries become Other, old dates and titles are cleaned', () => {

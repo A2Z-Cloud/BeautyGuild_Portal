@@ -3762,12 +3762,13 @@ iframe {
 .membership-journey .buy-section .radio-choice {
   border: 1px solid #ee3e96;
 }
-.membership-journey .buy-section .field.invalid input {
-  border: 2px solid #b3261e;
+.membership-journey .buy-section .field.invalid input,
+.membership-journey .buy-section .field.invalid select {
+  border: 2px solid #a3125a;
 }
 .membership-journey .buy-section .field .error,
 .membership-journey .buy-section p.error {
-  color: #b3261e;
+  color: #a3125a;
   font-weight: 600;
 }
 .membership-journey .buy-section p.error {
@@ -3984,4 +3985,12 @@ iframe {
 .review-section-head h4 {
   margin: 0;
   font-size: 15px;
+}
+
+.course-help h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+.course-help .field {
+  margin-top: 12px;
 }
