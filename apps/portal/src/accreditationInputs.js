@@ -70,7 +70,10 @@ export function accreditationSteps(countries) {
         f('title', 'Title', 'select', false, { options: list(['Mr', 'Mrs', 'Miss', 'Ms', 'Mx', 'Dr']) }),
         f('firstName', 'First name'),
         f('lastName', 'Surname'),
-        f('email', 'Email address', 'email', true, { readOnly: true, hint: 'This is the email you signed in with.' }),
+        f('email', 'Email address', 'email', true, {
+          readOnly: true,
+          hint: 'Once you are signed in, this is the email you signed in with.',
+        }),
         f('mobile', 'Mobile', 'tel', true, {
           hint: PHONE_HINT,
           countryFrom: 'contactCountry',

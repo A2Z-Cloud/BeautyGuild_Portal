@@ -19,6 +19,7 @@ import { usePreviewState } from './journeys/previewState.jsx';
 import AddressLookup from './components/AddressLookup.jsx';
 import { INTEGRATIONS, portalApi } from './services/api.js';
 import { prefillFor } from './prefill.js';
+import { isLocked } from './fieldLock.js';
 
 // Accreditation only: the fields a postcode lookup fills in, hidden behind a "look up my address" view until
 // either the lookup can't find it (the applicant asks for manual entry) or the country isn't the UK, where
@@ -193,12 +194,19 @@ export function Journey({ kind }) {
   const [errors, setErrors] = useState({});
   const [manualAddress, setManualAddress] = useState({});
   // null until known. The account checkpoint is only for visitors who are not signed in.
-  const [signedIn, setSignedIn] = useState(null);
+  const [signedIn, setSignedIn] = useState(null),
+    [accountEmail, setAccountEmail] = useState('');
   useEffect(() => {
     let alive = true;
     portalApi
       .getIdentity()
-      .then(() => alive && setSignedIn(true))
+      .then(user => {
+        if (!alive) return;
+        setSignedIn(true);
+        setAccountEmail(user?.email || '');
+        // The application is made in the signed-in account's name, so its email is the account's.
+        if (kind === 'accreditation' && user?.email) setAnswer(kind, 'email', user.email);
+      })
       .catch(() => alive && setSignedIn(false));
     return () => {
       alive = false;
@@ -299,6 +307,16 @@ export function Journey({ kind }) {
       alive = false;
     };
   }, [kind]); // eslint-disable-line react-hooks/exhaustive-deps
+  async function signOutHere() {
+    try {
+      await portalApi.signOut();
+    } catch {
+      // Still clear the screen: the next call that needs the account will ask for sign-in again.
+    }
+    setSignedIn(false);
+    setAccountEmail('');
+    setAnswer(kind, 'email', '');
+  }
   const update = (name, value) => {
     setAnswer(kind, name, value);
     setErrors(previous => ({ ...previous, [name]: undefined }));
@@ -491,6 +509,14 @@ export function Journey({ kind }) {
                     </span>
                   </div>
                 )}
+                {kind === 'accreditation' && signedIn && accountEmail && (
+                  <p className="muted" role="status">
+                    Signed in as {accountEmail}.{' '}
+                    <button type="button" className="text-button" onClick={signOutHere}>
+                      Not you? Sign out
+                    </button>
+                  </p>
+                )}
                 <div className="fields-grid">
                   {resolveFields(current.fields, values).map(f => {
                     if (hiddenInLookupMode.has(f.name)) return null;
@@ -521,6 +547,7 @@ export function Journey({ kind }) {
                               : f
                           }
                           value={values[f.name]}
+                          locked={isLocked(f, values[f.name], accountEmail)}
                           onChange={update}
                           error={errors[f.name]}
                           values={values}
