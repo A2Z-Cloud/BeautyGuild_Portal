@@ -211,7 +211,7 @@ export function Journey({ kind }) {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [kind]); // eslint-disable-line react-hooks/exhaustive-deps
   const [saving, setSaving] = useState(false),
     [saveStatus, setSaveStatus] = useState(''),
     [submitted, setSubmitted] = useState(null);
