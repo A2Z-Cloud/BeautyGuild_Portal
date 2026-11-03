@@ -18,12 +18,13 @@ import { validate } from './logic.mjs';
 import { GUILD_PHONE, toRequest, visibleFields } from './insuranceInputs.js';
 import { BlockedNotice, InsuranceForm, ReferralPanel, useInsuranceQuote } from './InsuranceForm.jsx';
 import AddressLookup from './components/AddressLookup.jsx';
-import { BRANCHES } from './branches.js';
+import { BRANCHES, branchName } from './branches.js';
 import { EMPTY_DETAILS, DETAIL_LABELS, detailsRequest, missingDetails, tradingNameOf } from './membershipDetails.js';
 import { DetailField } from './BuyMembership.jsx';
 import {
   ADDITIONAL_BRANCHES_TEXT,
   BRANCH_TEXT,
+  BUNDLE_INCLUDES_TEXT,
   EXTRAS_INTRO_TEXT,
   EXTRAS_ORDER_TEXT,
   EXTRAS_TEXT,
@@ -33,15 +34,21 @@ import {
   startDateText,
 } from './membershipText.js';
 import {
+  INTERESTS,
   STEP_TITLES,
   aboutYouErrors,
   answersRequest,
+  defaultBranch,
+  extrasErrors,
   inUkGroup,
   insuranceStepErrors,
   isInsuranceStep,
   outcomeText,
   planFor,
   stepIndex,
+  suggestedBranches,
+  toggleBranchChoice,
+  ukOnce,
 } from './membershipPlan.js';
 
 const ADDONS = [
@@ -51,6 +58,101 @@ const ADDONS = [
   ['sticker', 'Window sticker'],
 ];
 const money = pence => '£' + (pence / 100).toFixed(2);
+// England, Scotland, Wales and Northern Ireland are the United Kingdom, so the list shows it once.
+const COUNTRIES = COUNTRY_OPTIONS.filter(c => ukOnce(c) === c);
+const interestName = id => INTERESTS.find(i => i.id === id)?.name || id;
+// What is being bought, with a way back to each part (UAT round 1). Prices are the server's, in the price panel.
+function ReviewSummary({ f, d, plan, onEdit, onRemoveBranch, onRemoveAddon }) {
+  const chosen = [f.branch, ...f.branches].filter(Boolean),
+    addons = ADDONS.filter(([k]) => (f.addons[k] || 0) > 0),
+    address = [d.address1, d.address2, d.town, d.county, d.postcode].filter(Boolean).join(', ');
+  return (
+    <div className="review-summary">
+      <h3 className="buy-subtitle">What you are buying</h3>
+      <section className="review-section">
+        <div className="review-section-head">
+          <h4>Membership branches</h4>
+          <button type="button" className="text-button" onClick={() => onEdit('extras')}>
+            Edit
+          </button>
+        </div>
+        <ul className="review-items">
+          {chosen.map((id, i) => (
+            <li key={id}>
+              <span>
+                {branchName(id)} {i === 0 ? '(included)' : '(additional, £15)'}
+              </span>
+              {i > 0 && (
+                <button type="button" className="text-button" onClick={() => onRemoveBranch(id)}>
+                  Remove
+                </button>
+              )}
+            </li>
+          ))}
+          {!chosen.length && <li className="muted">No branch chosen yet.</li>}
+        </ul>
+      </section>
+      <section className="review-section">
+        <div className="review-section-head">
+          <h4>Membership extras</h4>
+          <button type="button" className="text-button" onClick={() => onEdit('extras')}>
+            Edit
+          </button>
+        </div>
+        <ul className="review-items">
+          {addons.map(([k, label]) => (
+            <li key={k}>
+              <span>
+                {label} × {f.addons[k]}
+              </span>
+              <button type="button" className="text-button" onClick={() => onRemoveAddon(k)}>
+                Remove
+              </button>
+            </li>
+          ))}
+          {!addons.length && <li className="muted">No extras.</li>}
+        </ul>
+      </section>
+      {plan.insurance && (
+        <section className="review-section">
+          <div className="review-section-head">
+            <h4>Insurance</h4>
+            <button type="button" className="text-button" onClick={() => onEdit('how_you_work')}>
+              Edit
+            </button>
+          </div>
+          <p className="muted">Included with your membership. The price is shown on the right.</p>
+        </section>
+      )}
+      <section className="review-section">
+        <div className="review-section-head">
+          <h4>About you</h4>
+          <button type="button" className="text-button" onClick={() => onEdit('about_you')}>
+            Edit
+          </button>
+        </div>
+        <dl className="review-list">
+          <div>
+            <dt>Name</dt>
+            <dd>{[d.firstName, d.lastName].filter(Boolean).join(' ') || '—'}</dd>
+          </div>
+          <div>
+            <dt>Based in</dt>
+            <dd>{f.country || '—'}</dd>
+          </div>
+          <div>
+            <dt>Interests</dt>
+            <dd>{f.interests.map(interestName).join(', ') || '—'}</dd>
+          </div>
+          <div>
+            <dt>Address</dt>
+            <dd>{address || '—'}</dd>
+          </div>
+        </dl>
+      </section>
+    </div>
+  );
+}
 
 // Join, renew or upgrade as one journey (docs/delivery/combined-membership-flow-spec.md, section 3). The customer never chooses a level: where they
 // are based, whether they need insurance and how they work decide it on the server. This page sends those answers, shows the steps for them, and
@@ -69,15 +171,25 @@ export default function CombinedMembership() {
       country: '',
       insuranceRequired: '',
       working: '',
+      interests: [],
       branch: '',
       branches: [],
+      // Set once the member has chosen a branch themselves, so a change of interests no longer changes it.
+      branchTouched: false,
       billing: 'annual',
       addons: {},
       accepted: false,
       start: '',
       code: '',
     },
-    x => ({ ...x, accepted: false, start: x.start && x.start >= startLimits().min ? x.start : '' }),
+    x => ({
+      ...x,
+      country: ukOnce(x.country),
+      interests: Array.isArray(x.interests) ? x.interests : [],
+      branchTouched: Boolean(x.branchTouched || x.branch),
+      accepted: false,
+      start: x.start && x.start >= startLimits().min ? x.start : '',
+    }),
   );
   const [kept, setKept] = useStoredState('combined_insurance', { iv: {} });
   // How you work lives in f.working; the insurance answers carry it as the one flag the server expects.
@@ -87,8 +199,7 @@ export default function CombinedMembership() {
     [showMissing, setShowMissing] = useState(false);
   const missing = missingDetails(d),
     setDetail = patch => setD(o => ({ ...o, ...patch }));
-  const [codeText, setCodeText] = useState(f.code || ''),
-    [codeOpen, setCodeOpen] = useState(Boolean(f.code));
+  const [codeText, setCodeText] = useState(f.code || '');
   const [errors, setErrors] = useState({}),
     [iErrors, setIErrors] = useState({}),
     [busy, setBusy] = useState(false),
@@ -122,7 +233,7 @@ export default function CombinedMembership() {
       .getMyDetails()
       .then(x => {
         if (!alive) return;
-        setF(old => ({ ...old, country: old.country || countryFor(x, COUNTRY_OPTIONS) }));
+        setF(old => ({ ...old, country: old.country || ukOnce(countryFor(x, COUNTRY_OPTIONS)) }));
         setWho(w => (w.firstName || w.lastName ? w : { ...w, firstName: x.firstName, lastName: x.lastName }));
       })
       .catch(() => {});
@@ -156,6 +267,13 @@ export default function CombinedMembership() {
       setD(o => ({ ...o, firstName: o.firstName || who.firstName || '', lastName: o.lastName || who.lastName || '' }));
   }, [who.firstName, who.lastName]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // The first branch follows the interests, in the Guild's order, until the member chooses their own.
+  useEffect(() => {
+    if (f.branchTouched) return;
+    const wanted = defaultBranch(f.interests);
+    if (wanted && f.branch !== wanted) set({ branch: wanted, branches: f.branches.filter(b => b !== wanted) });
+  }, [f.interests]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const plan = planFor(f),
     steps = plan.steps,
     index = stepIndex(steps, f.step),
@@ -170,7 +288,8 @@ export default function CombinedMembership() {
     billing: international ? 'annual' : f.billing,
     addons: f.addons,
     ...(f.branches.length ? { branches: f.branches.join(',') } : {}),
-    ...(f.start ? { start: f.start } : {}),
+    // Cover starts on the chosen date, so only a membership with insurance asks for one. Otherwise the membership starts on payment.
+    ...(f.start && plan.insurance ? { start: f.start } : {}),
     ...(previousId ? { previousId, changeType } : {}),
     ...(f.code && !previousId ? { code: f.code } : {}),
     ...(plan.insurance ? { country: f.country, insurance: toRequest(iv) } : {}),
@@ -210,14 +329,24 @@ export default function CombinedMembership() {
     else setIv(v => ({ ...v, [name]: value }));
     setIErrors(e => ({ ...e, [name]: undefined }));
   };
-  const toggleBranch = id =>
-    set({ branches: f.branches.includes(id) ? f.branches.filter(b => b !== id) : [...f.branches, id] });
+  const toggleBranch = id => {
+    set({ ...toggleBranchChoice(f, id), branchTouched: true });
+    setErrors(o => ({ ...o, branch: undefined }));
+  };
+  const toggleInterest = id => {
+    set({ interests: f.interests.includes(id) ? f.interests.filter(i => i !== id) : [...f.interests, id] });
+    setErrors(o => ({ ...o, interests: undefined }));
+  };
 
   // The first step that still has something missing, for Next and for Pay.
   function problemsOn(target) {
     if (target === 'about_you') {
       const found = aboutYouErrors(f, { askInsurance: !upgrading });
       return { errors: found, details: Object.keys(missing).length > 0, bad: Object.keys(found).length > 0 };
+    }
+    if (target === 'extras') {
+      const found = extrasErrors(f);
+      return { errors: found, bad: Object.keys(found).length > 0 };
     }
     if (isInsuranceStep(target)) {
       const found = insuranceStepErrors(target, iv);
@@ -231,6 +360,9 @@ export default function CombinedMembership() {
       setErrors(p.errors);
       setShowMissing(true);
       if (p.bad || p.details) return;
+    } else if (key === 'extras') {
+      setErrors(p.errors);
+      if (p.bad) return;
     } else if (p.bad) {
       setIErrors(p.iErrors);
       return;
@@ -245,7 +377,8 @@ export default function CombinedMembership() {
         if (target === 'about_you') {
           setErrors(p.errors);
           setShowMissing(true);
-        } else setIErrors(p.iErrors);
+        } else if (target === 'extras') setErrors(p.errors);
+        else setIErrors(p.iErrors);
         setPayError('Please complete the highlighted answers.');
         go(target);
         return;
@@ -283,7 +416,7 @@ export default function CombinedMembership() {
     try {
       await portalApi.joinAsAssociate(referral.reference);
       setSent({ outcome: null });
-      set({ insuranceRequired: 'no', working: '', accepted: false, step: 'membership_details' });
+      set({ insuranceRequired: 'no', working: '', accepted: false, step: 'extras' });
       setJoining({ busy: false, error: '' });
     } catch (e) {
       setJoining({ busy: false, error: e.message || 'We could not do that. Please try again or call the Guild.' });
@@ -362,7 +495,7 @@ export default function CombinedMembership() {
                         }}
                       >
                         <option value="">Choose a country</option>
-                        {COUNTRY_OPTIONS.map(c => (
+                        {COUNTRIES.map(c => (
                           <option key={c} value={c}>
                             {c}
                           </option>
@@ -374,6 +507,29 @@ export default function CombinedMembership() {
                         </small>
                       )}
                     </div>
+                    <fieldset className={'buy-fieldset' + (errors.interests ? ' invalid' : '')}>
+                      <legend>Your interests *</legend>
+                      <p className="muted">
+                        Choose as many as you like. We use them to suggest your membership branch.
+                      </p>
+                      <div className="interest-grid">
+                        {INTERESTS.map(i => (
+                          <label key={i.id} className="check-choice">
+                            <input
+                              type="checkbox"
+                              checked={f.interests.includes(i.id)}
+                              onChange={() => toggleInterest(i.id)}
+                            />
+                            {i.name}
+                          </label>
+                        ))}
+                      </div>
+                      {errors.interests && (
+                        <small className="error" role="alert">
+                          {errors.interests}
+                        </small>
+                      )}
+                    </fieldset>
                     {f.country && !inUkGroup(f.country) && <Notice title="International membership">{outcome}</Notice>}
                     {inUkGroup(f.country) && !upgrading && (
                       <fieldset className="buy-fieldset">
@@ -414,40 +570,6 @@ export default function CombinedMembership() {
                     {inUkGroup(f.country) && outcome && plan.level === 'associate' && (
                       <p className="muted">{outcome}</p>
                     )}
-                    <fieldset className={'buy-fieldset' + (errors.branch ? ' invalid' : '')}>
-                      <legend>Primary branch</legend>
-                      <p className="muted">{BRANCH_TEXT}</p>
-                      <div className="branch-grid">
-                        {BRANCHES.map(b => (
-                          <label
-                            key={b.id}
-                            className={'radio-choice branch-card' + (f.branch === b.id ? ' selected' : '')}
-                          >
-                            <input
-                              type="radio"
-                              name="branch"
-                              checked={f.branch === b.id}
-                              onChange={() => {
-                                set({ branch: b.id, branches: f.branches.filter(x => x !== b.id) });
-                                setErrors(o => ({ ...o, branch: undefined }));
-                              }}
-                            />
-                            {b.logo ? (
-                              <img className="branch-logo" src={b.logo} alt={b.name} height="44" />
-                            ) : (
-                              <span>
-                                <strong>{b.name}</strong>
-                              </span>
-                            )}
-                          </label>
-                        ))}
-                      </div>
-                      {errors.branch && (
-                        <small className="error" role="alert">
-                          {errors.branch}
-                        </small>
-                      )}
-                    </fieldset>
                   </section>
                   <section className="surface padded buy-section" id="details-section">
                     <h2>Your Details</h2>
@@ -615,43 +737,57 @@ export default function CombinedMembership() {
               {key === 'extras' && (
                 <section className="surface padded buy-section">
                   <h2>Personalise Your Membership</h2>
-                  <h3 className="buy-subtitle">Additional Branches</h3>
-                  <p className="muted">{ADDITIONAL_BRANCHES_TEXT}</p>
-                  <fieldset className="buy-fieldset">
-                    <legend className="sr-only">Additional Branches</legend>
-                    {BRANCHES.filter(b => b.id !== f.branch).map(b => (
-                      <label key={b.id} className="check-choice">
-                        <input
-                          type="checkbox"
-                          checked={f.branches.includes(b.id)}
-                          onChange={() => toggleBranch(b.id)}
-                        />
-                        {b.logo ? (
-                          <img className="branch-logo branch-logo-small" src={b.logo} alt={b.name} height="30" />
-                        ) : (
-                          b.name
-                        )}
-                      </label>
-                    ))}
+                  <h3 className="buy-subtitle">Membership Branches</h3>
+                  <p className="muted">
+                    {BRANCH_TEXT} {ADDITIONAL_BRANCHES_TEXT}
+                  </p>
+                  <fieldset className={'buy-fieldset' + (errors.branch ? ' invalid' : '')}>
+                    <legend className="sr-only">Membership Branches</legend>
+                    {BRANCHES.map(b => {
+                      const ticked = b.id === f.branch || f.branches.includes(b.id),
+                        suggested = !ticked && suggestedBranches(f.interests, f).includes(b.id);
+                      return (
+                        <label key={b.id} className="check-choice">
+                          <input type="checkbox" checked={ticked} onChange={() => toggleBranch(b.id)} />
+                          {b.logo ? (
+                            <img className="branch-logo branch-logo-small" src={b.logo} alt={b.name} height="30" />
+                          ) : (
+                            b.name
+                          )}
+                          {ticked && <small className="branch-note">{b.id === f.branch ? 'Included' : '£15'}</small>}
+                          {suggested && <small className="branch-note">Suggested additional branch</small>}
+                        </label>
+                      );
+                    })}
+                    {errors.branch && (
+                      <small className="error" role="alert">
+                        {errors.branch}
+                      </small>
+                    )}
                   </fieldset>
                   <h3 className="buy-subtitle">Membership Extras</h3>
                   <p className="muted">{EXTRAS_INTRO_TEXT}</p>
                   <p className="muted">{EXTRAS_TEXT}</p>
                   <p className="muted">{EXTRAS_ORDER_TEXT}</p>
                   {ADDONS.map(([k, label]) => (
-                    <label key={k} className="addon-row">
-                      <span>{label}</span>
-                      <input
-                        type="number"
-                        min="0"
-                        max="10"
-                        inputMode="numeric"
-                        value={f.addons[k] || 0}
-                        onChange={e =>
-                          set({ addons: { ...f.addons, [k]: Math.max(0, Math.min(10, Number(e.target.value) || 0)) } })
-                        }
-                      />
-                    </label>
+                    <React.Fragment key={k}>
+                      <label className="addon-row">
+                        <span>{label}</span>
+                        <input
+                          type="number"
+                          min="0"
+                          max="10"
+                          inputMode="numeric"
+                          value={f.addons[k] || 0}
+                          onChange={e =>
+                            set({
+                              addons: { ...f.addons, [k]: Math.max(0, Math.min(10, Number(e.target.value) || 0)) },
+                            })
+                          }
+                        />
+                      </label>
+                      {k === 'bundle' && <p className="muted addon-note">{BUNDLE_INCLUDES_TEXT}</p>}
+                    </React.Fragment>
                   ))}
                 </section>
               )}
@@ -659,63 +795,66 @@ export default function CombinedMembership() {
                 <section className="surface padded buy-section">
                   <h2>Review and pay</h2>
                   {outcome && <p>{outcome}</p>}
+                  <ReviewSummary
+                    f={f}
+                    d={d}
+                    plan={plan}
+                    onEdit={go}
+                    onRemoveBranch={id => set({ branches: f.branches.filter(b => b !== id), branchTouched: true })}
+                    onRemoveAddon={k => set({ addons: { ...f.addons, [k]: 0 } })}
+                  />
                   {showCode && (
                     <div className="code-box">
-                      {!codeOpen ? (
-                        <button type="button" className="text-button" onClick={() => setCodeOpen(true)}>
-                          Have a code?
+                      <h3 className="buy-subtitle">Have a code?</h3>
+                      <div className="field">
+                        <label htmlFor="school-code" className="sr-only">
+                          School code
+                        </label>
+                        <input
+                          id="school-code"
+                          value={codeText}
+                          maxLength={40}
+                          autoComplete="off"
+                          onChange={e => setCodeText(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              set({ code: codeText.trim() });
+                            }
+                          }}
+                        />
+                        <small>{SCHOOL_CODE_TEXT}</small>
+                      </div>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        disabled={!codeText.trim() || codeText.trim() === f.code}
+                        onClick={() => set({ code: codeText.trim() })}
+                      >
+                        Apply code
+                      </button>
+                      {f.code && (
+                        <button
+                          type="button"
+                          className="text-button"
+                          onClick={() => {
+                            setCodeText('');
+                            set({ code: '' });
+                          }}
+                        >
+                          Remove code
                         </button>
-                      ) : (
-                        <>
-                          <div className="field">
-                            <label htmlFor="school-code">School code</label>
-                            <input
-                              id="school-code"
-                              value={codeText}
-                              maxLength={40}
-                              autoComplete="off"
-                              onChange={e => setCodeText(e.target.value)}
-                              onKeyDown={e => {
-                                if (e.key === 'Enter') {
-                                  e.preventDefault();
-                                  set({ code: codeText.trim() });
-                                }
-                              }}
-                            />
-                            <small>{SCHOOL_CODE_TEXT}</small>
-                          </div>
-                          <button
-                            type="button"
-                            className="btn btn-secondary"
-                            disabled={!codeText.trim() || codeText.trim() === f.code}
-                            onClick={() => set({ code: codeText.trim() })}
-                          >
-                            Apply code
-                          </button>
-                          {f.code && (
-                            <button
-                              type="button"
-                              className="text-button"
-                              onClick={() => {
-                                setCodeText('');
-                                set({ code: '' });
-                              }}
-                            >
-                              Remove code
-                            </button>
-                          )}
-                          {f.code && priced?.discount && (
-                            <p className="muted" role="status">
-                              {priced.discount.label}.
-                              {priced.discount.indicative ? ' We check your code when you sign in.' : ''}
-                            </p>
-                          )}
-                          {f.code && priced?.codeResult && (
-                            <p className="error" role="alert">
-                              {priced.codeResult.message}
-                            </p>
-                          )}
-                        </>
+                      )}
+                      {f.code && priced?.discount && (
+                        <p className="muted" role="status">
+                          {priced.discount.label}.
+                          {priced.discount.indicative ? ' We check your code when you sign in.' : ''}
+                        </p>
+                      )}
+                      {f.code && priced?.codeResult && (
+                        <p className="error" role="alert">
+                          {priced.codeResult.message}
+                        </p>
                       )}
                     </div>
                   )}
@@ -823,7 +962,7 @@ export default function CombinedMembership() {
                 note={plan.insurance && !priced ? 'Insurance is not included yet. Answer how you work to add it.' : ''}
                 billing={f.billing}
                 onBilling={international ? undefined : b => set({ billing: b })}
-                start={f.start}
+                start={plan.insurance ? f.start : ''}
               />
             </div>
           </div>

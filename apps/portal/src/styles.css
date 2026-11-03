@@ -3994,3 +3994,34 @@ iframe {
 .course-help .field {
   margin-top: 12px;
 }
+
+/* Associate journey: interests, branches and the review summary (UAT round 1). */
+.interest-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+}
+.branch-note {
+  margin-left: 8px;
+  color: #a3125a;
+  font-weight: 600;
+}
+.addon-note {
+  margin: -6px 0 10px;
+  font-size: 12px;
+}
+.review-summary {
+  margin: 8px 0 18px;
+}
+.review-items {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+.review-items li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 0;
+}
