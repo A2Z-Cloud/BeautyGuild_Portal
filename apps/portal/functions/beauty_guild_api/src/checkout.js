@@ -357,9 +357,14 @@ function registerCheckoutRoutes(
     if (insurance) {
       // The insurance answers carry how the customer works as flags: exactly the decided one, and no other.
       const ins = insuranceModule.clean(insurance);
+      // How you work is a list (UAT round 2): the flags set must be exactly the ones in the answers, however many there are.
       const chosen = Object.keys(WORKING).filter(k => ins[k]);
-      const wanted = [String(Array.isArray(input.answers.working) ? input.answers.working[0] : input.answers.working)];
-      if (chosen.length !== 1 || chosen[0] !== wanted[0])
+      const wanted = [
+        ...new Set(
+          (Array.isArray(input.answers.working) ? input.answers.working : [input.answers.working]).map(String),
+        ),
+      ];
+      if (!chosen.length || chosen.length !== wanted.length || !wanted.every(w => chosen.includes(w)))
         throw new HttpError(422, 'INVALID_WORKING', 'How you work must match your answers.');
     }
     return { ...input, level: decision.level, country, insurance, decision };
