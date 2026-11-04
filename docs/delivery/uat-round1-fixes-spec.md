@@ -103,7 +103,7 @@ Only a Draft can be edited or removed. Remove deletes its offerings, link and ce
 
 ## 4. Switches and dependencies
 
-- Other course: `VITE_PORTAL_OTHER_COURSE` (client, build time) and the function's `ACC_OTHER_COURSE_FIELD`, the API name of a text field on Training_Centre_Accred that holds the typed course. Both off until the Guild creates the field. If the field is not configured the server ignores the text, and a GTi course is still needed.
+- Other course: `VITE_PORTAL_OTHER_COURSE` (client, build time) and the function's `ACC_OTHER_COURSE_FIELD`, the API name of the text field on Training_Centre_Accred that holds the typed course. The field is `Other_Course` (the Guild, 4 November 2026) and both switches are on in Development. If the field is not configured the server ignores the text, and a GTi course is still needed.
 
 ## 5. Tests
 
