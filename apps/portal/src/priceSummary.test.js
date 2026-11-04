@@ -1,6 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { dueToday, planSummary, thenCharge, upgradeCredit, waivedLine, offersCode } from './priceSummary.js';
+import {
+  dueToday,
+  orderedLines,
+  planSummary,
+  thenCharge,
+  upgradeCredit,
+  waivedLine,
+  offersCode,
+} from './priceSummary.js';
 
 const annual = {
   totalPence: 6500,
@@ -113,4 +121,18 @@ test('an upgrade shows the credit and what is left to pay, which is already the 
     'nothing to credit, nothing shown',
   );
   assert.equal(upgradeCredit(null), null);
+});
+
+test('the price panel lists what renews first and the one-off payments last', () => {
+  const lines = [
+    { name: 'Joining fee', totalPence: 1000 },
+    { name: 'Membership', totalPence: 5000, interval: 'year' },
+    { name: 'Insurance', totalPence: 3250, interval: 'year' },
+    { name: 'Certificate', totalPence: 500 },
+  ];
+  assert.deepEqual(
+    orderedLines({ lines }).map(l => l.name),
+    ['Membership', 'Insurance', 'Joining fee', 'Certificate'],
+  );
+  assert.deepEqual(orderedLines(null), []);
 });

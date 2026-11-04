@@ -19,7 +19,10 @@ export default function AddressLookup({ query, onSelect }) {
     setBusy(true);
     setError('');
     try {
-      const results = await portalApi.findAddresses(queryValue, container);
+      let results = await portalApi.findAddresses(queryValue, container);
+      // A postcode often comes back as one group, "12 addresses". Open it so the full list shows at once.
+      for (let i = 0; i < 2 && results.length === 1 && results[0].Type && results[0].Type !== 'Address'; i += 1)
+        results = await portalApi.findAddresses(results[0].Text || results[0].Description, results[0].Id);
       if (sequence === requestRef.current) {
         setMatches(results);
         if (!results.length) setError('No addresses found. Enter the address manually.');

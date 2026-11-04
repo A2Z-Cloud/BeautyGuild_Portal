@@ -189,6 +189,42 @@ test('accreditation without a membership is charged the combined bundle price, a
     assert.equal(w.crmPuts[0].body.data[0].Stripe_Checkout_Session_ID, 'cs_test_1');
   });
 });
+test("starting a payment expires the same person's other open payment for that service, and no one else's (UAT round 2, S14)", async () => {
+  const w = world();
+  const expired = [];
+  const open = (id, email, service) => ({
+    id,
+    status: 'open',
+    customer_email: email,
+    success_url: 'https://portal.example.test/app/#/payment-return?result=success&service=' + service,
+  });
+  w.external = async (url, init = {}) => {
+    if (url.startsWith('https://api.stripe.com/v1/checkout/sessions?') && (init.method || 'GET') === 'GET')
+      return {
+        status: 200,
+        ok: true,
+        json: async () => ({
+          has_more: false,
+          data: [
+            open('cs_old_same', 'alice@example.test', 'accreditation'),
+            open('cs_other_service', 'alice@example.test', 'membership'),
+            open('cs_other_person', 'bob@example.test', 'accreditation'),
+            open('cs_test_1', 'alice@example.test', 'accreditation'),
+          ],
+        }),
+      };
+    if (init.method === 'POST' && url.endsWith('/expire')) {
+      expired.push(url.split('/').slice(-2)[0]);
+      return { status: 200, ok: true, json: async () => ({ status: 'expired' }) };
+    }
+    return null;
+  };
+  await withApp(w, async ({ post }) => {
+    const r = await post({ service: 'accreditation', recordId: ACC });
+    assert.equal(r.status, 201);
+    assert.deepEqual(expired, ['cs_old_same']);
+  });
+});
 test('accreditation with a current membership pays the plain accreditation price and carries the membership id', async () => {
   const w = world({ deals: [activeDeal] });
   await withApp(w, async ({ post }) => {
@@ -846,6 +882,8 @@ const INS_OK = {
   insStandardConstruction: 'yes',
   insDeclarations: ['no', 'no', 'no', 'no', 'no', 'yes', 'yes'],
   insInformationAccurate: 'yes',
+  insQualifiedForTreatments: 'yes',
+  insPatchTesting: 'yes',
   insEthicsAccepted: 'yes',
   insDemandsNeedsAccepted: 'yes',
   insNonAdvisedAccepted: 'yes',

@@ -102,6 +102,33 @@ function registerCheckoutRoutes(
     if (!r.ok || !body) throw new HttpError(502, 'PAYMENT_UNAVAILABLE', 'Secure checkout is unavailable.');
     return body;
   }
+  // One payment at a time: when a new session starts for a person and a service, any other open session of theirs for the same service is
+  // expired, so a second browser tab cannot be paid as well and the member is never charged (or invoiced) twice. Best effort: if Stripe
+  // cannot be read the new session still goes ahead. Sessions have no Stripe customer, so they are matched on the email they were opened for.
+  async function expireOtherOpenSessions(email, service, keepId) {
+    const wanted = String(email || '').toLowerCase();
+    if (!wanted) return;
+    try {
+      for (let page = 0, after = ''; page < 3; page += 1) {
+        const q = new URLSearchParams({ status: 'open', limit: '100', ...(after ? { starting_after: after } : {}) });
+        const list = await stripe('GET', '/checkout/sessions?' + q.toString());
+        const rows = Array.isArray(list?.data) ? list.data : [];
+        for (const old of rows) {
+          if (old.id === keepId || old.status !== 'open') continue;
+          if (String(old.customer_email || '').toLowerCase() !== wanted) continue;
+          if (!String(old.success_url || '').includes('service=' + encodeURIComponent(service) + '')) continue;
+          await stripe('POST', '/checkout/sessions/' + encodeURIComponent(old.id) + '/expire', {
+            body: new URLSearchParams(),
+            key: 'portal-v2-expire-' + old.id,
+          }).catch(() => {});
+        }
+        if (!list?.has_more || !rows.length) break;
+        after = rows[rows.length - 1].id;
+      }
+    } catch {
+      // Nothing to do: the new payment is not held up by this.
+    }
+  }
   // The price a catalogue item points at: the active Stripe price whose lookup key is the item's price list code. Books keeps the
   // list; a price change is a new Stripe price that takes the lookup key over. Read live and held briefly.
   async function priceFor(itemKey) {
@@ -1171,6 +1198,7 @@ function registerCheckoutRoutes(
       const session = await stripe('POST', '/checkout/sessions', { body: params, key: 'portal-v2-' + key });
       if (!session.id || typeof session.url !== 'string' || !session.url.startsWith('https://checkout.stripe.com/'))
         throw new HttpError(502, 'PAYMENT_UNAVAILABLE', 'Secure checkout is unavailable.');
+      if (!staff) await expireOtherOpenSessions(payer.email, input.service, session.id);
       if (insuranceIds?.policyId)
         await crmUpdate(req, 'Insurance_Policy', insuranceIds.policyId, { Stripe_Checkout_Session_ID: session.id });
       if (b.prepared.record)

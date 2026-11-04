@@ -345,7 +345,7 @@ test('a school code is saved with the other Join answers, and left out when ther
 const C = {
   country: 'England',
   insuranceRequired: 'yes',
-  working: 'insMobile',
+  working: ['insMobile'],
   branch: 'beauty',
   branches: ['hair'],
   billing: 'annual',
@@ -361,7 +361,7 @@ test('a combined draft saves the answers, never a level, the agreement box or co
   const c = x.answers.membership.c;
   assert.deepEqual(
     { country: c.country, insuranceRequired: c.insuranceRequired, working: c.working },
-    { country: 'England', insuranceRequired: 'yes', working: 'insMobile' },
+    { country: 'England', insuranceRequired: 'yes', working: ['insMobile'] },
   );
   const text = JSON.stringify(x);
   assert.ok(!/"level"|accepted|"f":/.test(text), text);
@@ -387,7 +387,7 @@ test('resuming a combined draft restores the answers into the combined journey, 
   const f = readStored('combined', {}, s);
   assert.equal(f.accepted, false);
   assert.equal(f.step, 'about_you');
-  assert.equal(f.working, 'insMobile');
+  assert.deepEqual(f.working, ['insMobile']);
   assert.equal(f.insuranceRequired, 'yes');
   assert.equal(f.start, '2099-01-01');
   assert.deepEqual(readStored('membership_details', {}, s), D);
@@ -425,15 +425,15 @@ test('an older draft (with a level) opened in the combined journey becomes answe
     '/membership/buy',
   );
   let f = readStored('combined', {}, s);
-  assert.deepEqual([f.country, f.insuranceRequired, f.working, f.branch], ['Wales', 'yes', 'insSalon', 'beauty']);
-  // A mix of ways of working is asked again.
+  assert.deepEqual([f.country, f.insuranceRequired, f.working, f.branch], ['Wales', 'yes', ['insSalon'], 'beauty']);
+  // A mix of ways of working is kept.
   restoreDraftToTab(old('full_non_salon', { insWorking: ['insMobile', 'insSalon'] }), s, { combined: true });
   f = readStored('combined', {}, s);
-  assert.deepEqual([f.insuranceRequired, f.working], ['yes', '']);
+  assert.deepEqual([f.insuranceRequired, f.working], ['yes', ['insMobile', 'insSalon']]);
   // Associate: no insurance, and no country was saved, so it is filled from the Guild's record.
   restoreDraftToTab(old('associate', {}, false), s, { combined: true });
   f = readStored('combined', {}, s);
-  assert.deepEqual([f.country, f.insuranceRequired, f.working], ['', 'no', '']);
+  assert.deepEqual([f.country, f.insuranceRequired, f.working], ['', 'no', []]);
   assert.equal(combinedFromLegacy({ ...F, level: 'associate' }, null).insuranceRequired, 'no');
 });
 test('with the combined journey off, its drafts are left alone and an older draft opens the old page', () => {

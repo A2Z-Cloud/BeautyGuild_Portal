@@ -16,7 +16,7 @@ function phoneIssue(raw) {
   if (uk)
     return national.length >= 9 && national.length <= 10
       ? ''
-      : 'Enter a UK number with at least 9 digits after the country code.';
+      : 'Enter a valid number with at least 9 digits after the country code.';
   return digits.length >= 8 && digits.length <= 15 ? '' : 'Enter a valid phone number with its country code.';
 }
 module.exports = { phoneIssue };

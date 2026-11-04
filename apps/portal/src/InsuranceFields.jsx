@@ -21,10 +21,10 @@ export function Blocks({ blocks }) {
           <p key={i} className="ins-doc">
             {POLICY_WORDING[b.doc].href ? (
               <a href={POLICY_WORDING[b.doc].href} {...ext}>
-                Read the policy wording ({POLICY_WORDING[b.doc].ref})
+                Click here to view the policy wording
               </a>
             ) : (
-              'Policy wording: ' + POLICY_WORDING[b.doc].ref
+              'Click here to view the policy wording (link to follow)'
             )}
           </p>
         ) : (
@@ -234,7 +234,7 @@ export function InsField({ field: f, value, onChange, error, values = {} }) {
   if (f.type === 'checkbox')
     control = (
       <div className="ins-check">
-        <label className="check-choice">
+        <label className={'check-choice radio-choice' + (value ? ' selected' : '')}>
           <input {...common} type="checkbox" checked={Boolean(value)} onChange={update} />
           <span>{linked(f.label, f.links)}</span>
         </label>

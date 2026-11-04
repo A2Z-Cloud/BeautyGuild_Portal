@@ -110,6 +110,8 @@ const WRITES = { PORTAL_INSURANCE_CHANGES_WRITES: 'true' };
 const ANSWERS = {
   declarations: ['no', 'no', 'no', 'no', 'no', 'yes', 'yes'],
   insInformationAccurate: 'yes',
+  insQualifiedForTreatments: 'yes',
+  insPatchTesting: 'yes',
   insEthicsAccepted: 'yes',
   insDemandsNeedsAccepted: 'yes',
   insNonAdvisedAccepted: 'yes',

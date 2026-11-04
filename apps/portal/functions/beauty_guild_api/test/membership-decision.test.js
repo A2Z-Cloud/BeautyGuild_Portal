@@ -44,7 +44,6 @@ test('UK with insurance is Full: salon only for owning or operating a salon', ()
       'business',
       'cover_options',
       'declarations',
-      'membership_details',
       'extras',
       'review',
     ]);
@@ -53,16 +52,11 @@ test('UK with insurance is Full: salon only for owning or operating a salon', ()
   assert.equal(Object.values(WORKING).filter(r => r === 'non_salon').length, 4);
 });
 
-test('a one entry list is accepted, a mix or an unknown answer is refused', () => {
-  assert.equal(
-    decideMembership({ country: 'Wales', insuranceRequired: true, working: ['insMobile'] }).level,
-    'full_non_salon',
-  );
-  refused({ country: 'Wales', insuranceRequired: true, working: ['insSalon', 'insMobile'] }, 'INVALID_WORKING');
-  refused(
-    { country: 'Wales', insuranceRequired: true, working: ['insMobile', 'insWorkingFromHome'] },
-    'INVALID_WORKING',
-  );
+test('a list is accepted: the salon route if the salon option is in it, otherwise non-salon; an unknown answer is refused', () => {
+  const level = working => decideMembership({ country: 'Wales', insuranceRequired: true, working }).level;
+  assert.equal(level(['insMobile']), 'full_non_salon');
+  assert.equal(level(['insMobile', 'insWorkingFromHome']), 'full_non_salon');
+  assert.equal(level(['insSalon', 'insMobile']), 'full_salon');
   refused({ country: 'Wales', insuranceRequired: true, working: 'insSomethingElse' }, 'INVALID_WORKING');
 });
 

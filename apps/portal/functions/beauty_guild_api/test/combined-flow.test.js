@@ -33,12 +33,12 @@ test('switch on: a client that sends a level is refused', async () => {
   assert.equal(errorCode(r), 'LEVEL_NOT_CHOSEN_BY_CLIENT');
 });
 
-test('switch on: missing, mixed or unknown answers are refused, never guessed', async () => {
+test('switch on: missing or unknown answers are refused, never guessed', async () => {
   for (const [answers, code] of [
     [undefined, 'MISSING_ANSWER'],
     [{ country: 'England' }, 'MISSING_ANSWER'],
     [{ country: 'England', insuranceRequired: 'yes' }, 'MISSING_ANSWER'],
-    [{ country: 'England', insuranceRequired: 'yes', working: ['insSalon', 'insMobile'] }, 'INVALID_WORKING'],
+    [{ country: 'England', insuranceRequired: 'yes', working: ['insSomethingElse'] }, 'INVALID_WORKING'],
   ]) {
     const r = await quoteOf(world({ unlinked: true }), asked(answers));
     assert.equal(r.status, 422, JSON.stringify(answers));
