@@ -395,7 +395,12 @@ export default function CombinedMembership() {
     setBusy(true);
     setPayError('');
     try {
-      const r = await portalApi.startCheckout({ ...request(), accepted: 'yes', ...detailsRequest(d) });
+      const r = await portalApi.startCheckout({
+        ...request(),
+        accepted: 'yes',
+        interests: f.interests,
+        ...detailsRequest(d),
+      });
       if (!/^https:\/\/checkout\.stripe\.com\//.test(r.checkoutUrl))
         throw new Error('We could not open the payment page. Please try again.');
       window.location.assign(r.checkoutUrl);

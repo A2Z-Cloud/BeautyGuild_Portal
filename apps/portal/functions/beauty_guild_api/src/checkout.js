@@ -145,6 +145,34 @@ function registerCheckoutRoutes(
       .replace(/\s+/g, ' ')
       .trim()
       .slice(0, n);
+  // Interests is a multi-select picklist on the Contact. The Join page sends its own ids; these are the options the CRM holds.
+  const INTEREST_OPTIONS = {
+    beauty: 'Beauty',
+    holistic: 'Holistic',
+    nails: 'Nails',
+    hair: 'Hair',
+    training: 'Training',
+  };
+  // What the member chose is added to the interests the Contact already has, never replacing them. A best effort: the CRM refusing a value
+  // (an option it does not hold) must never stop a payment, so a failure here is ignored.
+  async function saveInterests(req, contact, ids) {
+    const wanted = [
+      ...new Set((Array.isArray(ids) ? ids : []).map(i => INTEREST_OPTIONS[String(i).toLowerCase()]).filter(Boolean)),
+    ];
+    if (!contact?.id || !wanted.length) return;
+    try {
+      const row = (await crm(req, 'Contacts/' + contact.id + '?fields=Interests'))[0];
+      const have = (Array.isArray(row?.Interests) ? row.Interests : [])
+        .map(v => (v && typeof v === 'object' ? (v.value ?? v.name) : v))
+        .filter(Boolean)
+        .map(String);
+      const added = wanted.filter(w => !have.some(h => h.toLowerCase() === w.toLowerCase()));
+      if (!added.length) return;
+      await crmUpdate(req, 'Contacts', contact.id, { Interests: [...have, ...added] });
+    } catch {
+      /* Interests are a convenience for the Guild, not part of the purchase. */
+    }
+  }
   async function ensureContact(req, input) {
     const user = req.portalUser,
       email = String(user.email || '')
@@ -668,6 +696,7 @@ function registerCheckoutRoutes(
     level: String(src.level || ''),
     answers: src.answers && typeof src.answers === 'object' && !Array.isArray(src.answers) ? src.answers : null,
     branch: String(src.branch || ''),
+    interests: Array.isArray(src.interests) ? src.interests.slice(0, 10).map(String) : [],
     branches: src.branches || '',
     billing: String(src.billing || ''),
     previousId: String(src.previousId || ''),
@@ -979,6 +1008,8 @@ function registerCheckoutRoutes(
         details,
       );
     }
+    // The Join page's interests go back to the Contact, for a member's own purchase only (never a staff payment link).
+    if (!staff && input.service === 'membership') await saveInterests(req, b.contact, input.interests);
     // Reuse a session already started for this record rather than create a second charge.
     if (b.prepared.existingSessionId) {
       const old = await stripe('GET', '/checkout/sessions/' + encodeURIComponent(b.prepared.existingSessionId)).catch(

@@ -20,7 +20,7 @@ Source: the Guild's comments on S01 and S02 (UAT v1.1, 3 November 2026). Agreed 
 ## 2. Decisions we made, for the Guild to confirm
 
 - **Training** is an interest with no branch. It is stored as an interest and ignored when choosing the default. A person who ticks only Training chooses their branch themselves.
-- **Interests are not yet written to the Guild CRM.** They are kept with the saved application. Writing them to the Contact's `Interests` field needs the exact picklist values from the Guild, otherwise the save is refused. Follow-up once we have the values.
+- **Interests go back to the Contact.** When a member presses Pay, the function adds their interests to the Contact's `Interests` field (a multi-select picklist) as Beauty, Holistic, Nails, Hair and Training. It adds to what the Contact already holds and never removes anything. It is a best effort: if the CRM refuses a value, the payment still opens. **Training must be an option on the picklist**; if it is not, add it in the CRM. A saved application keeps the interests in its answers but does not write them to the Contact until the member pays.
 - **Start date** is today for an Associate and International member. Full membership keeps its start date question.
 - **Pay choice** is removed from the steps for Associate and International. It stays on the Full membership details step until the Guild confirms a phone user can find the price panel toggle.
 - **£15 an extra branch** is the price the server already charges. The page does not calculate it: the amount shown is the server's.
