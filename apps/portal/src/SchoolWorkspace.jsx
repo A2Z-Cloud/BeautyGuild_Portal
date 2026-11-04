@@ -36,6 +36,7 @@ import { QualificationForm, SessionForm, TutorForm, BookingForm } from './School
 import ManagementLayout from './ManagementLayout.jsx';
 import SchoolProfilePanel from './SchoolProfilePanel.jsx';
 import SchoolVerification from './SchoolVerification.jsx';
+import VenuesTab from './VenuesTab.jsx';
 import CourseGroups from './components/CourseGroups.jsx';
 
 const GROUPS = [
@@ -256,22 +257,7 @@ function SchoolSection({ id, section }) {
         </>
       );
     case 'venues':
-      return (
-        <>
-          <h2>Accredited venues</h2>
-          <p>Adding a venue is subject to a separate Guild approval and payment process.</p>
-          <SimpleTable
-            rows={x.venues || []}
-            columns={[
-              col('name', 'Venue'),
-              col('town', 'Town'),
-              { key: 'isMain', label: 'Type', render: r => (r.isMain ? 'Main centre' : 'Additional venue') },
-              col('courseCount', 'Courses'),
-              { key: 'visible', label: 'Directory', render: r => (r.visible ? 'Visible' : 'Hidden') },
-            ]}
-          />
-        </>
-      );
+      return <VenuesTab schoolId={id} data={x} onChanged={saved} />;
     case 'tutors':
       return (
         <>

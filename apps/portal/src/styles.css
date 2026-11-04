@@ -4025,3 +4025,15 @@ iframe {
   gap: 12px;
   padding: 4px 0;
 }
+
+/* Additional venues: the form, and the actions on a saved venue. */
+.venue-form {
+  display: grid;
+  gap: 14px;
+}
+.venue-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}

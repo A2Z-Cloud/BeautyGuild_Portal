@@ -122,6 +122,14 @@ export function PaymentReturn() {
     cancelled = params.get('result') === 'cancelled';
   useEffect(() => {
     if (params.get('result') === 'success') finishPaidDraft(portalApi, params.get('service'));
+    // A venue stays Draft until Creator has the payment, so the Venues tab is told it has just been paid for.
+    if (params.get('result') === 'success' && params.get('service') === 'additional_venue' && params.get('centre')) {
+      try {
+        sessionStorage.setItem('venue_paid_' + params.get('centre'), String(Date.now()));
+      } catch {
+        /* The tab then simply offers payment as usual. */
+      }
+    }
   }, [params]);
   return (
     <div className="page narrow-page">

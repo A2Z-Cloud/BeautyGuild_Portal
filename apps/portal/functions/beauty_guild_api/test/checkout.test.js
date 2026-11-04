@@ -49,6 +49,8 @@ function world(opts = {}) {
     deals: opts.deals || [],
     policies: opts.policies || [],
     priceOverride: opts.priceOverride || {},
+    // A venue is saved as Draft; Creator sets Paid once the payment arrives.
+    centreStatus: opts.centreStatus || 'Draft',
   };
   const json = (body, status = 200) => ({ status, ok: status < 400, json: async () => body });
   state.fetchImpl = async (url, init = {}) => {
@@ -97,7 +99,13 @@ function world(opts = {}) {
     if (url.includes('Training_Centre_Accred/'))
       return json({ data: [{ id: 'x', Applicant_Contact: { id: 'someone-else' } }] });
     if (url.includes('Accreditation_Centre_Link/search'))
-      return json({ data: url.includes(CENTRE) ? [{ Training_Centre: { id: CENTRE } }] : [] });
+      return json({
+        data: url.includes(CENTRE)
+          ? [{ Training_Centre: { id: CENTRE }, Centre_Relationship_Type: opts.linkType || 'Additional Centre' }]
+          : [],
+      });
+    if (url.includes('Training_Centres/' + CENTRE))
+      return json({ data: [{ id: CENTRE, Centre_Status: state.centreStatus }] });
     if (url.includes('Deals/search')) return json({ data: state.deals });
     if (url.includes('Deals/' + DEAL))
       return json({ data: [{ id: DEAL, Contact_Name: { id: ME }, Member_Profile: { id: 'prof1' } }] });
@@ -314,6 +322,25 @@ test("additional venue must belong to the member's accreditation", async () => {
     assert.equal(p.get('metadata[type]'), 'additional_venue');
     assert.equal(p.get('metadata[centre_id]'), CENTRE);
     assert.equal(p.get('line_items[0][price]'), 'price_venue33333');
+  });
+});
+test('an additional venue is paid for only while it is a Draft, and never the main centre', async () => {
+  for (const [status, expected] of [
+    ['Paid', 200],
+    ['Verified', 200],
+    ['Unverified', 409],
+  ]) {
+    const w = world({ centreStatus: status });
+    await withApp(w, async ({ post }) => {
+      const r = await post({ service: 'additional_venue', recordId: ACC, centreId: CENTRE });
+      assert.equal(r.status, expected, status);
+      if (expected === 200) assert.equal(r.body.alreadyPaid, true, status);
+      assert.equal(w.stripePosts.length, 0, status + ' opens no payment');
+    });
+  }
+  const main = world({ linkType: 'Main Centre' });
+  await withApp(main, async ({ post }) => {
+    assert.equal((await post({ service: 'additional_venue', recordId: ACC, centreId: CENTRE })).status, 404);
   });
 });
 test('membership add-ons are priced per item with V1 metadata, quantities validated', async () => {

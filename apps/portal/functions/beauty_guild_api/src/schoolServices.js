@@ -6,7 +6,14 @@ const { isPaidStatus, isPayableAccreditation } = require('./catalogue');
 const { assess } = require('./publicSchoolVerification');
 const { FACILITY_FIELDS } = require('./facilities');
 const { findSchoolPageUrl } = require('./wordpress');
+const { phoneIssue } = require('./phone');
 const ID = /^\d{10,25}$/;
+// Centre_Status for an additional venue: saved as Draft, Paid once Creator has the payment, Verified once the Guild checks it.
+const VENUE_STATES = { Draft: 'draft', Paid: 'paid', Verified: 'verified' };
+const ACCREDITED = /^(verified|accredited)$/i;
+const VENUE_FIELDS =
+  'Name,Town,Address_Line_1,Address_Line_2,Address_Line_3,County,Country,Postcode,Email,Phone_Number,Mobile_Phone_Number,Contact_Name';
+const UK_COUNTRIES = new Set(['united kingdom', 'uk', 'england', 'scotland', 'wales', 'northern ireland']);
 const esc = v => encodeURIComponent(String(v));
 const fail = (message, status = 502, code = 'SERVICE_UNAVAILABLE') => {
   throw new HttpError(status, code, message);
@@ -159,6 +166,20 @@ function createSchoolApi({
     const row = body?.data?.[0];
     if (!response.ok || row?.status !== 'success') fail('CRM did not confirm the record was saved.');
   }
+  async function crmDelete(req, module, id) {
+    let response;
+    try {
+      response = await fetchImpl(crmApiDomain + '/crm/v3/' + module + '?ids=' + esc(id), {
+        method: 'DELETE',
+        headers: await getCrmHeaders(req),
+        signal: AbortSignal.timeout(15000),
+      });
+    } catch {
+      fail('CRM could not remove this record.');
+    }
+    const body = await response.json().catch(() => null);
+    if (!response.ok || body?.data?.[0]?.status !== 'success') fail('CRM did not confirm the record was removed.');
+  }
   async function creatorCreate(req, form, data) {
     const url =
       creatorApiDomain +
@@ -183,7 +204,7 @@ function createSchoolApi({
     if (!response.ok || body?.code !== 3000 || !body.data?.ID) fail('Creator did not confirm the record was saved.');
     return String(body.data.ID);
   }
-  return { crm, creator, contact, acc, deal, invoices, crmCreate, crmUpdate, creatorCreate };
+  return { crm, creator, contact, acc, deal, invoices, crmCreate, crmUpdate, crmDelete, creatorCreate };
 }
 function registerSchoolRoutes(
   app,
@@ -432,22 +453,57 @@ function registerSchoolRoutes(
               const c = (
                 await api.crm(
                   req,
-                  'Training_Centres/' + l.Training_Centre.id + '?fields=' + esc('Name,Town,Centre_Status'),
+                  'Training_Centres/' + l.Training_Centre.id + '?fields=' + esc(VENUE_FIELDS + ',Centre_Status'),
                 )
               )[0];
-              return c
-                ? {
-                    id: c.id,
-                    name: c.Name,
-                    town: c.Town || null,
-                    isMain: l.Centre_Relationship_Type === 'Main Centre',
-                    courseCount: offerings.filter(o => o.Training_Centre?.id === c.id).length,
-                    visible: c.Centre_Status === 'Verified',
-                  }
-                : null;
+              if (!c) return null;
+              const isMain = l.Centre_Relationship_Type === 'Main Centre';
+              const mine = offerings.filter(o => String(o.Training_Centre?.id) === String(c.id));
+              return {
+                id: c.id,
+                name: c.Name,
+                town: c.Town || null,
+                isMain,
+                courseCount: mine.length,
+                visible: c.Centre_Status === 'Verified',
+                status: c.Centre_Status || null,
+                state: isMain ? 'main' : VENUE_STATES[c.Centre_Status] || 'other',
+                // A draft venue carries its details so the form can be reopened and finished.
+                ...(!isMain && c.Centre_Status === 'Draft'
+                  ? {
+                      details: {
+                        name: c.Name || '',
+                        address1: c.Address_Line_1 || '',
+                        address2: c.Address_Line_2 || '',
+                        address3: c.Address_Line_3 || '',
+                        town: c.Town || '',
+                        county: c.County || '',
+                        country: c.Country || '',
+                        postcode: c.Postcode || '',
+                        email: c.Email || '',
+                        phone: c.Phone_Number || '',
+                        mobile: c.Mobile_Phone_Number || '',
+                        contactName: c.Contact_Name || '',
+                        courseIds: mine.map(o => String(o.Course?.id)).filter(Boolean),
+                      },
+                    }
+                  : {}),
+              };
             }),
         );
-        return res.json({ venues: centres.filter(Boolean).sort((x, y) => Number(y.isMain) - Number(x.isMain)) });
+        // The courses this school is accredited for: a venue can only offer these.
+        const accredited = [
+          ...new Map(
+            offerings
+              .filter(o => o.Course?.id)
+              .map(o => [String(o.Course.id), { id: String(o.Course.id), name: o.Course.name || 'Course' }]),
+          ).values(),
+        ];
+        return res.json({
+          venues: centres.filter(Boolean).sort((x, y) => Number(y.isMain) - Number(x.isMain)),
+          canAdd: writesEnabled && ACCREDITED.test(String(a.Accreditation_Status || '')),
+          courses: accredited,
+        });
       }
       if (section === 'tutors') {
         if (!accountId) return res.json({ tutors: [] });
@@ -737,6 +793,197 @@ function registerSchoolRoutes(
         ...Object.fromEntries(Object.entries(FACILITY_FIELDS).map(([key, field]) => [field, facilities.includes(key)])),
       };
       await api.crmUpdate(req, 'Training_Centres', centreId, record);
+      res.json({ ok: true });
+    }),
+  );
+  // ---- Additional venues (UAT round 1, S12) ----
+  // A venue is a Training_Centres record tied to the accreditation by an Accreditation_Centre_Link of type Additional Centre, with one
+  // TC_Course_Offering per course. It is saved as Centre_Status Draft so the member can come back and pay; Creator sets Paid once the
+  // payment arrives and the Guild sets Verified. Only a Draft can be edited or removed.
+  const todayIso = () => new Date().toISOString().slice(0, 10);
+  const venueText = (v, max, label, required = false) => {
+    const t = String(v ?? '')
+      .replace(/[\u0000-\u001f]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!t) {
+      if (required) fail('Enter ' + label + '.', 422, 'INVALID_VENUE');
+      return '';
+    }
+    if (t.length > max) fail(label.charAt(0).toUpperCase() + label.slice(1) + ' is too long.', 422, 'INVALID_VENUE');
+    return t;
+  };
+  function readVenue(body, accredited) {
+    const country = venueText(body.country, 80, 'the venue country', true);
+    const uk = UK_COUNTRIES.has(country.toLowerCase());
+    const v = {
+      name: venueText(body.name, 120, 'the venue name', true),
+      address1: venueText(body.address1, 120, 'the venue address', true),
+      address2: venueText(body.address2, 120, 'address line 2'),
+      address3: venueText(body.address3, 120, 'address line 3'),
+      town: venueText(body.town, 80, 'the venue town or city', true),
+      county: venueText(body.county, 80, 'the venue county'),
+      country: uk ? 'United Kingdom' : country,
+      postcode: venueText(body.postcode, 20, 'the venue postcode', uk),
+      email: venueText(body.email, 120, 'the venue email address', true),
+      phone: venueText(body.phone, 30, 'the venue telephone'),
+      mobile: venueText(body.mobile, 30, 'the venue mobile', true),
+      contactName: venueText(body.contactName, 100, 'the venue contact name'),
+    };
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.email)) fail('Enter a valid venue email address.', 422, 'INVALID_VENUE');
+    for (const [label, value] of [
+      ['the venue mobile', v.mobile],
+      ['the venue telephone', v.phone],
+    ]) {
+      const issue = value && phoneIssue(value);
+      if (issue) fail('Check ' + label + ' number. ' + issue, 422, 'INVALID_VENUE');
+    }
+    const ids = Array.isArray(body.courseIds) ? [...new Set(body.courseIds.map(String))] : [];
+    if (!ids.length) fail('Choose at least one course that runs at this venue.', 422, 'INVALID_VENUE');
+    if (ids.some(x => !accredited.has(x)))
+      fail('A venue can only offer courses your school is accredited for.', 422, 'INVALID_VENUE');
+    return { ...v, courseIds: ids };
+  }
+  const accreditedCourses = async (req, accId) =>
+    new Set(
+      (
+        await api.crm(
+          req,
+          'TC_Course_Offering/search?criteria=' + esc('(Accreditation:equals:' + accId + ')') + '&fields=Course',
+        )
+      )
+        .map(o => String(o.Course?.id || ''))
+        .filter(Boolean),
+    );
+  async function venueFor(req, accId, venueId) {
+    if (!ID.test(String(venueId))) fail('Venue not found.', 404, 'NOT_FOUND');
+    const links = await api.crm(
+      req,
+      'Accreditation_Centre_Link/search?criteria=' +
+        esc('((Accreditation:equals:' + accId + ')and(Training_Centre:equals:' + venueId + '))') +
+        '&fields=' +
+        esc('Name,Training_Centre,Centre_Relationship_Type'),
+    );
+    const link = links.find(
+      l => String(l.Training_Centre?.id) === String(venueId) && l.Centre_Relationship_Type === 'Additional Centre',
+    );
+    if (!link) fail('Venue not found.', 404, 'NOT_FOUND');
+    const centre = (await api.crm(req, 'Training_Centres/' + venueId + '?fields=Name,Centre_Status'))[0];
+    if (!centre) fail('Venue not found.', 404, 'NOT_FOUND');
+    return { link, centre };
+  }
+  const venueOfferings = (req, accId, venueId) =>
+    api.crm(
+      req,
+      'TC_Course_Offering/search?criteria=' +
+        esc('((Accreditation:equals:' + accId + ')and(Training_Centre:equals:' + venueId + '))') +
+        '&fields=' +
+        esc('Course,Offering_Status'),
+    );
+  router.post(
+    '/schools/:id/venues',
+    requireWrites,
+    handle(async (req, res) => {
+      const a = await api.acc(req, req.params.id, req.memberContact.id);
+      if (!ACCREDITED.test(String(a.Accreditation_Status || '')))
+        fail('You can add a venue once your school has been verified.', 409, 'NOT_VERIFIED');
+      if (!a.Account?.id) fail('School account not found.', 409, 'ACCOUNT_REQUIRED');
+      const body = req.body || {};
+      const v = readVenue(body, await accreditedCourses(req, a.id));
+      const record = {
+        Name: v.name,
+        Email: v.email,
+        // The WordPress sync reads this field, not Email.
+        Email_Address: v.email,
+        Phone_Number: v.phone || null,
+        Mobile_Phone_Number: v.mobile,
+        Address_Line_1: v.address1,
+        Address_Line_2: v.address2 || null,
+        Address_Line_3: v.address3 || null,
+        Town: v.town,
+        County: v.county || null,
+        Country: v.country,
+        Postcode: v.postcode || null,
+        Contact_Name: v.contactName || null,
+      };
+      let venueId = body.venueId ? String(body.venueId) : '',
+        linkId = '';
+      if (venueId) {
+        const found = await venueFor(req, a.id, venueId);
+        if (found.centre.Centre_Status !== 'Draft')
+          fail('This venue has been paid for and can no longer be changed here.', 409, 'NOT_DRAFT');
+        linkId = String(found.link.id);
+        await api.crmUpdate(req, 'Training_Centres', venueId, record);
+      } else {
+        // A repeat click must not make a second venue: an unpaid venue of the same name is reused.
+        const links = await api.crm(
+          req,
+          'Accreditation_Centre_Link/search?criteria=' +
+            esc('((Accreditation:equals:' + a.id + ')and(Centre_Relationship_Type:equals:Additional Centre))') +
+            '&fields=' +
+            esc('Training_Centre'),
+        );
+        for (const l of links) {
+          if (!l.Training_Centre?.id) continue;
+          const c = (await api.crm(req, 'Training_Centres/' + l.Training_Centre.id + '?fields=Name,Centre_Status'))[0];
+          if (c?.Centre_Status === 'Draft' && String(c.Name || '').toLowerCase() === v.name.toLowerCase()) {
+            venueId = String(c.id);
+            linkId = String(l.id);
+            break;
+          }
+        }
+        if (venueId) await api.crmUpdate(req, 'Training_Centres', venueId, record);
+        else {
+          venueId = await api.crmCreate(req, 'Training_Centres', {
+            ...record,
+            Account: { id: a.Account.id },
+            Contact: { id: req.memberContact.id },
+            Centre_Status: 'Draft',
+          });
+          linkId = await api.crmCreate(req, 'Accreditation_Centre_Link', {
+            Name: (a.Account?.name || 'School') + ' - Additional Centre',
+            Accreditation: { id: a.id },
+            Training_Centre: { id: venueId },
+            Centre_Relationship_Type: 'Additional Centre',
+            Start_Date: todayIso(),
+            ...(a.Valid_To ? { End_Date: a.Valid_To } : {}),
+          });
+        }
+      }
+      // One course offering per chosen course. A Draft venue has only its own, so any no longer chosen are removed.
+      const have = await venueOfferings(req, a.id, venueId);
+      const haveIds = new Set(have.map(o => String(o.Course?.id)));
+      for (const courseId of v.courseIds) {
+        if (haveIds.has(courseId)) continue;
+        await api.crmCreate(req, 'TC_Course_Offering', {
+          Name: v.name + ' - Course Offering',
+          Course: { id: courseId },
+          Training_Centre: { id: venueId },
+          Accreditation: { id: a.id },
+          Accreditation_Centre_Link: { id: linkId },
+          Offering_Status: 'Pending Review',
+          Valid_From: todayIso(),
+          ...(a.Valid_To ? { Valid_To: a.Valid_To } : {}),
+        });
+      }
+      for (const o of have)
+        if (o.Course?.id && !v.courseIds.includes(String(o.Course.id)))
+          await api.crmDelete(req, 'TC_Course_Offering', o.id);
+      res.status(201).json({ venue: { id: venueId, name: v.name, state: 'draft' } });
+    }),
+  );
+  router.delete(
+    '/schools/:id/venues/:venueId',
+    requireWrites,
+    handle(async (req, res) => {
+      const a = await api.acc(req, req.params.id, req.memberContact.id);
+      const { link, centre } = await venueFor(req, a.id, req.params.venueId);
+      if (centre.Centre_Status !== 'Draft')
+        fail('Only a venue that has not been paid for can be removed.', 409, 'NOT_DRAFT');
+      for (const o of await venueOfferings(req, a.id, req.params.venueId))
+        await api.crmDelete(req, 'TC_Course_Offering', o.id);
+      await api.crmDelete(req, 'Accreditation_Centre_Link', link.id);
+      await api.crmDelete(req, 'Training_Centres', req.params.venueId);
       res.json({ ok: true });
     }),
   );
