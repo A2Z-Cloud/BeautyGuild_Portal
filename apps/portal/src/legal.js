@@ -1,5 +1,6 @@
 // The Guild's legal and information pages and the policy documents, as in V1 (src/insurance/documents.js). One place, so every
 // page links the same documents.
+import { POLICY_LINKS } from './policyLinks.js';
 export const LEGAL = {
   terms: { label: 'Terms of Business', href: 'https://www.beautyguild.com/Legal/Terms-Of-Business' },
   privacy: { label: 'Privacy Policy', href: 'https://www.beautyguild.com/Legal/Privacy' },
@@ -36,5 +37,5 @@ export function policyDocuments(v = {}) {
     if (v.insBiCover === 'yes') codes.push('SALON_BI_WORDING');
     if (v.insPropertyAwayCover === 'yes') codes.push('SALON_PROPERTY_AWAY_WORDING');
   }
-  return [...new Set(codes)].map(code => ({ code, name: DOCUMENT_NAMES[code] }));
+  return [...new Set(codes)].map(code => ({ code, name: DOCUMENT_NAMES[code], href: POLICY_LINKS[code] }));
 }

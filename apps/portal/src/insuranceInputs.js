@@ -5,6 +5,7 @@
 // Extra keys the buy pages read (InsuranceFields.jsx): `info` (a pop-up next to the label), `note` (text under the question),
 // `yesNote` (text once the answer is yes), `stopOn` / `stopAbove` (a call-the-office message that blocks paying), `price` on an option.
 import { LEGAL } from './legal.js';
+import { POLICY_LINKS } from './policyLinks.js';
 export const GUILD_PHONE = '01332 224830';
 export const CALL_OFFICE = 'Please call the office to discuss your application';
 export const WAGE_ROLL_LIMIT = 125000;
@@ -45,15 +46,27 @@ export const gbp = n =>
 // The policy wordings the customer has supplied. The links wait for the customer's documents (AL-INS-039); until an href is set the
 // wording is named but not linked.
 export const POLICY_WORDING = {
-  MEDMAL: { ref: '1. Medmal policy wording', href: '' },
-  NON_SALON_CONTENTS: { ref: '2. Non-salon contents cover wording', href: '' },
-  NON_SALON_EL: { ref: '3. Non-salon EL cover wording', href: '' },
-  SALON_EL: { ref: '6. Salon Employers Liability Cover Policy Summary & Wording', href: '' },
-  SALON_CONTENTS: { ref: '7. Salon Contents Cover Policy Summary & Wording', href: '' },
-  SALON_MONEY: { ref: '8. Salon Money Cover Policy Summary & Wording', href: '' },
-  SALON_BUILDINGS: { ref: '9. Salon Buildings Cover Policy Summary & Wording', href: '' },
-  SALON_BI: { ref: '10. Salon Business Interruption Cover Policy Summary & Wording', href: '' },
-  SALON_PROPERTY_AWAY: { ref: '11. Salon Property Away Cover Policy Summary & Wording', href: '' },
+  MEDMAL: { ref: '1. Medmal policy wording', href: POLICY_LINKS.MEDMAL_WORDING },
+  NON_SALON_CONTENTS: { ref: '2. Non-salon contents cover wording', href: POLICY_LINKS.NON_SALON_CONTENTS_WORDING },
+  NON_SALON_EL: { ref: '3. Non-salon EL cover wording', href: POLICY_LINKS.NON_SALON_EL_WORDING },
+  SALON_EL: { ref: '6. Salon Employers Liability Cover Policy Summary & Wording', href: POLICY_LINKS.SALON_EL_WORDING },
+  SALON_CONTENTS: {
+    ref: '7. Salon Contents Cover Policy Summary & Wording',
+    href: POLICY_LINKS.SALON_CONTENTS_WORDING,
+  },
+  SALON_MONEY: { ref: '8. Salon Money Cover Policy Summary & Wording', href: POLICY_LINKS.SALON_MONEY_WORDING },
+  SALON_BUILDINGS: {
+    ref: '9. Salon Buildings Cover Policy Summary & Wording',
+    href: POLICY_LINKS.SALON_BUILDINGS_WORDING,
+  },
+  SALON_BI: {
+    ref: '10. Salon Business Interruption Cover Policy Summary & Wording',
+    href: POLICY_LINKS.SALON_BI_WORDING,
+  },
+  SALON_PROPERTY_AWAY: {
+    ref: '11. Salon Property Away Cover Policy Summary & Wording',
+    href: POLICY_LINKS.SALON_PROPERTY_AWAY_WORDING,
+  },
 };
 const doc = key => ({ doc: key });
 const EMPLOYMENT_STATUS_URL = 'https://www.gov.uk/guidance/check-employment-status-for-tax';

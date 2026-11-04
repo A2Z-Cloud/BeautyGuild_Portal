@@ -1,0 +1,17 @@
+// Public WorkDrive share links for the policy documents (view and download only). To change a document, upload a new
+// version of the same file in WorkDrive: the link stays the same. A new link is only needed if a file is replaced.
+const WD = 'https://workdrive.zohopublic.eu/external/';
+export const POLICY_LINKS = {
+  MEDMAL_WORDING: WD + '8f970adeda9add279757f771bf78ffe7e7e521a77d14c7a5a6c3544a1d19283e',
+  NON_SALON_CONTENTS_WORDING: WD + 'c18e253440449c5557b248299a612ecf1d625e4915adb7e1ada2dacec0cfeddf',
+  NON_SALON_EL_WORDING: WD + '95d2ad5499663bab27b21f75654ff1bf9d3a1ef930f3d1901e1aea246d615837',
+  GENERAL_TERMS: WD + '45e9a785edb0a1f5007435e0a11acf198e7d45a745ac870ee82908f49296074f',
+  NON_SALON_PROPERTY_DEFINITIONS: WD + '221d1cb17bd5aba71c19a80b434b734be697de5d0072546808c40807a3924ad3',
+  SALON_EL_WORDING: WD + '1b39971fde972b56e329c1af6c8ecc7278beff2893b0b4c66847df971de033e0',
+  SALON_CONTENTS_WORDING: WD + '54a07783622da5dd6281dcdbb8163071a022b5c87e9f63a53c675131cc9504f7',
+  SALON_MONEY_WORDING: WD + '6817ecc4e500febb7d77cb4443eaff3c8b79dc1aae88acd1010725a70b1cce92',
+  SALON_BUILDINGS_WORDING: WD + '947eba030f011d21a28b8e0b4e657f44358c0bd99f0ae24a89f48f686bd6b184',
+  SALON_BI_WORDING: WD + 'aa0b38dda50d798866e6823e88acd0e70eeac03192196f7b1a21776782bdb18b',
+  SALON_PROPERTY_AWAY_WORDING: WD + 'cf646144c75250821074a86de02271b70c85e126f16f0ded7829011898709200',
+  SALON_PROPERTY_DEFINITIONS: WD + 'dacac7b5249b0212db3a3232f9d2abadbd5329df900673d52781ae92f3e0e431',
+};
