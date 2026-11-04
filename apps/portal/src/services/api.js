@@ -203,12 +203,16 @@ export const portalApi = Object.freeze({
     documentHttp
       ? documentHttp(documentPath(kind, id) + (path ? '?path=' + encodeURIComponent(path) : ''))
       : unavailable('Authorised document listing'),
-  getDocumentDownloadUrl: (kind, id, fileId, path = '') =>
-    documentsOn
-      ? integrationConfig.apiBaseUrl +
-        documentPath(kind, id) +
-        '/file/' +
-        encodeURIComponent(fileId) +
-        (path ? '?path=' + encodeURIComponent(path) : '')
-      : null,
+  // inline: open a PDF or image in the browser instead of downloading it.
+  getDocumentDownloadUrl: (kind, id, fileId, path = '', inline = false) => {
+    if (!documentsOn) return null;
+    const query = [path ? 'path=' + encodeURIComponent(path) : '', inline ? 'inline=1' : ''].filter(Boolean).join('&');
+    return (
+      integrationConfig.apiBaseUrl +
+      documentPath(kind, id) +
+      '/file/' +
+      encodeURIComponent(fileId) +
+      (query ? '?' + query : '')
+    );
+  },
 });

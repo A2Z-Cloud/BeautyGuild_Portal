@@ -60,11 +60,29 @@ function registerDocumentRoutes(
         name: String(x.attributes?.name || 'Untitled'),
         isFolder: x.attributes?.is_folder === true || x.attributes?.type === 'folder',
         modifiedAt: x.attributes?.modified_time || null,
+        modifiedTimeMs:
+          Number(x.attributes?.modified_time_in_millisecond || x.attributes?.modified_time_i || 0) || null,
       }))
       .filter(x => FOLDER.test(x.id));
   }
+  // "My documents": the folder on the member's own membership Deal that has a Workdrive_Link, the active one first. Not the first
+  // record in the list, which may be a draft with no folder (V1 took the first Deal that had a link).
+  async function currentMembershipRoot(req) {
+    const rows = await crm.call(
+      req,
+      'Deals/search?criteria=' +
+        encodeURIComponent('(Contact_Name:equals:' + req.portalContact.id + ')') +
+        '&fields=' +
+        encodeURIComponent('Workdrive_Link,Stage,Created_Time'),
+    );
+    const linked = rows
+      .map(r => ({ folder: folderIdFromLink(r.Workdrive_Link), active: /active/i.test(String(r.Stage || '')) }))
+      .filter(r => r.folder);
+    return (linked.find(r => r.active) || linked[0] || {}).folder || null;
+  }
   async function authorisedRoot(req) {
     const { kind, id } = req.params;
+    if (kind === 'membership' && id === 'current') return currentMembershipRoot(req);
     if (!ID.test(id) || !DEFINITIONS[kind]) throw new HttpError(404, 'NOT_FOUND', 'Record not found.');
     const d = DEFINITIONS[kind],
       result = await crm.call(req, d.module + '/' + id + '?fields=' + encodeURIComponent(d.owner + ',Workdrive_Link'));
@@ -96,9 +114,10 @@ function registerDocumentRoutes(
     '/:kind/:id',
     safe(async (req, res) => {
       const root = await authorisedRoot(req);
-      if (!root) return res.json({ items: [], folderId: null, message: 'There are no documents for this record yet.' });
+      if (!root) return res.json({ items: [], folderId: null, message: 'There is no documents folder linked yet.' });
       const folder = await verifiedFolder(req, root);
-      res.json({ folderId: folder, items: await children(req, folder) });
+      const items = await children(req, folder);
+      res.json({ folderId: folder, items, ...(items.length ? {} : { empty: true }) });
     }),
   );
   router.get(
@@ -140,9 +159,13 @@ function registerDocumentRoutes(
         'Content-Type',
         /^(application\/pdf|image\/png|image\/jpeg)$/i.test(contentType) ? contentType : 'application/octet-stream',
       );
+      // ?inline=1 opens a PDF or image in the browser tab; anything else is always a download.
+      const viewable = /^(application\/pdf|image\/png|image\/jpeg)$/i.test(contentType) && req.query.inline === '1';
       res.set(
         'Content-Disposition',
-        "attachment; filename*=UTF-8''" + encodeURIComponent(allowed.name.replace(/[\r\n]/g, '').slice(0, 120)),
+        (viewable ? 'inline' : 'attachment') +
+          "; filename*=UTF-8''" +
+          encodeURIComponent(allowed.name.replace(/[\r\n]/g, '').slice(0, 120)),
       );
       res.send(payload);
     }),

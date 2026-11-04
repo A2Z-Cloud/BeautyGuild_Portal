@@ -699,14 +699,14 @@ export function MembershipManagement() {
 }
 
 export function AccountDocuments() {
-  const docs = useLoad(() => portalApi.listRecords('membership'), []);
-  if (!INTEGRATIONS.workdrive || !INTEGRATIONS.crmRecords)
+  if (!INTEGRATIONS.workdrive)
     return (
       <div className="page">
         <PageHeading eyebrow="YOUR ACCOUNT" title="My documents" />
         <Notice title="Coming soon">You will be able to view and download your documents here soon.</Notice>
       </div>
     );
+  // The server picks the member's own membership folder ("current"): the active membership that has a WorkDrive folder.
   return (
     <div className="page">
       <PageHeading
@@ -714,15 +714,7 @@ export function AccountDocuments() {
         title="My documents"
         description="Documents linked to your Guild membership."
       />
-      {docs.loading ? (
-        <p role="status">Finding your membership documents…</p>
-      ) : docs.error ? (
-        <ErrorNotice title="Documents unavailable" error={docs.error} />
-      ) : docs.value.length ? (
-        <DocumentsPanel kind="membership" id={docs.value[0].id} />
-      ) : (
-        <Notice title="No membership documents">There is no linked membership folder for this account.</Notice>
-      )}
+      <DocumentsPanel kind="membership" id="current" />
     </div>
   );
 }
