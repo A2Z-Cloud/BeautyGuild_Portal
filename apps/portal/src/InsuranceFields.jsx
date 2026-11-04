@@ -234,7 +234,7 @@ export function InsField({ field: f, value, onChange, error, values = {} }) {
   if (f.type === 'checkbox')
     control = (
       <div className="ins-check">
-        <label className="check-choice">
+        <label className={'check-choice radio-choice' + (value ? ' selected' : '')}>
           <input {...common} type="checkbox" checked={Boolean(value)} onChange={update} />
           <span>{linked(f.label, f.links)}</span>
         </label>

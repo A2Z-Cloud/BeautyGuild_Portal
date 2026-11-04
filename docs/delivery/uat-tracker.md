@@ -39,22 +39,78 @@ Sources: UAT workbook `Beauty-Guild Portal UAT v1.1 - Guild Comments.xlsx` (roun
 | REV-5 | Previous card layout for the course list | S10 step 15 | Not planned yet. |
 | REV-6 | Return to the application after creating an account | S01 step 5 | Needs a real sign-up email to reproduce. Likely the setup link losing the place. |
 | REV-7 | Course details (practical hours, prerequisites, Korean Eyelash Extensions) | S10 step 15 | The data comes from the CRM Courses records. We review it and update it in the CRM; the portal then shows it. |
-| REV-8 | Pay choice on the Full membership details step | S01 step 11 | Held until the Guild has tested mobile view. |
+| REV-8 | Pay choice on the Full membership details step | S01 step 11 | Closed by R2-14: the step is gone and the choice is on the price panel. |
 
 ### Waiting on the Guild
 
 | ID | Item | Notes |
 |---|---|---|
 | G-1 | Teaching Certificate page link | A "No" on the second declaration links to the GTi courses page for now. |
-| G-2 | Mobile view testing | Then revisit REV-8. |
+| G-2 | Mobile view testing | Now only a check that the new price panel pay switch works on a phone. |
 | G-3 | Insurance tabs (S03 to S09 as tested) and accreditation monthly (S11) comments | Promised for the day after the first round. |
 
 ### Done in round 1 (live on Development)
 Wording, layout, review Edit buttons, straight to payment, address picker, start date removed, United Kingdom listed once, declaration messages, dashboard loading state, Associate journey changes (interests, branch default with Training pointing to Beauty, no Membership details step for Associate, review summary with Edit and Remove, code heading, capital letters and dark pink), Add a venue form (saved as a draft, pay later), Other course box, and start dates only with insurance. See the PRs: 133, 134, 135, 136, 137, 138, 139, 140 and 141.
 
-## Round 2
+## Round 2: workbook v2 received, updated 4 November 2026
 
-Not yet received. Add the new tabs and items here when the Guild sends them: copy the layout above, and give new items the next ID in each table.
+Source: `Beauty-Guild Portal UAT v1.1 - Guild Comments v2 041126.xlsx` and Helen's email. S05, S06, S11 and S16 (orange tabs) are still with the Guild. S08 is not needed (no standalone insurance). The Guild tested earlier builds, so S10, S12 and S17 still carry round 1 comments that are already fixed.
+
+### Built in the round 2 pull request (retest on the next build)
+
+| ID | Item | Where it came from | What changed |
+|---|---|---|---|
+| R2-1 | Example numbers in the phone boxes | S10, S13 | Removed (the mobile one was a dummy, the telephone one was the Guild's number). |
+| R2-2 | Choose the phone country code before typing, keep it after an error, no "UK" in the message | S10 | The chosen code is kept, and the message reads "Enter a valid number with at least 9 digits after the country code." |
+| R2-3 | Address finder shows the full list straight away | S04 | The "x addresses" group opens by itself. |
+| R2-4 | Beauty ticked by default, missing interest highlighted | S14, S01 | Beauty is ticked on a new journey. |
+| R2-5 | Duplicate "How you work" heading | S03 | One heading. |
+| R2-6 | How you work as a multiple choice | S03 | Any mix is non-salon unless "I own/operate a salon" is ticked. Server and client agree (tested). Reverses spec 2.3. |
+| R2-7 | Salon wage roll question: No on the left, Yes on the right | S07 | Done. |
+| R2-8 | Terms box highlighted when not ticked | S03 | The Pay button now explains and highlights the box. |
+| R2-9 | Price panel order | S03 | Renewing lines (/yr, /mo) first, one-off payments last. |
+| R2-10 | Branches in four boxes across the full width | S03 | Done (check on a phone). |
+| R2-11 | Policy link text "Click here to view the policy wording" | S03, S04 | Done. The links stay empty until the Guild's documents arrive (see G-4). |
+| R2-12 | Treatment declarations always asked, above additional treatments | S07 | Qualified and patch test are asked of every application. The server now requires them too. |
+| R2-13 | Declaration tick boxes look like the Yes/No boxes | S03 | Done. |
+| R2-14 | No Membership details step for Full | S03 | Removed. Start date sits under "Do you require insurance" (insurance only). Annual or monthly is on the price panel. Closes REV-8. |
+| R2-15 | Saved applications: "In progress" status and a holding message | S13 | Done. The slow list itself is still REV-4. |
+| R2-16 | School verification page not found | S15 | The page is at `/#/verify`. A "Check a Guild accredited school" link is now on the sign-in page. Tell the Guild the address in the next email. |
+| R2-17 | Paying twice from two tabs (S14, failed) | S14 | Starting a payment now expires the same person's other open payment for that service, so only one can be paid. Tested. |
+
+### Checked, no change needed
+
+| ID | Item | Finding |
+|---|---|---|
+| C-1 | Named employee should not pay the joining fee (S07) | The code charges the named employee the membership fee only. The joining fee is one line for the member. Ask Helen which line she saw. |
+| C-2 | Correspondence country list has only a few countries (S10) | The full list (200 countries) went live on 3 November (PR 135), after the Guild tested. Retest. |
+
+### Fix our own workbook (expected values)
+
+| ID | Item |
+|---|---|
+| W-1 | S02: C8 to C10 should be £6.09 a month and £16.09 first payment. |
+| W-2 | S03: totals in steps 4, 5 and 6 include the £32.50 premium and £3.90 IPT (£120.40, £128.40). Monthly steps 9 and 10: £24.37 first, £10.37 after. |
+| W-3 | S04: steps 1 and 3 (£168 includes the £75 premium and £9 IPT). |
+| W-4 | S09 step 3 still says "[TO CONFIRM: which declaration]". |
+| W-5 | S15: add the verify page address. |
+
+### New under QA or under review
+
+| ID | Item | Where it came from | Current thinking |
+|---|---|---|---|
+| QA-12 | Proper VAT invoice with a breakdown (accreditation, membership, VAT), downloadable | S12 or S13 step 4 | Creator and Books. Add to Creator 7. |
+| REV-9 | What "My documents" should show (it says "Open folder", then "no documents found") | S13 | Need the Guild's list of documents. |
+| REV-10 | Edit account details (phone and others) | S13 | Profile editing is "coming soon". Needs scoping. |
+| REV-11 | Standalone insurance code | S08 | Not needed. Remove the standalone insurance code after UAT. The `/insurance` redirects are already in place. |
+| REV-12 | Caption changes, price panel and Review and pay page changes, accreditation monthly pricing, phone view | Orange tabs | The Guild is sending separate documents. |
+| REV-13 | Clean test accounts | Helen's email | New sign-ups with new email addresses work (aliases like name+uat1 are fine). Accounts that already have a Contact need the Contact created. Test data needs clearing afterwards. |
+
+### Waiting on the Guild
+
+| ID | Item | Notes |
+|---|---|---|
+| G-4 | Policy wording documents (links) | Needed from the Guild (Tega is providing): 1 Medmal policy wording (also linked from "insurance policy" under Treatments we cover); 2 Non-salon contents cover wording; 3 Non-salon EL cover wording; 4 Non-salon property definitions; 5 General terms and conditions; 6 Salon Employers Liability policy summary and wording; 7 Salon contents; 8 Salon money; 9 Salon buildings; 10 Salon business interruption; 11 Salon property away; 12 Salon property definitions. Links go in `POLICY_WORDING` in `apps/portal/src/insuranceInputs.js` (items 1 to 3 and 6 to 11); items 4, 5 and 12 are named in `apps/portal/src/legal.js` and are not linked yet. |
 
 ## Switches that are on in Development
 
