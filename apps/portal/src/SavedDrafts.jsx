@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { PageHeading, Notice } from './UiParts.jsx';
+import { PageHeading, Notice, Status } from './UiParts.jsx';
 import { INTEGRATIONS, portalApi } from './services/api.js';
 import { usePreviewState } from './journeys/previewState.jsx';
 import { forgetDraftRef, restoreDraftToTab } from './savedDraft.js';
@@ -60,12 +60,15 @@ export default function SavedDrafts() {
       {!INTEGRATIONS.crmDrafts ? (
         <Notice title="Coming soon">You will soon be able to save your applications and come back to them here.</Notice>
       ) : state.loading ? (
-        <p role="status">Loading applications…</p>
+        <p role="status">Loading your saved applications. This can take a minute.</p>
       ) : (
         <section className="surface padded">
           {state.error && <Notice title="Could not load application">{state.error}</Notice>}
           {state.items.length === 0 ? (
-            <p>You have no saved applications.</p>
+            <p>
+              You have no saved applications. If you have only just saved one, it can take a minute to appear here.
+              Check again shortly.
+            </p>
           ) : (
             state.items.map(d => (
               <div className="security-row" key={d.service + d.id}>
@@ -75,6 +78,7 @@ export default function SavedDrafts() {
                       ? 'Accreditation' + (d.title ? ' · ' + d.title : '')
                       : NAMES[d.service] || d.service}
                   </strong>
+                  <Status value="In progress" />
                   <span>
                     Saved application · Reference {d.id} · Updated{' '}
                     {d.updatedAt ? new Date(d.updatedAt).toLocaleString('en-GB') : 'recently'}

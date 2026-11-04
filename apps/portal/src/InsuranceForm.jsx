@@ -12,35 +12,7 @@ const money = pence => '£' + (pence / 100).toFixed(2);
 // The insurance questions as sections of one page, for the buy pages. The answers are collected here;
 // the server rates them, applies the STOP and REFER rules and decides whether they can be paid for online.
 // The combined journey passes `stepKey` to show only one journey step's questions (membershipPlan.js), `showCountry={false}` because About you has
-// already asked, and `singleWorking` because how you work is one choice there rather than a list to tick.
-export const WORKING_HELP = 'Choose the one that best describes how you work.';
-function WorkingChoice({ field, values, onChange, error }) {
-  const chosen = (values[field.name] || [])[0] || '';
-  return (
-    <div className={'field full-width' + (error ? ' invalid' : '')}>
-      <div className="buy-options" role="radiogroup" aria-label={field.label}>
-        {field.options.map(o => (
-          <label key={o.value} className={'radio-choice' + (chosen === o.value ? ' selected' : '')}>
-            <input
-              type="radio"
-              name={field.name}
-              checked={chosen === o.value}
-              onChange={() => onChange(field.name, [o.value])}
-            />
-            <span>
-              <strong>{o.label}</strong>
-            </span>
-          </label>
-        ))}
-      </div>
-      {error && (
-        <span className="error" role="alert">
-          {error}
-        </span>
-      )}
-    </div>
-  );
-}
+// already asked, and `hideTitle` where the page already has the step's heading.
 export function InsuranceForm({
   values,
   onChange,
@@ -50,7 +22,7 @@ export function InsuranceForm({
   countryError,
   stepKey,
   showCountry = true,
-  singleWorking = false,
+  hideTitle = false,
 }) {
   return (
     <>
@@ -82,12 +54,8 @@ export function InsuranceForm({
           demands = step.demands && demandsAndNeeds(values);
         return (
           <fieldset key={step.id} id={'ins-step-' + step.id} className="buy-fieldset ins-step">
-            <legend>{step.title}</legend>
-            {(singleWorking && step.fields.some(f => f.name === 'insWorking') ? WORKING_HELP : step.description) && (
-              <p className="muted">
-                {singleWorking && step.fields.some(f => f.name === 'insWorking') ? WORKING_HELP : step.description}
-              </p>
-            )}
+            <legend className={hideTitle ? 'sr-only' : undefined}>{step.title}</legend>
+            {step.description && <p className="muted">{step.description}</p>}
             {intro && (
               <div className="ins-intro">
                 <Blocks blocks={intro} />
@@ -107,26 +75,16 @@ export function InsuranceForm({
               <div className="fields-grid">
                 {step.fields
                   .filter(f => !f.when || f.when(values))
-                  .map(f =>
-                    singleWorking && f.name === 'insWorking' ? (
-                      <WorkingChoice
-                        key={f.name}
-                        field={f}
-                        values={values}
-                        onChange={onChange}
-                        error={errors[f.name]}
-                      />
-                    ) : (
-                      <InsField
-                        key={f.name}
-                        field={f}
-                        value={values[f.name]}
-                        onChange={onChange}
-                        error={errors[f.name]}
-                        values={values}
-                      />
-                    ),
-                  )}
+                  .map(f => (
+                    <InsField
+                      key={f.name}
+                      field={f}
+                      value={values[f.name]}
+                      onChange={onChange}
+                      error={errors[f.name]}
+                      values={values}
+                    />
+                  ))}
               </div>
             )}
           </fieldset>

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { formatDate } from './format.js';
 import { isFuture } from './startDate.js';
-import { dueToday, planSummary, thenCharge, upgradeCredit, waivedLine } from './priceSummary.js';
+import { dueToday, orderedLines, planSummary, thenCharge, upgradeCredit, waivedLine } from './priceSummary.js';
 
 const money = pence => '£' + (pence / 100).toFixed(2);
 
@@ -80,7 +80,7 @@ export default function PricePanel({
               )}
               {quote.lines.length > 0 && (
                 <div className="price-rows">
-                  {quote.lines.map(l => (
+                  {orderedLines(quote).map(l => (
                     <div key={l.name} className="price-row">
                       <span>
                         {l.name}

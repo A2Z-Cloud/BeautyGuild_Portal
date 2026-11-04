@@ -40,10 +40,12 @@ export const STEP_TITLES = {
   review: 'Review and pay',
 };
 
-// How you work: one choice. The options and their wording come from the insurance questions, so there is one source.
+// How you work: one or more choices; the salon option makes it the salon route. The options and their wording come from the insurance questions, so there is one source.
 export const WORKING_FIELD = INSURANCE_STEPS.find(s => s.id === 'business').fields.find(f => f.name === 'insWorking');
 export const WORKING_OPTIONS = WORKING_FIELD.options;
 export const SALON_WORKING = 'insSalon';
+// How you work as a list, whether it was kept as one value (an older draft) or a list.
+export const workingList = w => (Array.isArray(w) ? w : w ? [w] : []).map(String);
 
 // What the answers so far mean. `ready` is true once every answer the decision needs is in; until then the level is not known and the steps
 // shown are the shortest list (or the full one once the customer has said they need insurance).
@@ -61,10 +63,11 @@ export function planFor({ country, insuranceRequired, working } = {}) {
   if (insuranceRequired === 'no')
     return { ready: true, level: 'associate', insurance: false, steps: STEPS_SIMPLE, message: null };
   if (insuranceRequired !== 'yes') return none;
-  const known = WORKING_OPTIONS.some(o => o.value === working);
+  const list = workingList(working),
+    known = list.length > 0 && list.every(v => WORKING_OPTIONS.some(o => o.value === v));
   return {
     ready: known,
-    level: known ? (working === SALON_WORKING ? 'full_salon' : 'full_non_salon') : null,
+    level: known ? (list.includes(SALON_WORKING) ? 'full_salon' : 'full_non_salon') : null,
     insurance: true,
     steps: STEPS_FULL,
     message: null,
@@ -75,7 +78,8 @@ export function planFor({ country, insuranceRequired, working } = {}) {
 export function answersRequest({ country, insuranceRequired, working }) {
   const out = { country: String(country || '').trim() };
   if (inUkGroup(country) && insuranceRequired) out.insuranceRequired = insuranceRequired;
-  if (inUkGroup(country) && insuranceRequired === 'yes' && working) out.working = working;
+  if (inUkGroup(country) && insuranceRequired === 'yes' && workingList(working).length)
+    out.working = workingList(working);
   return out;
 }
 

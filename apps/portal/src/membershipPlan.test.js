@@ -98,7 +98,7 @@ test('answers sent to the server carry only what matters', () => {
   assert.deepEqual(answersRequest({ country: 'England', insuranceRequired: 'yes', working: 'insMobile' }), {
     country: 'England',
     insuranceRequired: 'yes',
-    working: 'insMobile',
+    working: ['insMobile'],
   });
 });
 test('every insurance question appears in exactly one journey step', () => {

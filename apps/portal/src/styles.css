@@ -4037,3 +4037,30 @@ iframe {
   align-items: center;
   gap: 8px 14px;
 }
+
+/* UAT round 2: a box that still needs ticking is highlighted in the Guild's dark pink. */
+.check-choice.check-missing {
+  outline: 2px solid #a3125a;
+  outline-offset: 4px;
+  border-radius: 6px;
+}
+/* The membership branches sit in four boxes across the full width. */
+.membership-journey .branch-boxes {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+.membership-journey .branch-boxes .check-choice {
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  min-height: 84px;
+  padding: 12px;
+  border: 1px solid var(--border, #d0d5dd);
+  border-radius: 8px;
+}
+@media (max-width: 700px) {
+  .membership-journey .branch-boxes {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

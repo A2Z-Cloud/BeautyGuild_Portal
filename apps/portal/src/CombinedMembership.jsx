@@ -49,6 +49,7 @@ import {
   suggestedBranches,
   toggleBranchChoice,
   ukOnce,
+  workingList,
 } from './membershipPlan.js';
 
 const ADDONS = [
@@ -170,8 +171,8 @@ export default function CombinedMembership() {
       step: 'about_you',
       country: '',
       insuranceRequired: '',
-      working: '',
-      interests: [],
+      working: [],
+      interests: ['beauty'],
       branch: '',
       branches: [],
       // Set once the member has chosen a branch themselves, so a change of interests no longer changes it.
@@ -185,7 +186,8 @@ export default function CombinedMembership() {
     x => ({
       ...x,
       country: ukOnce(x.country),
-      interests: Array.isArray(x.interests) ? x.interests : [],
+      working: workingList(x.working),
+      interests: Array.isArray(x.interests) ? x.interests : ['beauty'],
       branchTouched: Boolean(x.branchTouched || x.branch),
       accepted: false,
       start: x.start && x.start >= startLimits().min ? x.start : '',
@@ -193,10 +195,11 @@ export default function CombinedMembership() {
   );
   const [kept, setKept] = useStoredState('combined_insurance', { iv: {} });
   // How you work lives in f.working; the insurance answers carry it as the one flag the server expects.
-  const iv = { ...kept.iv, insWorking: f.working ? [f.working] : [] };
+  const iv = { ...kept.iv, insWorking: workingList(f.working) };
   const setIv = next => setKept(o => ({ ...o, iv: typeof next === 'function' ? next(o.iv) : next }));
   const [d, setD] = useStoredState('membership_details', EMPTY_DETAILS),
-    [showMissing, setShowMissing] = useState(false);
+    [showMissing, setShowMissing] = useState(false),
+    [termsMissing, setTermsMissing] = useState(false);
   const missing = missingDetails(d),
     setDetail = patch => setD(o => ({ ...o, ...patch }));
   const [codeText, setCodeText] = useState(f.code || '');
@@ -253,7 +256,11 @@ export default function CombinedMembership() {
         setF(old => ({
           ...old,
           insuranceRequired: old.insuranceRequired || (cover.includesInsurance ? 'yes' : 'no'),
-          working: old.working || (cover.insurance?.route === 'salon' ? 'insSalon' : ''),
+          working: workingList(old.working).length
+            ? old.working
+            : cover.insurance?.route === 'salon'
+              ? ['insSalon']
+              : [],
         }));
       })
       .catch(() => {});
@@ -325,7 +332,7 @@ export default function CombinedMembership() {
     window.scrollTo?.({ top: 0, behavior: 'smooth' });
   };
   const setI = (name, value) => {
-    if (name === 'insWorking') set({ working: (value || [])[0] || '' });
+    if (name === 'insWorking') set({ working: value || [] });
     else setIv(v => ({ ...v, [name]: value }));
     setIErrors(e => ({ ...e, [name]: undefined }));
   };
@@ -421,7 +428,7 @@ export default function CombinedMembership() {
     try {
       await portalApi.joinAsAssociate(referral.reference);
       setSent({ outcome: null });
-      set({ insuranceRequired: 'no', working: '', accepted: false, step: 'extras' });
+      set({ insuranceRequired: 'no', working: [], accepted: false, step: 'extras' });
       setJoining({ busy: false, error: '' });
     } catch (e) {
       setJoining({ busy: false, error: e.message || 'We could not do that. Please try again or call the Guild.' });
@@ -697,7 +704,7 @@ export default function CombinedMembership() {
                     country={f.country}
                     stepKey={key}
                     showCountry={false}
-                    singleWorking
+                    hideTitle={key === 'how_you_work'}
                   />
                 </section>
               )}
@@ -748,22 +755,24 @@ export default function CombinedMembership() {
                   </p>
                   <fieldset className={'buy-fieldset' + (errors.branch ? ' invalid' : '')}>
                     <legend className="sr-only">Membership Branches</legend>
-                    {BRANCHES.map(b => {
-                      const ticked = b.id === f.branch || f.branches.includes(b.id),
-                        suggested = !ticked && suggestedBranches(f.interests, f).includes(b.id);
-                      return (
-                        <label key={b.id} className="check-choice">
-                          <input type="checkbox" checked={ticked} onChange={() => toggleBranch(b.id)} />
-                          {b.logo ? (
-                            <img className="branch-logo branch-logo-small" src={b.logo} alt={b.name} height="30" />
-                          ) : (
-                            b.name
-                          )}
-                          {ticked && <small className="branch-note">{b.id === f.branch ? 'Included' : '£15'}</small>}
-                          {suggested && <small className="branch-note">Suggested additional branch</small>}
-                        </label>
-                      );
-                    })}
+                    <div className="branch-boxes">
+                      {BRANCHES.map(b => {
+                        const ticked = b.id === f.branch || f.branches.includes(b.id),
+                          suggested = !ticked && suggestedBranches(f.interests, f).includes(b.id);
+                        return (
+                          <label key={b.id} className="check-choice">
+                            <input type="checkbox" checked={ticked} onChange={() => toggleBranch(b.id)} />
+                            {b.logo ? (
+                              <img className="branch-logo branch-logo-small" src={b.logo} alt={b.name} height="30" />
+                            ) : (
+                              b.name
+                            )}
+                            {ticked && <small className="branch-note">{b.id === f.branch ? 'Included' : '£15'}</small>}
+                            {suggested && <small className="branch-note">Suggested additional branch</small>}
+                          </label>
+                        );
+                      })}
+                    </div>
                     {errors.branch && (
                       <small className="error" role="alert">
                         {errors.branch}
@@ -901,11 +910,14 @@ export default function CombinedMembership() {
                         </ReferralPanel>
                       ) : (
                         <>
-                          <label className="check-choice">
+                          <label className={'check-choice' + (termsMissing && !f.accepted ? ' check-missing' : '')}>
                             <input
                               type="checkbox"
                               checked={f.accepted}
-                              onChange={e => set({ accepted: e.target.checked })}
+                              onChange={e => {
+                                set({ accepted: e.target.checked });
+                                setTermsMissing(false);
+                              }}
                             />
                             <span>
                               I accept the{' '}
@@ -923,6 +935,11 @@ export default function CombinedMembership() {
                               .
                             </span>
                           </label>
+                          {termsMissing && !f.accepted && (
+                            <small className="error" role="alert">
+                              Please accept the Code of Ethics, Terms of Business and Privacy Policy to continue.
+                            </small>
+                          )}
                           {payError && <Notice title="Payment unavailable">{payError}</Notice>}
                           {guest ? (
                             <>
@@ -938,8 +955,8 @@ export default function CombinedMembership() {
                             <button
                               type="button"
                               className="btn btn-primary btn-block"
-                              disabled={busy || !f.accepted || priced.payable === false}
-                              onClick={pay}
+                              disabled={busy || priced.payable === false}
+                              onClick={() => (f.accepted ? pay() : setTermsMissing(true))}
                             >
                               <LockKeyhole size={16} />
                               {busy

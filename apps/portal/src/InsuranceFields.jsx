@@ -21,10 +21,10 @@ export function Blocks({ blocks }) {
           <p key={i} className="ins-doc">
             {POLICY_WORDING[b.doc].href ? (
               <a href={POLICY_WORDING[b.doc].href} {...ext}>
-                Read the policy wording ({POLICY_WORDING[b.doc].ref})
+                Click here to view the policy wording
               </a>
             ) : (
-              'Policy wording: ' + POLICY_WORDING[b.doc].ref
+              'Click here to view the policy wording (link to follow)'
             )}
           </p>
         ) : (

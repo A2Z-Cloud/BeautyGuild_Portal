@@ -79,12 +79,10 @@ export function accreditationSteps(countries) {
         f('mobile', 'Mobile', 'tel', true, {
           hint: PHONE_HINT,
           countryFrom: 'contactCountry',
-          placeholder: '7700 900123',
         }),
         f('phone', 'Telephone', 'tel', false, {
           hint: PHONE_HINT,
           countryFrom: 'contactCountry',
-          placeholder: '1332 224830',
         }),
       ],
     },
@@ -116,12 +114,10 @@ export function accreditationSteps(countries) {
         f('centreMobile', 'Centre mobile', 'tel', true, {
           hint: PHONE_HINT,
           countryFrom: 'country',
-          placeholder: '7700 900123',
         }),
         f('centrePhone', 'Centre telephone', 'tel', false, {
           hint: PHONE_HINT,
           countryFrom: 'country',
-          placeholder: '1332 224830',
         }),
         f('centreAddress1', 'Centre address line 1'),
         f('centreAddress2', 'Centre address line 2', 'text', false),

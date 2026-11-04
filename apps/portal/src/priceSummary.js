@@ -1,3 +1,6 @@
+// The lines in the order the customer reads them: what renews (/yr, /mo) first, the one-off payments last. The order within each group is kept.
+export const orderedLines = quote =>
+  [...(quote?.lines || [])].sort((a, b) => Number(Boolean(b.interval)) - Number(Boolean(a.interval)));
 // Due today is the whole first charge: a subscription's first payment plus every one-off line on the same checkout.
 export const dueToday = quote => (quote ? quote.totalPence : 0);
 // What is charged each period after the first, if anything recurs.

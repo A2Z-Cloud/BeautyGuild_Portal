@@ -161,6 +161,9 @@ export function LoginPage() {
         <Link className="auth-small" to={route}>
           Return to your application
         </Link>
+        <p className="auth-small">
+          Looking up a school? <Link to="/verify">Check a Guild accredited school</Link>
+        </p>
       </form>
     </Shell>
   );

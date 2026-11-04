@@ -846,6 +846,8 @@ const INS_OK = {
   insStandardConstruction: 'yes',
   insDeclarations: ['no', 'no', 'no', 'no', 'no', 'yes', 'yes'],
   insInformationAccurate: 'yes',
+  insQualifiedForTreatments: 'yes',
+  insPatchTesting: 'yes',
   insEthicsAccepted: 'yes',
   insDemandsNeedsAccepted: 'yes',
   insNonAdvisedAccepted: 'yes',

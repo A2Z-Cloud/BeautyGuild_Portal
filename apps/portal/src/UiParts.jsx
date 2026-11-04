@@ -52,9 +52,14 @@ export function PageHeading({ eyebrow, title, description, children }) {
 }
 // Country code beside the number. Until a number is typed the code follows the country chosen on the form.
 function PhoneInput({ common, value, onChange, countryName, placeholder }) {
+  // The code chosen before any digit is typed is kept here, because the stored value is empty until there are digits.
+  const [picked, setPicked] = React.useState('');
   const parsed = splitPhone(value),
-    iso = parsed.iso || isoForCountry(countryName);
-  const set = (nextIso, local) => onChange(joinPhone(nextIso, local));
+    iso = parsed.iso || picked || isoForCountry(countryName);
+  const set = (nextIso, local) => {
+    setPicked(nextIso);
+    onChange(joinPhone(nextIso, local));
+  };
   return (
     <div className="phone-input">
       {/* The list names each country; the closed box shows only the flag and code. The select sits invisibly over the label. */}

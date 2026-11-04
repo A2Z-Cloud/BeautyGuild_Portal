@@ -129,11 +129,11 @@ export const INSURANCE_STEPS = [
   {
     id: 'business',
     title: 'How you work',
-    description: 'Select every way that you work.',
+    description: '',
     fields: [
       {
         name: 'insWorking',
-        label: 'How you work',
+        label: 'Select every way that you work',
         type: 'multi',
         required: true,
         options: [
@@ -168,6 +168,11 @@ export const INSURANCE_STEPS = [
         when: isSalon,
         stopOn: 'yes',
         stopMessage: CALL_OFFICE,
+        // No on the left, Yes on the right (Guild, UAT round 2).
+        options: [
+          { value: 'no', label: 'No' },
+          { value: 'yes', label: 'Yes' },
+        ],
       }),
       { name: 'insSalonCount', label: 'Number of salons', type: 'number', required: true, when: isSalon },
     ],
@@ -261,19 +266,10 @@ export const INSURANCE_STEPS = [
     description: 'Choose any additional treatments you want to be covered for.',
     intro: ['All prices include IPT.'],
     fields: [
-      {
-        name: 'insTreatmentExtensions',
-        label: 'Additional treatments',
-        type: 'multi',
-        required: false,
-        list: true,
-        options: TREATMENT_OPTIONS,
-      },
       yn(
         'insQualifiedForTreatments',
         'Do you and your employees hold the relevant qualification(s) for the treatment(s) you perform from a recognised and accredited UK college or company?',
         {
-          when: treatments,
           note: [
             'You and your employees, must hold the appropriate qualification(s) for any treatment(s) you wish to be covered for. Cover can be provided for online courses, where the practical training and assessment were done through a live video link with the course tutor, e.g. Zoom, Whatsapp.',
             'You and everyone that works for you, will be required to provide proof of your qualification(s) if a claim should arise.',
@@ -281,7 +277,6 @@ export const INSURANCE_STEPS = [
         },
       ),
       yn('insPatchTesting', 'Do you agree to always carry out a Sensitivity Patch Test for all relevant treatments?', {
-        when: treatments,
         info: [
           'You must ensure that:',
           'At least 24 hours prior to:',
@@ -304,6 +299,14 @@ export const INSURANCE_STEPS = [
           "The results of each patch test must be recorded in writing on the client's records.",
         ],
       }),
+      {
+        name: 'insTreatmentExtensions',
+        label: 'Additional treatments',
+        type: 'multi',
+        required: false,
+        list: true,
+        options: TREATMENT_OPTIONS,
+      },
     ],
   },
   {

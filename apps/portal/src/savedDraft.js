@@ -1,7 +1,7 @@
 import { clearStored, readStored, writeStored } from './storedState.js';
 import { CONFIRMATIONS } from './insuranceInputs.js';
 import { startLimits } from './startDate.js';
-import { WORKING_OPTIONS, inUkGroup } from './membershipPlan.js';
+import { WORKING_OPTIONS, inUkGroup, workingList } from './membershipPlan.js';
 
 // Save and finish later for the Join the Guild and Buy insurance pages. The answers go to the CRM against the signed-in account
 // (portalApi drafts); the tab keeps only a small reference to the draft. Agreement boxes and insurance confirmations are never saved
@@ -173,7 +173,7 @@ export const combinedDraft = ({ f, d, iv }) => {
     c: {
       country: f.country || '',
       insuranceRequired: f.insuranceRequired || '',
-      working: f.working || '',
+      working: workingList(f.working),
       interests: f.interests || [],
       branch: f.branch,
       branches: f.branches,
@@ -190,16 +190,15 @@ export const combinedDraft = ({ f, d, iv }) => {
     answers: insured ? { membership, insurance: { iv: noConfirmations(iv), country: f.country } } : { membership },
   };
 };
-// A draft saved by the old page (it has a level) opened in the combined journey: the level becomes answers. A mix of ways of working was
-// allowed then and is not now, so it is asked again (spec 2.3).
+// A draft saved by the old page (it has a level) opened in the combined journey: the level becomes answers.
 export function combinedFromLegacy(f, insurance) {
   const insured = Boolean(insurance) && f.insurance !== false && /^full/.test(f.level || '');
   const list = Array.isArray(insurance?.iv?.insWorking) ? insurance.iv.insWorking : [];
-  const only = list.length === 1 && WORKING_OPTIONS.some(o => o.value === list[0]) ? list[0] : '';
+  const only = list.filter(v => WORKING_OPTIONS.some(o => o.value === v));
   return {
     country: insurance?.country || '',
     insuranceRequired: insured ? 'yes' : 'no',
-    working: insured ? only : '',
+    working: insured ? only : [],
     branch: f.branch,
     branches: f.branches || [],
     billing: f.billing || 'annual',

@@ -392,16 +392,15 @@ function evaluateRules(ins, country, { complete = false } = {}) {
         'Cover across multiple addresses needs to be reviewed by the Insurance team.',
       );
   }
-  if (ins.insTreatmentExtensions.length) {
-    if (ins.insQualifiedForTreatments === 'no')
-      push(
-        'STOP',
-        'TREATMENT_QUALIFICATION',
-        'The required treatment qualifications must be confirmed before continuing.',
-      );
-    if (ins.insPatchTesting === 'no')
-      push('STOP', 'PATCH_TESTING', 'The required patch testing declaration must be confirmed before continuing.');
-  }
+  // Asked of every application, whether or not an additional treatment is chosen.
+  if (ins.insQualifiedForTreatments === 'no')
+    push(
+      'STOP',
+      'TREATMENT_QUALIFICATION',
+      'The required treatment qualifications must be confirmed before continuing.',
+    );
+  if (ins.insPatchTesting === 'no')
+    push('STOP', 'PATCH_TESTING', 'The required patch testing declaration must be confirmed before continuing.');
   if (ins.insInformationAccurate === 'no')
     push(
       'STOP',
@@ -431,7 +430,7 @@ function evaluateRules(ins, country, { complete = false } = {}) {
       )
     )
       missing.push('Please confirm each statement before paying.');
-    if (ins.insTreatmentExtensions.length && (!ins.insQualifiedForTreatments || !ins.insPatchTesting))
+    if (!ins.insQualifiedForTreatments || !ins.insPatchTesting)
       missing.push('Please confirm your treatment qualifications and patch testing.');
     if (propertyRequired(ins) && !(ins.insPremisesAddress.l1 && ins.insPremisesAddress.postcode))
       missing.push('Please enter the address of the insured premises.');

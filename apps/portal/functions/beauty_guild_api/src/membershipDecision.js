@@ -7,7 +7,8 @@ const { HttpError } = require('./errors');
 const INTERNATIONAL_NO_INSURANCE_TEXT =
   'Insurance is not available outside the UK, so you will join as an International member without insurance.';
 
-// How you work: exactly one of these. Four are non-salon, owning or operating a salon is the salon route. A mix is refused.
+// How you work: one or more of these. Four are non-salon; owning or operating a salon is the salon route. Any mix is non-salon
+// unless the salon option is ticked (Guild, UAT round 2).
 const WORKING = Object.freeze({
   insWorkingFromHome: 'non_salon',
   insMobile: 'non_salon',
@@ -49,13 +50,13 @@ function yesNo(value) {
   return null;
 }
 
-// "How you work" may arrive as one value, or as the list a multiple choice form sends. One answer only.
-function workingAnswer(value) {
+// "How you work" may arrive as one value, or as the list a multiple choice form sends. The salon route is any list with the salon option in it.
+function workingRoute(value) {
   const list = (Array.isArray(value) ? value : value == null || value === '' ? [] : [value]).map(String);
   if (!list.length) throw invalid('MISSING_ANSWER', 'Tell us how you work.');
-  if (list.length > 1 || !Object.hasOwn(WORKING, list[0]))
-    throw invalid('INVALID_WORKING', 'Choose one way that you work.');
-  return list[0];
+  if (!list.every(x => Object.hasOwn(WORKING, x)))
+    throw invalid('INVALID_WORKING', 'Choose how you work from the list.');
+  return list.some(x => WORKING[x] === 'salon') ? 'salon' : 'non_salon';
 }
 
 /**
@@ -80,7 +81,7 @@ function decideMembership(answers) {
   if (required === null) throw invalid('MISSING_ANSWER', 'Tell us whether you require insurance.');
   if (!required)
     return { level: 'associate', insurance: false, route: null, ukGroup: true, steps: STEPS_SIMPLE, message: null };
-  const route = WORKING[workingAnswer(a.working)];
+  const route = workingRoute(a.working);
   return {
     level: route === 'salon' ? 'full_salon' : 'full_non_salon',
     insurance: true,

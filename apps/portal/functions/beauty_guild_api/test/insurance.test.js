@@ -14,6 +14,8 @@ const {
 const DECL = ['no', 'no', 'no', 'no', 'no', 'yes', 'yes'];
 const CONFIRM = {
   insInformationAccurate: 'yes',
+  insQualifiedForTreatments: 'yes',
+  insPatchTesting: 'yes',
   insEthicsAccepted: 'yes',
   insDemandsNeedsAccepted: 'yes',
   insNonAdvisedAccepted: 'yes',
@@ -193,7 +195,7 @@ test('paying needs every declaration and confirmation answered; a quote does not
     'INCOMPLETE',
   );
   assert.equal(
-    rules({ insTreatmentExtensions: ['spmu'], insDeclarations: DECL, ...CONFIRM }, 'UK', { complete: true }).overall,
+    rules({ insDeclarations: DECL, ...CONFIRM, insQualifiedForTreatments: '' }, 'UK', { complete: true }).overall,
     'INCOMPLETE',
   );
 });
