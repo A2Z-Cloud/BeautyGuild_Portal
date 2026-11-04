@@ -89,6 +89,33 @@ test('UK with insurance is Full, and the insurance answers must agree with how t
   assert.equal(errorCode(mismatch), 'INVALID_WORKING');
 });
 
+test('How you work can be several choices: the insurance flags must be exactly the list sent', async () => {
+  const two = ['insWorkingFromHome', 'insMobile'];
+  const ok = await quoteOf(
+    world({ unlinked: true }),
+    asked(
+      { ...UK_INSURED, working: two },
+      { insurance: { ...INS_OK, insWorkingFromHome: true, insMobile: true }, country: 'United Kingdom' },
+    ),
+  );
+  assert.equal(ok.status, 200, JSON.stringify(ok.body));
+  assert.equal(ok.body.quote.decision.level, 'full_non_salon');
+  const missingOne = await quoteOf(
+    world({ unlinked: true }),
+    asked({ ...UK_INSURED, working: two }, { insurance: { ...INS_OK, insWorkingFromHome: false, insMobile: true } }),
+  );
+  assert.equal(missingOne.status, 422);
+  assert.equal(errorCode(missingOne), 'INVALID_WORKING');
+  const extra = await quoteOf(
+    world({ unlinked: true }),
+    asked(
+      { ...UK_INSURED, working: ['insMobile'] },
+      { insurance: { ...INS_OK, insWorkingFromHome: true, insMobile: true } },
+    ),
+  );
+  assert.equal(extra.status, 422);
+});
+
 test('a country sent beside the answers must match them', async () => {
   const r = await quoteOf(world({ unlinked: true }), asked(UK_NO_INSURANCE, { country: 'France' }));
   assert.equal(r.status, 422);
