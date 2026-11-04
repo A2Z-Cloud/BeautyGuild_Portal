@@ -171,9 +171,9 @@
     if(!columns.length&&rows.length)columns=Object.keys(rows[0]).filter(k=>k!=='id'&&!k.startsWith('$')&&(meta.size===0||meta.has(k))).slice(0,6);
     if(!columns.length)columns=['Name'];
     const headings=columns.map(k=>'<th scope="col">'+safe(meta.get(k)?.field_label||pretty(k))+'</th>').join('');
-    return '<div class="v12-table-wrap"><table class="v12-table"><thead><tr>'+headings+(navigable.has(entity)?'<th scope="col">Action</th>':'')+'</tr></thead><tbody>'+
-      rows.map(r=>'<tr>'+columns.map(k=>'<td>'+statusMarkup(k,r[k])+'</td>').join('')+
-      (navigable.has(entity)?'<td><button class="v12-link" data-action="select" data-entity="'+safe(entity)+'" data-id="'+safe(r.id)+'">Open</button></td>':'')+'</tr>').join('')+
+    return '<div class="v12-table-wrap"><table class="v12-table"><thead><tr>'+headings+(navigable.has(entity)?'<th scope="col" class="v12-action-cell">Action</th>':'')+'</tr></thead><tbody>'+
+      rows.map(r=>'<tr>'+columns.map((k,i)=>'<td>'+(i===0&&navigable.has(entity)?'<button class="v12-link v12-cell-link" data-action="select" data-entity="'+safe(entity)+'" data-id="'+safe(r.id)+'">'+statusMarkup(k,r[k])+'</button>':statusMarkup(k,r[k]))+'</td>').join('')+
+      (navigable.has(entity)?'<td class="v12-action-cell"><button class="v12-link" data-action="select" data-entity="'+safe(entity)+'" data-id="'+safe(r.id)+'">Open</button></td>':'')+'</tr>').join('')+
       '</tbody></table></div>';
   }
   function relationContent(entity,record,name,api,rerender){
@@ -277,7 +277,7 @@ if(selection==='overview'&&['Deals','Membership'].includes(entity))main=membersh
     }
     if(a==='v12-tab'){
       const tab=el.dataset.tab;if(!['details','overview','timeline','processing','updates'].includes(tab)&&!relationList(entity).some(x=>x.id===tab))return true;
-      chosen.set(key,tab);rerender();if(!['details','overview','timeline','processing','updates'].includes(tab))await loadRelation(entity,record.id,tab,crm,rerender);return true;
+      chosen.set(key,tab);rerender();try{const top=document.querySelector('.v12-record');if(top&&top.scrollIntoView)top.scrollIntoView({block:'start'});}catch(_){/* Scrolling is a convenience only. */}if(!['details','overview','timeline','processing','updates'].includes(tab))await loadRelation(entity,record.id,tab,crm,rerender);return true;
     }
     if(a==='v12-all'){fieldModes.set(key,el.dataset.show==='true');rerender();return true;}
     if(a==='v12-rel-refresh'||a==='v12-rel-page'){

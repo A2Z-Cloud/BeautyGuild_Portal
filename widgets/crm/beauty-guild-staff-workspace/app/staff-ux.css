@@ -174,3 +174,14 @@ body.staff-dev-tools #staff-api-open{display:inline-flex}
 .v12-stop-banner ul{margin:0;padding-left:18px}
 .v12-stop-banner--stop{background:#fdecee;border-color:#e5a3ac;color:#8f1d2c}
 .v12-stop-banner--review{background:#fff6e5;border-color:#e8c27a;color:#7a4b00}
+
+/* Note dialog: the hidden attribute must win over the dialog's grid styles, so a note never shows a due date. */
+#dueRow[hidden]{display:none!important}
+/* Wide tables: the first column and the Open button stay in view while the rest scrolls sideways. */
+.v12-table th:first-child,.v12-table td:first-child{position:sticky;left:0;z-index:1;background:#fff;box-shadow:1px 0 0 #f0ebee}
+.v12-table th:first-child{background:#f7f3f6;z-index:2}
+.v12-table th.v12-action-cell,.v12-table td.v12-action-cell{position:sticky;right:0;z-index:1;background:#fff;box-shadow:-1px 0 0 #f0ebee}
+.v12-table th.v12-action-cell{background:#f7f3f6;z-index:2}
+.v12-table tr:hover td:first-child,.v12-table tr:hover td.v12-action-cell{background:#fff9fc}
+.v12-cell-link{background:none;border:0;padding:0;font:inherit;font-weight:700;text-align:left;cursor:pointer;color:inherit}
+.v12-cell-link:hover,.v12-cell-link:focus-visible{color:#c0176e;text-decoration:underline}

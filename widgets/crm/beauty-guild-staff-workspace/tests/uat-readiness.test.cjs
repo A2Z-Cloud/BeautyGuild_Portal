@@ -70,5 +70,29 @@ test('table status text does not break mid-word, and the stop banner is styled',
   assert.match(css,/\.v12-table td \.bg-state\{white-space:nowrap\}/);
   assert.match(css,/\.v12-stop-banner--stop/);
   const html=fs.readFileSync(path.join(app,'index.html'),'utf8');
-  assert.match(html,/widget\.js\?v=20261104-uatfix1/);
+  assert.match(html,/widget\.js\?v=20261104-uatfix2/);
+});
+
+test('buttons that only open the CRM record say so, and the note dialog names the record and hides the due date',()=>{
+  const js=fs.readFileSync(path.join(app,'widget.js'),'utf8');
+  assert.doesNotMatch(js,/Send email in CRM|CRM buttons \/ actions/);
+  assert.match(js,/Send email \(opens CRM\)/);
+  assert.match(js,/More CRM actions \(opens CRM\)/);
+  assert.match(js,/\$\('#modalContext'\)\.textContent=target\?/);
+  const css=fs.readFileSync(path.join(app,'staff-ux.css'),'utf8');
+  assert.match(css,/#dueRow\[hidden\]\{display:none!important\}/);
+});
+
+test('wide tables keep the first column and the Open button in view, and the first cell opens the record',()=>{
+  const css=fs.readFileSync(path.join(app,'staff-ux.css'),'utf8');
+  assert.match(css,/\.v12-table th:first-child,\.v12-table td:first-child\{position:sticky;left:0/);
+  assert.match(css,/td\.v12-action-cell\{position:sticky;right:0/);
+  const v12=fs.readFileSync(path.join(app,'v12-crm.js'),'utf8');
+  assert.match(v12,/v12-cell-link/);
+  assert.match(v12,/class="v12-action-cell"/);
+});
+
+test('switching record sections returns to the top of the record, so a shorter section never leaves a blank band',()=>{
+  const v12=fs.readFileSync(path.join(app,'v12-crm.js'),'utf8');
+  assert.match(v12,/chosen\.set\(key,tab\);rerender\(\);try\{const top=document\.querySelector\('\.v12-record'\)/);
 });
