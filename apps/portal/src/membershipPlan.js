@@ -121,12 +121,15 @@ export const INTERESTS = [
   { id: 'hair', name: 'Hair' },
   { id: 'training', name: 'Training' },
 ];
-// The first branch ticked from the interests, in this order (the Guild, UAT round 1). Training is not a branch.
+// The first branch ticked from the interests, in this order (the Guild, UAT round 1). Training has no branch of its own: it points to Beauty
+// (the Guild, 4 November 2026).
 export const BRANCH_PRIORITY = ['beauty', 'holistic', 'nails', 'hair'];
-export const defaultBranch = (interests = []) => BRANCH_PRIORITY.find(id => interests.includes(id)) || '';
+export const branchesForInterests = (interests = []) =>
+  BRANCH_PRIORITY.filter(id => interests.includes(id) || (id === 'beauty' && interests.includes('training')));
+export const defaultBranch = (interests = []) => branchesForInterests(interests)[0] || '';
 // The branches that match an interest but are not yet chosen, offered as suggestions.
 export const suggestedBranches = (interests = [], { branch, branches = [] } = {}) =>
-  BRANCH_PRIORITY.filter(id => interests.includes(id) && id !== branch && !branches.includes(id));
+  branchesForInterests(interests).filter(id => id !== branch && !branches.includes(id));
 // One list of branches: the first ticked is the included one, any after it are the additional (£15) ones. Unticking the first promotes the next.
 export function toggleBranchChoice({ branch = '', branches = [] }, id) {
   if (id === branch) return { branch: branches[0] || '', branches: branches.slice(1) };

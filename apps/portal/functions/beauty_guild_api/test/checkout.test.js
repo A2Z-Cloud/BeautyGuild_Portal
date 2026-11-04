@@ -1652,21 +1652,22 @@ test('with the risk switches off nothing changes: no Analytics or Creator call, 
 });
 
 // ---- Start dates and payment status values ----
-test('a membership start date outside the window is refused with a message, not reset to today', async () => {
+const INSURED = () => ({ ...BUY, level: 'full_non_salon', insurance: INS_OK, country: 'United Kingdom' });
+test('a membership with insurance refuses a start date outside the window with a message, not reset to today', async () => {
   const w = world({ priceOverride: RECURRING });
   await withApp(
     w,
     async ({ post }) => {
       const day = n => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10);
       for (const start of ['2000-01-01', day(-1), day(91), 'tomorrow']) {
-        const r = await post({ ...BUY, previousId: DEAL, start });
+        const r = await post({ ...INSURED(), start });
         assert.equal(r.status, 422, start);
         assert.match(r.body.error, /^Choose a start date from today up to \d{4}-\d{2}-\d{2}\.$/);
       }
       assert.equal(w.stripePosts.length, 0);
-      assert.equal((await post({ ...BUY, previousId: DEAL, start: day(30) })).status, 201);
+      assert.equal((await post({ ...INSURED(), start: day(30) })).status, 201);
       assert.equal(w.stripePosts[0].params.get('metadata[membership_start]'), day(30));
-      assert.equal((await post({ ...BUY, previousId: DEAL })).status, 201);
+      assert.equal((await post({ ...INSURED() })).status, 201);
       assert.equal(w.stripePosts[1].params.get('metadata[membership_start]'), day(0));
     },
     MEM_ENV,
@@ -1750,8 +1751,22 @@ test('the membership start window is 30 days, the same as insurance', async () =
   await withApp(
     w,
     async ({ post }) => {
-      assert.equal((await post({ ...BUY, previousId: DEAL, start: dayFrom(31) })).status, 422);
-      assert.equal((await post({ ...BUY, previousId: DEAL, start: dayFrom(30) })).status, 201);
+      assert.equal((await post({ ...INSURED(), start: dayFrom(31) })).status, 422);
+      assert.equal((await post({ ...INSURED(), start: dayFrom(30) })).status, 201);
+    },
+    MEM_ENV,
+  );
+});
+test('a membership without insurance always starts on payment, whatever start date is asked for (the Guild, 4 November 2026)', async () => {
+  const w = world({ priceOverride: RECURRING });
+  await withApp(
+    w,
+    async ({ post }) => {
+      for (const start of [dayFrom(10), dayFrom(30), dayFrom(31), '2000-01-01', 'tomorrow']) {
+        const r = await post({ ...BUY, start });
+        assert.equal(r.status, 201, start);
+      }
+      for (const p of w.stripePosts) assert.equal(p.params.get('metadata[membership_start]'), dayFrom(0));
     },
     MEM_ENV,
   );
