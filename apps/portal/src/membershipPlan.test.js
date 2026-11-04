@@ -125,11 +125,13 @@ test('the branch is chosen on Personalise your membership', () => {
   assert.ok(extrasErrors({}).branch);
   assert.deepEqual(extrasErrors({ branch: 'beauty' }), {});
 });
-test('the first branch follows the interests in the Guild order, and Training has no branch', () => {
+test('the first branch follows the interests in the Guild order, and Training points to Beauty', () => {
   assert.equal(defaultBranch(['hair', 'nails']), 'nails');
   assert.equal(defaultBranch(['hair', 'beauty', 'holistic', 'nails']), 'beauty');
   assert.equal(defaultBranch(['holistic', 'hair']), 'holistic');
-  assert.equal(defaultBranch(['training']), '');
+  assert.equal(defaultBranch(['training']), 'beauty', 'Training points to Beauty');
+  assert.equal(defaultBranch(['training', 'nails']), 'beauty');
+  assert.deepEqual(suggestedBranches(['training', 'hair'], { branch: 'hair', branches: [] }), ['beauty']);
   assert.equal(defaultBranch([]), '');
   assert.deepEqual(suggestedBranches(['hair', 'beauty', 'training'], { branch: 'beauty', branches: [] }), ['hair']);
   assert.deepEqual(suggestedBranches(['hair', 'beauty'], { branch: 'beauty', branches: ['hair'] }), []);

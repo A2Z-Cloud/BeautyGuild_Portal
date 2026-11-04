@@ -19,10 +19,10 @@ Source: the Guild's comments on S01 and S02 (UAT v1.1, 3 November 2026). Agreed 
 
 ## 2. Decisions we made, for the Guild to confirm
 
-- **Training** is an interest with no branch. It is stored as an interest and ignored when choosing the default. A person who ticks only Training chooses their branch themselves.
+- **Training** points to the Beauty branch (the Guild, 4 November 2026). Ticking Training puts Beauty in the default and the suggestions, and it is stored as an interest like the others.
 - **Interests go back to the Contact.** When a member presses Pay, the function adds their interests to the Contact's `Interests` field (a multi-select picklist) as Beauty, Holistic, Nails, Hair and Training. It adds to what the Contact already holds and never removes anything. It is a best effort: if the CRM refuses a value, the payment still opens. **Training must be an option on the picklist**; if it is not, add it in the CRM. A saved application keeps the interests in its answers but does not write them to the Contact until the member pays.
-- **Start date** is today for an Associate and International member. Full membership keeps its start date question.
-- **Pay choice** is removed from the steps for Associate and International. It stays on the Full membership details step until the Guild confirms a phone user can find the price panel toggle.
+- **Start date:** an Associate or International membership starts on payment, and the server now ignores any start date sent for a membership without insurance. A membership with insurance keeps the start date question, up to 30 days ahead, and the cover starts on the same date. Accreditation has no start date: it starts when the Guild verifies the application (the Guild, 4 November 2026).
+- **Pay choice** is removed from the steps for Associate and International. It stays on the Full membership details step. The Guild has not yet tested mobile view, so this is held until they have.
 - **£15 an extra branch** is the price the server already charges. The page does not calculate it: the amount shown is the server's.
 
 ## 3. Not in this change

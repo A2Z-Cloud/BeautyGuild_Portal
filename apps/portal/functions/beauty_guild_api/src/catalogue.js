@@ -608,7 +608,9 @@ SERVICES.membership = {
         409,
         'MEMBERSHIP_EXISTS',
       );
-    const { start, end: expiry } = resolveStart(input.start, 'membership');
+    // Only a membership with insurance has a start date to choose (up to 30 days ahead, the same date as the cover). Any other membership
+    // starts on payment (the Guild, 4 November 2026), whatever a request asks for.
+    const { start, end: expiry } = resolveStart(input.insurance ? input.start : undefined, 'membership');
     // An upgrade from Associate to Full, with the unused Associate fee credited (only while the upgrade switch is on: see checkout.js). The
     // helper refuses anything that is not an active, annual Associate membership whose payment can be confirmed, rather than charge the full price.
     const upgrade =
