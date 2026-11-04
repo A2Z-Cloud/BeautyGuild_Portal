@@ -2231,3 +2231,71 @@ test('join as Associate is off unless the combined flow switch is on', async () 
   assert.equal(r.status, 503);
   assert.equal(joinedWrites(w).length, 0);
 });
+
+const interestPuts = w => w.crmPuts.filter(c => c.url.includes('/Contacts/' + ME));
+const withInterestsOnContact = (w, interests) => {
+  const f = w.fetchImpl;
+  w.fetchImpl = async (u, i) =>
+    String(u).includes('/Contacts/' + ME + '?fields=Interests')
+      ? { status: 200, ok: true, json: async () => ({ data: [{ id: ME, Interests: interests }] }) }
+      : f(u, i);
+  return w;
+};
+
+test('the Join page interests are added to the Contact as the CRM option names (UAT round 1)', async () => {
+  const w = world({ priceOverride: RECURRING });
+  await withApp(
+    w,
+    async ({ post }) => {
+      const r = await post({ ...BUY, interests: ['hair', 'beauty', 'training', 'nonsense'] });
+      assert.equal(r.status, 201);
+      const puts = interestPuts(w);
+      assert.equal(puts.length, 1);
+      assert.deepEqual(puts[0].body.data[0].Interests, ['Hair', 'Beauty', 'Training']);
+    },
+    MEM_ENV,
+  );
+});
+
+test('interests the Contact already holds are kept, nothing is written when none are new, and a refusal never stops the payment', async () => {
+  const keep = withInterestsOnContact(world({ priceOverride: RECURRING }), ['Nails', { value: 'Beauty' }]);
+  await withApp(
+    keep,
+    async ({ post }) => {
+      assert.equal((await post({ ...BUY, interests: ['beauty', 'hair'] })).status, 201);
+      assert.deepEqual(interestPuts(keep)[0].body.data[0].Interests, ['Nails', 'Beauty', 'Hair']);
+    },
+    MEM_ENV,
+  );
+  const same = withInterestsOnContact(world({ priceOverride: RECURRING }), ['Beauty', 'Hair']);
+  await withApp(
+    same,
+    async ({ post }) => {
+      assert.equal((await post({ ...BUY, interests: ['hair'] })).status, 201);
+      assert.equal(interestPuts(same).length, 0, 'nothing new to add');
+    },
+    MEM_ENV,
+  );
+  const none = world({ priceOverride: RECURRING });
+  await withApp(
+    none,
+    async ({ post }) => {
+      assert.equal((await post({ ...BUY })).status, 201);
+      assert.equal(interestPuts(none).length, 0, 'no interests sent');
+    },
+    MEM_ENV,
+  );
+  const broken = world({ priceOverride: RECURRING });
+  const f = broken.fetchImpl;
+  broken.fetchImpl = async (u, i) => {
+    if (String(u).includes('/Contacts/' + ME + '?fields=Interests')) throw new Error('CRM down');
+    return f(u, i);
+  };
+  await withApp(
+    broken,
+    async ({ post }) => {
+      assert.equal((await post({ ...BUY, interests: ['hair'] })).status, 201, 'the payment still opens');
+    },
+    MEM_ENV,
+  );
+});
