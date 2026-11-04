@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { LEGAL, LEGAL_LINKS, policyDocuments } from './legal.js';
+import { POLICY_LINKS } from './policyLinks.js';
 
 test('the Guild legal pages are the V1 addresses', () => {
   assert.equal(LEGAL.terms.href, 'https://www.beautyguild.com/Legal/Terms-Of-Business');
@@ -33,4 +34,17 @@ test('policy documents follow the cover chosen, as in V1', () => {
   assert.equal(salon.length, 9);
   assert.ok(salon.includes('Salon Business Interruption Policy Wording'));
   assert.ok(!salon.some(n => n.startsWith('Non-Salon')));
+});
+test('every policy document has a public share link', () => {
+  const all = policyDocuments({
+    insWorking: ['insSalon'],
+    insSalonEL: 'yes',
+    insContents: 'yes',
+    insMoneyCover: 'yes',
+    insBuildingsCover: 'yes',
+    insBiCover: 'yes',
+    insPropertyAwayCover: 'yes',
+  });
+  for (const d of all) assert.match(d.href, /^https:\/\/workdrive\.zohopublic\.eu\/external\/[0-9a-f]{64}$/, d.code);
+  assert.equal(new Set(Object.values(POLICY_LINKS)).size, 12);
 });

@@ -42,7 +42,13 @@ export function PolicyDocuments({ values }) {
       <ul>
         {docs.map(d => (
           <li key={d.code}>
-            <span>{d.name}</span>
+            {d.href ? (
+              <a href={d.href} target="_blank" rel="noopener noreferrer">
+                {d.name}
+              </a>
+            ) : (
+              <span>{d.name}</span>
+            )}
             <small>Included</small>
           </li>
         ))}
