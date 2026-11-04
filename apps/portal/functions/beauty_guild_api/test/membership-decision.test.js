@@ -44,7 +44,6 @@ test('UK with insurance is Full: salon only for owning or operating a salon', ()
       'business',
       'cover_options',
       'declarations',
-      'membership_details',
       'extras',
       'review',
     ]);

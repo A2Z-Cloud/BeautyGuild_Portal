@@ -158,11 +158,11 @@ test('England, Scotland, Wales and Northern Ireland are the United Kingdom in th
   assert.equal(ukOnce(''), '');
   assert.equal(inUkGroup(ukOnce('England')), true);
 });
-test('Associate and International have no Membership details step; Full membership keeps it', () => {
+test('no journey has a Membership details step: the start date and the pay choice moved (Guild, UAT round 2)', () => {
   assert.equal(STEPS_SIMPLE.includes('membership_details'), false);
   assert.deepEqual(planFor({ country: 'France' }).steps, ['about_you', 'extras', 'review']);
   assert.deepEqual(planFor({ country: 'England', insuranceRequired: 'no' }).steps, ['about_you', 'extras', 'review']);
-  assert.equal(planFor({ country: 'England', insuranceRequired: 'yes' }).steps.includes('membership_details'), true);
+  assert.equal(planFor({ country: 'England', insuranceRequired: 'yes' }).steps.includes('membership_details'), false);
   assert.equal(STEP_TITLES.extras, 'Personalise your membership');
 });
 test('an unknown step counts as the first', () => {

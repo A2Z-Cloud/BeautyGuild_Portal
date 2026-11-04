@@ -579,6 +579,20 @@ export default function CombinedMembership() {
                         )}
                       </fieldset>
                     )}
+                    {inUkGroup(f.country) && !upgrading && f.insuranceRequired === 'yes' && (
+                      <div className="field">
+                        <label htmlFor="start">Start date</label>
+                        <input
+                          id="start"
+                          type="date"
+                          value={f.start || startLimits().min}
+                          min={startLimits().min}
+                          max={startLimits().max}
+                          onChange={e => set({ start: e.target.value === startLimits().min ? '' : e.target.value })}
+                        />
+                        <small>{startDateText(START_WINDOW_DAYS, true)}</small>
+                      </div>
+                    )}
                     {inUkGroup(f.country) && outcome && plan.level === 'associate' && (
                       <p className="muted">{outcome}</p>
                     )}
@@ -706,44 +720,6 @@ export default function CombinedMembership() {
                     showCountry={false}
                     hideTitle={key === 'how_you_work'}
                   />
-                </section>
-              )}
-              {key === 'membership_details' && (
-                <section className="surface padded buy-section">
-                  <h2>Membership details</h2>
-                  <div className="field">
-                    <label htmlFor="start">Start date</label>
-                    <input
-                      id="start"
-                      type="date"
-                      value={f.start || startLimits().min}
-                      min={startLimits().min}
-                      max={startLimits().max}
-                      onChange={e => set({ start: e.target.value === startLimits().min ? '' : e.target.value })}
-                    />
-                    <small>{startDateText(START_WINDOW_DAYS, plan.insurance)}</small>
-                  </div>
-                  <fieldset className="buy-fieldset">
-                    <legend>Pay</legend>
-                    {international ? (
-                      <p className="muted">International membership is paid yearly.</p>
-                    ) : (
-                      [
-                        ['annual', 'Annually'],
-                        ['monthly', 'Monthly'],
-                      ].map(([id, name]) => (
-                        <label key={id} className="check-choice">
-                          <input
-                            type="radio"
-                            name="billing"
-                            checked={f.billing === id}
-                            onChange={() => set({ billing: id })}
-                          />
-                          {name}
-                        </label>
-                      ))
-                    )}
-                  </fieldset>
                 </section>
               )}
               {key === 'extras' && (

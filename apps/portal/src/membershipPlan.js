@@ -25,7 +25,6 @@ export const STEPS_FULL = [
   'business',
   'cover_options',
   'declarations',
-  'membership_details',
   'extras',
   'review',
 ];

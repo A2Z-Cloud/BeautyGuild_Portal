@@ -29,7 +29,6 @@ const STEPS_FULL = Object.freeze([
   'business',
   'cover_options',
   'declarations',
-  'membership_details',
   'extras',
   'review',
 ]);
