@@ -70,7 +70,7 @@ test('table status text does not break mid-word, and the stop banner is styled',
   assert.match(css,/\.v12-table td \.bg-state\{white-space:nowrap\}/);
   assert.match(css,/\.v12-stop-banner--stop/);
   const html=fs.readFileSync(path.join(app,'index.html'),'utf8');
-  assert.match(html,/widget\.js\?v=20261104-uatfix3/);
+  assert.match(html,/widget\.js\?v=20261104-uatfix4/);
 });
 
 test('buttons that only open the CRM record say so, and the note dialog names the record and hides the due date',()=>{
@@ -95,4 +95,23 @@ test('wide tables keep the first column and the Open button in view, and the fir
 test('switching record sections returns to the top of the record, so a shorter section never leaves a blank band',()=>{
   const v12=fs.readFileSync(path.join(app,'v12-crm.js'),'utf8');
   assert.match(v12,/chosen\.set\(key,tab\);rerender\(\);try\{const top=document\.querySelector\('\.v12-record'\)/);
+});
+
+test('Operational UAT no longer mentions MTA, renewals or cancellations on membership and policy records',()=>{
+  const js=fs.readFileSync(path.join(app,'widget.js'),'utf8');
+  assert.match(js,/OPERATIONAL_UAT\?'View policy':'View policy \/ MTA'/);
+  assert.match(js,/OPERATIONAL_UAT\?'Open a policy to review its cover and status\.'/);
+  assert.match(js,/OPERATIONAL_UAT\?'Current transaction':'Renewal and service actions'/);
+  assert.match(js,/window\.BG_OPERATIONAL_UAT=OPERATIONAL_UAT/);
+  const v12=fs.readFileSync(path.join(app,'v12-crm.js'),'utf8');
+  assert.match(v12,/ctx\.operationalUat\|\|global\.BG_OPERATIONAL_UAT/);
+  assert.match(v12,/cancell\|voucher\|waive/);
+});
+
+test('Notes and Activities related lists show the title, content, subject and due date',()=>{
+  const v12=fs.readFileSync(path.join(app,'v12-crm.js'),'utf8');
+  assert.match(v12,/Notes:\['Note_Title','Note_Content','Owner','Modified_Time'\]/);
+  assert.match(v12,/Tasks:\['Subject','Status','Priority','Due_Date','Owner'\]/);
+  assert.match(v12,/Open_Activities:\['Subject','Activity_Type','Status','Due_Date','Owner','Modified_Time'\]/);
+  assert.match(v12,/function cellMarkup\(k,v\)/);
 });

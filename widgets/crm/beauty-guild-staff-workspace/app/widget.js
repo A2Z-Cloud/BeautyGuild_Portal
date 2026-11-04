@@ -7,6 +7,7 @@
   // Operational UAT is an explicitly limited workspace release. Excluded workflows remain in the source,
   // but are inaccessible from its navigation and delegated actions.
   const OPERATIONAL_UAT=true;
+  if(typeof window!=='undefined')window.BG_OPERATIONAL_UAT=OPERATIONAL_UAT;
   const EXCLUDED_ACTION=/^(journey-|membership-cancel-|membership-renew$|membership-upgrade$|coming-soon$|staff-mta-|staff-voucher-)/;
   const isExcludedAction=a=>OPERATIONAL_UAT&&EXCLUDED_ACTION.test(String(a||''));
   const M = Object.freeze({CONTACT:'Contacts',ACCOUNT:'Accounts',PROFILE:'Membership',DEAL:'Deals',ADDON:'Membership_Extension',POLICY:'Insurance_Policy',EXT:'Insurance_Extension',PERSON:'Insured_People',PREMISES:'Insured_Premises',DECLARATION:'Declarations',REVISION:'Policy_Revisions',RISK:'Risk_Screenings',ACC:'Training_Centre_Accred',CENTRE:'Training_Centres',QUAL:'Qualifications',OFFER:'TC_Course_Offering',TUTOR:'Tutor_Relationships',ACCLINK:'Accreditation_Centre_Link',ACCEXT:'Accreditation_Extensions',TASK:'Tasks'});
@@ -591,12 +592,12 @@
         (deals.length?deals.map(d=>row(pick(d,['Deal_Name','Name']), 'Payment: '+pick(d,['Payment_Status'])+' · '+pick(d,['Stage'])+' · Expires: '+pick(d,['Expiry_Date','Renewal_Date']),recordLink(M.DEAL,d,'View transaction'))).join(''):'<p class="v12-muted">No membership transactions returned from CRM.</p>')+
         '<div class="membership-service-actions">'+recordLink(M.PROFILE,currentProfile,'View member profile')+'</div></section>'+
       '<section><h4>Insurance and changes</h4>'+
-        (shown.length?shown.map(p=>row(pick(p,['Policy_Number','Name']), 'Cover: '+pick(p,['Policy_Status','Application_Status'])+' · Payment: '+pick(p,['Payment_Status'])+' · Ends: '+pick(p,['Policy_End_Date','End_Date']),recordLink(M.POLICY,p,'View policy / MTA'))).join(''):'<p class="v12-muted">No linked insurance policies returned from CRM.</p>')+
-        '<p class="v12-muted">Open a policy to review current cover, request an MTA, quote and save the revision.</p></section>'+
+        (shown.length?shown.map(p=>row(pick(p,['Policy_Number','Name']), 'Cover: '+pick(p,['Policy_Status','Application_Status'])+' · Payment: '+pick(p,['Payment_Status'])+' · Ends: '+pick(p,['Policy_End_Date','End_Date']),recordLink(M.POLICY,p,OPERATIONAL_UAT?'View policy':'View policy / MTA'))).join(''):'<p class="v12-muted">No linked insurance policies returned from CRM.</p>')+
+        '<p class="v12-muted">'+(OPERATIONAL_UAT?'Open a policy to review its cover and status.':'Open a policy to review current cover, request an MTA, quote and save the revision.')+'</p></section>'+
       '<section><h4>Membership extensions</h4>'+
         (extensions.length?extensions.map(x=>row(pick(x,['Name','Extension_Name','Product_Name']), 'Status: '+pick(x,['Status','Payment_Status'])+' · '+pick(x,['Quantity']),recordLink(M.ADDON,x,'Open extension'))).join(''):'<p class="v12-muted">No extensions loaded for this membership. See the transaction’s related lists for the authoritative record set.</p>')+
-      '</section><section><h4>Renewal and service actions</h4>'+
-        '<p class="v12-muted">Renewals and upgrades follow the existing application and checkout logic. Payment is verified from CRM after Creator processes the Stripe event.</p>'+
+      '</section><section><h4>'+(OPERATIONAL_UAT?'Current transaction':'Renewal and service actions')+'</h4>'+
+        (OPERATIONAL_UAT?'':'<p class="v12-muted">Renewals and upgrades follow the existing application and checkout logic. Payment is verified from CRM after Creator processes the Stripe event.</p>')+
         '<div class="membership-service-actions">'+
           (activeDeal?.id?'<button type="button" class="button secondary" data-action="membership-cancel-open" data-id="'+esc(activeDeal.id)+'">Cancellation / downgrade quote</button>':'')+
           '<button type="button" class="button primary" data-action="journey-start" data-kind="membership">New membership</button>'+ (activeDeal?.id?'<button type="button" class="button secondary" data-action="membership-renew" data-id="'+esc(activeDeal.id)+'">Renew membership</button>'+(/associate/i.test(String(currentProfile?.Current_Member_Type||activeDeal?.Membership_Type||''))&&/^(united kingdom|england|scotland|wales|northern ireland)$/i.test(String(c.Correspondence_Country||c.Mailing_Country||c.Country||'').trim())?'<button type="button" class="button secondary" data-action="membership-upgrade" data-id="'+esc(activeDeal.id)+'">Upgrade to Full with insurance</button>':''):'')+

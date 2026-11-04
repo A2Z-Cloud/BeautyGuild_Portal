@@ -9,7 +9,12 @@
     Deals:['Deal_Name','Contact_Name','Membership_Type','Stage','Payment_Status','Expiry_Date'],
     Membership:['Name','Contact','Current_Member_Type','Current_Membership_Status'],
     Insurance_Policy:['Name','Contact','Policy_Type','Application_Status','Underwriting_Status','Payment_Status','Policy_Status','Policy_End_Date'],
-    Training_Centre_Accred:['Name','Applicant_Contact','Account','Application_Stage','Accreditation_Status','Payment_Status','Valid_To']
+    Training_Centre_Accred:['Name','Applicant_Contact','Account','Application_Stage','Accreditation_Status','Payment_Status','Valid_To'],
+    Notes:['Note_Title','Note_Content','Owner','Modified_Time'],
+    Tasks:['Subject','Status','Priority','Due_Date','Owner'],
+    Activities:['Subject','Activity_Type','Status','Due_Date','Owner','Modified_Time'],
+    Open_Activities:['Subject','Activity_Type','Status','Due_Date','Owner','Modified_Time'],
+    Closed_Activities:['Subject','Activity_Type','Status','Due_Date','Owner','Modified_Time']
   };
   const appNames={
     Contacts:'Contact',Accounts:'Organisation',Deals:'Membership transaction',Membership:'Member profile',
@@ -144,7 +149,9 @@
     const rows=x.relatives.filter(r=>r.visible!==false).map(r=>({id:r.api_name||r.name,label:r.display_label||r.name||r.api_name,mod:r.module?.api_name||null})).filter(r=>r.id);
     const fallback=fallbackRelated[entity]||[];
     for(const s of fallback){if(!rows.some(x=>x.id===s))rows.push({id:s,label:pretty(s),mod:null,fallback:true});}
-    return rows.filter(r=>{if(seen.has(r.id))return false;seen.add(r.id);return true;});
+    // Operational UAT leaves out the related lists of features that are not part of it (cancellations, vouchers and waivers).
+    const outOfScope=r=>global.BG_OPERATIONAL_UAT&&/cancell|voucher|waive/i.test(r.id+' '+r.label);
+    return rows.filter(r=>{if(outOfScope(r)||seen.has(r.id))return false;seen.add(r.id);return true;});
   }
   function relationKey(entity,id,list){return entity+':'+id+':'+list;}
   async function loadRelation(entity,id,list,api,rerender,{page=1}={}){
@@ -163,6 +170,11 @@
     finally{item.loading=false;rerender();}
   }
   const navigable=new Set(['Contacts','Accounts','Deals','Membership','Membership_Extension','Insurance_Policy','Insurance_Extension','Insured_People','Insured_Premises','Declarations','Risk_Screenings','Policy_Revisions','Training_Centre_Accred','Training_Centres','Qualifications','TC_Course_Offering','Tutor_Relationships','Accreditation_Centre_Link','Accreditation_Extensions','Tasks']);
+  // A long note is shortened in a table cell; the full text stays on the note itself.
+  function cellMarkup(k,v){
+    if(k==='Note_Content'&&typeof v==='string'&&v.length>160)return safe(v.slice(0,160).trim())+'…';
+    return statusMarkup(k,v);
+  }
   function tableRows(entity,rows,ctx){
     const meta=fieldMap(entity);
     const requested=Array.isArray(ctx?.columns)?ctx.columns.filter(x=>/^[A-Za-z_][A-Za-z0-9_]*$/.test(x)):[];
@@ -172,7 +184,7 @@
     if(!columns.length)columns=['Name'];
     const headings=columns.map(k=>'<th scope="col">'+safe(meta.get(k)?.field_label||pretty(k))+'</th>').join('');
     return '<div class="v12-table-wrap"><table class="v12-table"><thead><tr>'+headings+(navigable.has(entity)?'<th scope="col" class="v12-action-cell">Action</th>':'')+'</tr></thead><tbody>'+
-      rows.map(r=>'<tr>'+columns.map((k,i)=>'<td>'+(i===0&&navigable.has(entity)?'<button class="v12-link v12-cell-link" data-action="select" data-entity="'+safe(entity)+'" data-id="'+safe(r.id)+'">'+statusMarkup(k,r[k])+'</button>':statusMarkup(k,r[k]))+'</td>').join('')+
+      rows.map(r=>'<tr>'+columns.map((k,i)=>'<td>'+(i===0&&navigable.has(entity)?'<button class="v12-link v12-cell-link" data-action="select" data-entity="'+safe(entity)+'" data-id="'+safe(r.id)+'">'+cellMarkup(k,r[k])+'</button>':cellMarkup(k,r[k]))+'</td>').join('')+
       (navigable.has(entity)?'<td class="v12-action-cell"><button class="v12-link" data-action="select" data-entity="'+safe(entity)+'" data-id="'+safe(r.id)+'">Open</button></td>':'')+'</tr>').join('')+
       '</tbody></table></div>';
   }
@@ -254,7 +266,7 @@ if(selection==='overview'&&['Deals','Membership'].includes(entity))main=membersh
     }else if(selection==='processing'){
       main='<section class="v12-detail-section"><h3>Processing and decisions</h3>'+fieldRows(entity,record,['Application_Status','Application_Stage','Underwriting_Status','Risk_Status','Sanctions_Status','Payment_Status','Policy_Status','Finance_Sync_Status','Next_Action','Next_Action_Date','Stop_Reason','Manual_Review_Outcome'],true)+'<div class="v12-warning">Risk decisions and payment status must be verified in CRM and the authoritative Catalyst service. This screen does not clear a referral or activate cover.</div></section>'+(typeof ctx.processing==='function'?ctx.processing(entity,record):'');
     }else{main=relationContent(entity,record,selection,ctx.crm,ctx.rerender);}
-    const extraAction=ctx.operationalUat?'':(global.BGStaffAddons?.action(entity,record)||'');
+    const extraAction=(ctx.operationalUat||global.BG_OPERATIONAL_UAT)?'':(global.BGStaffAddons?.action(entity,record)||'');
     const header='<header class="v12-record-head"><div><span class="v12-kicker">'+safe(appNames[entity]||pretty(entity))+'</span><h2>'+safe(ctx.title(entity,record))+'</h2><p>'+safe(ctx.summary(entity,record)||'')+'</p></div><div class="v12-status-row">'+statusBar(entity,record)+'</div></header>'+stopBanner(entity,record);
     const navigation=[...(['Deals','Membership'].includes(entity)?[['overview','Membership overview']]:[]),['details','All CRM fields'],['timeline','Activity timeline'],['processing','Processing'],...(editable?[['updates','Field updates']]:[])].map(p=>'<button class="v12-side-link '+(selection===p[0]?'active':'')+'" data-action="v12-tab" data-tab="'+p[0]+'">'+safe(p[1])+'</button>').join('');
     const related=relations.map(r=>{
