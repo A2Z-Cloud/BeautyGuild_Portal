@@ -291,7 +291,7 @@ export function RecordsSummary() {
           Your memberships, accreditations and insurance will appear here once you are signed in.
         </Notice>
       );
-    return <Notice title="Your records">{error.message}</Notice>;
+    return <ErrorNotice title="Your records" error={error.message} />;
   }
   if (!data) return <p role="status">Loading your records…</p>;
   return (

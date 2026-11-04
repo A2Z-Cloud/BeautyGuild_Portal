@@ -29,7 +29,7 @@ const paths = {
   insurance: ['Business information', 'Cover options', 'Declarations', 'Review information'],
 };
 // The combined Membership and Insurance journey, as the member sees it.
-const COMBINED_PATH = ['About you', 'Membership details', 'Extras', 'Review and pay'];
+const COMBINED_PATH = ['About you', 'Personalise your membership', 'Review and pay'];
 // Shown to someone with no membership (MEM-031, MEM-032).
 export const NO_MEMBERSHIP_TEXT =
   "You don't currently have a Guild membership. Choose Associate Membership, or Full Membership with insurance, and start enjoying exclusive member perks, discounts and support.";
