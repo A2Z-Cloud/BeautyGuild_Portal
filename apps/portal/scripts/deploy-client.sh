@@ -24,6 +24,9 @@ export VITE_PORTAL_SCHOOL_WRITES=true
 # Add a venue to a verified school, saved as a draft and paid for later (docs/delivery/uat-round1-fixes-spec.md, section H). The venue payment is
 # under QA with Creator, which sets the venue to Paid. VITE_PORTAL_ADD_VENUE=false scripts/deploy-client.sh switches it off.
 export VITE_PORTAL_ADD_VENUE="${VITE_PORTAL_ADD_VENUE:-true}"
+# The Other course box on the accreditation Courses step. The function's ACC_OTHER_COURSE_FIELD (Other_Course) names the CRM field that holds it:
+# keep the two in step. VITE_PORTAL_OTHER_COURSE=false scripts/deploy-client.sh switches it off.
+export VITE_PORTAL_OTHER_COURSE="${VITE_PORTAL_OTHER_COURSE:-true}"
 export VITE_PORTAL_SCHOOL_MEDIA=true
 export VITE_PORTAL_BILLING=true
 export VITE_PORTAL_CRM_DRAFTS=true
