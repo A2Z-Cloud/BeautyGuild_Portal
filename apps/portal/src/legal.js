@@ -1,8 +1,11 @@
 // The Guild's legal and information pages and the policy documents, as in V1 (src/insurance/documents.js). One place, so every
 // page links the same documents.
 import { POLICY_LINKS } from './policyLinks.js';
+// Terms of Business: a WorkDrive share link. Upload a new version of the same file to change it.
+const TERMS_OF_BUSINESS_URL =
+  'https://workdrive.zohopublic.eu/external/14804f48d2fc6acacd15e5c1f9e11008b57644429afd67cbfaf41c0b01c8e498';
 export const LEGAL = {
-  terms: { label: 'Terms of Business', href: 'https://www.beautyguild.com/Legal/Terms-Of-Business' },
+  terms: { label: 'Terms of Business', href: TERMS_OF_BUSINESS_URL },
   privacy: { label: 'Privacy Policy', href: 'https://www.beautyguild.com/Legal/Privacy' },
   treatments: { label: 'Treatments We Cover', href: 'https://www.beautyguild.com/Membership/Treatments-We-Cover' },
   ethics: { label: 'Code of Ethics', href: 'https://www.beautyguild.com/Membership/Code-Of-Ethics' },

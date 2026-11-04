@@ -225,6 +225,6 @@ test("the centre step can copy the applicant's own details, and the wording foll
   assert.match(DECLARATIONS_WARNING, /GTi accreditation/);
   assert.match(DECLARATIONS_WARNING, /01332 224830/);
   assert.equal(byName('courseIds').label, 'Select the GTi courses you wish to teach');
-  assert.ok(byName('terms').links['Terms of Business'].includes('beautyguild.com/Legal'));
+  assert.ok(byName('terms').links['Terms of Business'].includes('workdrive.zohopublic.eu/external/'));
   assert.deepEqual(Object.keys(LEGAL_LINKS), ['Terms of Business', 'Privacy Policy']);
 });

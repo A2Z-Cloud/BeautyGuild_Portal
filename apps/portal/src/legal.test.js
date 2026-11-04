@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { LEGAL, LEGAL_LINKS, policyDocuments } from './legal.js';
 import { POLICY_LINKS } from './policyLinks.js';
 
-test('the Guild legal pages are the V1 addresses', () => {
-  assert.equal(LEGAL.terms.href, 'https://www.beautyguild.com/Legal/Terms-Of-Business');
+test('the Guild legal pages are the agreed addresses', () => {
+  assert.match(LEGAL.terms.href, /^https:\/\/workdrive\.zohopublic\.eu\/external\/[0-9a-f]{64}$/);
   assert.equal(LEGAL.privacy.href, 'https://www.beautyguild.com/Legal/Privacy');
   assert.equal(LEGAL.treatments.href, 'https://www.beautyguild.com/Membership/Treatments-We-Cover');
   assert.equal(LEGAL.ethics.href, 'https://www.beautyguild.com/Membership/Code-Of-Ethics');
