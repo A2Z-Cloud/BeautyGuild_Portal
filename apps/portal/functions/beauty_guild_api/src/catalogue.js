@@ -207,9 +207,18 @@ const SERVICES = {
         req,
         'Accreditation_Centre_Link/search?criteria=' +
           esc('((Accreditation:equals:' + id + ')and(Training_Centre:equals:' + centre + '))') +
-          '&fields=Training_Centre',
+          '&fields=Training_Centre,Centre_Relationship_Type',
       );
-      if (!links.some(l => String(l.Training_Centre?.id) === centre)) notFound('Venue');
+      // Only an additional venue of this accreditation is paid for here, never the main centre.
+      if (
+        !links.some(l => String(l.Training_Centre?.id) === centre && l.Centre_Relationship_Type === 'Additional Centre')
+      )
+        notFound('Venue');
+      // A venue is saved as Draft, and Creator sets Paid once the payment arrives. Anything past Draft has been paid for.
+      const status = (await crm(req, 'Training_Centres/' + centre + '?fields=Centre_Status'))[0]?.Centre_Status;
+      if (status === 'Paid' || status === 'Verified') return { alreadyPaid: true };
+      if (status !== 'Draft')
+        bad('This venue cannot be paid for online. Please contact the Guild.', 409, 'NOT_PAYABLE');
       return {
         lines: [{ item: 'additional_venue', quantity: 1 }],
         metadata: () => ({ type: 'additional_venue', centre_id: centre, accreditation_id: id, contact_id: contact.id }),

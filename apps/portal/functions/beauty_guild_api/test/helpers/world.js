@@ -125,7 +125,9 @@ function world({
         ],
       });
     if (url.includes('Accreditation_Centre_Link/search'))
-      return json({ data: [{ Training_Centre: { id: IDS.centre } }] });
+      return json({ data: [{ Training_Centre: { id: IDS.centre }, Centre_Relationship_Type: 'Additional Centre' }] });
+    if (url.includes('Training_Centres/' + IDS.centre))
+      return json({ data: [{ id: IDS.centre, Centre_Status: 'Draft' }] });
     if (url.includes('Deals/search')) return json({ data: deals });
     if (url.includes('Deals/' + IDS.deal))
       return json({

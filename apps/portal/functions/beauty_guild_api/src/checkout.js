@@ -1115,7 +1115,14 @@ function registerCheckoutRoutes(
         mode: b.mode,
         customer_email: payer.email,
         ...(expiresAt ? { expires_at: String(Math.floor(expiresAt.getTime() / 1000)) } : {}),
-        success_url: publicOrigin + '/app/#/payment-return?result=success&service=' + encodeURIComponent(input.service),
+        // A venue payment names the venue, so the Venues tab can say the payment is being confirmed until Creator marks it Paid.
+        success_url:
+          publicOrigin +
+          '/app/#/payment-return?result=success&service=' +
+          encodeURIComponent(input.service) +
+          (input.service === 'additional_venue' && /^\d{10,25}$/.test(String(input.centreId || ''))
+            ? '&centre=' + input.centreId
+            : ''),
         cancel_url:
           publicOrigin + '/app/#/payment-return?result=cancelled&service=' + encodeURIComponent(input.service),
         ...(b.contact ? { client_reference_id: String(b.contact.id) } : {}),

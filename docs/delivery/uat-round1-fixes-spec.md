@@ -79,13 +79,21 @@ Each row says where it comes from, what changes and how we know it is done.
 
 ### H. Additional venue (S12)
 
-**Not in this PR, and bigger than a button.** The £60 checkout pays for a venue record that already exists (`centreId`, a Training_Centres record linked to the accreditation). The portal has no way to create that record: the Add Venue wizard is listed as still missing in `docs/api-contracts/school-management-invoices.md`. So S12 cannot pass until we build:
+Built behind `VITE_PORTAL_ADD_VENUE` (client) and the existing school writes switch (function). Off until Creator has tested the payment.
 
-1. A short form on a verified school's Venues tab: venue name, address, contact details and which of the school's courses run there.
-2. A server route that creates the venue records (Training_Centres, Accreditation_Centre_Link and course offerings) as pending, with the same checks as V1.
-3. The existing `/pay/additional_venue/:recordId?centreId=` payment, then Creator's handling of the paid event (see Creator QA 7.4).
+**Flow**
+1. On a verified school's Venues tab, **Add a venue** opens a form: venue name, country, address, email, mobile, optional telephone and contact name, and the school's accredited courses that run there (at least one).
+2. **Save venue** creates a `Training_Centres` record with `Centre_Status` **Draft** (Account is the school's, Contact is the person adding it), an `Accreditation_Centre_Link` with `Centre_Relationship_Type` **Additional Centre** (starting today, ending on the accreditation's valid-to date), and a `TC_Course_Offering` per course with `Offering_Status` Pending Review.
+3. The tab lists the venue as "Saved, awaiting payment" with **Pay for this venue**, **Edit** and **Remove**. Saving again edits the same venue, and a repeat click with the same name reuses the unpaid venue.
+4. **Pay for this venue** opens the existing `additional_venue` checkout (£60, a single payment), which now only accepts an Additional Centre link whose centre is a Draft. A venue already Paid or Verified answers "already paid"; any other status is refused.
+5. After Stripe, the tab says "Payment received, we are confirming it" for an hour, until Creator sets `Centre_Status` to **Paid**. It then shows "Paid, awaiting verification".
+6. The Guild sets **Verified**, and the venue becomes visible.
 
-We need the Guild's V1 behaviour for step 2 (what a venue holds, who verifies it) before building. Proposed as its own piece of work.
+Only a Draft can be edited or removed. Remove deletes its offerings, link and centre. The main centre is never reachable through these routes.
+
+**Server routes** (under `/portal/management/schools/:id`): `GET /venues` (adds `state`, `canAdd`, the accredited `courses` and a Draft's `details`), `POST /venues` (create or edit, with `venueId` to edit), `DELETE /venues/:venueId`.
+
+**Needs checking in QA:** `Draft` and `Paid` must be options on the Centre Status picklist; the Additional Centre link type must exist (confirmed with the Guild); Creator must set Paid on `checkout.session.completed` for `type=additional_venue`.
 
 ## 3. Not in this PR
 
