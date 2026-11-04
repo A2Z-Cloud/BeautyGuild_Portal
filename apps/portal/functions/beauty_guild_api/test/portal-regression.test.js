@@ -185,3 +185,56 @@ test('a Referred insurance application is shown to its owner read-only as With t
     assert.equal(summary.body.summary.insurance, 2);
   });
 });
+function documentsFetch({ deals, folders = {} }) {
+  const json = body => ({ status: 200, ok: true, json: async () => body });
+  return async url => {
+    url = String(url);
+    if (url.includes('Contacts/search')) return json({ data: [{ id: '111', Email: 'alice@example.test' }] });
+    if (url.includes('Deals/search')) return json({ data: deals });
+    const m = url.match(/files\/([A-Za-z0-9_-]+)\/files/);
+    if (m) return json({ data: folders[m[1]] || [] });
+    return { status: 404, ok: false, json: async () => ({}) };
+  };
+}
+test('My documents uses the active membership that has a folder, not the first record', async () => {
+  const fetchImpl = documentsFetch({
+    deals: [
+      { id: '1', Stage: 'Draft' },
+      { id: '2', Stage: 'Expired', Workdrive_Link: 'https://workdrive.zoho.eu/folder/oldFolder1' },
+      { id: '3', Stage: 'Active', Workdrive_Link: 'https://workdrive.zoho.eu/folder/liveFolder1' },
+    ],
+    folders: {
+      liveFolder1: [
+        { id: 'file1', attributes: { name: 'Certificate.pdf', is_folder: false, modified_time_in_millisecond: 5 } },
+      ],
+    },
+  });
+  await withApp({ fetchImpl }, async ({ call }) => {
+    const result = await call('/portal/documents/membership/current');
+    assert.equal(result.status, 200);
+    assert.equal(result.body.folderId, 'liveFolder1');
+    assert.equal(result.body.items[0].name, 'Certificate.pdf');
+    assert.equal(result.body.items[0].modifiedTimeMs, 5);
+    assert.equal(result.body.empty, undefined);
+  });
+});
+test('My documents falls back to a linked folder when none is active, says so when none is linked, and flags an empty folder', async () => {
+  const linked = documentsFetch({
+    deals: [
+      { id: '1', Stage: 'Draft' },
+      { id: '2', Stage: 'Expired', Workdrive_Link: 'https://workdrive.zoho.eu/folder/oldFolder1' },
+    ],
+  });
+  await withApp({ fetchImpl: linked }, async ({ call }) => {
+    const result = await call('/portal/documents/membership/current');
+    assert.equal(result.body.folderId, 'oldFolder1');
+    assert.equal(result.body.empty, true);
+  });
+  const none = documentsFetch({ deals: [{ id: '1', Stage: 'Active' }] });
+  await withApp({ fetchImpl: none }, async ({ call }) => {
+    const result = await call('/portal/documents/membership/current');
+    assert.equal(result.status, 200);
+    assert.equal(result.body.folderId, null);
+    assert.match(result.body.message, /no documents folder/i);
+  });
+});
