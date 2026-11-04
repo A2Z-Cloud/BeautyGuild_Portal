@@ -10,7 +10,7 @@ import { validate } from './logic.mjs';
 import { usePreviewState } from './journeys/previewState.jsx';
 import AddressLookup from './components/AddressLookup.jsx';
 import { INTEGRATIONS, portalApi } from './services/api.js';
-import { prefillFor } from './prefill.js';
+import { nameFromAccount, prefillFor } from './prefill.js';
 import { isLocked } from './fieldLock.js';
 import { needsAccountFirst, accountFirstPath } from './accountGate.js';
 
@@ -211,7 +211,8 @@ export function Journey({ kind }) {
   const [manualAddress, setManualAddress] = useState({});
   // null until known. The account checkpoint is only for visitors who are not signed in.
   const [signedIn, setSignedIn] = useState(null),
-    [accountEmail, setAccountEmail] = useState('');
+    [accountEmail, setAccountEmail] = useState(''),
+    [accountName, setAccountName] = useState(null);
   useEffect(() => {
     let alive = true;
     portalApi
@@ -220,6 +221,7 @@ export function Journey({ kind }) {
         if (!alive) return;
         setSignedIn(true);
         setAccountEmail(user?.email || '');
+        setAccountName({ firstName: user?.firstName || '', lastName: user?.lastName || '' });
         // The application is made in the signed-in account's name, so its email is the account's.
         if (kind === 'accreditation' && user?.email) setAnswer(kind, 'email', user.email);
       })
@@ -300,7 +302,8 @@ export function Journey({ kind }) {
     }
   }
   // Fill in what the Guild already holds about the member, once, without overwriting anything they have typed.
-  const [prefilled, setPrefilled] = useState(false);
+  const [prefilled, setPrefilled] = useState(false),
+    [detailsDone, setDetailsDone] = useState(!INTEGRATIONS.crmRecords);
   useEffect(() => {
     if (!INTEGRATIONS.crmRecords) return undefined;
     let alive = true;
@@ -317,11 +320,17 @@ export function Journey({ kind }) {
         Object.entries(filled).forEach(([name, value]) => setAnswer(kind, name, value));
         if (Object.keys(filled).length) setPrefilled(true);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => alive && setDetailsDone(true));
     return () => {
       alive = false;
     };
   }, [kind]); // eslint-disable-line react-hooks/exhaustive-deps
+  // With no Guild Contact to fill the name from, an application uses the name on the sign-in (the Join page already does).
+  useEffect(() => {
+    if (kind !== 'accreditation' || !detailsDone || !accountName) return;
+    Object.entries(nameFromAccount(values, accountName)).forEach(([name, value]) => setAnswer(kind, name, value));
+  }, [detailsDone, accountName]); // eslint-disable-line react-hooks/exhaustive-deps
   async function signOutHere() {
     try {
       await portalApi.signOut();

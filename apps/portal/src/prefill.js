@@ -51,5 +51,13 @@ export function prefillFor(kind, details, fields, answers = {}) {
   }
   return out;
 }
+// The signed-in account's name, for an application the Guild holds no Contact for yet. Only fills a box that is still empty.
+export function nameFromAccount(answers = {}, user = {}) {
+  const blank = v => v === undefined || v === null || String(v).trim() === '';
+  return {
+    ...(blank(answers.firstName) && !blank(user?.firstName) ? { firstName: String(user.firstName).trim() } : {}),
+    ...(blank(answers.lastName) && !blank(user?.lastName) ? { lastName: String(user.lastName).trim() } : {}),
+  };
+}
 // The country choices offered on the buy pages: use the contact's country when it is one of them.
 export const countryFor = (details, options) => (options.includes(details?.country) ? details.country : '');

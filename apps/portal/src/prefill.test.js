@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { countryFor, prefillFor } from './prefill.js';
+import { countryFor, nameFromAccount, prefillFor } from './prefill.js';
 import { JOURNEYS, COUNTRY_OPTIONS } from './JourneyConfig.js';
 
 const DETAILS = {
@@ -68,4 +68,20 @@ test('the buy pages use the contact country only when it is one of their options
   assert.equal(countryFor({ country: 'France' }, COUNTRY_OPTIONS), 'France');
   assert.equal(countryFor({ country: 'Atlantis' }, COUNTRY_OPTIONS), '');
   assert.equal(countryFor(null, COUNTRY_OPTIONS), '');
+});
+
+test('the sign-in name fills an empty first name and surname only', () => {
+  assert.deepEqual(nameFromAccount({}, { firstName: ' Tega ', lastName: 'Test2' }), {
+    firstName: 'Tega',
+    lastName: 'Test2',
+  });
+  assert.deepEqual(nameFromAccount({ firstName: 'Amy' }, { firstName: 'Tega', lastName: 'Test2' }), {
+    lastName: 'Test2',
+  });
+  assert.deepEqual(
+    nameFromAccount({ firstName: 'Amy', lastName: 'Lee' }, { firstName: 'Tega', lastName: 'Test2' }),
+    {},
+  );
+  assert.deepEqual(nameFromAccount({}, { firstName: '', lastName: '' }), {});
+  assert.deepEqual(nameFromAccount(), {});
 });

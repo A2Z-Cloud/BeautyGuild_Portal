@@ -42,7 +42,7 @@ export const DECLARATIONS = [
   [
     'qualifiedSixMonths',
     'I am qualified in the subjects I wish to teach and have held my qualifications for at least 6 months.',
-    'You need to be qualified in the areas you want to teach and have at least 6 months of experience in each subject or treatment. See our GTi course list for courses that can help.',
+    'You need to be qualified in the areas you want to teach and have at least 6 months of experience in each subject or treatment. The GTi courses can help.',
     '/gti-courses',
   ],
   [
@@ -189,7 +189,7 @@ export function accreditationSteps(countries) {
     },
     {
       id: 'review',
-      title: 'Review and submit',
+      title: 'Review your application',
       description: 'Check your answers. Continuing saves your application and takes you to payment.',
       fields: [],
     },
