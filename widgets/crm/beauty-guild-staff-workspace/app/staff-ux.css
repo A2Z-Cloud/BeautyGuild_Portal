@@ -183,5 +183,5 @@ body.staff-dev-tools #staff-api-open{display:inline-flex}
 .v12-table th.v12-action-cell,.v12-table td.v12-action-cell{position:sticky;right:0;z-index:1;background:#fff;box-shadow:-1px 0 0 #f0ebee}
 .v12-table th.v12-action-cell{background:#f7f3f6;z-index:2}
 .v12-table tr:hover td:first-child,.v12-table tr:hover td.v12-action-cell{background:#fff9fc}
-.v12-cell-link{background:none;border:0;padding:0;font:inherit;font-weight:700;text-align:left;cursor:pointer;color:inherit}
-.v12-cell-link:hover,.v12-cell-link:focus-visible{color:#c0176e;text-decoration:underline}
+.v12-table .v12-cell-link{background:none;border:0;border-radius:0;padding:0;font:inherit;font-weight:700;text-align:left;cursor:pointer;color:inherit;white-space:normal}
+.v12-table .v12-cell-link:hover,.v12-table .v12-cell-link:focus-visible{color:#c0176e;text-decoration:underline}
