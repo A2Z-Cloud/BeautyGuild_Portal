@@ -52,7 +52,12 @@
     Training_Centre_Accred:[['Notes','Notes'],['Attachments','Attachments'],['Tasks','Tasks'],['Accreditation_Centre_Link','Accreditation centre links'],['Training_Centre_Course_Offering','Course offerings'],['Tutor_Relationship','Tutors'],['Accreditation_Extensions','Accreditation extensions']],
     Training_Centres:[['Notes','Notes'],['Attachments','Attachments'],['Tasks','Tasks']]
   });
-  const STATUSES={ok:['paid','current','verified','approved','active','clear','complete','completed','fulfilled','scheduled'],danger:['declined','failed','cancelled','refunded','banned','rejected','expired','stop','blocked'],attention:['refer','pending','outstanding','review','awaiting','processing','not paid','not assessed','unverified','draft','needs']};
+  // Whole-word matching only: "Incomplete", "Unpaid" and "Inactive" must never be read as "complete", "paid" or "active".
+  const STATUS_WORDS={
+    danger:/\b(declined|failed|failure|cancelled|canceled|refunded|banned|rejected|expired|stop|stopped|block|blocked|error|potential match|listed postcode)\b/,
+    attention:/\b(refer|referred|pending|outstanding|review|awaiting|processing|not paid|not assessed|not checked|unverified|incomplete|unpaid|needs)\b/,
+    ok:/\b(paid|current|verified|approved|active|clear|cleared|complete|completed|fulfilled|scheduled|issued)\b/
+  };
   const FIELDS={
     Accounts:[['Account_Name','Organisation'],['Email_Address','Email'],['Phone','Telephone'],['Website','Website'],['Address_Line_1','Address'],['Town','Town'],['Country','Country'],['Status','Status'],['Workdrive_Link','Documents']],
     Contacts:[['Full_Name','Full name'],['Email','Email'],['Mobile','Mobile'],['Phone','Phone'],['Catalyst_User_ID','Portal account ID'],['Correspondence_Postcode','Postcode']],
@@ -110,7 +115,7 @@
   const cashNames=/Amount|Price|Premium|Fee|Quoted|Turnover|IPT_Amount|VAT_Amount|Sum_Insured|Discount|Refundable|Gross|Net/;
   const DEAL_STAGE_LABELS={'Qualification':'Draft','Closed Won':'Draft Quote','Needs Analysis':'Awaiting Payment','Value Proposition':'Paid','Id. Decision Makers':'Active','Proposal/Price Quote':'Expired','Negotiation/Review':'Cancelled','Refunded':'Refunded'};
   function valueFor(k,v){if(k==='Stage'&&v!=null)return DEAL_STAGE_LABELS[v]||txt(v);if(v==null||v==='')return '—';if(/Date$|_Date$|_At$|Valid_From|Valid_To|Start_Date|End_Date|Effective_From|Effective_To/.test(k)&&!k.includes('Amount'))return date(v);if(cashNames.test(k)&&typeof v!=='object')return money(v);return txt(v);}
-  function statusClass(v){const s=String(txt(v)).toLowerCase().trim();if(!s||s==='—')return'neutral';if(s.startsWith('not ')||s.startsWith('un')&&s.includes('verified'))return'attention';if(STATUSES.danger.some(x=>s===x||s.includes(x)))return'danger';if(/awaiting payment|payment processing|in progress|submitted/.test(s))return'info';if(/draft|paused|on hold/.test(s))return'draft';if(STATUSES.attention.some(x=>s.includes(x)))return'attention';if(STATUSES.ok.some(x=>s.includes(x)))return'ok';return'neutral';}
+  function statusClass(v){const s=String(txt(v)).toLowerCase().trim();if(!s||s==='—'||s==='not recorded'||s==='inactive')return'neutral';if(s.startsWith('not '))return'attention';if(STATUS_WORDS.danger.test(s))return'danger';if(/awaiting payment|payment processing|in progress|submitted/.test(s))return'info';if(/draft|paused|on hold/.test(s))return'draft';if(STATUS_WORDS.attention.test(s))return'attention';if(STATUS_WORDS.ok.test(s))return'ok';return'neutral';}
   function badge(v){return v?`<span class="pill ${statusClass(v)}">${esc(txt(v))}</span>`:'';}
   function customerName(entity,r){
     if(entity==='Contacts')return [r.First_Name,r.Last_Name].filter(Boolean).join(' ')||r.Full_Name||'';
@@ -188,6 +193,8 @@
   function wfText(cfg,v){return cfg.type==='boolean'?(v==='true'?'Yes':v==='false'?'No':'not recorded'):(v||'not recorded');}
   function workflowFieldEditor(entity,record,key){
     const cfg=wfConfig(entity,key);if(!cfg||!record||!record.id)return null;
+    // In Operational UAT a field that cannot be changed here shows as plain text, never as a dropdown with nothing to choose.
+    if(!uatEditable(entity,key,record[key]))return null;
     const current=wfCurrent(cfg,record[key]),opts=OPERATIONAL_UAT?(wfOptions(cfg).filter(([value])=>(UAT_STAGE_OPTIONS[entity]?.[key]||[]).includes(value))):wfOptions(cfg),tag=entity+':'+record.id+':'+key;
     const pending=state.wfPending&&state.wfPending.tag===tag?state.wfPending.value:null,shown=pending!=null?pending:current,saving=state.wfSaving===tag;
     const html=(opts.some(o=>o[0]===shown)?[]:[`<option value="" selected disabled>${esc(current?valueFor(key,record[key]):'Not recorded')}</option>`]).concat(opts.map(([v,l])=>`<option value="${esc(v)}" ${v===shown?'selected':''}>${esc(l)}</option>`)).join('');
@@ -201,6 +208,17 @@
     Insurance_Policy:['Application_Status'],
     Training_Centre_Accred:['Application_Stage']
   };
+  // A policy's Application Status can only be changed from an early state. Once it is Awaiting Payment, Completed, Withdrawn or Expired,
+  // a customer may have an open checkout or an issued policy, so a change must be made in CRM instead.
+  const UAT_EDIT_FROM={
+    Insurance_Policy:{Application_Status:['','Draft','In Progress','Quote Saved','Referred']}
+  };
+  function uatEditable(entity,key,raw){
+    if(!OPERATIONAL_UAT)return true;
+    if(!(UAT_STAGE_OPTIONS[entity]&&UAT_STAGE_OPTIONS[entity][key]))return false;
+    const from=UAT_EDIT_FROM[entity]&&UAT_EDIT_FROM[entity][key];
+    return !from||from.includes(raw==null?'':String(raw));
+  }
   const UAT_STAGE_OPTIONS={
     Insurance_Policy:{Application_Status:['Draft','In Progress','Quote Saved','Referred']},
     Training_Centre_Accred:{Application_Stage:['Needs Processing','Under Review','Needs Information','Qualifications Outstanding']}
@@ -219,6 +237,7 @@
   function askWorkflowEdit(entity,id,key,value){
     const cfg=wfConfig(entity,key);if(!cfg||OPERATIONAL_UAT&&!(UAT_STAGE_OPTIONS[entity]?.[key]||[]).includes(value)||!/^\d{8,30}$/.test(String(id||''))||!wfOptions(cfg).some(o=>o[0]===value)){setNotice('Select a valid record and value first.');return}
     const record=state.focus&&idsEqual(state.focus.record.id,id)?state.focus.record:null,current=record?wfCurrent(cfg,record[key]):'';
+    if(!record||!uatEditable(entity,key,record[key])){setNotice('This status cannot be changed here from its current value. Use CRM.');wfHide();render();return}
     if(value===current){wfHide();render();return}
     state.wfPending={tag:entity+':'+id+':'+key,entity,id:String(id),key,value,previous:current};
     const el=wfBar();
@@ -340,6 +359,24 @@
   function reviewKind(entity){return ({Membership:'membership',Deals:'membership',Insurance_Policy:'insurance',Training_Centre_Accred:'accreditation'})[entity]||null;}
   function reviewKey(entity,id){return `${entity}:${id}`;}
   function reviewDraft(entity,id){const key=reviewKey(entity,id);if(!state.reviewDrafts[key])state.reviewDrafts[key]={checked:{},outcome:'',comment:''};return state.reviewDrafts[key];}
+  // Reasons an insurance policy must not go ahead without staff action. Used by the attention filter, the Needs attention box and the
+  // red banner at the top of the record, so all three always agree. `stop` means do not proceed; `review` means a person must look.
+  function insuranceBlocks(r){
+    const out=[];if(!r)return out;
+    const add=(severity,label,reason)=>out.push({severity,label,reason});
+    const why=r.Stop_Reason?` ${r.Stop_Reason}`:'';
+    if(r.Underwriting_Status==='Stop')add('stop','Underwriting stop','Underwriting status is Stop. Do not proceed.'+why);
+    if(r.Underwriting_Status==='Declined')add('stop','Underwriting declined','Underwriting status is Declined.'+why);
+    if(r.Sanctions_Status==='Block')add('stop','Sanctions block','Sanctions status is Block. Do not proceed.');
+    if(r.Sanctions_Status==='Review')add('review','Sanctions review','Sanctions status is Review. A manual check is needed.');
+    if(r.Sanctions_Status==='Error')add('review','Sanctions check error','The sanctions check returned an error. It has not cleared.');
+    if(r.Member_Gate_Result==='Blocked')add('stop','Member gate blocked','The member gate result is Blocked.'+(r.Next_Action?` ${r.Next_Action}`:''));
+    if(r.Member_Gate_Result==='Review')add('review','Member gate review','The member gate result is Review.');
+    if(r.Document_Status==='Failed')add('review','Policy documents failed','Document status is Failed. Regenerate or check in CRM.');
+    if(r.Reprice_Required===true)add('review','Reprice required','The quote needs repricing before payment.');
+    return out;
+  }
+  if(typeof window!=='undefined')window.BGInsurance={blocks:insuranceBlocks};
   function reviewSignals(kind,record){
     const checks=[];const missing=(label,reason)=>checks.push({label,reason});
     const id=record&&record.id;
@@ -350,8 +387,11 @@
       if(record.Current_Membership_Status==='Expired')missing('Member profile expired','The member profile shows Expired.');
       if(record.Stage && !['Id. Decision Makers','Closed Won','Qualification'].includes(record.Stage))missing('Membership stage to review',`Membership stage: ${DEAL_STAGE_LABELS[record.Stage]||record.Stage}. Check the current membership.`);
     }else if(kind==='insurance'){
-      if(['Refer','Pending','Manual Review (REC)','Declined'].includes(record.Underwriting_Status))missing('Underwriting attention',`Underwriting status: ${record.Underwriting_Status}`);
-      if(record.Payment_Status!=='Paid')missing('Payment not verified',`Policy payment status: ${record.Payment_Status||'not provided'}`);
+      insuranceBlocks(record).forEach(b=>missing(b.label,b.reason));
+      if(['Refer','Pending','Manual Review (REC)'].includes(record.Underwriting_Status))missing('Underwriting attention',`Underwriting status: ${record.Underwriting_Status}`);
+      if((record.Payment_Status==='Paid'||record.Policy_Status==='Active')&&['','Not Assessed',undefined,null].includes(record.Underwriting_Status))missing('Underwriting not recorded','Paid or active, but no underwriting result is recorded. Check in CRM.');
+      if((record.Payment_Status==='Paid'||record.Policy_Status==='Active')&&['','Not Checked',undefined,null].includes(record.Sanctions_Status))missing('Sanctions not recorded','Paid or active, but no sanctions result is recorded. Check in CRM.');
+      if(record.Payment_Status!=='Paid')missing('Not recorded as paid',`CRM payment status: ${record.Payment_Status||'not provided'}. This is the CRM field, not a check against the payment provider.`);
       if(record.Policy_Status!=='Active')missing('Policy not active',`Policy status: ${record.Policy_Status||'not provided'}`);
       if(!refId(record.Contact))missing('Customer details missing','The customer could not be confirmed.');
     }else if(kind==='accreditation'){
@@ -704,7 +744,7 @@
     if(!found.length&&!isEmail){for(const entity of [M.DEAL,M.POLICY,M.ACC]){try{let result=state.demo?demoSearch(entity,q):asRows(await api().searchRecord({Entity:entity,Type:'word',Query:q,page:1,per_page:20}));result.forEach(record=>found.push({entity,record}))}catch(_){/* These modules may not support a word lookup for every profile. */}}}
     if(token!==state.requestId)return;state.searchResults=found.slice(0,50);if(!found.length)setNotice('No matching CRM records were found. Check spelling or open the record directly.');
   }catch(err){if(token===state.requestId)setNotice(`CRM search failed: ${err.message||err}`,'error')}finally{if(token===state.requestId){state.busy=false;render()}}}
-  function isQueueItem(kind,entity,r){if(kind==='insurance')return ['Refer','Pending','Manual Review (REC)'].includes(r.Underwriting_Status)||['Referred','Awaiting Payment'].includes(r.Application_Status)||r.Finance_Sync_Status==='Failed (REC)';if(kind==='accreditation')return['Submitted','Needs Processing','Under Review','Needs Information','Qualifications Outstanding'].includes(r.Application_Stage);if(kind==='membership'){const inDays=r.Expiry_Date?(Date.parse(r.Expiry_Date)-Date.now())/(86400*1000):9999;return (inDays>=-15&&inDays<=60)||['Failed','Not Paid','Part Refunded'].includes(r.Payment_Status)||!!(r.Has_Insurance_Issue||r.Banned_From_Membership||r.Banned_From_Insurance)}return false;}
+  function isQueueItem(kind,entity,r){if(kind==='insurance')return ['Refer','Pending','Manual Review (REC)'].includes(r.Underwriting_Status)||['Referred','Awaiting Payment'].includes(r.Application_Status)||r.Finance_Sync_Status==='Failed (REC)'||insuranceBlocks(r).length>0;if(kind==='accreditation')return['Submitted','Needs Processing','Under Review','Needs Information','Qualifications Outstanding'].includes(r.Application_Stage);if(kind==='membership'){const inDays=r.Expiry_Date?(Date.parse(r.Expiry_Date)-Date.now())/(86400*1000):9999;return (inDays>=-15&&inDays<=60)||['Failed','Not Paid','Part Refunded'].includes(r.Payment_Status)||!!(r.Has_Insurance_Issue||r.Banned_From_Membership||r.Banned_From_Insurance)}return false;}
   async function loadDirectory(){
     const token=++state.requestId;state.busy=true;render();
     try{const result=await pagesFromCRM('getAllRecords',{Entity:M.CONTACT},100);if(token!==state.requestId)return;
@@ -1056,5 +1096,5 @@
   function demoQueue(){throw Error('Demo data is disabled');}
   function demoSearch(){throw Error('Demo data is disabled');}
   if(typeof document!=='undefined')document.addEventListener('DOMContentLoaded',init);
-  if(typeof module!=='undefined'&&module.exports)module.exports={isExcludedAction,customViewQuery,pageItems,SIZES,esc,asRows,matchContext,isQueueItem,refId,queryCriterion,statusClass,contactLookup,reviewKind,reviewSignals,REVIEW_GROUPS,DEMO_RECORDS,M};
+  if(typeof module!=='undefined'&&module.exports)module.exports={isExcludedAction,customViewQuery,pageItems,SIZES,esc,asRows,matchContext,isQueueItem,refId,queryCriterion,statusClass,contactLookup,reviewKind,reviewSignals,insuranceBlocks,uatEditable,REVIEW_GROUPS,DEMO_RECORDS,M};
 })();

@@ -44,11 +44,20 @@
     const t=String(x??'').trim().toLowerCase();
     if(!t)return 'neutral';
     if(/^(active|approved|clear|cleared|paid|verified|current|completed|issued|succeeded)$/.test(t))return 'good';
-    if(/failed|banned|stopped|stop|rejected|cancelled|expired|declined|error|listed postcode|potential match/.test(t))return 'bad';
+    if(/\b(failed|banned|stopped|stop|block|blocked|rejected|cancelled|expired|declined|error)\b|listed postcode|potential match/.test(t))return 'bad';
     if(/awaiting payment|payment processing|in progress|processing|submitted/.test(t))return 'info';
     if(/draft|paused|on hold/.test(t))return 'draft';
-    if(/pending|refer|await|review|not paid|unverified|outstanding|needs/.test(t))return 'waiting';
+    if(/pending|refer|await|review|not paid|not checked|not assessed|unverified|incomplete|unpaid|outstanding|needs/.test(t))return 'waiting';
     return 'neutral';
+  }
+  // A red banner at the top of an insurance record when it must not go ahead, amber when a person must look. The reasons come from
+  // widget.js (BGInsurance.blocks), the same list the attention filter and the Needs attention box use.
+  function stopBanner(entity,record){
+    if(entity!=='Insurance_Policy'||!global.BGInsurance)return '';
+    const blocks=global.BGInsurance.blocks(record);
+    if(!blocks.length)return '';
+    const stop=blocks.some(b=>b.severity==='stop');
+    return '<div class="v12-stop-banner v12-stop-banner--'+(stop?'stop':'review')+'" role="alert"><strong>'+(stop?'Do not proceed with this policy':'This policy needs a manual check')+'</strong><ul>'+blocks.map(b=>'<li><b>'+safe(b.label)+'.</b> '+safe(b.reason)+'</li>').join('')+'</ul></div>';
   }
   function statusMarkup(field,raw){
     if(!/(?:^Stage$|_Status$|^Status$|_Stage$|^Result$|^Priority$|^Investigation_Status$)/.test(field))
@@ -246,7 +255,7 @@ if(selection==='overview'&&['Deals','Membership'].includes(entity))main=membersh
       main='<section class="v12-detail-section"><h3>Processing and decisions</h3>'+fieldRows(entity,record,['Application_Status','Application_Stage','Underwriting_Status','Risk_Status','Sanctions_Status','Payment_Status','Policy_Status','Finance_Sync_Status','Next_Action','Next_Action_Date','Stop_Reason','Manual_Review_Outcome'],true)+'<div class="v12-warning">Risk decisions and payment status must be verified in CRM and the authoritative Catalyst service. This screen does not clear a referral or activate cover.</div></section>'+(typeof ctx.processing==='function'?ctx.processing(entity,record):'');
     }else{main=relationContent(entity,record,selection,ctx.crm,ctx.rerender);}
     const extraAction=ctx.operationalUat?'':(global.BGStaffAddons?.action(entity,record)||'');
-    const header='<header class="v12-record-head"><div><span class="v12-kicker">'+safe(appNames[entity]||pretty(entity))+'</span><h2>'+safe(ctx.title(entity,record))+'</h2><p>'+safe(ctx.summary(entity,record)||'')+'</p></div><div class="v12-status-row">'+statusBar(entity,record)+'</div></header>';
+    const header='<header class="v12-record-head"><div><span class="v12-kicker">'+safe(appNames[entity]||pretty(entity))+'</span><h2>'+safe(ctx.title(entity,record))+'</h2><p>'+safe(ctx.summary(entity,record)||'')+'</p></div><div class="v12-status-row">'+statusBar(entity,record)+'</div></header>'+stopBanner(entity,record);
     const navigation=[...(['Deals','Membership'].includes(entity)?[['overview','Membership overview']]:[]),['details','All CRM fields'],['timeline','Activity timeline'],['processing','Processing'],...(editable?[['updates','Field updates']]:[])].map(p=>'<button class="v12-side-link '+(selection===p[0]?'active':'')+'" data-action="v12-tab" data-tab="'+p[0]+'">'+safe(p[1])+'</button>').join('');
     const related=relations.map(r=>{
       const cache=relatedCache.get(relationKey(entity,id,r.id));

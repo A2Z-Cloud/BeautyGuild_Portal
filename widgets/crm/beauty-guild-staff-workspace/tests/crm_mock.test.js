@@ -23,24 +23,10 @@ function delegate(action,entity,id){let t={dataset:{action,entity,id},closest:()
  const before=calls.notes.length;
  delegate('refresh-record','Insurance_Policy',ids.policy);await nap();
  assert.equal(calls.notes.length,before);
- // New application walkthrough is interactive but stops before payment.
+ // Operational UAT: the New application walkthrough is not available. Opening it must not start a journey or write anything.
  nav[6].callbacks.click();await nap();
- assert.match(el['#contentArea'].innerHTML,/Select application type/);
- let t={dataset:{action:'journey-type',kind:'insurance'},closest:()=>t};el['#contentArea'].callbacks.click({target:t});await nap();
- assert.match(el['#contentArea'].innerHTML,/Journey preview only/);
- assert.match(el['#contentArea'].innerHTML,/Continue with customer/);
- // Check a full preview journey reaches a disabled payment step without CRM application writes.
- let type={dataset:{action:'journey-type',kind:'membership'},closest:()=>type};el['#contentArea'].callbacks.click({target:type});
- delegate('journey-next');await nap();assert.match(el['#contentArea'].innerHTML,/Membership options/);
- const setField=(name,value,type='text',checked=false)=>{const input={dataset:{journeyField:name},value,type,checked};el['#contentArea'].callbacks.input({target:input});};
- setField('membershipLevel','associate');setField('membershipBranch','beauty');setField('billing','annual');setField('joinType','new');
- delegate('journey-next');await nap();assert.match(el['#contentArea'].innerHTML,/Applicant details/);
- delegate('journey-next');await nap();assert.match(el['#contentArea'].innerHTML,/Additional branches/);
- setField('insuranceWanted','no');delegate('journey-next');await nap();assert.match(el['#contentArea'].innerHTML,/Declarations/);
- setField('codeAccepted','yes');setField('termsAccepted','yes');delegate('journey-next');await nap();
- assert.match(el['#contentArea'].innerHTML,/Application preview complete/);
- assert.match(el['#contentArea'].innerHTML,/Generate payment link · Coming soon/);
+ assert.doesNotMatch(el['#contentArea'].innerHTML,/Select application type/);
  assert.doesNotMatch(el['#contentArea'].innerHTML,/checkoutUrl/);
  assert.equal(calls.tasks.length,1);
- console.log('PASS CRM mock SDK, browse-first lists, records, related lists, Notes/Tasks, native CRM actions and payment-stopped journey');
+ console.log('PASS CRM mock SDK, browse-first lists, records, related lists, Notes/Tasks, native CRM actions and the blocked New application route');
 })().catch(e=>{console.error(e);process.exit(1)});
