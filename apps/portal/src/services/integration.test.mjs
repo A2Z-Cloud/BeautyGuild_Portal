@@ -88,6 +88,32 @@ test('address search uses URL encoding and the exact V1 response shape', async (
   assert.deepEqual(await g.retrieveAddress('GB|123'), { postcode: 'AB1 2CD' });
   assert.ok(urls[1].includes('GB%7C123'));
 });
+test('geocodeAddress returns a point or null, and sends the address and country', async () => {
+  const c = parseIntegrationConfig({
+    VITE_DATA_MODE: 'api',
+    VITE_API_BASE_URL: '/server/beauty_guild_api',
+    VITE_ENABLED_LEGACY_APIS: 'address',
+  });
+  const urls = [];
+  let reply = { coordinates: { latitude: 52.9225, longitude: '-1.4746' } };
+  const g = createLegacyGateway(c, {
+    fetchImpl: async url => {
+      urls.push(url);
+      return { ok: true, status: 200, text: async () => JSON.stringify(reply) };
+    },
+  });
+  assert.deepEqual(await g.geocodeAddress('United Kingdom', '1 High St, Derby, DE1 2AB'), {
+    latitude: 52.9225,
+    longitude: -1.4746,
+  });
+  assert.ok(urls[0].includes('/address/geocode?'));
+  assert.ok(urls[0].includes('country=United+Kingdom'));
+  assert.ok(urls[0].includes('location=1+High+St%2C+Derby%2C+DE1+2AB'));
+  reply = { coordinates: null };
+  assert.equal(await g.geocodeAddress('GBR', 'Nowhere Lane, Nowhere'), null);
+  assert.equal(await g.geocodeAddress('GBR', 'ab'), null, 'too short to ask');
+  assert.equal(urls.length, 2, 'a short address is never sent');
+});
 test('unauthorised CRM requests return typed errors', async () => {
   const api = createHttpClient({
     baseUrl: '/server/beauty_guild_api',

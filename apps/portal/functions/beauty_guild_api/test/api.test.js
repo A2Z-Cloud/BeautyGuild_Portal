@@ -61,6 +61,43 @@ test('address/find returns only whitelisted fields, trims to max, sends key and 
   });
 });
 
+test('address/geocode returns a point, sends the key and a country code, and never a guess', async () => {
+  const calls = [];
+  let reply = { Items: [{ Latitude: '52.92251', Longitude: '-1.47466', Extra: 'drop-me' }] };
+  const fetchImpl = async url => {
+    calls.push(String(url));
+    return json(reply);
+  };
+  await withServer({ config: loadConfig(baseEnv), fetchImpl }, async base => {
+    const r = await get(
+      base,
+      '/address/geocode?country=United%20Kingdom&location=1%20High%20St%2C%20Derby%2C%20DE1%202AB',
+    );
+    assert.equal(r.status, 200);
+    assert.deepEqual(r.body, { coordinates: { latitude: 52.92251, longitude: -1.47466 } });
+    const url = new URL(calls[0]);
+    assert.ok(url.pathname.endsWith('/Geocoding/International/Geocode/v1.10/json6.ws'));
+    assert.equal(url.searchParams.get('Key'), SECRET);
+    assert.equal(url.searchParams.get('Country'), 'GBR');
+    assert.equal(url.searchParams.get('Location'), '1 High St, Derby, DE1 2AB');
+    assert.ok(!JSON.stringify(r.body).includes(SECRET));
+    // A country name that is not a code is left out: the country in the address text does the work.
+    await get(base, '/address/geocode?country=France&location=10%20Rue%20de%20Rivoli%2C%20Paris%2C%20France');
+    assert.equal(new URL(calls[1]).searchParams.has('Country'), false);
+    await get(base, '/address/geocode?country=FR&location=10%20Rue%20de%20Rivoli%2C%20Paris');
+    assert.equal(new URL(calls[2]).searchParams.get('Country'), 'FR');
+    reply = { Items: [] };
+    assert.deepEqual((await get(base, '/address/geocode?country=GBR&location=Nowhere%20Lane%2C%20Nowhere')).body, {
+      coordinates: null,
+    });
+    reply = { Items: [{ Latitude: '999', Longitude: '-1.4' }] };
+    assert.deepEqual((await get(base, '/address/geocode?country=GBR&location=Out%20of%20range%2C%20Derby')).body, {
+      coordinates: null,
+    });
+    assert.equal((await get(base, '/address/geocode?country=GBR')).status, 400);
+    assert.equal((await get(base, '/address/geocode?country=GBR&location=ab')).status, 400);
+  });
+});
 test('address/find allows ".." in search text and validates input', async () => {
   const fetchImpl = async () => json({ Items: [] });
   await withServer({ config: loadConfig(baseEnv), fetchImpl }, async base => {

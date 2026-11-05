@@ -116,6 +116,19 @@ function createApp({
     }),
   );
 
+  // Where an address is, for the pin on the training centre map. A point or null; the school confirms or moves it on the map.
+  app.get(
+    '/address/geocode',
+    limitAddress,
+    handle(async (req, res) => {
+      const location = cleanText(req.query.location);
+      if (location.length < 5 || location.length > 300)
+        throw new HttpError(400, 'INVALID_REQUEST', 'Enter the address to locate.');
+      const country = cleanText(req.query.country).slice(0, 60);
+      res.json({ coordinates: await loqate.geocode(country, location) });
+    }),
+  );
+
   app.get(
     '/address/retrieve',
     limitAddress,

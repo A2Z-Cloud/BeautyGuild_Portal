@@ -4210,3 +4210,49 @@ button.doc-card {
 .price-updating.idle {
   visibility: hidden;
 }
+
+/* Confirm the training centre on a map (Guild, 5 November 2026): a softened map and the Guild pink pin. */
+.location-field {
+  grid-column: 1 / -1;
+}
+.centre-location {
+  margin-top: 6px;
+}
+.centre-location h4 {
+  margin: 0 0 4px;
+}
+.centre-map {
+  height: 260px;
+  border: 1px solid #efe6ec;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #f4eef2;
+}
+.centre-map .leaflet-tile-pane {
+  filter: grayscale(0.55) saturate(0.8) contrast(0.95) brightness(1.04);
+}
+.centre-map .leaflet-container {
+  font-family: inherit;
+}
+.centre-map .leaflet-control-zoom {
+  border: 0;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(41, 33, 42, 0.18);
+}
+.centre-map .leaflet-control-zoom a {
+  color: #a92a70;
+}
+.centre-map-pin {
+  background: none;
+  border: 0;
+}
+.centre-location-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: #6c5e6b;
+}

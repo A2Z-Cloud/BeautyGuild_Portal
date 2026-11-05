@@ -45,7 +45,7 @@ const ACC_FIELDS = [
 ].join(',');
 const CENTRE_FIELDS =
   'Name,Account,Contact,Email,Phone_Number,Mobile_Phone_Number,Address_Line_1,Address_Line_2,Address_Line_3,Town,County,Country,Postcode,' +
-  'Contact_Name,Website,About_the_School,Facebook,Instagram,TikTok,LinkedIn,School_Image,School_Logo,' +
+  'Latitude,Longitude,Contact_Name,Website,About_the_School,Facebook,Instagram,TikTok,LinkedIn,School_Image,School_Logo,' +
   'Parking,Changing_Area,Eating_Area,Disabled_Access,Free_Wifi,Air_Conditioning,Refreshments_Provided,Public_Transport_Nearby';
 const FACILITY_KEYS = new Set(Object.keys(FACILITY_FIELDS));
 const CONTACT_FIELDS =
@@ -87,6 +87,12 @@ function str(value, max = 255) {
   return s;
 }
 const flag = v => (v === 'yes' || v === true ? true : v === 'no' || v === false ? false : null);
+// A latitude or longitude: a finite number within range, as text with up to seven decimals (about a centimetre), or '' for anything else.
+function coordinate(value, max) {
+  if (value === null || value === undefined || value === '') return '';
+  const n = Number(value);
+  return Number.isFinite(n) && Math.abs(n) <= max ? String(Number(n.toFixed(7))) : '';
+}
 function strArray(value, allowed) {
   if (value === undefined || value === null) return [];
   if (!Array.isArray(value)) fail('INVALID_ANSWERS', 'One of your answers is not valid.');
@@ -175,6 +181,9 @@ function readAnswers(a, { final = false, now = Date.now(), otherCourseField = ''
       county: str(a.centreCounty),
       postcode: str(a.centrePostcode, 20),
       country,
+      // Where the school confirmed its centre is on the map (kept as text in the CRM). Blank unless it is a real point.
+      latitude: coordinate(a.centreLatitude, 90),
+      longitude: coordinate(a.centreLongitude, 180),
       contact: str(a.centreContact, 100),
       website: str(a.centreWebsite, 255),
       about: str(a.centreAbout, 2000),
@@ -369,6 +378,8 @@ function createAccreditation({
     // On an update, an emptied field is cleared (null); on create it is simply left out.
     const v = x => x || (isNew ? undefined : null);
     return {
+      Latitude: v(s.latitude),
+      Longitude: v(s.longitude),
       Name: s.name || placeholderName(person.id),
       Account: { id: accountId },
       Contact: { id: person.id },
@@ -692,6 +703,8 @@ function createAccreditation({
         centreTown: centre?.Town || '',
         centreCounty: centre?.County || '',
         centrePostcode: centre?.Postcode || '',
+        centreLatitude: centre?.Latitude || '',
+        centreLongitude: centre?.Longitude || '',
         centreContact: centre?.Contact_Name || '',
         centreWebsite: centre?.Website || '',
         centreAbout: centre?.About_the_School || '',

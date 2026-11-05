@@ -2,6 +2,7 @@
 const { HttpError } = require('./errors');
 
 const UPSTREAM_TIMEOUT_MS = 8000;
+const UK_NAMES = new Set(['united kingdom', 'uk', 'england', 'scotland', 'wales', 'northern ireland']);
 
 function mapAddress(item) {
   const physicalLine = [item.SubBuilding, item.BuildingName, item.BuildingNumber, item.Street]
@@ -65,6 +66,25 @@ function createLoqate({ config, fetchImpl = fetch, log = console.log }) {
     async retrieve(id) {
       const items = await call('/Capture/Interactive/Retrieve/v1.30/json6.ws', { Id: id });
       return items[0] ? mapAddress(items[0]) : null;
+    },
+    // The point for an address, as V1 does it (Loqate International Geocode). A country the service cannot take as a code is left out and the
+    // country name in the address text does the work. No point found is null, never a guess.
+    async geocode(country, location) {
+      const params = { Location: location };
+      const c = String(country || '').trim();
+      const code = UK_NAMES.has(c.toLowerCase()) ? 'GBR' : /^[A-Za-z]{2,3}$/.test(c) ? c.toUpperCase() : '';
+      if (code) params.Country = code;
+      const items = await call('/Geocoding/International/Geocode/v1.10/json6.ws', params);
+      const item = items[0];
+      const latitude = Number(item && item.Latitude),
+        longitude = Number(item && item.Longitude);
+      return item &&
+        Number.isFinite(latitude) &&
+        Number.isFinite(longitude) &&
+        Math.abs(latitude) <= 90 &&
+        Math.abs(longitude) <= 180
+        ? { latitude, longitude }
+        : null;
     },
   });
 }

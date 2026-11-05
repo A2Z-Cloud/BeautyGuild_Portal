@@ -189,6 +189,7 @@ export const portalApi = Object.freeze({
   listCourses: options => gateway.listCourses(options),
   findAddresses: (text, container, options) => gateway.findAddresses(text, container, options),
   retrieveAddress: (id, options) => gateway.retrieveAddress(id, options),
+  geocodeAddress: (country, location, options) => gateway.geocodeAddress(country, location, options),
   createDraft: async data => (await draftReq('/', { method: 'POST', body: data })).draft,
   updateDraft: async (service, id, data) =>
     (await draftReq('/' + service + '/' + encodeURIComponent(id), { method: 'PUT', body: data })).draft,

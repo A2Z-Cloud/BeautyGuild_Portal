@@ -33,6 +33,18 @@ export function createLegacyGateway(config, options = {}) {
         throw new ApiError('Address response is missing an items array.', { code: 'INVALID_RESPONSE' });
       return data.items;
     },
+    // Where an address is, for the map pin: { latitude, longitude } or null when the address cannot be found.
+    async geocodeAddress(country, location, { signal } = {}) {
+      const text = String(location || '').trim();
+      if (text.length < 5) return null;
+      const params = new URLSearchParams({ location: text });
+      if (country) params.set('country', String(country));
+      const data = await requireEnabled('address')('/address/geocode?' + params.toString(), { signal });
+      const c = data && data.coordinates;
+      return c && Number.isFinite(Number(c.latitude)) && Number.isFinite(Number(c.longitude))
+        ? { latitude: Number(c.latitude), longitude: Number(c.longitude) }
+        : null;
+    },
     async retrieveAddress(id, { signal } = {}) {
       if (!id) throw new ApiError('Choose an address.', { code: 'INVALID_ID' });
       const data = await requireEnabled('address')('/address/retrieve?id=' + encodeURIComponent(id), { signal });

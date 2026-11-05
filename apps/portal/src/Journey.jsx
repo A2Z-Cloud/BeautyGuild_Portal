@@ -9,6 +9,7 @@ import { PolicyDocuments } from './LegalLinks.jsx';
 import { validate } from './logic.mjs';
 import { usePreviewState } from './journeys/previewState.jsx';
 import AddressLookup from './components/AddressLookup.jsx';
+import LocationConfirm from './components/LocationConfirm.jsx';
 import { INTEGRATIONS, portalApi } from './services/api.js';
 import { nameFromAccount, prefillFor } from './prefill.js';
 import { isLocked } from './fieldLock.js';
@@ -581,6 +582,12 @@ export function Journey({ kind }) {
                 <div className="fields-grid">
                   {resolveFields(current.fields, values).map(f => {
                     if (hiddenInLookupMode.has(f.name)) return null;
+                    if (f.type === 'location')
+                      return (
+                        <div key={f.name} className="location-field">
+                          <LocationConfirm values={values} onChange={update} />
+                        </div>
+                      );
                     if (f.type === 'copyHome')
                       return (
                         <div key={f.name} className="copy-home">

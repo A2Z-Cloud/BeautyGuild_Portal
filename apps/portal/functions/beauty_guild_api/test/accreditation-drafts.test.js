@@ -365,6 +365,35 @@ test('the About/Website/socials/Facilities fields are written to the training ce
   });
 });
 
+test('the confirmed map point is saved on the training centre, restored on resume, cleared when blank, and never a bad number', async () => {
+  const crm = fakeCrm();
+  await withApp(crm, async call => {
+    const first = (
+      await call(
+        '/portal/drafts/',
+        send('POST', body(answers({ centreLatitude: 52.9225147123, centreLongitude: '-1.4746' }))),
+      )
+    ).body.draft;
+    assert.equal(crm.store.Training_Centres[0].Latitude, '52.9225147');
+    assert.equal(crm.store.Training_Centres[0].Longitude, '-1.4746');
+    const read = (await call('/portal/drafts/accreditation/' + first.id)).body.draft.answers;
+    assert.equal(read.centreLatitude, '52.9225147');
+    assert.equal(read.centreLongitude, '-1.4746');
+    // Moving the address clears the point (the page sends it blank until the school confirms again).
+    await call(
+      '/portal/drafts/accreditation/' + first.id,
+      send('PUT', body(answers({ centreLatitude: '', centreLongitude: '' }), { related: first.related })),
+    );
+    assert.equal(crm.store.Training_Centres[0].Latitude, null);
+    assert.equal(crm.store.Training_Centres[0].Longitude, null);
+  });
+  const bad = fakeCrm();
+  await withApp(bad, async call => {
+    await call('/portal/drafts/', send('POST', body(answers({ centreLatitude: '999', centreLongitude: 'abc' }))));
+  });
+  assert.equal(bad.store.Training_Centres[0].Latitude, undefined);
+  assert.equal(bad.store.Training_Centres[0].Longitude, undefined);
+});
 test('resume rebuilds the answers from the CRM records and lists only my drafts', async () => {
   const crm = fakeCrm();
   await withApp(crm, async call => {
