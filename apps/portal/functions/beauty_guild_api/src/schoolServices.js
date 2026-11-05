@@ -377,7 +377,12 @@ function registerSchoolRoutes(
       res.json({
         offerings: offerings
           .filter(o => o.Course?.id && o.Training_Centre?.id)
-          .map(o => ({ id: o.id, name: o.Course.name, trainingCentre: o.Training_Centre.name })),
+          .map(o => ({
+            id: o.id,
+            name: o.Course.name,
+            trainingCentre: o.Training_Centre.name,
+            trainingCentreId: String(o.Training_Centre.id),
+          })),
         tutors: tutors.filter(t => t.Tutor_Contact?.id).map(t => ({ id: t.id, name: t.Tutor_Contact.name })),
       });
     }),

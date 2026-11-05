@@ -380,7 +380,9 @@ test('course options are reachable for the school and offer its courses and acti
   });
   const r = await getJson(f, '/portal/management/schools/' + SCHOOL + '/course-options');
   assert.equal(r.status, 200);
-  assert.deepEqual(r.body.offerings, [{ id: '7000000000001', name: 'Gel Polish', trainingCentre: 'Main Centre' }]);
+  assert.deepEqual(r.body.offerings, [
+    { id: '7000000000001', name: 'Gel Polish', trainingCentre: 'Main Centre', trainingCentreId: '401' },
+  ]);
   assert.equal(r.body.tutors[0].name, 'Jo Tutor');
   const active = f.calls.find(c => c.u.includes('Tutor_Relationships/search'));
   assert.ok(active.u.includes('Status:equals:Active'), 'only active tutors can be assigned to a course date');

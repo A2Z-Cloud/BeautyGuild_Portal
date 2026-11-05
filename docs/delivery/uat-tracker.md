@@ -131,6 +131,7 @@ Source: `Beauty-Guild Portal UAT v1.1  - Membership journey and Dashboard Commen
 | R3-9 | Policy document names | The Salon and Non-Salon prefixes are gone from the Review and Pay list. |
 | R3-10 | Rate bug | A No to "more than 15% non-standard construction" now gets the normal business equipment rate (the higher rate applies only to Yes, which is referred). The MTA rating follows the same rule. |
 | R3-11 | Dashboard basics | Signed-out visitors go to the sign-in page. The heading is "Hi, First name". The caption and the "Guild Services" labels are removed. |
+| R3-21 | Course dates for a school with several venues | Publishing a course session asks for the venue first when the school has more than one, then lists only the courses offered at that venue. A school with one venue sees its courses as before. |
 
 ### Left for now (needs the Guild or more work)
 
