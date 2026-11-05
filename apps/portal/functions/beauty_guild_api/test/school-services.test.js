@@ -3,7 +3,7 @@ const test = require('node:test'),
   assert = require('node:assert/strict');
 const { loadConfig } = require('../src/config');
 const { createApp } = require('../src/app');
-const { mapInvoice } = require('../src/schoolServices');
+const { mapInvoice, createSchoolApi } = require('../src/schoolServices');
 
 const cfg = loadConfig({ PORTAL_SCHOOL_SERVICES_ENABLED: 'true' });
 function upstream(url) {
@@ -133,6 +133,7 @@ test('invoice mapping follows V1 Creator data fields', () => {
     {
       id: '1',
       invoiceNumber: '41',
+      hasPdf: false,
       netAmount: null,
       vatAmount: null,
       type: 'Membership',
@@ -574,4 +575,75 @@ test('updates the training centre with the profile content, including clearing f
   assert.equal(data.Parking, true);
   assert.equal(data.Free_Wifi, true);
   assert.equal(data.Changing_Area, false);
+});
+
+// The invoice PDF: only the member's own invoice, only a real PDF, never another member's.
+function pdfApi({ rows, file }) {
+  const calls = [];
+  const api = createSchoolApi({
+    getCrmHeaders: async () => ({}),
+    getCreatorHeaders: async () => ({ Authorization: 'x' }),
+    crmApiDomain: 'https://crm.test',
+    creatorApiDomain: 'https://creator.test',
+    creatorAccountOwner: 'owner',
+    creatorAppLinkName: 'app',
+    creatorInvoiceReport: 'All_Invoice_Records',
+    fetchImpl: async url => {
+      calls.push(decodeURIComponent(url));
+      if (url.includes('/download')) return { ok: file.ok !== false, arrayBuffer: async () => file.bytes };
+      return { ok: true, json: async () => ({ code: 3000, data: rows }) };
+    },
+  });
+  return { api, calls };
+}
+const PDF_BYTES = Buffer.from('%PDF-1.4 test');
+const MEMBER = '1011174000000000099';
+const ROW = {
+  ID: '2011174000000000001',
+  Books_Invoice_Number: 'INV-000123',
+  Invoice_PDF: '/file',
+  crm_contact_id: MEMBER,
+};
+test('the member can download their own invoice PDF, named after the Books number', async () => {
+  const { api, calls } = pdfApi({ rows: [ROW], file: { bytes: PDF_BYTES } });
+  const f = await api.invoicePdf({}, ROW.ID, MEMBER);
+  assert.equal(f.name, 'Invoice-INV-000123.pdf');
+  assert.equal(f.buffer.toString().startsWith('%PDF-'), true);
+  assert.ok(
+    calls[0].includes('(ID == ' + ROW.ID + ' && crm_contact_id == "' + MEMBER + '")'),
+    'searched with the member id',
+  );
+  assert.ok(calls[1].endsWith('/report/All_Invoice_Records/' + ROW.ID + '/Invoice_PDF/download'));
+});
+test('an invoice PDF is refused for another member, an invoice with no PDF, a bad id, or a file that is not a PDF', async () => {
+  const code = e => e.code === 'NOT_FOUND';
+  await assert.rejects(pdfApi({ rows: [], file: { bytes: PDF_BYTES } }).api.invoicePdf({}, ROW.ID, MEMBER), code);
+  await assert.rejects(
+    pdfApi({ rows: [{ ...ROW, crm_contact_id: '1011174000000000555' }], file: { bytes: PDF_BYTES } }).api.invoicePdf(
+      {},
+      ROW.ID,
+      MEMBER,
+    ),
+    code,
+    'a row for someone else is never sent, even if the search returned it',
+  );
+  await assert.rejects(
+    pdfApi({ rows: [{ ...ROW, Invoice_PDF: '' }], file: { bytes: PDF_BYTES } }).api.invoicePdf({}, ROW.ID, MEMBER),
+    code,
+  );
+  await assert.rejects(
+    pdfApi({ rows: [ROW], file: { bytes: PDF_BYTES } }).api.invoicePdf({}, '1) || (1', MEMBER),
+    code,
+  );
+  await assert.rejects(
+    pdfApi({ rows: [ROW], file: { bytes: Buffer.from('<html>login</html>') } }).api.invoicePdf({}, ROW.ID, MEMBER),
+    e => e.code === 'SERVICE_UNAVAILABLE',
+  );
+  await assert.rejects(
+    pdfApi({ rows: [ROW], file: { ok: false, bytes: PDF_BYTES } }).api.invoicePdf({}, ROW.ID, MEMBER),
+  );
+});
+test('hasPdf is true only when the record holds a PDF', () => {
+  assert.equal(mapInvoice({ ID: '1', Invoice_PDF: '/file' }).hasPdf, true);
+  assert.equal(mapInvoice({ ID: '1' }).hasPdf, false);
 });
