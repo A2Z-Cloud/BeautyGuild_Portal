@@ -643,6 +643,31 @@ test('an invoice PDF is refused for another member, an invoice with no PDF, a ba
     pdfApi({ rows: [ROW], file: { ok: false, bytes: PDF_BYTES } }).api.invoicePdf({}, ROW.ID, MEMBER),
   );
 });
+test('invoices are read from the Payments app when it is set, and the PDF too; school reports stay on the older app', async () => {
+  const calls = [];
+  const api = createSchoolApi({
+    getCrmHeaders: async () => ({}),
+    getCreatorHeaders: async () => ({}),
+    crmApiDomain: 'https://crm.test',
+    creatorApiDomain: 'https://creator.test',
+    creatorAccountOwner: 'owner',
+    creatorAppLinkName: 'old-app',
+    creatorPaymentsAppLinkName: 'payments-app',
+    creatorInvoiceReport: 'All_Invoice_Records',
+    fetchImpl: async url => {
+      calls.push(decodeURIComponent(url));
+      if (url.includes('/download')) return { ok: true, arrayBuffer: async () => PDF_BYTES };
+      return { ok: true, json: async () => ({ code: 3000, data: [ROW] }) };
+    },
+  });
+  await api.invoices({}, 'crm_contact_id == "' + MEMBER + '"');
+  await api.invoicePdf({}, ROW.ID, MEMBER);
+  await api.creator({}, 'Course_Sessions_Report', 'ID==1');
+  assert.ok(calls[0].includes('/owner/payments-app/report/All_Invoice_Records'));
+  assert.ok(calls[1].includes('/owner/payments-app/report/All_Invoice_Records'));
+  assert.ok(calls[2].includes('/owner/payments-app/report/All_Invoice_Records/' + ROW.ID + '/Invoice_PDF/download'));
+  assert.ok(calls[3].includes('/owner/old-app/report/Course_Sessions_Report'));
+});
 test('hasPdf is true only when the record holds a PDF', () => {
   assert.equal(mapInvoice({ ID: '1', Invoice_PDF: '/file' }).hasPdf, true);
   assert.equal(mapInvoice({ ID: '1' }).hasPdf, false);
