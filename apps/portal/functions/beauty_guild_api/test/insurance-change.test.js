@@ -119,7 +119,7 @@ test('equipment: only a verified increase goes online, priced as the new level l
   assert.deepEqual(codes(q({ equipmentTier: 5000 }, ten)), ['DOWNGRADE']);
   assert.deepEqual(codes(q({ equipmentTier: 5000 }, cover({ covers: [] }))), ['PREMISES_NEEDED']);
   const nonStandard = cover({
-    premises: [{ id: 'm1', standardConstruction: 'no' }],
+    premises: [{ id: 'm1', standardConstruction: 'no', nonStandardOver15: 'yes' }],
     covers: [{ id: 'c3', code: 'BUSINESS_EQUIPMENT', netPence: 9750, sumInsured: 5000 }],
   });
   assert.equal(

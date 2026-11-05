@@ -1,11 +1,11 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { AccreditationDashboardCard } from './AccreditationStatus.jsx';
 import { ArrowRight, ArrowUpRight, Sparkles } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { DEMO_RECORDS, DEMO_SERVICES } from './data/demo.js';
 import { IconFor, ServiceArrow, Status } from './UiParts.jsx';
 import IntegrationStatus from './components/IntegrationStatus.jsx';
-import { DATA_MODE, INTEGRATIONS } from './services/api.js';
+import { DATA_MODE, INTEGRATIONS, portalApi } from './services/api.js';
 import { RecordsSummary } from './LiveRecords.jsx';
 import { Notice, PageHeading } from './UiParts.jsx';
 import { liveServices } from './combinedFlow.js';
@@ -32,36 +32,58 @@ const LIVE_SERVICES = [
     theme: 'violet',
   },
 ];
-export default function Dashboard() {
-  if (DATA_MODE === 'api')
+// The Dashboard is for people who are signed in. Anyone else goes to the sign-in page, which also offers registration (Guild, 5 November 2026).
+function useSignedInName() {
+  const [state, setState] = useState({ status: 'checking', firstName: '' });
+  useEffect(() => {
+    let live = true;
+    portalApi
+      .getIdentity()
+      .then(
+        user =>
+          live && setState(user ? { status: 'in', firstName: user.firstName || '' } : { status: 'out', firstName: '' }),
+      )
+      .catch(() => live && setState({ status: 'out', firstName: '' }));
+    return () => {
+      live = false;
+    };
+  }, []);
+  return state;
+}
+function LiveDashboard() {
+  const who = useSignedInName();
+  if (who.status === 'checking')
     return (
       <div className="page dashboard">
-        <PageHeading
-          eyebrow="YOUR GUILD"
-          title="Welcome to the Guild"
-          description="Manage your membership, insurance and training centre accreditation in one place."
-        />
-        <div className="services-grid">
-          {liveServices(LIVE_SERVICES, INTEGRATIONS.combinedFlow).map(s =>
-            s.kind === 'accreditation' && INTEGRATIONS.crmRecords ? (
-              <AccreditationDashboardCard key={s.kind} service={s} />
-            ) : (
-              <Link key={s.kind} className={'service-card ' + s.theme} to={'/' + s.kind}>
-                <span className="service-icon">
-                  <IconFor kind={s.kind} />
-                </span>
-                <small>GUILD SERVICES</small>
-                <strong>{s.title}</strong>
-                <p>{s.description}</p>
-                <ServiceArrow>{s.action}</ServiceArrow>
-              </Link>
-            ),
-          )}
-        </div>
-        {INTEGRATIONS.crmRecords && <RecordsSummary />}
+        <p role="status">Checking your signed-in session…</p>
       </div>
     );
-
+  if (who.status === 'out') return <Navigate to="/login" replace />;
+  return (
+    <div className="page dashboard">
+      <PageHeading title={who.firstName ? 'Hi, ' + who.firstName : 'Hi'} />
+      <div className="services-grid">
+        {liveServices(LIVE_SERVICES, INTEGRATIONS.combinedFlow).map(s =>
+          s.kind === 'accreditation' && INTEGRATIONS.crmRecords ? (
+            <AccreditationDashboardCard key={s.kind} service={s} />
+          ) : (
+            <Link key={s.kind} className={'service-card ' + s.theme} to={'/' + s.kind}>
+              <span className="service-icon">
+                <IconFor kind={s.kind} />
+              </span>
+              <strong>{s.title}</strong>
+              <p>{s.description}</p>
+              <ServiceArrow>{s.action}</ServiceArrow>
+            </Link>
+          ),
+        )}
+      </div>
+      {INTEGRATIONS.crmRecords && <RecordsSummary />}
+    </div>
+  );
+}
+export default function Dashboard() {
+  if (DATA_MODE === 'api') return <LiveDashboard />;
   return (
     <div className="page dashboard">
       <div className="eyebrow welcome">

@@ -13,17 +13,17 @@ export const LEGAL = {
 export const LEGAL_LINKS = { 'Terms of Business': LEGAL.terms.href, 'Privacy Policy': LEGAL.privacy.href };
 const DOCUMENT_NAMES = {
   MEDMAL_WORDING: 'Medical Malpractice Policy Wording',
-  GENERAL_TERMS: 'General Terms & Conditions',
-  NON_SALON_CONTENTS_WORDING: 'Non-Salon Contents Policy Wording',
-  NON_SALON_EL_WORDING: "Non-Salon Employers' Liability Policy Wording",
-  NON_SALON_PROPERTY_DEFINITIONS: 'Non-Salon Property Definitions',
-  SALON_EL_WORDING: "Salon Employers' Liability Policy Wording",
-  SALON_CONTENTS_WORDING: 'Salon Contents Policy Wording',
-  SALON_MONEY_WORDING: 'Salon Money Policy Wording',
-  SALON_BUILDINGS_WORDING: 'Salon Buildings Policy Wording',
-  SALON_BI_WORDING: 'Salon Business Interruption Policy Wording',
-  SALON_PROPERTY_AWAY_WORDING: 'Salon Property Away Policy Wording',
-  SALON_PROPERTY_DEFINITIONS: 'Salon Property Definitions',
+  GENERAL_TERMS: 'General Terms and Conditions',
+  NON_SALON_CONTENTS_WORDING: 'Business Equipment Policy Wording',
+  NON_SALON_EL_WORDING: "Employers' Liability Policy Wording",
+  NON_SALON_PROPERTY_DEFINITIONS: 'Property Definitions',
+  SALON_EL_WORDING: "Employers' Liability Policy Wording",
+  SALON_CONTENTS_WORDING: 'Contents Policy Wording',
+  SALON_MONEY_WORDING: 'Money Policy Wording',
+  SALON_BUILDINGS_WORDING: 'Buildings Policy Wording',
+  SALON_BI_WORDING: 'Business Interruption Policy Wording',
+  SALON_PROPERTY_AWAY_WORDING: 'Property Away Policy Wording',
+  SALON_PROPERTY_DEFINITIONS: 'Property Definitions',
 };
 // The policy documents that apply to the cover chosen (V1 getQuoteDocuments), from the insurance form's answers.
 export function policyDocuments(v = {}) {

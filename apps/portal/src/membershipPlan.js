@@ -2,7 +2,7 @@
 // belong to which step (docs/delivery/combined-membership-flow-spec.md, sections 2 and 3). The server's membershipDecision.js is the
 // authority on the level and the price. This only decides what to SHOW before the server has been asked, and membershipPlan.test.js checks
 // it against the server function for every row of the matrix so the two cannot drift.
-import { INSURANCE_STEPS, visibleSteps } from './insuranceInputs.js';
+import { INSURANCE_STEPS, stopOf, stopMessages, visibleSteps } from './insuranceInputs.js';
 import { validate } from './logic.mjs';
 
 const UK_GROUP = ['united kingdom', 'uk', 'great britain', 'england', 'scotland', 'wales', 'northern ireland'];
@@ -100,7 +100,10 @@ export const fieldsOf = (key, values) =>
 
 // What is still missing on an insurance step. `working` comes from About you's sibling step, so how_you_work also needs it chosen.
 export function insuranceStepErrors(key, values) {
-  const errors = validate(fieldsOf(key, values), values);
+  const fields = fieldsOf(key, values),
+    errors = validate(fields, values);
+  // A call-the-office answer stops the journey here (Guild, 5 November 2026): the message is the error.
+  for (const f of fields) if (!errors[f.name] && stopOf(f, values)) errors[f.name] = stopOf(f, values);
   if (key === 'how_you_work' && !(values.insWorking || []).length) errors.insWorking = 'Choose how you work.';
   return errors;
 }

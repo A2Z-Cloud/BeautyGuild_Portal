@@ -57,7 +57,6 @@ export function AccreditationDashboardCard({ service }) {
         <span className="service-icon">
           <IconFor kind="accreditation" />
         </span>
-        <small>GUILD SERVICES</small>
         <strong>{service.title}</strong>
         <p>Checking your accreditation…</p>
       </div>
@@ -72,7 +71,6 @@ export function AccreditationDashboardCard({ service }) {
       <span className="service-icon">
         <IconFor kind="accreditation" />
       </span>
-      <small>GUILD SERVICES</small>
       <strong>{active ? state.title : service.title}</strong>
       <p>{active ? state.text : service.description}</p>
       <ServiceArrow>{go.action}</ServiceArrow>

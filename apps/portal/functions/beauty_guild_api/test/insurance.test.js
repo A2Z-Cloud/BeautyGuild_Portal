@@ -54,6 +54,7 @@ test('named people, treatments, teaching and non-salon tiers are rated as in V1'
     insTeachingCover: 'additional',
     insEquipmentTier: 10000,
     insStandardConstruction: 'no',
+    insNonStandardOver15: 'yes',
     insNonSalonEL: true,
     insNonSalonELTier: 3,
   });
@@ -159,6 +160,17 @@ test('STOP rules: territory, wage roll, sums insured, declarations the customer 
     ['insNonAdvisedAccepted', 'NON_ADVISED_SALE'],
   ])
     assert.ok(codes(rules({ [key]: 'no' })).includes(code));
+});
+test('business equipment: a No to the 15% non-standard question is rated as standard (Guild, 5 November 2026)', () => {
+  const rate = extra =>
+    quote({ insEquipmentTier: 10000, ...extra }).rows.find(r => r.code === 'BUSINESS_EQUIPMENT').premiumPence;
+  assert.equal(rate({ insStandardConstruction: 'yes' }), 10000);
+  assert.equal(rate({ insStandardConstruction: 'no', insNonStandardOver15: 'no' }), 10000, 'up to 15% is standard');
+  assert.equal(
+    rate({ insStandardConstruction: 'no', insNonStandardOver15: 'yes' }),
+    15000,
+    'over 15% is the higher rate',
+  );
 });
 test('REFER rules: people limit, multiple salons, premises history, declarations', () => {
   const five = Array.from({ length: 5 }, () => ({ type: 'employee', firstName: 'A', lastName: 'B' }));
@@ -345,7 +357,12 @@ test('every quote row carries a price list code that exists in Books, whatever t
     }
   };
   for (const nonStd of ['yes', 'no'])
-    for (const tier of [5000, 10000, 15000, 20000]) check({ insEquipmentTier: tier, insStandardConstruction: nonStd });
+    for (const tier of [5000, 10000, 15000, 20000])
+      check({
+        insEquipmentTier: tier,
+        insStandardConstruction: nonStd,
+        insNonStandardOver15: nonStd === 'no' ? 'yes' : 'no',
+      });
   for (const tier of [1, 3, 5]) check({ insNonSalonEL: true, insNonSalonELTier: tier });
   for (const turnover of [50000, 100000, 100001, 175000, 175001, 250000])
     check({ insSalon: true, insTurnover: turnover });

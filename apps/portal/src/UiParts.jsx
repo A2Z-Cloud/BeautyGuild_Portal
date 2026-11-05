@@ -42,7 +42,7 @@ export function PageHeading({ eyebrow, title, description, children }) {
   return (
     <div className="page-heading">
       <div>
-        <small className="eyebrow">{eyebrow}</small>
+        {eyebrow && <small className="eyebrow">{eyebrow}</small>}
         <h1>{title}</h1>
         {description && <p>{description}</p>}
       </div>

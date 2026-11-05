@@ -34,3 +34,4 @@ Thumbs.db
 
 # Written by scripts/deploy-functions.sh for the duration of a deploy only
 apps/portal/functions/beauty_guild_api/build-info.json
+apps/portal/.catalystrc
