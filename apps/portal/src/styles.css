@@ -4100,3 +4100,13 @@ button.doc-card {
   display: flex;
   gap: 14px;
 }
+
+/* A button on its own row under a card grid needs room above and below it. */
+.service-extra-action {
+  margin: 22px 0 24px;
+}
+/* A button in the page heading keeps its text on one line and its size, whatever the description beside it. */
+.page-heading > .btn {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
