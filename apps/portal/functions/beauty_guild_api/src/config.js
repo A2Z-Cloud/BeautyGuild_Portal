@@ -117,6 +117,11 @@ function loadConfig(env = process.env) {
     creatorConnectionName: String(env.CREATOR_CONNECTION_NAME || 'zohocreator'),
     creatorAccountOwner: String(env.CREATOR_ACCOUNT_OWNER || 'beautyguild'),
     creatorAppLinkName: String(env.CREATOR_APP_LINK_NAME || 'beautyguild'),
+    // The new Beauty Guild Payments app holds invoices and voucher redemptions; the older app still holds the school forms and reports.
+    // Unset, it is the same app as above.
+    creatorPaymentsAppLinkName: String(
+      env.CREATOR_PAYMENTS_APP_LINK_NAME || env.CREATOR_APP_LINK_NAME || 'beautyguild',
+    ),
     creatorInvoiceReport: String(env.CREATOR_INVOICES_REPORT || 'All_Invoice_Records'),
     // Set these only after confirming the school identifier API name and status in CRM.
     publicVerificationEnabled: env.PUBLIC_SCHOOL_VERIFICATION_ENABLED === 'true',

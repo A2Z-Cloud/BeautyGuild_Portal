@@ -204,7 +204,7 @@ function createApp({
       getCreatorHeaders,
       creatorApiDomain: config.creatorApiDomain,
       creatorAccountOwner: config.creatorAccountOwner,
-      creatorAppLinkName: config.creatorAppLinkName,
+      creatorAppLinkName: config.creatorPaymentsAppLinkName,
       fetchImpl,
     }),
     enabled: config.billingEnabled,

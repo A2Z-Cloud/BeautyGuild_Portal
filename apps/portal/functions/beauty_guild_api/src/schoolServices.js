@@ -59,6 +59,7 @@ function createSchoolApi({
   creatorApiDomain,
   creatorAccountOwner,
   creatorAppLinkName,
+  creatorPaymentsAppLinkName = creatorAppLinkName,
   creatorInvoiceReport,
   fetchImpl = fetch,
 }) {
@@ -78,12 +79,12 @@ function createSchoolApi({
     const r = await call(req, crmApiDomain, '/crm/v3/' + path, await getCrmHeaders(req));
     return r.data || [];
   };
-  const creator = async (req, report, criteria) => {
+  const creator = async (req, report, criteria, app = creatorAppLinkName) => {
     const path =
       '/creator/v2.1/data/' +
       esc(creatorAccountOwner) +
       '/' +
-      esc(creatorAppLinkName) +
+      esc(app) +
       '/report/' +
       esc(report) +
       '?field_config=all&max_records=200&criteria=' +
@@ -140,7 +141,7 @@ function createSchoolApi({
     return r;
   }
   async function invoices(req, criteria) {
-    const rows = await creator(req, creatorInvoiceReport, criteria);
+    const rows = await creator(req, creatorInvoiceReport, criteria, creatorPaymentsAppLinkName);
     // Newest first. Creator ids grow with time, and a Books number such as INV-000123 is not a number, so sort on the id (ids are too long for Number).
     return rows
       .map(mapInvoice)
@@ -156,6 +157,7 @@ function createSchoolApi({
       req,
       creatorInvoiceReport,
       '(ID == ' + id + ' && crm_contact_id == "' + contactId + '")',
+      creatorPaymentsAppLinkName,
     );
     const row = rows.find(r => String(r.ID) === String(id));
     if (!row || !pick(row, PDF_FIELD, 'invoice_pdf')) notFound();
@@ -167,7 +169,7 @@ function createSchoolApi({
       '/creator/v2.1/data/' +
       esc(creatorAccountOwner) +
       '/' +
-      esc(creatorAppLinkName) +
+      esc(creatorPaymentsAppLinkName) +
       '/report/' +
       esc(creatorInvoiceReport) +
       '/' +
@@ -279,6 +281,7 @@ function registerSchoolRoutes(
       creatorApiDomain: config.creatorApiDomain,
       creatorAccountOwner: config.creatorAccountOwner,
       creatorAppLinkName: config.creatorAppLinkName,
+      creatorPaymentsAppLinkName: config.creatorPaymentsAppLinkName,
       creatorInvoiceReport: config.creatorInvoiceReport,
       fetchImpl,
     });
