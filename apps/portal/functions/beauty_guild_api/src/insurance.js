@@ -239,7 +239,9 @@ function calculateQuote(ins) {
   if (ins.insTeachingCover === 'additional')
     add('TEACHING_PLUS', 'Teaching + Student Cover + Additional Treatments', 150, { sku: 'INS-TEACH-PLUS' });
   if (!salon) {
-    const nonStandard = ins.insStandardConstruction === 'no';
+    // The higher rates apply only when more than 15% of the premises is non-standard (and that case is referred). Up to 15% is rated as
+    // standard (Guild, 5 November 2026: a No to the 15% question must not get the non-standard rates).
+    const nonStandard = ins.insStandardConstruction === 'no' && ins.insNonStandardOver15 === 'yes';
     const equipment = (nonStandard ? NON_SALON_EQUIPMENT_NON_STANDARD : NON_SALON_EQUIPMENT).find(
       t => t.value === ins.insEquipmentTier,
     );

@@ -106,11 +106,10 @@ export default function PricePanel({
                 <span>Due today</span>
                 <strong>{money(dueToday(quote))}</strong>
               </div>
-              {loading && (
-                <p className="price-updating" role="status">
-                  Updating…
-                </p>
-              )}
+              {/* The line keeps its space when nothing is loading, so the panel does not jump as extras are added (Guild, 5 November 2026). */}
+              <p className={'price-updating' + (loading ? '' : ' idle')} role="status">
+                {loading ? 'Updating…' : '\u00a0'}
+              </p>
               {error && (
                 <p className="price-error" role="alert">
                   {error}

@@ -1,6 +1,6 @@
 import React, { useEffect, useId, useRef } from 'react';
 import { Info } from 'lucide-react';
-import { POLICY_WORDING } from './insuranceInputs.js';
+import { POLICY_WORDING, stopOf } from './insuranceInputs.js';
 
 const ext = { target: '_blank', rel: 'noopener noreferrer' };
 const opts = f => (f.options || []).map(o => (typeof o === 'string' ? { value: o, label: o } : o));
@@ -180,24 +180,47 @@ function PeopleRows({ field: f, value, onChange, id }) {
     </div>
   );
 }
-const Choice = ({ o, checked, type, name, onChange, field, values }) => (
-  <div className="ins-option">
-    <label className={'radio-choice' + (checked ? ' selected' : '')}>
-      <input type={type} name={name} value={o.value} checked={checked} onChange={onChange} />
-      <span>
-        {o.label}
-        {o.price && (
-          <strong className="ins-price">
-            {' '}
-            {o.price}
-            <small> including IPT</small>
-          </strong>
-        )}
-      </span>
-    </label>
-    {o.info && <InfoTip label={o.label} blocks={o.info} />}
-  </div>
-);
+// An option can carry `wording`: what it covers and what the member must hold. A small "i" opens it, and ticking the option opens it too.
+function Choice({ o, checked, type, name, onChange }) {
+  const [open, setOpen] = React.useState(false),
+    wordingId = useId();
+  const showWording = Boolean(o.wording) && (checked || open);
+  return (
+    <div className="ins-option">
+      <label className={'radio-choice' + (checked ? ' selected' : '')}>
+        <input type={type} name={name} value={o.value} checked={checked} onChange={onChange} />
+        <span>
+          {o.label}
+          {o.price && (
+            <strong className="ins-price">
+              {' '}
+              {o.price}
+              <small> including IPT</small>
+            </strong>
+          )}
+        </span>
+      </label>
+      {o.info && <InfoTip label={o.label} blocks={o.info} />}
+      {o.wording && (
+        <button
+          type="button"
+          className="ins-tip-btn"
+          aria-expanded={showWording}
+          aria-controls={wordingId}
+          aria-label={'What this covers: ' + o.label}
+          onClick={() => setOpen(x => !x)}
+        >
+          <Info size={15} />
+        </button>
+      )}
+      {showWording && (
+        <div id={wordingId} className="ins-wording">
+          <Blocks blocks={o.wording} />
+        </div>
+      )}
+    </div>
+  );
+}
 
 // One insurance question. Own renderer (not UiParts' Field) so the customer's pop-ups, notes and prices sit where they asked; the
 // answers it reports are the same as Field's.
@@ -216,17 +239,7 @@ export function InsField({ field: f, value, onChange, error, values = {} }) {
   const group = f.type === 'radio' || f.type === 'multi',
     labelRow = f.type !== 'checkbox' && (
       <div className="ins-label">
-        {group ? (
-          <span id={id + '-label'}>
-            {f.label}
-            {f.required ? ' *' : ''}
-          </span>
-        ) : (
-          <label htmlFor={id}>
-            {f.label}
-            {f.required ? ' *' : ''}
-          </label>
-        )}
+        {group ? <span id={id + '-label'}>{f.label}</span> : <label htmlFor={id}>{f.label}</label>}
         {tip}
       </div>
     );
@@ -291,7 +304,19 @@ export function InsField({ field: f, value, onChange, error, values = {} }) {
       </select>
     );
   else
-    control = (
+    control = f.prefix ? (
+      <div className="ins-prefixed">
+        <span aria-hidden="true">{f.prefix}</span>
+        <input
+          {...common}
+          type={f.type || 'text'}
+          min={f.type === 'number' ? 0 : undefined}
+          inputMode={f.type === 'number' ? 'decimal' : undefined}
+          value={value ?? ''}
+          onChange={update}
+        />
+      </div>
+    ) : (
       <input
         {...common}
         type={f.type || 'text'}
@@ -301,10 +326,15 @@ export function InsField({ field: f, value, onChange, error, values = {} }) {
         onChange={update}
       />
     );
-  const stop = (f.stopOn && value === f.stopOn) || (f.stopAbove && Number(value) > f.stopAbove);
+  const stop = stopOf(f, { ...values, [f.name]: value });
   return (
     <div className={'field ins-field' + (error ? ' invalid' : '')}>
       {labelRow}
+      {f.lead && (
+        <div className="ins-note">
+          <Blocks blocks={f.lead} />
+        </div>
+      )}
       {control}
       {f.note && (
         <div className="ins-note">
@@ -318,11 +348,11 @@ export function InsField({ field: f, value, onChange, error, values = {} }) {
       )}
       {stop && (
         <small className="field-warning" role="alert">
-          {f.stopMessage}
+          {stop}
         </small>
       )}
-      {f.hint && <small>{f.hint}</small>}
-      {error && (
+      {f.hint && (!f.hintWhen || f.hintWhen(value)) && <small>{f.hint}</small>}
+      {error && error !== stop && (
         <small id={id + '-error'} className="error" role="alert">
           {error}
         </small>

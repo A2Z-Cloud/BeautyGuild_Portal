@@ -138,7 +138,11 @@ test('AL-INS-044 and 049: wage roll is a yes/no for a salon, and the figure is o
   assert.ok(names({ ...SALON, insSalonEL: 'yes' }).includes('insWageRoll'));
   assert.deepEqual(stopMessages({ ...SALON, insWageRollOver125k: 'yes' }), [CALL_OFFICE]);
   assert.deepEqual(stopMessages({ ...SALON, insWageRollOver125k: 'no' }), []);
-  assert.deepEqual(stopMessages({ ...SALON, insSalonEL: 'yes', insWageRoll: '125001' }), [CALL_OFFICE]);
+  assert.deepEqual(stopMessages({ ...SALON, insSalonEL: 'yes', insWageRoll: '125001' }), [
+    'Gross Annual Wage Roll cannot exceed £125,000. Please call our office on ' +
+      GUILD_PHONE +
+      ' for further assistance.',
+  ]);
   assert.deepEqual(stopMessages({ ...SALON, insSalonEL: 'yes', insWageRoll: '125000' }), []);
   const r = toRequest({ ...SALON, insWageRollOver125k: 'no', insSalonEL: 'yes', insWageRoll: '60000' });
   assert.equal(r.insWageRollOver125k, 'no');
@@ -149,8 +153,8 @@ test('AL-INS-073: the £10,000 single item limit is wording on the page, not a q
   const v = { ...SALON, insContents: 'yes', insPropertyAwayCover: 'yes' };
   assert.ok(!names(v).includes('insPropertyAwayMaxItem'));
   assert.equal(stopMessages({ ...v, insPropertyAwayMaxItem: '50000' }).length, 0);
-  const field = visibleFields(v).find(f => f.name === 'insPropertyAwaySI');
-  assert.ok(field.info.includes('The value of any single item to be insured does not exceed £10,000'));
+  const cover = visibleFields(v).find(f => f.name === 'insPropertyAwayCover');
+  assert.ok(cover.yesNote.includes('The value of any single item to be insured cannot exceed £10,000'));
 });
 test('AL-INS-008 and 009: treatment and teaching prices show with IPT, and additional teaching needs an additional treatment', () => {
   assert.deepEqual(
@@ -286,4 +290,73 @@ test('Money, Buildings, Business Interruption and Property Away are only offered
     [false, false, false, false],
   );
   assert.equal(toRequest({ ...SALON, insContents: 'yes', insMoneyCover: 'yes' }).insMoneyCover, true);
+});
+
+const STOP_TEXT = what => what + ' Please call our office on ' + GUILD_PHONE + ' for further assistance.';
+test('limits stop the journey with the Guild wording, and no limit message shows at the limit', () => {
+  const salon = { ...SALON, insContents: 'yes' };
+  assert.deepEqual(stopMessages({ ...salon, insSalonCount: '3' }), []);
+  assert.equal(stopMessages({ ...salon, insSalonCount: '4' }).length, 1);
+  assert.match(stopMessages({ ...salon, insSalonCount: '4' })[0], /unable to offer you a quote for insurance/);
+  const big = { ...salon, insComputers: '100000', insEquipment: '100000', insStock: '50001' };
+  assert.deepEqual(stopMessages(big), [STOP_TEXT('Total sum insured for contents cover cannot exceed £250,000.')]);
+  assert.deepEqual(stopMessages({ ...big, insStock: '50000' }), []);
+  const bld = { ...salon, insBuildingsCover: 'yes', insBuildingsSI: '400000', insFixturesSI: '100001' };
+  assert.deepEqual(stopMessages(bld), [STOP_TEXT('Total sum insured for buildings cover cannot exceed £500,000.')]);
+  assert.deepEqual(stopMessages({ ...bld, insFixturesSI: '100000' }), []);
+  const bi = { ...salon, insBiCover: 'yes', insBiIncome: '250000', insBiDebtsCover: 'yes', insBiDebts: '50001' };
+  assert.deepEqual(stopMessages(bi), [
+    STOP_TEXT('Total sum insured for business interruption cover cannot exceed £300,000.'),
+  ]);
+  assert.deepEqual(stopMessages({ ...bi, insBiDebts: '50000' }), []);
+  assert.deepEqual(
+    stopMessages({ ...bi, insBiDebtsCover: 'no', insBiDebts: '90000' }),
+    [],
+    'debts only count when asked',
+  );
+  const away = { ...salon, insPropertyAwayCover: 'yes', insPropertyAwaySI: '25001' };
+  assert.deepEqual(stopMessages(away), [
+    STOP_TEXT('Total sum insured for property away and in transit cover cannot exceed £25,000.'),
+  ]);
+  assert.deepEqual(stopMessages({ ...away, insPropertyAwaySI: '25000' }), []);
+  assert.deepEqual(stopMessages({ ...salon, insBuildingsCover: 'yes', insBuildingsSubsidenceDeclaration: 'no' }), [
+    CALL_OFFICE,
+  ]);
+});
+test('the outstanding debts question is for the screen only: the amount is what is sent', () => {
+  const v = { ...SALON, insContents: 'yes', insBiCover: 'yes', insBiIncome: '10000' };
+  assert.ok(names(v).includes('insBiDebtsCover'));
+  assert.ok(!names(v).includes('insBiDebts'));
+  assert.ok(names({ ...v, insBiDebtsCover: 'yes' }).includes('insBiDebts'));
+  const r = toRequest({ ...v, insBiDebtsCover: 'yes', insBiDebts: '5000' });
+  assert.equal(r.insBiDebts, 5000);
+  assert.equal(Object.hasOwn(r, 'insBiDebtsCover'), false);
+});
+test('the two treatment questions sit under Treatments we cover and must both be Yes', () => {
+  const step = INSURANCE_STEPS.find(s => s.id === 'standardTreatments');
+  assert.deepEqual(
+    step.fields.map(f => f.name),
+    ['insQualifiedForTreatments', 'insPatchTesting'],
+  );
+  assert.ok(step.fields.every(f => f.mustBe === 'yes'));
+  assert.deepEqual(
+    INSURANCE_STEPS.find(s => s.id === 'treatments').fields.map(f => f.name),
+    ['insTreatmentExtensions'],
+  );
+  assert.ok(
+    TREATMENT_OPTIONS.every(o => o.wording[0].length > 50),
+    'each advanced treatment carries its wording',
+  );
+});
+test('business equipment is a list of levels with Not required last, and is still sent as a number', () => {
+  const f = visibleFields(NON).find(x => x.name === 'insEquipmentTier');
+  assert.equal(f.type, 'radio');
+  assert.equal(f.options.at(-1).label, 'Not required');
+  assert.equal(toRequest({ ...NON, insEquipmentTier: '10000' }).insEquipmentTier, 10000);
+  assert.equal(toRequest({ ...NON, insEquipmentTier: '0' }).insEquipmentTier, 0);
+});
+test('the maximum of 5 note shows only when four people are listed', () => {
+  const f = visibleFields({ ...NON, insNamedPeopleCover: 'yes' }).find(x => x.name === 'insNamedPeople');
+  assert.equal(f.hintWhen([{}, {}, {}]), false);
+  assert.equal(f.hintWhen([{}, {}, {}, {}]), true);
 });

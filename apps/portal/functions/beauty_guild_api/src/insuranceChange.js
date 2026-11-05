@@ -75,6 +75,7 @@ function rate({ people = [], treatments = [], teaching = '', equipmentTier = 0, 
     insTeachingCover: teaching,
     insEquipmentTier: equipmentTier,
     insStandardConstruction: nonStandard ? 'no' : 'yes',
+    insNonStandardOver15: nonStandard ? 'yes' : 'no',
     insNonSalonEL: elTier > 0,
     insNonSalonELTier: elTier,
   });
@@ -134,7 +135,9 @@ function quoteChange({ cover, change, today }) {
         ? change.effectiveDate
         : insuranceCover.startDate || change.effectiveDate,
   });
-  const nonStandard = (insuranceCover.premises || []).some(p => p.standardConstruction === 'no');
+  const nonStandard = (insuranceCover.premises || []).some(
+    p => p.standardConstruction === 'no' && p.nonStandardOver15 === 'yes',
+  );
   const covers = insuranceCover.covers || [];
   const annual = row => annualPence(row, insuranceCover);
   const byCode = code => covers.find(c => c.code === code);

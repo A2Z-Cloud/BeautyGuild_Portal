@@ -13,13 +13,13 @@ test('the Guild legal pages are the agreed addresses', () => {
 const names = v => policyDocuments(v).map(d => d.name);
 test('policy documents follow the cover chosen, as in V1', () => {
   assert.deepEqual(names({ insWorking: ['insWorkingFromHome'] }), [
-    'General Terms & Conditions',
+    'General Terms and Conditions',
     'Medical Malpractice Policy Wording',
   ]);
   assert.deepEqual(names({ insWorking: ['insMobile'], insEquipmentTier: '5000', insNonSalonEL: 'yes' }).slice(2), [
-    "Non-Salon Employers' Liability Policy Wording",
-    'Non-Salon Contents Policy Wording',
-    'Non-Salon Property Definitions',
+    "Employers' Liability Policy Wording",
+    'Business Equipment Policy Wording',
+    'Property Definitions',
   ]);
   const salon = names({
     insWorking: ['insSalon'],
@@ -32,8 +32,11 @@ test('policy documents follow the cover chosen, as in V1', () => {
     insEquipmentTier: '5000',
   });
   assert.equal(salon.length, 9);
-  assert.ok(salon.includes('Salon Business Interruption Policy Wording'));
-  assert.ok(!salon.some(n => n.startsWith('Non-Salon')));
+  assert.ok(salon.includes('Business Interruption Policy Wording'));
+  assert.ok(
+    !salon.some(n => /^(Non-)?Salon/.test(n)),
+    'the Salon and Non-Salon prefixes are gone (Guild, 5 November 2026)',
+  );
 });
 test('every policy document has a public share link', () => {
   const all = policyDocuments({

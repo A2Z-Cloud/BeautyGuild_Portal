@@ -7,7 +7,8 @@
 import { LEGAL } from './legal.js';
 import { POLICY_LINKS } from './policyLinks.js';
 export const GUILD_PHONE = '01332 224830';
-export const CALL_OFFICE = 'Please call the office to discuss your application';
+export const CALL_OFFICE = 'Please call our office on ' + GUILD_PHONE + ' to discuss your application';
+const CALL_FOR_HELP = what => what + ' Please call our office on ' + GUILD_PHONE + ' for further assistance.';
 export const WAGE_ROLL_LIMIT = 125000;
 const IPT = 1.12;
 const yn = (name, label, extra = {}) => ({
@@ -32,12 +33,23 @@ const propertyCover = v =>
   ['insContents', 'insMoneyCover', 'insBuildingsCover', 'insBiCover', 'insPropertyAwayCover'].some(k => v[k] === 'yes');
 const treatments = v => (v.insTreatmentExtensions || []).length > 0;
 const tiers = [
-  [0, 'None'],
   [5000, 'Up to £5,000'],
   [10000, 'Up to £10,000'],
   [15000, 'Up to £15,000'],
   [20000, 'Up to £20,000'],
+  [0, 'Not required'],
 ].map(([value, label]) => ({ value: String(value), label }));
+const num = x => Number(x) || 0;
+const totalOf = (v, keys) => keys.reduce((t, k) => t + num(v[k]), 0);
+const CONTENTS_KEYS = [
+  'insComputers',
+  'insEquipment',
+  'insStock',
+  'insGeneralContents',
+  'insTenantImprovements',
+  'insRentPayable',
+];
+const BUILDINGS_KEYS = ['insBuildingsSI', 'insFixturesSI', 'insRentReceivableSI'];
 // What the customer pays for a net premium once Insurance Premium Tax is added (12%), as pounds and pence.
 export const withIpt = net => '£' + (Math.round(net * 100 * IPT) / 100).toFixed(2);
 export const gbp = n =>
@@ -81,6 +93,18 @@ const CONTENTS_WORDING =
   'This covers you for damage to your business stock and equipment from fire, flood or theft up to the value chosen. This would include your business tools and equipment which are items such as scissors, hair straighteners, make-up brushes, waxing strips, and specialist beauty therapy equipment. It would also include any computer equipment used in connection with your business and your stock, i.e. the goods you sell, and materials you use to provide your services.';
 
 // Prices include IPT: the net premiums are the function's TREATMENT_EXTENSIONS and teaching rows (insurance.js).
+// What each advanced treatment covers and what the member must hold, from the Guild's own wording (UAT, 5 November 2026).
+const TREATMENT_WORDING = {
+  advanced_electrolysis:
+    "Advanced electrolysis level 1, including the removal and reduction of: dilated blood vessels, telangiectasia - dilated blood vessels near the surface of the skin, spider naevus - dilated blood vessels near the surface of the skin, campbell de morgans or cherry angiomas – blood spots, skin tags or papillomas, milia – small raised pearly white or yellowish bumps on the skin, warts, common warts - firm raised warts with a raised surface, plane warts - smooth flat growth often yellow in colour, removal of hairs from moles, removal of moles or dermatosis papulosa nigra - benign skin lesions on dark skin. You must ensure that such treatment was included in your advanced electrolysis training course (NVQ Level 3 Beauty Therapy with a unit on advanced electrolysis or an equivalent qualification). You must ensure that you have obtained approval in writing from your client's General Practitioner, which is retained by you alongside the client’s general record card, prior to the performance of any advanced electrolysis level 1 treatment for: warts, common warts, plane warts, removal of hairs from moles or removal of moles. If you require further clarification about your advanced electrolysis qualification, please email info@beautyguild.com",
+  microneedling:
+    'Also includes Nano-needling. Needle sizes can be used on the face up to 1.5 mm and needle sizes can be used on the body up to 3 mm. You must hold NVQ Level 3 Beauty Therapy or equivalent national qualification including A&P plus relevant manufacturer or supplier’s training certificate.',
+  piercing:
+    'You must use only one of the following systems; Blomdahl Medical Ear Piercing System, Caress 2000, Coren, Inverness, Medisept, New Caflon Disposable, Perfex, Studex Ear Piercing System or Trips Sterile Guard. We can also cover piercing that is performed with a single-use, sterile cannula needle. You must also obtain written consent from the parent or guardian of any client aged under 16 prior to performing the piercing.',
+  spmu: 'Microblading of the eyebrows. Semi-permanent make up and micropigmentation administered for the purposes of eyeliner, eyebrow, lip liner, full lip colour or areola. You must hold NVQ Level 3 or equivalent in Beauty Therapy or NVQ Level 3 or equivalent in Facial Electricals, including A&P plus relevant manufacturer or supplier’s training certificate. You must ensure that; 1) your client has read dated and signed an appropriate consent form prior to their treatment of which you have stored on file, 2) you were qualified to perform treatments to the specific area being treated at the time of the treatment and 3) you always use a single use, disposable and sterile instrument which you immediately dispose of into a sharps container following each treatment.',
+  dermaplaning:
+    'For exfoliation on the skin and removal of fine hairs. You must hold NVQ Level 2 Beauty Therapy or equivalent UK accredited qualification including A&P plus relevant manufacturers or suppliers training certificate',
+};
 export const TREATMENT_OPTIONS = [
   {
     value: 'advanced_electrolysis',
@@ -91,7 +115,7 @@ export const TREATMENT_OPTIONS = [
   { value: 'piercing', label: 'Nose and Cartilage Piercing', net: 14.15 },
   { value: 'spmu', label: 'Microblading, Semi-Permanent Make Up & Micropigmentation', net: 179.25 },
   { value: 'dermaplaning', label: 'Dermaplaning', net: 179.25 },
-].map(o => ({ ...o, price: withIpt(o.net) }));
+].map(o => ({ ...o, price: withIpt(o.net), wording: [TREATMENT_WORDING[o.value]] }));
 export const DECLARATION_STATEMENTS = [
   'I have not made any claims in the past 5 years and I have never had any claims for any laser or IPL treatments.',
   'I have not been declared bankrupt, become insolvent, made any voluntary arrangement with creditors or been subject to enforcement of a judgement debt either in a personal capacity or as a business.',
@@ -136,7 +160,28 @@ export function demandsAndNeeds(v) {
   } else if (Number(v.insEquipmentTier) > 0) items.push('Contents up to ' + gbp(v.insEquipmentTier));
   return { intro: DEMANDS_INTRO, items };
 }
-const salonSum = (name, label, info, when) => sum(name, label + ' (£)', { when, info: [info] });
+const PATCH_TEST_INFO = [
+  'You must ensure that:',
+  'At least 24 hours prior to:',
+  {
+    list: [
+      'The application of false eyelashes;',
+      'Any eyelash or eyebrow tinting;',
+      'Any eyelash perming treatment; or',
+      "The application of any other chemicals to the skin or hair where, the manufacturer's instructions for the product being used, requires a patch test,",
+    ],
+  },
+  'A skin patch test must be performed on:',
+  {
+    list: [
+      'New clients to be treated;',
+      'Existing clients, where a year has passed since their last patch test; or',
+      "Where the product applied has been changed since the client's last treatment of that kind.",
+    ],
+  },
+  "The results of each patch test must be recorded in writing on the client's records.",
+];
+const salonSum = (name, label, info, when, extra = {}) => sum(name, label + ' (£)', { when, info: [info], ...extra });
 
 export const INSURANCE_STEPS = [
   {
@@ -162,7 +207,7 @@ export const INSURANCE_STEPS = [
       },
       {
         name: 'insTurnover',
-        label: 'Estimated annual turnover for the next 12 months',
+        label: 'What is your estimated annual turnover for the next 12 months?',
         type: 'radio',
         numeric: true,
         required: true,
@@ -173,7 +218,7 @@ export const INSURANCE_STEPS = [
           { value: '250000', label: '£175,001–£250,000' },
         ],
         info: [
-          'Please select the band that best reflects your estimated annual business turnover for the next 12 months. If this is your first year of trading, use your estimated turnover for your first year.',
+          'Please select the band that best reflects your estimated annual business turnover for the next 12 months. Turnover means your total business sales before deducting any costs or expenses. If this is your first year of trading, use your estimated turnover for your first year.',
           'If your estimated annual turnover exceeds £250,000, please call the office on ' + GUILD_PHONE + '.',
         ],
       },
@@ -187,7 +232,19 @@ export const INSURANCE_STEPS = [
           { value: 'yes', label: 'Yes' },
         ],
       }),
-      { name: 'insSalonCount', label: 'Number of salons', type: 'number', required: true, when: isSalon },
+      {
+        name: 'insSalonCount',
+        label: 'How many salons do you own or operate?',
+        type: 'number',
+        required: true,
+        when: isSalon,
+        // One salon goes online, two or three reach the Insurance team at the quote, more than three cannot be quoted (Guild, 5 November 2026).
+        stopAbove: 3,
+        stopMessage:
+          'Unfortunately, we are unable to offer you a quote for insurance. Please call the office on ' +
+          GUILD_PHONE +
+          ' if you require any further assistance.',
+      },
     ],
   },
   {
@@ -218,8 +275,11 @@ export const INSURANCE_STEPS = [
               after: '.',
             },
           ],
-          note: [
-            'Please note that your policy will provide treatment, product and public liability for all employees you list. Anyone you list as a subcontractor e.g. someone who is renting a space in your salon, trading in their own name, is not covered under this policy for their own treatment, public and product liability and they must obtain their own cover.',
+          yesNote: [
+            'Employees: Your policy provides treatment, public and product liability cover for the employees you list.',
+            'Subcontractors: Your policy provides vicarious liability cover only - covering claims against you where you are held legally responsible for a subcontractor’s actions or omissions. It does not cover the subcontractor’s own liability. As a condition of your cover, they must maintain their own medical malpractice, public and product liability insurance for their work. Vicarious liability cover is available for treatments on our standard treatment list. Treatments on our advanced treatment list require individual review and agreement. Please contact us on ' +
+              GUILD_PHONE +
+              ' to discuss your specific requirements before relying on cover.',
           ],
         },
       ),
@@ -230,6 +290,8 @@ export const INSURANCE_STEPS = [
         required: true,
         when: yes('insNamedPeopleCover'),
         max: 4,
+        // Shown only when four people are listed, the most the policy takes with the policy holder (Guild, 5 November 2026).
+        hintWhen: people => Array.isArray(people) && people.length >= 4,
         hint:
           'This policy covers a maximum of 5 including the policy holder. If you would like to add more employees, contact the office on ' +
           GUILD_PHONE +
@@ -241,48 +303,47 @@ export const INSURANCE_STEPS = [
     id: 'standardTreatments',
     title: 'Treatments we cover',
     description: '',
-    fields: [],
     intro: [
       {
-        before: 'Our standard ',
-        link: 'insurance policy',
+        before: 'Our ',
+        link: 'standard insurance policy',
         href: POLICY_WORDING.MEDMAL.href,
         after:
-          ' covers all of the most popular beauty, nails, hair and holistic treatments in the event you injure a client, including:',
+          ' covers a wide range of beauty, nail, hair and holistic treatments, providing protection against claims if a client is injured as a result of an insured treatment. These include:',
       },
       {
         list: [
-          'Massage, Reflexology, Healing, Reiki, Yoga, Relaxation Techniques, Stress Management',
-          'Hair Cutting, hairdressing, hairstyling, washing, tinting, dyeing, bleaching, drying, barbering',
-          'Hair Extensions - Fusion Bond, Nano Rings, Weaves, Clip in Hair, Mesh and Micro Rings/Links, Tape and Weft. (excludes hair replacement treatments)',
-          'Face and Body Treatments - Facials, masks, steaming, microcurrent, oxygen treatments, light therapy',
-          'Eyebrow treatments - lamination, perming, henna, HD, threading, tinting, waxing, tweezing',
-          'Eyelash treatments - perming, tinting, eyelash extensions, eyelash lifting',
-          'Face and body painting including henna art and su-do body art',
-          'Make-up application',
-          'Nails Treatments - manicure, e-filing, foils, pedicure, callus peel, gel polish, nail art, acrylic/fibreglass/Gel Nail extensions',
-          'Tanning and Sunbed UV treatment (maximum of 2 sunbeds)',
-          'Waxing, body sugaring, bleaching and hair removal creams',
+          'Facials and skincare – cleansing, masks, steaming, microdermabrasion, skin peels, microcurrent, LED light and oxygen treatments.',
+          'Body and spa treatments – exfoliation, body wraps, body contouring, slimming and cellulite treatments.',
+          'Nail treatments – manicures, pedicures, gel polish, builder gel, acrylic and gel extensions, nail art, e-filing and callus peels.',
+          'Eyebrow and eyelash treatments – brow shaping, threading, tinting, henna, lamination, lash lifts and eyelash extensions.',
+          'Hairdressing and barbering – cutting, styling, colouring, bleaching, perming, straightening and shaving.',
+          'Hair extensions – fusion bonds, nano rings, micro rings/links, tapes, wefts and weaves, excluding hair replacement treatments.',
+          'Hair removal – waxing, including intimate waxing, sugaring, depilatory creams and electrolysis, excluding advanced electrolysis.',
+          'Make-up and body art – make-up application, face and body painting, henna art and glitter tattoos.',
+          'Tanning – spray tanning, manual tanning and UV sunbed treatments, with a maximum of two sunbeds.',
+          'Massage and reflexology – including Swedish, deep tissue, pregnancy, hot stone, Indian head and aromatherapy massage. Sports massage requires a Level 3 or above qualification on the National Qualification Framework.',
+          'Holistic therapies – Reiki, healing, crystal therapy, energy balancing, sound therapy and ear candling.',
+          'Movement and wellbeing – yoga, Pilates, Tai Chi, meditation, breathwork, relaxation and stress management.',
+          'Counselling and coaching – counselling excluding psychotherapy, life coaching and wellbeing coaching.',
+          'Other treatments – ear lobe piercing and tooth gems.',
         ],
       },
       {
-        before: 'If the treatment you offer is not listed above, you can ',
-        link: 'click here',
+        before: 'This is a summary only. Please check our ',
+        link: 'full treatment list',
         href: LEGAL.treatments.href,
-        after: ' to see the full list of treatments we cover.',
+        after:
+          ' for your specific treatments and all applicable requirements and restrictions. All cover is subject to your policy’s terms, conditions and exclusions. If your treatment is not listed or you are unsure whether it is covered, please contact us before relying on cover.',
       },
     ],
-  },
-  {
-    id: 'treatments',
-    title: 'Additional treatments',
-    description: 'Choose any additional treatments you want to be covered for.',
-    intro: ['All prices include IPT.'],
+    // The two treatment questions sit under the Treatments we cover box, above the advanced treatments (Guild, 5 November 2026). Both must be Yes.
     fields: [
       yn(
         'insQualifiedForTreatments',
         'Do you and your employees hold the relevant qualification(s) for the treatment(s) you perform from a recognised and accredited UK college or company?',
         {
+          mustBe: 'yes',
           note: [
             'You and your employees, must hold the appropriate qualification(s) for any treatment(s) you wish to be covered for. Cover can be provided for online courses, where the practical training and assessment were done through a live video link with the course tutor, e.g. Zoom, Whatsapp.',
             'You and everyone that works for you, will be required to provide proof of your qualification(s) if a claim should arise.',
@@ -290,31 +351,20 @@ export const INSURANCE_STEPS = [
         },
       ),
       yn('insPatchTesting', 'Do you agree to always carry out a Sensitivity Patch Test for all relevant treatments?', {
-        info: [
-          'You must ensure that:',
-          'At least 24 hours prior to:',
-          {
-            list: [
-              'The application of false eyelashes;',
-              'Any eyelash or eyebrow tinting;',
-              'Any eyelash perming treatment; or',
-              "The application of any other chemicals to the skin or hair where, the manufacturer's instructions for the product being used, requires a patch test,",
-            ],
-          },
-          'A skin patch test must be performed on:',
-          {
-            list: [
-              'New clients to be treated;',
-              'Existing clients, where a year has passed since their last patch test; or',
-              "Where the product applied has been changed since the client's last treatment of that kind.",
-            ],
-          },
-          "The results of each patch test must be recorded in writing on the client's records.",
-        ],
+        mustBe: 'yes',
+        info: PATCH_TEST_INFO,
       }),
+    ],
+  },
+  {
+    id: 'treatments',
+    title: 'Advanced treatments',
+    description: 'Choose any advanced treatments you want to be covered for.',
+    intro: ['All prices include IPT.'],
+    fields: [
       {
         name: 'insTreatmentExtensions',
-        label: 'Additional treatments',
+        label: 'Advanced treatments',
         type: 'multi',
         required: false,
         list: true,
@@ -324,29 +374,36 @@ export const INSURANCE_STEPS = [
   },
   {
     id: 'teaching',
-    title: 'Teaching and student cover',
-    description: 'Choose a level of teaching cover if you teach.',
-    intro: ['All prices include IPT.'],
+    title: 'Teaching and Student Cover',
+    description: '',
     fields: [
       {
         name: 'insTeachingCover',
-        label: 'Teaching and student cover',
+        label: 'Do you require Insurance to teach?',
         type: 'radio',
         required: true,
+        info: [
+          'Cover will be provided for teaching and training provided you hold an acceptable teaching qualification and you are qualified in the treatment that you are teaching.',
+        ],
         optionWhen: { additional: treatments },
         options: [
-          { value: 'none', label: 'None' },
+          { value: 'none', label: 'No' },
           {
             value: 'standard',
-            label: 'Teaching + Student Cover',
+            label: 'Teaching and Training including Student Cover',
             price: withIpt(75),
             info: [
-              'Select this level of cover if you are only teaching treatments that are on our Standard Treatment list.',
+              {
+                before: 'Select this level of cover if you are only teaching treatments that are on our ',
+                link: 'Standard Treatment List',
+                href: LEGAL.treatments.href,
+                after: '.',
+              },
             ],
           },
           {
             value: 'additional',
-            label: 'Teaching + Student Cover + Additional Treatments',
+            label: 'Teaching and Training including Student Cover and Additional Treatments Purchased',
             price: withIpt(150),
             info: [
               'Select this level of cover if you are teaching any of the treatments in our advanced treatment list that you have paid an additional premium to be covered for i.e. Dermaplaning, Microblading & Semi-Permanent Make Up, Microneedling or Dermarolling, Micropigmentation, Nose and Cartilage Piercing or Red Veins, Skin Tags, Milia, Warts & Moles by Advanced Electrolysis.',
@@ -358,24 +415,26 @@ export const INSURANCE_STEPS = [
   },
   {
     id: 'equipment',
-    title: 'Business equipment',
+    title: 'Business Equipment',
     description: '',
     when: v => !isSalon(v),
-    intro: [CONTENTS_WORDING, signedOff('of the value of your contents'), doc('NON_SALON_CONTENTS')],
     fields: [
       {
         name: 'insEquipmentTier',
-        label: 'Business equipment sum insured',
-        type: 'select',
+        label: 'Do you require Business Equipment Cover?',
+        type: 'radio',
+        numeric: true,
         required: true,
         options: tiers,
+        // The description sits between the question and the levels of cover (Guild, 5 November 2026).
+        lead: [CONTENTS_WORDING, signedOff('of the value of your contents'), doc('NON_SALON_CONTENTS')],
         when: v => !isSalon(v),
       },
-      yn('insStandardConstruction', 'Is the building of standard construction?', {
+      yn('insStandardConstruction', 'My premises are built of Standard Construction?', {
         when: tier,
         info: STANDARD_CONSTRUCTION,
       }),
-      yn('insNonStandardOver15', 'Is more than 15% of the building non-standard construction?', {
+      yn('insNonStandardOver15', 'Is more than 15% of your premises made of Non-Standard Construction?', {
         when: v => tier(v) && v.insStandardConstruction === 'no',
       }),
       yn('insMultipleAddresses', 'Is the equipment kept at more than one address?', { when: tier }),
@@ -388,10 +447,11 @@ export const INSURANCE_STEPS = [
     intro: v => [
       "Employers' Liability covers the compensation and legal costs you must pay if an employee is injured or becomes ill because of the work they do for you. Please note that this cover is legally required if you have employees.",
       'You will be covered for up to £10 million for each and every occurrence including costs.',
+      'Please note that this does not include subcontractors.',
       doc(isSalon(v) ? 'SALON_EL' : 'NON_SALON_EL'),
     ],
     fields: [
-      yn('insNonSalonEL', "Do you need Employers' Liability?", { when: v => !isSalon(v) }),
+      yn('insNonSalonEL', 'Do you require Employers Liability Cover?', { when: v => !isSalon(v) }),
       {
         name: 'insNonSalonELTier',
         label: "How many employees do you need Employers' Liability for?",
@@ -404,15 +464,16 @@ export const INSURANCE_STEPS = [
           { value: '5', label: 'Up to 5 employees' },
         ],
       },
-      yn('insSalonEL', "Do you need Employers' Liability?", { when: isSalon }),
+      yn('insSalonEL', 'Do you require Employers Liability Cover?', { when: isSalon }),
       {
         name: 'insWageRoll',
-        label: 'Estimated gross annual wage roll for the next 12 months (£)',
+        label: 'What is your estimated gross annual wage roll for the next 12 months?',
         type: 'number',
+        prefix: '£',
         required: true,
         when: salonAnd('insSalonEL'),
         stopAbove: WAGE_ROLL_LIMIT,
-        stopMessage: CALL_OFFICE,
+        stopMessage: CALL_FOR_HELP('Gross Annual Wage Roll cannot exceed £125,000.'),
       },
     ],
   },
@@ -423,7 +484,7 @@ export const INSURANCE_STEPS = [
     when: isSalon,
     intro: [CONTENTS_WORDING, doc('SALON_CONTENTS')],
     fields: [
-      yn('insContents', 'Do you need Contents cover?', {
+      yn('insContents', 'Do you require Contents Insurance?', {
         when: isSalon,
         yesNote: [
           'We can cover up to a maximum of £250,000 across all contents headings listed below. It is important that you provide an accurate reflection of the value of your contents as if you under-estimate the total value of your contents, you could find yourself significantly out of pocket if you have to make a claim and cannot recover the full amount from the insurer.',
@@ -464,6 +525,10 @@ export const INSURANCE_STEPS = [
         'Rent Payable Sum To Be Insured',
         'Calculate this amount as the annual rent for the insured premises that you must legally pay while the insured premises or any part of it is unusable as a result of damage insured by this cover.',
         salonAnd('insContents'),
+        {
+          stopIf: v => totalOf(v, CONTENTS_KEYS) > 250000,
+          stopMessage: CALL_FOR_HELP('Total sum insured for contents cover cannot exceed £250,000.'),
+        },
       ),
     ],
   },
@@ -476,7 +541,7 @@ export const INSURANCE_STEPS = [
       'This covers all forms of money such as cash, cheques, current postage stamps etc. stolen from your premises, in transit, from a safe, or in the personal possession of you or anyone working for the business. It also covers compensation costs for injury to you or anyone working for the business as a result of money being stolen or someone attempting to steal money. You will be covered for up to £5,000 for each and every incident of loss.',
       doc('SALON_MONEY'),
     ],
-    fields: [yn('insMoneyCover', 'Do you need Money cover?', { when: salonAnd('insContents') })],
+    fields: [yn('insMoneyCover', 'Do you require Money Cover?', { when: salonAnd('insContents') })],
   },
   {
     id: 'buildings',
@@ -511,11 +576,15 @@ export const INSURANCE_STEPS = [
         'Rent Receivable Sum To Be Insured',
         'Calculate as the rent that you are not legally entitled to recover from your tenants while the buildings or any part are unusable as a result of insured damage.',
         salonAnd('insBuildingsCover'),
+        {
+          stopIf: v => totalOf(v, BUILDINGS_KEYS) > 500000,
+          stopMessage: CALL_FOR_HELP('Total sum insured for buildings cover cannot exceed £500,000.'),
+        },
       ),
       yn(
         'insBuildingsSubsidenceDeclaration',
-        'Is the building free from subsidence, heave and landslip, with no known cause for concern?',
-        { when: salonAnd('insBuildingsCover') },
+        'My business premises are free from cracks or other signs of damage that may be due to subsidence, landslip or heave and have not previously suffered damage by any of these and are not in a known subsidence area.',
+        { when: salonAnd('insBuildingsCover'), stopOn: 'no', stopMessage: CALL_OFFICE },
       ),
     ],
   },
@@ -529,11 +598,12 @@ export const INSURANCE_STEPS = [
       doc('SALON_BI'),
     ],
     fields: [
-      yn('insBiCover', 'Do you need Business Interruption cover?', {
+      yn('insBiCover', 'Do you require Business Interruption Insurance?', {
         when: salonAnd('insContents'),
         yesNote: [
-          'Select the level of business interruption you require',
-          signedOff('your business') + ' We can only provide cover up to a maximum of £300,000.',
+          'Select the level of business interruption cover you require.',
+          'Income means your total business sales before deducting any costs or expenses. When choosing your sum insured, also allow for any increased costs of working you may need to claim following an insured event.',
+          'It is important that the amount accurately reflects your business needs. If you underestimate it, you may not receive enough to cover your loss in the event of a claim. The maximum cover available is £300,000.',
         ],
       }),
       salonSum(
@@ -541,18 +611,27 @@ export const INSURANCE_STEPS = [
         'Loss of income including increased costs of working sum to be insured',
         'Would cover your loss of income if you were unable to work as a result of an insured event. It would also cover the costs and expenses necessarily and reasonably incurred by you for the sole purpose of minimising the reduction in income from your activities during the indemnity period, but not exceeding the reduction in income saved.',
         salonAnd('insBiCover'),
+        {
+          stopIf: v => num(v.insBiIncome) + (v.insBiDebtsCover === 'yes' ? num(v.insBiDebts) : 0) > 300000,
+          stopMessage: CALL_FOR_HELP('Total sum insured for business interruption cover cannot exceed £300,000.'),
+        },
       ),
+      // Outstanding debts is its own question first (Guild, 5 November 2026). The answer is only for the screen: the amount is what is sent.
+      yn('insBiDebtsCover', 'Do you also want to cover outstanding debts?', {
+        when: salonAnd('insBiCover'),
+        clientOnly: true,
+      }),
       salonSum(
         'insBiDebts',
-        'Outstanding Debts',
+        'Outstanding Debts sum to be insured',
         'This would cover any of your outstanding debts which you are unable to recover following loss of your accounting records as a direct result of insured damage or insured failure.',
-        salonAnd('insBiCover'),
+        v => salonAnd('insBiCover')(v) && v.insBiDebtsCover === 'yes',
       ),
     ],
   },
   {
     id: 'propertyAway',
-    title: 'Property Away in Transit',
+    title: 'Property Away and in Transit',
     description: '',
     when: salonAnd('insContents'),
     intro: [
@@ -563,14 +642,18 @@ export const INSURANCE_STEPS = [
       yn(
         'insPropertyAwayCover',
         'Do You Require Property Away in Transit cover? Anywhere in UK, Northern Ireland, Channel Islands and Isle of Man.',
-        { when: salonAnd('insContents'), yesNote: [signedOff('of the value of your property')] },
+        {
+          when: salonAnd('insContents'),
+          yesNote: [
+            'It is important that you choose cover to accurately reflect the value of your property as if you under-estimate this, you could find yourself significantly out of pocket if you have to make a claim and cannot recover the full amount from the insurer. Cover can be provided for up to £25,000',
+            'The value of any single item to be insured cannot exceed £10,000',
+          ],
+        },
       ),
-      sum('insPropertyAwaySI', 'What is the total value you require for all property away in transit? (£)', {
+      sum('insPropertyAwaySI', 'What is the total value you require for all property away and in transit? (£)', {
         when: salonAnd('insPropertyAwayCover'),
-        info: [
-          'Cover can be provided for up to £25,000',
-          'The value of any single item to be insured does not exceed £10,000',
-        ],
+        stopAbove: 25000,
+        stopMessage: CALL_FOR_HELP('Total sum insured for property away and in transit cover cannot exceed £25,000.'),
       }),
     ],
   },
@@ -586,8 +669,8 @@ export const INSURANCE_STEPS = [
       { name: 'insPremCounty', label: 'County', type: 'text', required: false },
       { name: 'insPremPostcode', label: 'Postcode', type: 'text', required: true },
       yn('insSoleOccupation', 'Do you solely occupy the premises?'),
-      yn('insStandardConstruction', 'Is the building of standard construction?', { info: STANDARD_CONSTRUCTION }),
-      yn('insNonStandardOver15', 'Is more than 15% of the building non-standard construction?', {
+      yn('insStandardConstruction', 'My premises are built of Standard Construction?', { info: STANDARD_CONSTRUCTION }),
+      yn('insNonStandardOver15', 'Is more than 15% of your premises made of Non-Standard Construction?', {
         when: v => v.insStandardConstruction === 'no',
       }),
       yn('insUnoccupiedDeclaration', 'Will the premises be occupied, never empty for more than 30 days in a row?'),
@@ -686,10 +769,18 @@ export const CONFIRMATIONS = [
 export const effective = v =>
   v.insTeachingCover === 'additional' && !treatments(v) ? { ...v, insTeachingCover: '' } : v;
 // The call-the-office messages that stop the customer going on (a wage roll over £125,000).
+export const stopOf = (f, v) =>
+  (f.stopOn && v[f.name] === f.stopOn) || (f.stopAbove && Number(v[f.name]) > f.stopAbove) || (f.stopIf && f.stopIf(v))
+    ? f.stopMessage
+    : '';
 export function stopMessages(v) {
-  return visibleFields(v).flatMap(f =>
-    (f.stopOn && v[f.name] === f.stopOn) || (f.stopAbove && Number(v[f.name]) > f.stopAbove) ? [f.stopMessage] : [],
-  );
+  return [
+    ...new Set(
+      visibleFields(v)
+        .map(f => stopOf(f, v))
+        .filter(Boolean),
+    ),
+  ];
 }
 
 // Flat form answers -> the request body's `insurance` object. Only answers to questions still on screen are sent.
@@ -700,7 +791,7 @@ export function toRequest(raw) {
     out = {};
   for (const f of visibleFields(v)) {
     const x = v[f.name];
-    if (f.decl !== undefined) continue;
+    if (f.decl !== undefined || f.clientOnly) continue;
     if (f.type === 'number' || f.type === 'select' || f.numeric) out[f.name] = Number(x) || 0;
     else if (f.type === 'radio' && f.options.some(o => o.value === 'yes'))
       out[f.name] = x === 'yes' || x === 'no' ? x : '';

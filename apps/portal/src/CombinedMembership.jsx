@@ -15,7 +15,7 @@ import { COUNTRY_OPTIONS } from './JourneyConfig.js';
 import { countryFor } from './prefill.js';
 import { START_WINDOW_DAYS, startLimits } from './startDate.js';
 import { validate } from './logic.mjs';
-import { GUILD_PHONE, toRequest, visibleFields } from './insuranceInputs.js';
+import { GUILD_PHONE, stopMessages, toRequest, visibleFields } from './insuranceInputs.js';
 import { BlockedNotice, InsuranceForm, ReferralPanel, useInsuranceQuote } from './InsuranceForm.jsx';
 import AddressLookup from './components/AddressLookup.jsx';
 import { BRANCHES, branchName } from './branches.js';
@@ -207,6 +207,11 @@ export default function CombinedMembership() {
     [iErrors, setIErrors] = useState({}),
     [busy, setBusy] = useState(false),
     [payError, setPayError] = useState('');
+  // The choices on the first page that are missing are also named at the bottom, beside the missing details (Guild, 5 November 2026).
+  const aboutYouMessages = ['country', 'insuranceRequired', 'interests']
+    .map(k => errors[k])
+    .filter(Boolean)
+    .map(m => m.replace(/\.$/, ''));
   const set = patch => setF(old => ({ ...old, ...patch }));
 
   // An upgrade is for someone who needs insurance, so that answer is already given.
@@ -303,7 +308,13 @@ export default function CombinedMembership() {
   });
   const answersKey = JSON.stringify(request());
   const iq = useInsuranceQuote({
-    enabled: INTEGRATIONS.stripeCheckout && (who.state === 'in' || guest) && plan.ready && Boolean(f.branch),
+    // No price is worked out while an answer stops the journey (a limit passed, or call the office): the Guild asked for that.
+    enabled:
+      INTEGRATIONS.stripeCheckout &&
+      (who.state === 'in' || guest) &&
+      plan.ready &&
+      Boolean(f.branch) &&
+      !(plan.insurance && stopMessages(iv).length),
     send: guest ? portalApi.publicQuote : portalApi.checkoutQuotePost,
     request,
     key: answersKey,
@@ -549,7 +560,11 @@ export default function CombinedMembership() {
                         <p className="muted">{INSURANCE_TEXT}</p>
                         <div className="buy-options">
                           {[
-                            ['yes', 'Yes, include insurance', 'Add insurance cover to your membership.'],
+                            [
+                              'yes',
+                              'Yes, include insurance',
+                              'You will be covered for up to £3 million for any one claim and £6 million in the aggregate.',
+                            ],
                             ['no', 'No, membership only', 'Continue with membership without insurance.'],
                           ].map(([value, name, hint]) => (
                             <label
@@ -695,12 +710,15 @@ export default function CombinedMembership() {
                         {d.manual ? 'Search for my address instead' : 'Enter your address manually'}
                       </button>
                     )}
-                    {showMissing && Object.keys(missing).length > 0 && (
+                    {showMissing && (Object.keys(missing).length > 0 || aboutYouMessages.length > 0) && (
                       <p className="error" role="alert">
                         Still to complete:{' '}
-                        {Object.keys(missing)
-                          .map(k => DETAIL_LABELS[k].charAt(0).toUpperCase() + DETAIL_LABELS[k].slice(1).toLowerCase())
-                          .join(', ')}
+                        {[
+                          ...aboutYouMessages,
+                          ...Object.keys(missing).map(
+                            k => DETAIL_LABELS[k].charAt(0).toUpperCase() + DETAIL_LABELS[k].slice(1).toLowerCase(),
+                          ),
+                        ].join(', ')}
                         .
                       </p>
                     )}
@@ -761,7 +779,7 @@ export default function CombinedMembership() {
                   <p className="muted">{EXTRAS_ORDER_TEXT}</p>
                   {ADDONS.map(([k, label]) => (
                     <React.Fragment key={k}>
-                      <label className="addon-row">
+                      <label className={'addon-row' + (k === 'bundle' ? ' has-note' : '')}>
                         <span>{label}</span>
                         <input
                           type="number"

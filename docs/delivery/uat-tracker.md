@@ -112,6 +112,40 @@ Source: `Beauty-Guild Portal UAT v1.1 - Guild Comments v2 041126.xlsx` and Helen
 |---|---|---|
 | G-4 | Policy wording documents (links) | Needed from the Guild (Tega is providing): 1 Medmal policy wording (also linked from "insurance policy" under Treatments we cover); 2 Non-salon contents cover wording; 3 Non-salon EL cover wording; 4 Non-salon property definitions; 5 General terms and conditions; 6 Salon Employers Liability policy summary and wording; 7 Salon contents; 8 Salon money; 9 Salon buildings; 10 Salon business interruption; 11 Salon property away; 12 Salon property definitions. Links go in `POLICY_WORDING` in `apps/portal/src/insuranceInputs.js` (items 1 to 3 and 6 to 11); items 4, 5 and 12 are named in `apps/portal/src/legal.js` and are not linked yet. |
 
+## Round 3: Helen's journey comments and the Dashboard comments, 5 November 2026
+
+Source: `Beauty-Guild Portal UAT v1.1  - Membership journey and Dashboard Comments.xlsx` (General feedback rows 5 to 26). Helen's comments cover the Associate and Full journeys; PA, NS and QT sent the Dashboard comments.
+
+### Built (retest on the next build)
+
+| ID | Item | What changed |
+|---|---|---|
+| R3-1 | Pink links, bold red errors, no asterisks | Every link in the Join journey is pink. Errors are bold red. The asterisks are gone from the insurance questions. |
+| R3-2 | Missing answers on About you | The missing country, insurance and interest answers are also listed at the bottom, beside the missing details. |
+| R3-3 | Branches, bundle line, price panel | Branches sit two over two. The bundle line sits under its text. The price panel keeps its space while it updates, so it no longer jumps. |
+| R3-4 | "Too many requests" when adding extras | Pricing allows 90 requests a minute, not 20 or 30. |
+| R3-5 | Insurance caption | "You will be covered for up to £3 million for any one claim and £6 million in the aggregate." |
+| R3-6 | Business information | The max-5 note shows only at four people. The subcontractor note shows only on Yes, with the Employees and Subcontractors wording. The Treatments we cover text is the new wording with pink links. The qualification and patch test questions sit under it and must be Yes. Advanced Treatments (renamed) each have an "i" with the Guild's wording, which also opens when ticked. Teaching and Student Cover has the new question and options. |
+| R3-7 | Cover options, non-salon | Business Equipment is a list of levels with Not required last, with the description between the question and the levels. The construction questions and the Employers Liability wording are updated. |
+| R3-8 | Cover options, salon | New question wording throughout. Limits stop the journey with a call-the-office message and no price: wage roll £125,000, contents £250,000 in total, buildings £500,000, business interruption £300,000 (income plus debts), property away £25,000, four or more salons. A No to the subsidence question stops. Outstanding debts is a Yes/No question first. |
+| R3-9 | Policy document names | The Salon and Non-Salon prefixes are gone from the Review and Pay list. |
+| R3-10 | Rate bug | A No to "more than 15% non-standard construction" now gets the normal business equipment rate (the higher rate applies only to Yes, which is referred). The MTA rating follows the same rule. |
+| R3-11 | Dashboard basics | Signed-out visitors go to the sign-in page. The heading is "Hi, First name". The caption and the "Guild Services" labels are removed. |
+
+### Left for now (needs the Guild or more work)
+
+| ID | Item | Why |
+|---|---|---|
+| R3-12 | Isle of Man, Jersey and Guernsey offered insurance; Gibraltar added; the "Other" country | Reverses the rule that outside the UK is International. Needs the Guild's answers (cover level, Gibraltar, drop Other). |
+| R3-13 | Employers Liability as radio buttons with Not required | The tiers do not match: the Guild says 1, up to 2 and up to 5 employees, the rating has 1, up to 3 and up to 5. Needs an answer first. |
+| R3-14 | Business address for contents, and moving the premises questions to Cover options | Needs a new question, a CRM field for the contents address, and where the flood check reads the postcode from. |
+| R3-15 | Calendar for the start date | Styling of the date picker. Not started. |
+| R3-16 | Document names when downloaded | These are the WorkDrive file names: the Guild or A2Z renames the files (the link stays the same). |
+| R3-17 | Terms of Business 3 November version | Confirm the linked file is the updated version. |
+| R3-18 | S01 step names | Helen renamed steps on S01 (About Your Work, Register your account, Your address). Ask whether this is a new Associate order. |
+| R3-19 | Dashboard personalised panels, GTi and Registers panels, new icons | Needs the CRM records for GTi students and register and directory entries, and the icons from Awais. |
+| R3-20 | Interest icons | The Guild offered to send them. |
+
 ## Switches that are on in Development
 
 | Switch | Where | State |

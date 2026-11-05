@@ -379,7 +379,11 @@ export default function BuyMembership() {
                 <p className="muted">{INSURANCE_TEXT}</p>
                 <div className="buy-options">
                   {[
-                    [true, 'Yes, include insurance', 'Add insurance cover to your membership.'],
+                    [
+                      true,
+                      'Yes, include insurance',
+                      'You will be covered for up to £3 million for any one claim and £6 million in the aggregate.',
+                    ],
                     [false, 'No, membership only', 'Continue with membership without insurance.'],
                   ]
                     .filter(([yes]) => !upgrading || yes)

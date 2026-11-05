@@ -70,7 +70,9 @@ function registerCheckoutRoutes(
   const { call: crm } = createCrmClient({ getCrmHeaders, crmApiDomain, fetchImpl });
   // School referral code and the 30 day joining fee rule: absent unless PORTAL_DISCOUNTS_ENABLED is 'true'.
   const discounts = discountsEnabled ? createDiscounts({ crm, referenceField: discountReferenceField, now }) : null;
-  const limiter = createRateLimiter({ limit: 20, windowMs: 60 * 1000, now });
+  // Pricing runs on every tick of an extra on the Join page, so a person adding things can make many quotes a minute (the Guild saw
+  // "Too many requests", 5 November 2026). 90 a minute is far above a person and still stops a script.
+  const limiter = createRateLimiter({ limit: 90, windowMs: 60 * 1000, now });
   // Each insurance pay attempt writes 5 to 15 CRM records, so it has its own, lower limits.
   const insuranceMinute = createRateLimiter({ limit: 3, windowMs: 60 * 1000, now });
   const insuranceHour = createRateLimiter({ limit: 10, windowMs: 60 * 60 * 1000, now });
@@ -852,7 +854,7 @@ function registerCheckoutRoutes(
   });
   // Price a membership without an account, so the form can be filled in and priced before anyone signs up. Membership only: renewals and
   // standalone insurance need a signed-in member. Nothing is read from or written to the CRM, and it is rate limited per client.
-  const guestLimiter = createRateLimiter({ limit: 30, windowMs: 60 * 1000, now });
+  const guestLimiter = createRateLimiter({ limit: 90, windowMs: 60 * 1000, now });
   app.post(
     '/public/quote',
     express.json({ limit: '40kb' }),

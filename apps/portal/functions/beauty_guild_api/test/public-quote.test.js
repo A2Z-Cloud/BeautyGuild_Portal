@@ -181,7 +181,7 @@ test('guest pricing is off unless switched on, and checkout and drafts still nee
 test('guest pricing is rate limited per client', async () => {
   await withApp(async ({ quote }) => {
     let last;
-    for (let i = 0; i < 31; i++) last = await quote(BUY);
+    for (let i = 0; i < 91; i++) last = await quote(BUY);
     assert.equal(last.status, 429);
   });
 });
