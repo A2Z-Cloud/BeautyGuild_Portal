@@ -15,6 +15,7 @@ import {
   UploadCloud,
 } from 'lucide-react';
 import { Notice, Status } from './UiParts.jsx';
+import LocationConfirm from './components/LocationConfirm.jsx';
 import { formatDate } from './format.js';
 import { FACILITY_OPTIONS } from './facilities.js';
 import { INTEGRATIONS, portalApi } from './services/api.js';
@@ -34,11 +35,14 @@ const editableFields = [
   'facilities',
   'imageUrl',
   'logoUrl',
+  'latitude',
+  'longitude',
 ];
 const tabs = [
   { key: 'overview', label: 'Overview' },
   { key: 'media', label: 'Branding & media' },
   { key: 'contact', label: 'Contact & social' },
+  { key: 'location', label: 'Location' },
   { key: 'facilities', label: 'Facilities' },
   { key: 'registration', label: 'Registration' },
 ];
@@ -311,7 +315,7 @@ export default function SchoolProfilePanel({ data, schoolId, onDone }) {
             target="_blank"
             rel="noopener noreferrer"
           >
-            View public profile <ExternalLink size={15} aria-hidden="true" />
+            View School Page <ExternalLink size={15} aria-hidden="true" />
           </a>
         )}
       </div>
@@ -502,6 +506,34 @@ export default function SchoolProfilePanel({ data, schoolId, onDone }) {
                   <Field key={key} label={label} value={values[key]} onChange={v => set(key, v)} disabled={!canEdit} />
                 ))}
               </div>
+            </div>
+          )}
+          {activeTab === 'location' && (
+            <div className="school-profile-content">
+              <div className="school-profile-section-head">
+                <h3>Location</h3>
+                <p>Where your training centre is. It is used for the map on your page on the Guild website.</p>
+              </div>
+              {canEdit ? (
+                <LocationConfirm
+                  values={{
+                    centreAddress1: profile.addressLine1,
+                    centreTown: profile.town,
+                    centreCounty: profile.county,
+                    centrePostcode: profile.postcode,
+                    country: profile.country,
+                    centreLatitude: values.latitude,
+                    centreLongitude: values.longitude,
+                  }}
+                  onChange={(name, value) => set(name === 'centreLatitude' ? 'latitude' : 'longitude', value)}
+                  emptyMessage="We need your centre address to show it on a map. Contact the Accreditation team to complete it."
+                  intro="Drag the pin to your training centre, then select Save changes."
+                />
+              ) : (
+                <small>
+                  <LockKeyhole size={14} aria-hidden="true" /> Location changes are currently unavailable.
+                </small>
+              )}
             </div>
           )}
           {activeTab === 'facilities' && (

@@ -158,8 +158,22 @@ From the Guild's website UAT workbook (4 November), as the internal action log W
 | W03 | The WordPress media library mention is gone, with size guidance (school image 1600 x 900, logo 600 x 600, JPG or PNG). | Built |
 | W04 | Main contact is on Overview. A public email and mobile are on Contact and social. | Built behind two settings (`SCHOOL_PUBLIC_EMAIL_FIELD`, `SCHOOL_PUBLIC_MOBILE_FIELD`). Needs two new CRM fields on Training Centres, then switch on. |
 | W05 | "Please try again" on the 8MB message. | Built |
-| W06 to W09, W12 | Website sync items (UK numbers, latitude and longitude, course level, insurance eligible, code format). | Not the portal as far as we know: the CRM-to-WordPress sync. Latitude and longitude (W07): built (PR for review). The application's centre step shows a map under the address with a pin looked up through Loqate (as V1 does); the school drags the pin, and it is saved in the `Latitude` and `Longitude` fields on the training centre. A softened map and a Guild pink pin. Correcting the pin later on the school profile is not built yet. |
-| W10, W11 | Maximum class size per course, and the public page link wording. | Not built. Need the Guild's decision (M13) and the agreed wording (B11). |
+| W06 | UK numbers show 0 and not +44 on the website; international schools keep the country code. | The Guild fixes this in the CRM (5 November). Nothing in the portal. |
+| W07 | Latitude and longitude, so the website map shows. | Built (PRs for review). The application's centre step and the school profile's Location tab show a softened map with a Guild pink pin looked up through Loqate (as V1 does); the school drags the pin, and it is saved in the `Latitude` and `Longitude` fields on the training centre. Existing schools set theirs on the Location tab. Additional venues are not done. |
+| W08, W09, W12 | Course Level, Insurance eligible = Yes, and the registration code format. | Website sync and a Guild decision (M12). Not the portal as far as we know. |
+| W10 | Maximum class size per course. | Not built. Needs the Guild's decision (M13). |
+| W11 | The public page link wording. | Built: "View School Page", as the tester wrote it. |
+
+### Insurance changes (MTA): portal fixes, 5 November 2026
+
+From the Creator session's review of the portal against the Guild's CRM picklists.
+
+| Item | State |
+|---|---|
+| A cover row with status `Expired (REC).` (the Guild's picklist spelling) counted as current cover. | Fixed: the "(REC)" tag and full stop are ignored when matching. |
+| A `Scheduled` row (dated in the future) counted as current cover. | Fixed: it is not current until it starts. |
+| The cover type for an ad hoc row was `Ad Hoc Adjustment`, but the picklist value is `Ad Hoc Adjustment (REC).` | Fixed: written exactly as spelt. Change `AD_HOC_COVER_TYPE` in `insurance.js` if the picklist value is corrected. |
+| `Cover_Option` on Insurance Extension. | A picklist with placeholder values only ("Equipment band or EL band", "Valid options by cover."). No real Employers' Liability tiers, so changes to a held Employers' Liability cover go to the office. |
 
 ## Switches that are on in Development
 

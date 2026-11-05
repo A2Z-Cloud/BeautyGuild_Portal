@@ -410,7 +410,7 @@ function registerSchoolRoutes(
                   centreId +
                   '?fields=' +
                   esc(
-                    'Name,Town,County,Country,Postcode,Centre_Status,Contact_Name,Website,About_the_School,' +
+                    'Name,Address_Line_1,Address_Line_2,Address_Line_3,Town,County,Country,Postcode,Latitude,Longitude,Centre_Status,Contact_Name,Website,About_the_School,' +
                       'Facebook,Instagram,TikTok,LinkedIn,School_Image,School_Logo,' +
                       [publicEmailField, publicMobileField]
                         .filter(Boolean)
@@ -445,10 +445,16 @@ function registerSchoolRoutes(
           profile: {
             id,
             name: centre?.Name || a.Account?.name || 'Training centre',
+            addressLine1: centre?.Address_Line_1 || null,
+            addressLine2: centre?.Address_Line_2 || null,
+            addressLine3: centre?.Address_Line_3 || null,
             town: centre?.Town || null,
             county: centre?.County || null,
             country: centre?.Country || null,
             postcode: centre?.Postcode || null,
+            // Where the centre is on the map (text in the CRM), for the Location tab and the website map.
+            latitude: centre?.Latitude || null,
+            longitude: centre?.Longitude || null,
             status: a.Accreditation_Status,
             expires: a.Valid_To,
             level: a.Accreditation_Level,
@@ -887,6 +893,22 @@ function registerSchoolRoutes(
         ...(Object.hasOwn(body, 'logoId') ? { School_Logo_ID: mediaId(body.logoId, 'School logo') } : {}),
         ...Object.fromEntries(Object.entries(FACILITY_FIELDS).map(([key, field]) => [field, facilities.includes(key)])),
       };
+      // The point on the map: written only when the page sends it, as numbers in range, or cleared when sent blank.
+      for (const [key, field, max, label] of [
+        ['latitude', 'Latitude', 90, 'Latitude'],
+        ['longitude', 'Longitude', 180, 'Longitude'],
+      ]) {
+        if (!Object.hasOwn(body, key)) continue;
+        const raw = body[key];
+        if (raw === null || raw === '') {
+          record[field] = null;
+          continue;
+        }
+        const n = Number(raw);
+        if (!Number.isFinite(n) || Math.abs(n) > max)
+          fail(label + ' is not a valid map point.', 422, 'INVALID_PROFILE');
+        record[field] = String(Number(n.toFixed(7)));
+      }
       // The public email and mobile are only written when the settings name the CRM fields and the page sent them.
       if (publicEmailField && Object.hasOwn(body, 'publicEmail')) {
         const email = shortText(body.publicEmail, 254, 'Public email', 'INVALID_PROFILE');

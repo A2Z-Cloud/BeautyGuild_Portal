@@ -63,7 +63,11 @@ function upstream(url) {
         {
           id: '1011174000000000401',
           Name: 'Grace School',
+          Address_Line_1: '2 Low Rd',
           Town: 'Derby',
+          Postcode: 'DE2 2BB',
+          Latitude: '52.9225147',
+          Longitude: '-1.4746',
           Contact_Name: 'Jess Owner',
           Website: 'https://glow.test',
           About_the_School: 'A friendly neighbourhood academy.',
@@ -188,6 +192,9 @@ test('the school profile carries the About/Website/socials/Facilities fields and
     const r = await call('/portal/management/schools/1011174000000000301/profile');
     assert.equal(r.status, 200);
     assert.equal(r.body.profile.contactName, 'Jess Owner');
+    assert.equal(r.body.profile.addressLine1, '2 Low Rd');
+    assert.equal(r.body.profile.latitude, '52.9225147');
+    assert.equal(r.body.profile.longitude, '-1.4746');
     assert.equal(r.body.profile.website, 'https://glow.test');
     assert.equal(r.body.profile.about, 'A friendly neighbourhood academy.');
     assert.equal(r.body.profile.facebook, 'glowacademy');
@@ -579,6 +586,38 @@ test('updates the training centre with the profile content, including clearing f
   assert.equal(data.Changing_Area, false);
 });
 
+test('the map point is written as text when sent, cleared when blank, left alone when not sent, and refused when out of range', async () => {
+  const run = async body => {
+    const writes = [];
+    let status;
+    await withServer(
+      {
+        config: writeCfg,
+        fetchImpl: async (u, o) => {
+          if ((o?.method || 'GET') === 'PUT' && String(u).includes('Training_Centres/401'))
+            writes.push(JSON.parse(o.body).data[0]);
+          return { status: 200, ok: true, json: async () => writeUpstream({ centreId: '401' })(u, o) };
+        },
+      },
+      async call => {
+        status = (await call('/portal/management/schools/1000000000301/profile', jput({ ...goodProfile, ...body })))
+          .status;
+      },
+    );
+    return { status, write: writes[0] };
+  };
+  const set = await run({ latitude: '52.92251471234', longitude: -1.4746 });
+  assert.equal(set.status, 200);
+  assert.equal(set.write.Latitude, '52.9225147');
+  assert.equal(set.write.Longitude, '-1.4746');
+  const cleared = await run({ latitude: '', longitude: null });
+  assert.equal(cleared.write.Latitude, null);
+  assert.equal(cleared.write.Longitude, null);
+  const quiet = await run({});
+  assert.equal(Object.hasOwn(quiet.write, 'Latitude'), false, 'not sent, not touched');
+  assert.equal((await run({ latitude: '91', longitude: '0' })).status, 422);
+  assert.equal((await run({ latitude: 'abc' })).status, 422);
+});
 const publicCfg = loadConfig({
   PORTAL_SCHOOL_SERVICES_ENABLED: 'true',
   PORTAL_SCHOOL_WRITES_ENABLED: 'true',

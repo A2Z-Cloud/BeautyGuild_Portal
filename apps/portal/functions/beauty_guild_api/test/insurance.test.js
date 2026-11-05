@@ -161,6 +161,9 @@ test('STOP rules: territory, wage roll, sums insured, declarations the customer 
   ])
     assert.ok(codes(rules({ [key]: 'no' })).includes(code));
 });
+test('an ad hoc cover row uses the Guild picklist value exactly as it is spelt, including the (REC) tag', () => {
+  assert.equal(require('../src/insurance').AD_HOC_COVER_TYPE, 'Ad Hoc Adjustment (REC).');
+});
 test('business equipment: a No to the 15% non-standard question is rated as standard (Guild, 5 November 2026)', () => {
   const rate = extra =>
     quote({ insEquipmentTier: 10000, ...extra }).rows.find(r => r.code === 'BUSINESS_EQUIPMENT').premiumPence;

@@ -11,7 +11,12 @@ const addressOf = v =>
 const ready = v => Boolean(v.centreAddress1 && v.centreTown && centreCountry(v));
 const hasPoint = v => v.centreLatitude !== undefined && v.centreLatitude !== '' && v.centreLongitude !== '';
 
-export default function LocationConfirm({ values, onChange }) {
+export default function LocationConfirm({
+  values,
+  onChange,
+  emptyMessage = 'Enter the centre address above and we will show it on a map.',
+  intro = 'Drag the pin to your training centre. It is used for the map on your page on the Guild website. This step is optional.',
+}) {
   const [state, setState] = useState({ busy: false, message: '' });
   const [round, setRound] = useState(0);
   const address = addressOf(values);
@@ -80,16 +85,13 @@ export default function LocationConfirm({ values, onChange }) {
     return (
       <div className="centre-location">
         <h4>Confirm your centre&rsquo;s location</h4>
-        <p className="muted">Enter the centre address above and we will show it on a map.</p>
+        <p className="muted">{emptyMessage}</p>
       </div>
     );
   return (
     <div className="centre-location">
       <h4>Confirm your centre&rsquo;s location</h4>
-      <p className="muted">
-        Drag the pin to your training centre. It is used for the map on your page on the Guild website. This step is
-        optional.
-      </p>
+      <p className="muted">{intro}</p>
       <Suspense fallback={<p role="status">Loading the map…</p>}>
         <MapPicker latitude={values.centreLatitude} longitude={values.centreLongitude} onChange={move} />
       </Suspense>
