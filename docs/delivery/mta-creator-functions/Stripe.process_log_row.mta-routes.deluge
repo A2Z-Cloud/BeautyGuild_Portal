@@ -1,0 +1,41 @@
+// ============================================================================
+// DRAFT, UNTESTED. PATCH for Stripe.process_log_row  (not a function on its own)
+// Purpose : route the mid-term change events to their handlers.
+//
+// Two edits to the dispatcher:
+//
+// 1. Inside the `if(event_type == "checkout.session.completed")` block, paste this ABOVE the final
+//    "Every other type ... has no handler yet" lines, next to the routes for membership and accreditation:
+// ============================================================================
+
+			// A paid insurance mid-term change (a one-off payment for one or more dated revisions)
+			if(purchase_type == "insurance_change" && session_mode == "payment")
+			{
+				return thisapp.Creator.process_insurance_change(log_id);
+			}
+			//
+			// A paid membership mid-term change (an extra branch, or flat items such as a badge)
+			if(purchase_type == "membership_change" && session_mode == "payment")
+			{
+				return thisapp.Creator.process_membership_change(log_id);
+			}
+
+// ============================================================================
+// 2. A checkout that expired unpaid: its revisions go back from Awaiting Payment to Quoted.
+//    Paste this ABOVE the final "Everything else ... has no handler yet" block (the same place the refund routes go).
+//    It needs the Stripe webhook endpoint to send checkout.session.expired.
+//    The expiry handler reads the type from Stripe itself and skips anything that is not an insurance change,
+//    so it is safe to route every expired session to it.
+// ============================================================================
+
+		if(event_type == "checkout.session.expired")
+		{
+			return thisapp.Creator.expire_insurance_change(log_id);
+		}
+
+// ============================================================================
+// Also needed, outside this function:
+//  - A Creator schedule, once a day, that runs Creator.apply_scheduled_revisions().
+//  - checkout.session.expired added to the Stripe webhook endpoint's events.
+//  - Keep the portal switch PORTAL_INSURANCE_CHANGES_PAYMENT OFF until the CRM automation check is done.
+// ============================================================================

@@ -1,0 +1,266 @@
+map Creator.process_insurance_change(int log_id)
+{
+	// ============================================================================
+	// DRAFT, UNTESTED. Do not enable until the CRM automation check in creator-payments-app.md 6.7 is done,
+	// and keep the portal switch PORTAL_INSURANCE_CHANGES_PAYMENT off until then.
+	//
+	// Creator.process_insurance_change
+	// Purpose : A paid insurance mid-term change (checkout.session.completed, mode payment, type insurance_change,
+	//           mta_scope policy). It is a one-off payment: there is no Stripe invoice and no subscription.
+	//   1. Verify with Stripe and check every revision BEFORE changing anything (creator-payments-app.md 6.2).
+	//   2. Record the Invoice Record and Payment in Creator.
+	//   3. Apply each revision in start-date order with CRM.apply_policy_revision (6.3).
+	//   4. Push the invoice and payment to Books (6.4).
+	// If a check fails nothing is changed and the reason is on the log row for the office.
+	// Safe to run again: records are reused, a revision already Approved, Scheduled or Applied is skipped, and
+	// apply_policy_revision is safe to repeat.
+	//
+	// NOT DONE YET (open): Books shows ONE invoice for the payment. Splitting the lines by revision, so Books shows
+	// one adjustment per start date, needs the checkout lines to carry their revision. Decide with the Creator owner.
+	//
+	// @input.log_id - the Stripe_Webhook_Log row of the checkout.session.completed event
+	// ============================================================================
+	try
+	{
+		// ---- Stage 0: load and claim the log row ----
+		log_rows = Stripe_Webhook_Log[ID == log_id];
+		if(log_rows.count() == 0)
+		{
+			return {"status":"error","message":"No Stripe_Webhook_Log row " + log_id};
+		}
+		current_status = log_rows.Status;
+		event_type = log_rows.Event_Type;
+		if((current_status != "Received" && current_status != "Failed") || event_type != "checkout.session.completed")
+		{
+			return {"status":"skipped","message":"Row is " + current_status + " / " + event_type};
+		}
+		log_rows.Status="Processing";
+		log_rows.Attempts=ifnull(log_rows.Attempts,0) + 1;
+		session_id = log_rows.Stripe_Object_ID;
+		//
+		// ---- Stage 1: verify with Stripe. Nothing is written yet. ----
+		verified = thisapp.Stripe.get_verified_session(session_id);
+		if(verified.get("status") == "waiting")
+		{
+			thisapp.Stripe.set_log_status(log_id,"Received","Session not complete and paid yet");
+			return {"status":"waiting"};
+		}
+		if(verified.get("status") != "success")
+		{
+			thisapp.Stripe.set_log_status(log_id,"Failed",verified.get("message"));
+			return {"status":"error","message":verified.get("message")};
+		}
+		session = verified.get("session");
+		metadata = ifnull(session.get("metadata"),Map());
+		if(metadata.get("type") != "insurance_change" || session.get("mode") != "payment" || ifnull(metadata.get("mta_scope"),"policy") != "policy")
+		{
+			thisapp.Stripe.set_log_status(log_id,"Failed","Not a one-off insurance change session (type " + metadata.get("type") + ", mode " + session.get("mode") + ", scope " + metadata.get("mta_scope") + ")");
+			return {"status":"error","message":"Unsupported session"};
+		}
+		contact_id = ifnull(metadata.get("contact_id"),"").toString();
+		deal_id = ifnull(metadata.get("membership_deal_id"),"").toString();
+		policy_id = ifnull(metadata.get("insurance_policy_id"),"").toString();
+		if(contact_id == "" || policy_id == "" || (session.get("client_reference_id") != null && session.get("client_reference_id") != contact_id))
+		{
+			thisapp.Stripe.set_log_status(log_id,"Failed","Missing contact_id or insurance_policy_id, or client_reference_id does not match contact_id");
+			return {"status":"error","message":"Metadata check failed"};
+		}
+		//
+		// The amount charged must equal the amount the portal said it was charging
+		amount = (session.get("amount_total").toDecimal() / 100).round(2);
+		expected_amount = ifnull(metadata.get("total_amount"),"0").toDecimal();
+		if((amount - expected_amount).abs() > 0.005)
+		{
+			thisapp.Stripe.set_log_status(log_id,"Failed","Amount mismatch: Stripe took " + amount + " but the metadata says " + expected_amount + ". Nothing was changed.");
+			return {"status":"error","message":"Amount mismatch"};
+		}
+		//
+		// The revisions: ids, quote ids and dates arrive as comma separated lists in the same order
+		revision_ids = ifnull(metadata.get("revision_ids"),"").toString().toList(",");
+		quote_ids = ifnull(metadata.get("quote_ids"),"").toString().toList(",");
+		revision_count = ifnull(metadata.get("revision_count"),"0").toLong();
+		if(revision_ids.size() == 0 || revision_ids.size() != revision_count || quote_ids.size() != revision_ids.size())
+		{
+			thisapp.Stripe.set_log_status(log_id,"Failed","The revision lists in the metadata do not agree (ids " + revision_ids.size() + ", quotes " + quote_ids.size() + ", count " + revision_count + "). Nothing was changed.");
+			return {"status":"error","message":"Revision lists do not agree"};
+		}
+		//
+		// Check EVERY revision before applying any. A revision already Approved, Scheduled or Applied is a repeat and is skipped later.
+		position = 0;
+		for each  raw_id in revision_ids
+		{
+			revision_id = raw_id.trim();
+			revision = zoho.crm.getRecordById("Policy_Revisions",revision_id.toLong());
+			if(revision == null || revision.get("id") == null)
+			{
+				thisapp.Stripe.set_log_status(log_id,"Failed","Revision " + revision_id + " does not exist. Nothing was changed.");
+				return {"status":"error","message":"Revision not found"};
+			}
+			revision_status = ifnull(revision.get("Revision_Status"),"").toString();
+			already_done = revision_status == "Approved" || revision_status == "Scheduled" || revision_status == "Applied";
+			if(!already_done)
+			{
+				if(revision_status != "Awaiting Payment")
+				{
+					thisapp.Stripe.set_log_status(log_id,"Failed","Revision " + revision_id + " is " + revision_status + ", not Awaiting Payment. Nothing was changed.");
+					return {"status":"error","message":"Revision not awaiting payment"};
+				}
+				if(ifnull(revision.get("Stripe_Checkout_Session_ID"),"").toString() != session_id)
+				{
+					thisapp.Stripe.set_log_status(log_id,"Failed","Revision " + revision_id + " belongs to a different checkout session. Nothing was changed.");
+					return {"status":"error","message":"Revision session mismatch"};
+				}
+				if(ifnull(revision.get("After_Quote_ID"),"").toString() != quote_ids.get(position).trim())
+				{
+					thisapp.Stripe.set_log_status(log_id,"Failed","Revision " + revision_id + " has a different quote reference from the payment. Nothing was changed.");
+					return {"status":"error","message":"Quote mismatch"};
+				}
+			}
+			// Every revision must be for the policy named in the payment
+			revision_policy = revision.get("Policy");
+			if(revision_policy == null || revision_policy.get("id").toString() != policy_id)
+			{
+				thisapp.Stripe.set_log_status(log_id,"Failed","Revision " + revision_id + " is for a different policy. Nothing was changed.");
+				return {"status":"error","message":"Policy mismatch"};
+			}
+			position = position + 1;
+		}
+		//
+		// Which payment is this? With no invoice, the payment intent is the unique Stripe reference.
+		payment_intent_id = ifnull(session.get("payment_intent"),"").toString();
+		if(payment_intent_id == "")
+		{
+			thisapp.Stripe.set_log_status(log_id,"Failed","The session has no payment intent");
+			return {"status":"error","message":"No payment intent"};
+		}
+		//
+		// Get the line items of the session, with the product so the price list code can be read
+		lines_response = thisapp.Stripe.call_stripe_api("https://api.stripe.com/v1/checkout/sessions/" + session_id + "/line_items?limit=100&expand%5B%5D=data.price.product","GET",null);
+		if(lines_response.get("error") != null || lines_response.get("data") == null)
+		{
+			thisapp.Stripe.set_log_status(log_id,"Failed","Could not read the session lines: " + lines_response.toString());
+			return {"status":"error","message":"Line items failed"};
+		}
+		if(lines_response.get("has_more").toString() == "true")
+		{
+			thisapp.Stripe.set_log_status(log_id,"Failed","More than 100 lines on an insurance change payment, which is not expected.");
+			return {"status":"error","message":"Too many lines"};
+		}
+		//
+		// Map every line to a Books item. Stop here if any code is missing in Stripe or Books (premium rows, INS-IPT, FEE-MTA, MEM-FULLNS-Y).
+		lines_result = thisapp.Books.build_invoice_lines(lines_response.get("data"),amount,0.00,List());
+		if(lines_result.get("status") != "success")
+		{
+			thisapp.Stripe.set_log_status(log_id,"Failed","Books item mapping failed, nothing else was processed: " + lines_result.get("errors").toString());
+			return {"status":"error","message":"Books item mapping failed"};
+		}
+		customer_details = ifnull(session.get("customer_details"),Map());
+		customer_email = ifnull(customer_details.get("email"),metadata.get("email"));
+		livemode = session.get("livemode").toString() == "true";
+		paid_time = ifnull(log_rows.Stripe_Created,zoho.currenttime);
+		//
+		// ---- Stage 2: Creator records (each reuses an existing row on a retry) ----
+		inv_data = Map();
+		inv_data.put("invoice_id","");
+		inv_data.put("session_id",session_id);
+		inv_data.put("invoice_type","One-off payment");
+		inv_data.put("customer_name",customer_details.get("name"));
+		inv_data.put("customer_email",customer_email);
+		inv_data.put("contact_id",contact_id);
+		inv_data.put("membership_id",deal_id);
+		inv_data.put("product_description","Insurance change (" + revision_ids.size() + " start date(s))");
+		inv_data.put("amount",amount);
+		inv_data.put("paid_time",paid_time);
+		inv_data.put("payment_intent_id",payment_intent_id);
+		inv_data.put("related_records",{"contact_id":contact_id,"insurance_policy_id":policy_id,"revision_ids":metadata.get("revision_ids"),"quote_ids":metadata.get("quote_ids")});
+		inv_data.put("livemode",livemode);
+		inv_result = thisapp.Creator.get_or_create_invoice_record(inv_data);
+		pay_data = Map();
+		pay_data.put("reference",payment_intent_id);
+		pay_data.put("livemode",livemode);
+		pay_data.put("log_id",log_id);
+		pay_data.put("payment_intent_id",payment_intent_id);
+		pay_data.put("session_id",session_id);
+		pay_data.put("customer_id",session.get("customer"));
+		pay_data.put("contact_id",contact_id);
+		pay_data.put("invoice_record_id",inv_result.get("id"));
+		pay_data.put("currency",session.get("currency"));
+		pay_data.put("amount",amount);
+		pay_data.put("paid_time",paid_time);
+		pay_result = thisapp.Creator.get_or_create_payment_record(pay_data);
+		if(inv_result.get("status") != "success" || pay_result.get("status") != "success")
+		{
+			message = "Creator records failed: " + inv_result.toString() + " " + pay_result.toString();
+			thisapp.Stripe.set_log_status(log_id,"Failed",message);
+			return {"status":"error","message":message};
+		}
+		inv_rec_id = inv_result.get("id");
+		pay_rec_id = pay_result.get("id");
+		log_rows.Invoice=inv_rec_id;
+		//
+		// ---- Stage 3: CRM. Apply each revision in start-date order (the portal sends the ids in that order). ----
+		applied_outcomes = List();
+		for each  apply_raw_id in revision_ids
+		{
+			apply_id = apply_raw_id.trim();
+			apply_result = thisapp.CRM.apply_policy_revision(apply_id,session_id);
+			if(apply_result.get("status") != "success")
+			{
+				thisapp.Stripe.set_log_status(log_id,"Failed","Revision " + apply_id + " could not be applied (a retry resumes it): " + apply_result.get("message"));
+				return {"status":"error","message":"Apply failed"};
+			}
+			applied_outcomes.add(apply_id + ":" + apply_result.get("outcome"));
+		}
+		//
+		// ---- Stage 4: Books (CRM stays updated if this fails; a retry reuses what already exists) ----
+		inv_check = Invoice_Records[ID == inv_rec_id];
+		if(inv_check.Books_Sync_Status != "Pushed")
+		{
+			books_customer = thisapp.Books.get_or_create_books_customer(customer_email,contact_id);
+			if(books_customer.get("status") != "success")
+			{
+				books_error = "Books customer failed: " + books_customer.toString();
+				thisapp.Creator.mark_invoice_books_result(inv_rec_id,"Failed",{"error":books_error});
+				thisapp.Creator.mark_payment_books_result(pay_rec_id,"Failed",{"error":books_error});
+				thisapp.Stripe.set_log_status(log_id,"Failed",books_error);
+				return {"status":"error","message":books_error};
+			}
+			books_customer_id = books_customer.get("books_customer_id").toString();
+			// The payment intent id is the Stripe reference on the Books invoice and payment, so a retry finds them
+			invoice_push = thisapp.Books.create_books_invoice(books_customer_id,lines_result.get("lines"),payment_intent_id,amount,deal_id);
+			if(invoice_push.get("status") != "success")
+			{
+				books_error = "Books invoice failed: " + invoice_push.toString();
+				thisapp.Creator.mark_invoice_books_result(inv_rec_id,"Failed",{"error":books_error,"books_invoice_id":invoice_push.get("invoice_id"),"books_customer_id":books_customer_id,"lines_json":lines_result.get("snapshot").toString()});
+				thisapp.Creator.mark_payment_books_result(pay_rec_id,"Failed",{"error":books_error});
+				thisapp.Stripe.set_log_status(log_id,"Failed",books_error);
+				return {"status":"error","message":books_error};
+			}
+			books_invoice_id = invoice_push.get("invoice_id");
+			payment_push = thisapp.Books.record_books_payment(books_customer_id,books_invoice_id,amount,payment_intent_id,paid_time.toString("yyyy-MM-dd"));
+			if(payment_push.get("status") != "success")
+			{
+				books_error = "Books payment failed: " + payment_push.toString();
+				thisapp.Creator.mark_invoice_books_result(inv_rec_id,"Failed",{"error":books_error,"books_invoice_id":books_invoice_id,"books_customer_id":books_customer_id,"lines_json":lines_result.get("snapshot").toString()});
+				thisapp.Creator.mark_payment_books_result(pay_rec_id,"Failed",{"error":books_error});
+				thisapp.Stripe.set_log_status(log_id,"Failed",books_error);
+				return {"status":"error","message":books_error};
+			}
+			thisapp.Creator.mark_invoice_books_result(inv_rec_id,"Pushed",{"books_invoice_id":books_invoice_id,"books_customer_id":books_customer_id,"invoice_status":"Paid","lines_json":lines_result.get("snapshot").toString()});
+			thisapp.Creator.mark_payment_books_result(pay_rec_id,"Pushed",{"books_payment_id":payment_push.get("payment_id")});
+		}
+		for each  inv_rec in Invoice_Records[ID == inv_rec_id]
+		{
+			inv_rec.crm_membership_id=deal_id;
+		}
+		//
+		// ---- Stage 5: every stage succeeded ----
+		thisapp.Stripe.set_log_status(log_id,"Processed","");
+		return {"status":"success","invoice_record":inv_rec_id,"payment_record":pay_rec_id,"revisions":applied_outcomes};
+	}	catch (e)
+	{
+		thisapp.Stripe.set_log_status(log_id,"Failed",e.toString());
+		return {"status":"error","message":e.toString()};
+	}
+	return {};
+}

@@ -136,21 +136,20 @@ Daily, find revisions with status Scheduled and `Requested_Effective_Date` on or
 ### 6.8 Tests (Development, Stripe test mode)
 One revision paid now; a basket of two dates paid in one checkout (two revisions applied in date order, one `FEE-MTA` each); a future-dated revision that stays Scheduled and applies on its date; a swap that ends the old row and starts the new one; a repeated and an out-of-order event (applied once); an amount mismatch (nothing changes, exception logged); an expired session (back to Quoted); and a branch bought as a membership change. After each, check the live policy status and Payment_Status are untouched and that no activation or document workflow fired.
 
-### 6.9 Functions to write (none written yet)
+### 6.9 Functions (drafted 5 November 2026, not yet in Creator, untested)
 
-No MTA Deluge exists yet, and none should be written until the automation check in 6.7 is done. The functions, named in the same style as the rest of the app:
+The Deluge is in [mta-creator-functions/](mta-creator-functions/). It is a **draft**: it has not been pasted into Creator or run, and it must not be switched on until the automation check in 6.7 is done and the tests in 6.8 pass. The functions, named in the same style as the rest of the app:
 
 | Function | What it does | Section |
 |---|---|---|
-| `Stripe.process_log_row` (edit) | Route `checkout.session.completed` with `type=insurance_change` and `type=membership_change` to the handlers below, and `checkout.session.expired` for an insurance change to the expiry handler | 6.2, 6.6 |
-| `Creator.process_insurance_change(log_id)` | Fetch the session, verify amount, revision ids, session id, status and quote ids, record the exception if any check fails, otherwise apply the revisions in effective-date order (idempotent by revision id), create the Invoice Record and push it to Books | 6.2, 6.3, 6.4 |
-| `CRM.apply_policy_revision(revision_id)` | Approve, then Schedule or apply one revision: Draft rows to Active, endings to Superseded, Cancelled or Removed with `Effective_To`, the revision to Applied, `Document_Status` to Regenerate. Never touches the policy's Payment_Status, Application_Status or Policy_Status | 6.3 |
-| `Creator.apply_scheduled_revisions()` | Daily schedule: apply every Scheduled revision whose date has come, log each run, retry failures, feed the Failed view | 6.5 |
+| `Stripe.process_log_row` (patch) | Route `checkout.session.completed` with `type=insurance_change` and `type=membership_change` to the handlers below, and `checkout.session.expired` to the expiry handler | 6.2, 6.6 |
+| `Creator.process_insurance_change(log_id)` | Fetch the session, verify amount, revision ids, session id, status, quote ids and policy, record the exception if any check fails, otherwise apply the revisions in effective-date order (idempotent by revision id), create the Invoice Record and push it to Books | 6.2, 6.3, 6.4 |
+| `CRM.apply_policy_revision(revision_id, session_id)` | Approve, then Schedule or apply one revision: Draft rows to Active, endings to Superseded or Removed with `Effective_To`, the revision to Applied, `Document_Status` to Regenerate. Never touches the policy's Payment_Status, Application_Status or Policy_Status | 6.3 |
+| `Creator.apply_scheduled_revisions()` | Daily schedule: apply every Scheduled revision whose date has come, and retry any stuck in Approved | 6.5 |
 | `Creator.expire_insurance_change(log_id)` | Revisions back from Awaiting Payment to Quoted, session id cleared | 6.2 |
 | `Creator.process_membership_change(log_id)` | Branch and add-on purchases mid-term: Membership_Extension rows, Invoice Record, Books | 6.6 |
-| `Books.build_invoice_lines` (extend) | One adjustment per start date, `FEE-MTA` once per date, the employee fee split 38/55 | 6.4 |
 
-Each must keep the rules the rest of the app follows: verify from Stripe, one log row and one status, every step idempotent, `Failed` visible and retryable, Books items found by price list code and never created.
+Still to do: split the Books invoice by revision, decide who adds a branch's yearly price to the renewal subscription (a Stripe write), and confirm which module holds `Document_Status`. Each function keeps the rules the rest of the app follows: verify from Stripe, one log row and one status, every step idempotent, `Failed` visible and retryable, Books items found by price list code and never created.
 
 ## 7. UAT round 1: items Creator must pick up (for QA)
 
