@@ -141,16 +141,19 @@ const WAIVER_FIELDS = Object.freeze({
   session: 'Stripe_Checkout_Session',
   status: 'Status', // picklist
 });
-// Voucher redemptions live in Creator (Voucher_Redemptions_Report). Contact and voucher are the CRM ids as text. Creator creates a Used
-// row when the payment succeeds and marks it Reversed on a refund or cancellation; only the statuses in REDEMPTION_COUNTED count.
+// Voucher redemptions live in Creator (Voucher_Redemptions_Report, form "Voucher Redemptions"). The names are Creator's own, made from the
+// form labels, so they are capitalised. Voucher, Contacts, Accreditation and School are LOOKUPS to the CRM: Creator sends each as an object
+// ({ ID, display_value }), not text. Creator creates a Used row when the payment succeeds and marks it Reversed on a refund or cancellation;
+// only the statuses in REDEMPTION_COUNTED count.
 const REDEMPTION_REPORT = 'Voucher_Redemptions_Report';
 const REDEMPTION_FIELDS = Object.freeze({
-  key: 'redemption_key', // unique per voucher, application and person (the engine's key): UNCONFIRMED name
-  contact: 'contact',
-  voucher: 'voucher',
-  status: 'status', // 'Used' or 'Reversed'
-  date: 'redemption_date',
+  key: 'Redemption_Key', // unique in Creator: one row per voucher, application and person (the engine's key)
+  contact: 'Contacts',
+  voucher: 'Voucher',
+  status: 'Status', // Reserved, Used, Reversed or Failed
 });
+// A Creator lookup value -> the CRM id as text. Accepts the { ID } object Creator sends, or a plain id.
+const lookupId = v => text(v && typeof v === 'object' ? (v.ID ?? v.id) : v);
 // Settings the A2Z side may still change, in one place. Statuses that COUNT against a voucher's usage limit and one use per person:
 // Reserved (made at payment), Applied (set when paid), and Creator's current 'Used'. Reversed and Failed give the use back.
 const REDEMPTION_COUNTED = Object.freeze(['Reserved', 'Applied', 'Used']);
@@ -235,16 +238,15 @@ function createCrmStore({
       const criteria =
         '(' +
         f.voucher +
-        ' == "' +
+        ' == ' +
         id(voucherId, 'voucher') +
-        '"' +
-        (contactId ? ' && ' + f.contact + ' == "' + id(contactId, 'person') + '"' : '') +
+        (contactId ? ' && ' + f.contact + ' == ' + id(contactId, 'person') : '') +
         ')';
       const rows = await creator(req, REDEMPTION_REPORT, criteria);
       if (rows.length >= REDEMPTION_PAGE) throw unavailable('voucher redemption history');
       return rows
         .filter(r => REDEMPTION_COUNTED.some(s => same(r[f.status], s)))
-        .map(r => ({ key: text(r[f.key]), contactId: text(r[f.contact]), status: text(r[f.status]) }));
+        .map(r => ({ key: text(r[f.key]), contactId: lookupId(r[f.contact]), status: text(r[f.status]) }));
     },
     // This person's earlier waivers of the joining fee that still count (not Void).
     async joiningWaivers(contactId) {

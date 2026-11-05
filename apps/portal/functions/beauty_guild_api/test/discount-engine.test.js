@@ -373,7 +373,7 @@ test('the store reads waivers from the CRM and redemptions from Creator, and ign
     creator: async (req, report, criteria) => {
       creatorCalls.push([report, criteria]);
       return [
-        { [R.status]: 'Used', [R.contact]: '9', [R.key]: 'k1' },
+        { [R.status]: 'Used', [R.contact]: { ID: '1011174000000000099', display_value: 'A Member' }, [R.key]: 'k1' },
         { [R.status]: 'Reversed', [R.key]: 'k2' },
         { [R.status]: 'Reserved', [R.key]: 'k3' },
         { [R.status]: 'Applied', [R.key]: 'k4' },
@@ -406,10 +406,10 @@ test('the store reads waivers from the CRM and redemptions from Creator, and ign
   );
   assert.deepEqual(creatorCalls[0], [
     'Voucher_Redemptions_Report',
-    '(voucher == "1011174000000000001" && contact == "1011174000000000099")',
+    '(Voucher == 1011174000000000001 && Contacts == 1011174000000000099)',
   ]);
   await store.redemptions('1011174000000000001');
-  assert.equal(creatorCalls[1][1], '(voucher == "1011174000000000001")', 'for everyone');
+  assert.equal(creatorCalls[1][1], '(Voucher == 1011174000000000001)', 'for everyone');
   // Ids that are not CRM ids never reach a query, and the checks fail closed.
   await assert.rejects(store.joiningWaivers('1) or (x'), e => e.code === 'DISCOUNT_LOG_UNAVAILABLE');
   await assert.rejects(store.redemptions('1" || 1==1'), e => e.code === 'DISCOUNT_LOG_UNAVAILABLE');
