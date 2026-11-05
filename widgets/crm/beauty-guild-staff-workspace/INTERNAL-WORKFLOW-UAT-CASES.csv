@@ -1,0 +1,35 @@
+Case ID,Suite,Scenario,Environment gate,Required proof,Priority
+OP-11,Operational,Insurance Application Status safe edit,Development,Workflow update/audit note,P0
+OP-12,Operational,Accreditation Application Stage safe edit,Development,Workflow update/email if configured,P0
+MB-01,Membership,New Associate paid,QA-only transactional,Membership active; acceptance email/letter; invoice,P0
+MB-02,Membership,Full membership with Insurance,QA-only transactional,Policy/cover and status; membership email; draft docs,P0
+MB-03,Membership,Renewal paid,QA-only transactional,Renewal receipt and dates; no duplicates,P0
+MB-04,Membership,Upgrade Associate to Full,QA-only transactional,New type and correct pricing; upgrade notice,P1
+MB-05,Membership,Failed/abandoned payment,QA-only transactional,No paid-success or activation,P0
+INS-01,Insurance,Member Gate clear,Authorised CRM Development,Member_Gate_Result Clear with evidence,P0
+INS-02,Insurance,Member Gate blocked/missing,Authorised CRM Development,"Blocked or referred, not silently clear",P0
+INS-03,Insurance,Sanctions screening referred,Authorised CRM Development,"Sanctions roll-up, task, policy blocked",P0
+INS-04,Insurance,Manual review approved,Authorised CRM Development,"Decision, reviewer/time audit",P0
+INS-05,Insurance,Manual review declined,Authorised CRM Development,Policy stopped/withdrawn; no issued docs,P0
+INS-06,Insurance,Approved with endorsement,Authorised CRM Development,"Quote version increases, reprice required",P0
+INS-07,Insurance,Activation after trusted payment,QA-only transactional,CRM active only with acceptable gates,P0
+INS-08,Insurance,Uncleared risk blocks activation,Authorised CRM Development,Fail closed; no policy issued,P0
+INS-09,Insurance,Documents on activation,Authorised CRM Development,"Correct DRAFT documents, WorkDrive links",P0
+INS-10,Insurance,Regenerate document,Authorised CRM Development,"Version and links, no stale data",P1
+INS-11,Insurance,Document generation failure,Authorised CRM Development,Failed state; no issued output,P0
+INS-12,Insurance,Scheduled incomplete follow-up,Scheduler test,"One task, deduplication and timezone",P1
+AC-01,Accreditation,Submission and review stage,Development,Correct stage and configured notices,P0
+AC-02,Accreditation,Paid confirmation,QA-only transactional,"Paid state, receipt email and invoice",P0
+AC-03,Accreditation,Failed/Processing payment,Creator Development,No approval; configured failure notification,P0
+AC-04,Accreditation,Approval and acceptance letter,Authorised CRM Development,Approved stage; acceptance document/email,P0
+AC-05,Accreditation,Verified and published,Authorised CRM Development,Correct listing and dates,P0
+MT-01,MTA,Quote and revision save,QA-only transactional,"Revision saved, old cover untouched",P0
+MT-02,MTA,Referral/stale quote,QA-only transactional,"No payment link, reprice required",P0
+MT-03,MTA,Paid effective-dated revision,QA-only transactional,"One applied change, updated cover/docs",P0
+CN-01,Cancellation,Quote only without confirmation,QA-only transactional,"No cancellation, no refund or email",P0
+CN-02,Cancellation,Confirmed refund,QA-only transactional,Correct refund and confirmation email,P0
+CN-03,Cancellation,Idempotent retry,QA-only transactional,No duplicated refund or message,P0
+PAY-01,Creator,Duplicate/out-of-order webhook,Creator Development,One processing result and communication,P0
+PAY-02,Finance,Books invoice sync,Creator/Books Development,"Correct mapping, amounts and invoice",P0
+PAY-03,Communications,Email failure/retry,QA email environment,Failure evidence; no duplicates,P1
+SEC-01,Security,Restricted user and cross-contact access,Development restricted user,Denied access to other Contact documents,P0
