@@ -140,6 +140,7 @@ const SERVICES = {
       const membership = await activeMembership(req, crm, contact.id);
       // A school without a current membership pays the combined accreditation and Associate price.
       const bundle = !membership;
+      const bundleTerm = bundle ? resolveStart(undefined, 'membership') : null;
       const label = international
         ? bundle
           ? 'International Accreditation + International Membership'
@@ -185,11 +186,13 @@ const SERVICES = {
           // The Deal's own id, not its Member_Profile id - Training_Centre_Accred.Membership is a
           // lookup to Deals, so this has to be the Deal's own id to link correctly (matches V1).
           membership_id: membership?.id || '',
+          // A bundle makes a NEW membership, so it has no existing dates: its term starts today and runs one year (the same rule as a new
+          // membership). Creator creates the Deal and its renewals from these dates, so they must not be empty.
           membership_details: JSON.stringify({
             required: bundle,
             type: bundle ? (international ? 'International' : 'Associate') : null,
-            start_date: membership?.start || null,
-            expiry_date: membership?.expiry || null,
+            start_date: membership?.start || bundleTerm?.start || null,
+            expiry_date: membership?.expiry || bundleTerm?.end || null,
           }),
         }),
       };
