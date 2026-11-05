@@ -133,6 +133,8 @@ test('invoice mapping follows V1 Creator data fields', () => {
     {
       id: '1',
       invoiceNumber: '41',
+      netAmount: null,
+      vatAmount: null,
       type: 'Membership',
       invoiceDate: null,
       dueDate: null,
@@ -141,6 +143,29 @@ test('invoice mapping follows V1 Creator data fields', () => {
       status: 'Paid',
     },
   );
+});
+test('invoice mapping shows the Books number first, with net and VAT, and reads either spelling of the field names', () => {
+  const row = {
+    ID: '2',
+    invoice_number: '42',
+    Books_Invoice_Number: 'INV-000123',
+    Net_Amount: '45.83',
+    VAT_Amount: '9.17',
+  };
+  const m = mapInvoice(row);
+  assert.equal(m.invoiceNumber, 'INV-000123');
+  assert.equal(m.netAmount, 45.83);
+  assert.equal(m.vatAmount, 9.17);
+  assert.equal(
+    mapInvoice({ ID: '3', books_invoice_number: 'INV-000124', net_amount: '1' }).invoiceNumber,
+    'INV-000124',
+  );
+  assert.equal(
+    mapInvoice({ ID: '4', invoice_number: '43', Books_Invoice_Number: '' }).invoiceNumber,
+    '43',
+    'no Books number yet: Creator number',
+  );
+  assert.equal(mapInvoice({ ID: '5' }).vatAmount, null);
 });
 test('requires Catalyst identity before any school or invoice data', async () => {
   await withServer({ getCurrentUser: async () => null }, async call => {

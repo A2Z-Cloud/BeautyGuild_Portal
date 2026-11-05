@@ -18,11 +18,21 @@ const esc = v => encodeURIComponent(String(v));
 const fail = (message, status = 502, code = 'SERVICE_UNAVAILABLE') => {
   throw new HttpError(status, code, message);
 };
+// Creator names the fields made from a label as the label with underscores (Books_Invoice_Number); the older ones are lower case.
+// Read either, so a change of spelling in Creator cannot blank the page.
+const pick = (r, ...names) => {
+  for (const n of names) if (r[n] !== undefined && r[n] !== null && r[n] !== '') return r[n];
+  return null;
+};
+const money = v => (v === null || !Number.isFinite(Number(v)) ? null : Number(v));
 function mapInvoice(r) {
   const descriptor = r.product_description;
   return {
     id: String(r.ID),
-    invoiceNumber: r.invoice_number || null,
+    // The Books invoice number is the one the member sees on their invoice. Older rows have none yet, so fall back to Creator's own number.
+    invoiceNumber: pick(r, 'Books_Invoice_Number', 'books_invoice_number', 'invoice_number'),
+    netAmount: money(pick(r, 'Net_Amount', 'net_amount')),
+    vatAmount: money(pick(r, 'VAT_Amount', 'vat_amount')),
     type:
       descriptor && descriptor.length <= 40
         ? descriptor
@@ -127,7 +137,10 @@ function createSchoolApi({
   }
   async function invoices(req, criteria) {
     const rows = await creator(req, creatorInvoiceReport, criteria);
-    return rows.map(mapInvoice).sort((a, b) => Number(b.invoiceNumber || 0) - Number(a.invoiceNumber || 0));
+    // Newest first. Creator ids grow with time, and a Books number such as INV-000123 is not a number, so sort on the id (ids are too long for Number).
+    return rows
+      .map(mapInvoice)
+      .sort((a, b) => (BigInt(b.id) > BigInt(a.id) ? 1 : BigInt(b.id) < BigInt(a.id) ? -1 : 0));
   }
 
   async function crmCreate(req, module, data) {
