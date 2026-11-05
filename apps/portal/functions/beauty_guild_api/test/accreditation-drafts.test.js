@@ -660,6 +660,63 @@ test('a CRM failure part way is reported with our own wording and no CRM text', 
   });
 });
 
+const MY_DEAL = (over = {}) => ({
+  id: '5001',
+  Contact_Name: { id: MY_CONTACT },
+  Stage: 'Active',
+  Membership_Type: 'Full Member',
+  Start_Date: '2020-01-01',
+  Expiry_Date: '2999-01-01',
+  ...over,
+});
+test("a member's accreditation is linked to their current membership, on the first save and the later ones", async () => {
+  const crm = fakeCrm({ rows: { Deals: [MY_DEAL(), MY_DEAL({ id: '5002', Contact_Name: { id: '1000000000999' } })] } });
+  await withApp(crm, async call => {
+    const first = (await call('/portal/drafts/', send('POST', body()))).body.draft;
+    assert.deepEqual(crm.store.Training_Centre_Accred[0].Membership, { id: '5001' });
+    assert.equal(
+      (await call('/portal/drafts/accreditation/' + first.id, send('PUT', body(answers(), { related: first.related }))))
+        .status,
+      200,
+    );
+  });
+  assert.equal(crm.store.Training_Centre_Accred.length, 1);
+  assert.deepEqual(crm.store.Training_Centre_Accred[0].Membership, { id: '5001' }, "never someone else's membership");
+});
+test('a later save moves a stale membership link, for example after an upgrade', async () => {
+  const crm = fakeCrm({ rows: { Deals: [MY_DEAL({ id: '5001', Membership_Type: 'Associate Member' })] } });
+  await withApp(crm, async call => {
+    const first = (await call('/portal/drafts/', send('POST', body()))).body.draft;
+    assert.deepEqual(crm.store.Training_Centre_Accred[0].Membership, { id: '5001' });
+    crm.store.Deals[0].Stage = 'Cancelled';
+    crm.store.Deals.push(MY_DEAL({ id: '5003', Start_Date: '2026-11-01' }));
+    await call('/portal/drafts/accreditation/' + first.id, send('PUT', body(answers(), { related: first.related })));
+  });
+  assert.deepEqual(crm.store.Training_Centre_Accred[0].Membership, { id: '5003' });
+});
+test('no current membership means no link, and a failed lookup never blocks the save', async () => {
+  const ended = fakeCrm({
+    rows: { Deals: [MY_DEAL({ Stage: 'Cancelled' }), MY_DEAL({ id: '5004', Expiry_Date: '2020-02-01' })] },
+  });
+  await withApp(ended, async call => {
+    assert.equal((await call('/portal/drafts/', send('POST', body()))).status, 201);
+  });
+  assert.equal(ended.store.Training_Centre_Accred[0].Membership, undefined);
+  const none = fakeCrm();
+  await withApp(none, async call => {
+    assert.equal((await call('/portal/drafts/', send('POST', body()))).status, 201);
+  });
+  assert.equal(none.store.Training_Centre_Accred[0].Membership, undefined);
+  const real = fakeCrm({ rows: { Deals: [MY_DEAL()] } });
+  const failing = async (url, init) =>
+    String(url).includes('Deals/search')
+      ? { status: 500, ok: false, json: async () => ({}) }
+      : real.fetchImpl(url, init);
+  await withApp({ ...real, fetchImpl: failing }, async call => {
+    assert.equal((await call('/portal/drafts/', send('POST', body()))).status, 201);
+  });
+  assert.equal(real.store.Training_Centre_Accred[0].Membership, undefined);
+});
 test('tutors are linked once, an existing member tutor is Active, and a removed tutor is unlinked', async () => {
   const crm = fakeCrm({
     contacts: [

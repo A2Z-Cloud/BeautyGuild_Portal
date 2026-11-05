@@ -27,6 +27,7 @@ const ACC_FIELDS = [
   'Account',
   'Applicant_Contact',
   'Application_Stage',
+  'Membership',
   'Accreditation_Level',
   'Valid_From',
   'Valid_To',
@@ -464,6 +465,26 @@ function createAccreditation({
     ) &&
     !(deal.Start_Date && deal.Start_Date > today) &&
     !(deal.Expiry_Date && deal.Expiry_Date < today);
+  // The applicant's own current membership, to link on the accreditation (a member has one). A failed lookup never blocks the save.
+  async function currentMembershipId(req, personId) {
+    try {
+      const today = todayIso(now());
+      const deals = await search(
+        req,
+        'Deals/search?criteria=' +
+          q('(Contact_Name:equals:' + personId + ')') +
+          '&fields=' +
+          q('Stage,Membership_Type,Start_Date,Expiry_Date'),
+      );
+      const current = deals
+        .filter(d => currentMembership(d, today))
+        .sort((a, b) => String(b.Start_Date || '').localeCompare(String(a.Start_Date || '')));
+      return current.length ? String(current[0].id) : null;
+    } catch (err) {
+      log('membership link lookup failed', err && err.code, err && err.message);
+      return null;
+    }
+  }
   // Links each listed tutor to the school as V1 does: the tutor's Contact is reused (or created) and a Tutor_Relationships row
   // links it. A tutor starts Inactive unless they already hold a current membership. One tutor failing never blocks the save.
   // Tutors removed from the list are unlinked, but only on the Account this journey created for the application.
@@ -562,6 +583,10 @@ function createAccreditation({
     const isNew = !acc;
     let accId = acc?.id;
     const record = accRecord(m, person, accountId, isNew);
+    // A member's accreditation is linked to their membership (Guild, 5 November 2026). Someone buying a membership in the same payment has
+    // none yet: the payment app links it once the membership exists. A later save moves a stale link (for example after an upgrade).
+    const membershipId = await currentMembershipId(req, person.id);
+    if (membershipId) record.Membership = { id: membershipId };
     if (isNew) accId = await create(req, 'Training_Centre_Accred', { ...record, Application_Stage: DRAFT });
     else await update(req, 'Training_Centre_Accred', accId, record);
     const linkName = (schoolName || placeholderName(person.id)) + ' - Main Centre';
