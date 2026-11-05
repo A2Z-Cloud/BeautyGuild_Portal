@@ -237,6 +237,26 @@ test('accreditation with a current membership pays the plain accreditation price
   });
 });
 const INTL_ENV = {};
+test("a bundled accreditation sends the new membership its start and expiry dates; one with a membership keeps that membership's dates", async () => {
+  const today = new Date().toISOString().slice(0, 10);
+  const w = world({});
+  await withApp(w, async ({ post }) => {
+    assert.equal((await post({ service: 'accreditation', recordId: ACC })).status, 201);
+    const d = JSON.parse(w.stripePosts[0].params.get('metadata[membership_details]'));
+    assert.equal(d.required, true);
+    assert.equal(d.start_date, today);
+    assert.match(d.expiry_date, /^\d{4}-\d{2}-\d{2}$/);
+    assert.ok(d.expiry_date > today, 'the term runs forward from today');
+  });
+  const w2 = world({ deals: [activeDeal] });
+  await withApp(w2, async ({ post }) => {
+    assert.equal((await post({ service: 'accreditation', recordId: ACC })).status, 201);
+    const d = JSON.parse(w2.stripePosts[0].params.get('metadata[membership_details]'));
+    assert.equal(d.required, false);
+    assert.equal(d.start_date, activeDeal.Start_Date);
+    assert.equal(d.expiry_date, activeDeal.Expiry_Date);
+  });
+});
 test('an international school without a membership pays the flat 405 pound international bundle, no VAT', async () => {
   const w = world({ acc: { Accreditation_Level: 'International Accreditation Annual' } });
   await withApp(
