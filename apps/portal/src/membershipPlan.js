@@ -2,7 +2,7 @@
 // belong to which step (docs/delivery/combined-membership-flow-spec.md, sections 2 and 3). The server's membershipDecision.js is the
 // authority on the level and the price. This only decides what to SHOW before the server has been asked, and membershipPlan.test.js checks
 // it against the server function for every row of the matrix so the two cannot drift.
-import { INSURANCE_STEPS, stopOf, stopMessages, visibleSteps } from './insuranceInputs.js';
+import { INSURANCE_STEPS, stopOf, visibleSteps } from './insuranceInputs.js';
 import { validate } from './logic.mjs';
 
 const UK_GROUP = ['united kingdom', 'uk', 'great britain', 'england', 'scotland', 'wales', 'northern ireland'];
