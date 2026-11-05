@@ -5,6 +5,7 @@ const { createLoqate } = require('./loqate');
 const { createCourses } = require('./courses');
 const { createRateLimiter, clientKey } = require('./rateLimit');
 const { registerRecordRoutes, createCrmClient } = require('./records');
+const { registerProfileRoutes } = require('./profile');
 const { registerCheckoutRoutes } = require('./checkout');
 const { registerDocumentRoutes } = require('./documents');
 const { registerDiagnosticsRoutes } = require('./diagnostics');
@@ -71,7 +72,8 @@ function createApp({
       !req.path.startsWith('/portal/drafts') &&
       !req.path.startsWith('/portal/management') &&
       !req.path.startsWith('/staff') &&
-      !req.path.startsWith('/portal/media')
+      !req.path.startsWith('/portal/media') &&
+      !req.path.startsWith('/portal/profile')
     )
       return next(new HttpError(405, 'METHOD_NOT_ALLOWED', 'Method not allowed.'));
     return next();
@@ -166,6 +168,14 @@ function createApp({
     fetchImpl,
     hideDrafts: config.crmDraftsEnabled,
     draftStatus: config.draftStatus,
+  });
+  registerProfileRoutes(app, {
+    enabled: config.recordsEnabled && config.profileEnabled,
+    getCurrentUser,
+    getCrmHeaders,
+    crmApiDomain: config.crmApiDomain,
+    fetchImpl,
+    now,
   });
   registerVoucherRoutes(app, {
     enabled: config.vouchersEnabled,

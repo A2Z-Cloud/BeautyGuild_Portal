@@ -32,7 +32,7 @@ Sources: UAT workbook `Beauty-Guild Portal UAT v1.1 - Guild Comments.xlsx` (roun
 
 | ID | Item | Where it came from | Current thinking |
 |---|---|---|---|
-| REV-1 | GDPR preferences page | S01 step 13 (screenshot 2) | Need the Guild's current journey wording and the CRM fields that hold the answers. |
+| REV-1 | GDPR preferences page | S01 step 13 (screenshot 2) | Built on the Account page (5 November): E-Mail, SMS, By Post, Guild Gazette, News and Special Offers, saved to the Contact with the date. Training Course Alerts is left out. Still to do: ask the same questions on Join, and load the V1 preferences into the new Contact fields before go-live so nobody looks opted out. Needs a real test with a linked Contact. |
 | REV-2 | Create the account with a password on page one | S01 step 10 | The sign-up system probably emails a link to choose a password, so it may not accept one from our form. Needs checking. A close alternative: name, email and phone, then a setup link, and carry on. |
 | REV-3 | Edit an application after "Continue to payment" | S10 step 3 | The server only lets a Draft be edited. Choose between sending it back to Draft or editing in place. |
 | REV-4 | Saved applications slow to appear | S10 step 12 | CRM search lags real writes by up to about 30 seconds. Idea: show the application just saved from this browser until the search catches up. |
@@ -101,7 +101,7 @@ Source: `Beauty-Guild Portal UAT v1.1 - Guild Comments v2 041126.xlsx` and Helen
 |---|---|---|---|
 | QA-12 | Proper VAT invoice with a breakdown (accreditation, membership, VAT), downloadable | S12 or S13 step 4 | Creator and Books. Add to Creator 7. |
 | REV-9 | What "My documents" should show (it says "Open folder", then "no documents found") | S13 | Need the Guild's list of documents. |
-| REV-10 | Edit account details (phone and others) | S13 | Profile editing is "coming soon". Needs scoping. |
+| REV-10 | Edit account details (phone and others) | S13 | Built on the Account page (5 November): mobile, phone and postal address. Name and email stay with the Guild (email is the sign-in), as in V1. Needs a real test with a linked Contact. |
 | REV-11 | Standalone insurance code | S08 | Not needed. Remove the standalone insurance code after UAT. The `/insurance` redirects are already in place. |
 | REV-12 | Caption changes, price panel and Review and pay page changes, accreditation monthly pricing, phone view | Orange tabs | The Guild is sending separate documents. |
 | REV-13 | Clean test accounts | Helen's email | New sign-ups with new email addresses work (aliases like name+uat1 are fine). Accounts that already have a Contact need the Contact created. Test data needs clearing afterwards. |
@@ -119,4 +119,5 @@ Source: `Beauty-Guild Portal UAT v1.1 - Guild Comments v2 041126.xlsx` and Helen
 | Combined Membership and Insurance journey, Associate upgrade | client build and function | On |
 | Add a venue (`VITE_PORTAL_ADD_VENUE`) | client build, plus the school writes switch in the function | On |
 | Other course (`VITE_PORTAL_OTHER_COURSE`, `ACC_OTHER_COURSE_FIELD=Other_Course`) | client build and function | On |
+| Contact preferences and details (`VITE_PORTAL_PROFILE`, `PORTAL_PROFILE_ENABLED`) | client build and function | On once the Contact fields exist: `Contact_by_Email`, `Contact_by_SMS`, `Contact_by_Post`, `Guild_Gazette`, `News_and_Special_Offers`, `Preferences_Updated_On`, `Preferences_Source` |
 | Membership changes | client build and function | Off: Creator cannot process that payment type yet |

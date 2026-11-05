@@ -130,6 +130,8 @@ function loadConfig(env = process.env) {
     // Lets signed-out visitors price a membership (no account, no CRM access). Needs billing on as well.
     publicQuotesEnabled: env.PUBLIC_QUOTES_ENABLED === 'true',
     documentsEnabled: env.PORTAL_DOCUMENTS_ENABLED === 'true',
+    // The member's own contact preferences and phone and address (src/profile.js). Needs records on as well.
+    profileEnabled: env.PORTAL_PROFILE_ENABLED === 'true',
     // School referral code online (£10 off the joining fee) and the 30 day joining fee rule. Off unless 'true'. Needs billing on as well.
     discountsEnabled: env.PORTAL_DISCOUNTS_ENABLED === 'true',
     // Redeeming a bespoke voucher (reserving a use of it) has its own switch, off until the field checks and end-to-end tests pass.

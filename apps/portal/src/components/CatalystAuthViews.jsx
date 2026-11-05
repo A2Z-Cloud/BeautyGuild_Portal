@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { ReviewedLabel } from '../LegalLinks.jsx';
 import { ArrowLeft, KeyRound, ShieldAlert } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { portalApi } from '../services/api.js';
+import { portalApi, INTEGRATIONS } from '../services/api.js';
+import { ContactDetails, ContactPreferences } from '../AccountProfile.jsx';
 
 export function CatalystSignIn({ returnTo = '/' }) {
   const [status, setStatus] = useState('loading');
@@ -184,6 +185,8 @@ export function CatalystAccountOverview() {
               <Link to="/membership/buy">Join the Guild</Link>.
             </span>
           </div>
+          {INTEGRATIONS.profile && <ContactDetails />}
+          {INTEGRATIONS.profile && <ContactPreferences />}
           <section className="account-password" aria-labelledby="password-heading">
             <h3 id="password-heading">Password</h3>
             <p>We will email a link to {result.user.email || 'your email address'} so you can choose a new password.</p>
