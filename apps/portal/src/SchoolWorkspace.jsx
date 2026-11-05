@@ -181,6 +181,18 @@ export function InvoiceTable({ rows }) {
               render: r => (Number.isFinite(r.amount) ? '£' + r.amount.toFixed(2) : '—'),
             },
             { key: 'status', label: 'Status', render: r => <Status value={r.status || 'Unknown'} /> },
+            {
+              key: 'pdf',
+              label: 'PDF',
+              render: r =>
+                r.hasPdf && portalApi.getInvoicePdfUrl(r.id) ? (
+                  <a className="text-link" href={portalApi.getInvoicePdfUrl(r.id)}>
+                    Download
+                  </a>
+                ) : (
+                  '—'
+                ),
+            },
           ]}
           rows={rows}
         />
@@ -219,6 +231,13 @@ export function InvoiceTable({ rows }) {
                 </div>
               ))}
             </dl>
+            {selected.hasPdf && portalApi.getInvoicePdfUrl(selected.id) && (
+              <p>
+                <a className="btn btn-primary" href={portalApi.getInvoicePdfUrl(selected.id)}>
+                  Download invoice (PDF)
+                </a>
+              </p>
+            )}
           </section>
         </div>
       )}
