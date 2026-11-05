@@ -141,7 +141,7 @@ Source: `Beauty-Guild Portal UAT v1.1  - Membership journey and Dashboard Commen
 | R3-14 | Business address for contents, and moving the premises questions to Cover options | Needs a new question, a CRM field for the contents address, and where the flood check reads the postcode from. |
 | R3-15 | Calendar for the start date | Styling of the date picker. Not started. |
 | R3-16 | Document names when downloaded | These are the WorkDrive file names: the Guild or A2Z renames the files (the link stays the same). |
-| R3-17 | Terms of Business 3 November version | Confirm the linked file is the updated version. |
+| R3-17 | Terms of Business 3 November version | Confirmed by A2Z (5 November): the linked file is the 3 November version. Nothing to do. |
 | R3-18 | S01 step names | Helen renamed steps on S01 (About Your Work, Register your account, Your address). Ask whether this is a new Associate order. |
 | R3-19 | Dashboard personalised panels, GTi and Registers panels, new icons | Needs the CRM records for GTi students and register and directory entries, and the icons from Awais. |
 | R3-20 | Interest icons | The Guild offered to send them. |

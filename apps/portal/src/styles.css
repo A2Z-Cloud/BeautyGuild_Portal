@@ -3669,11 +3669,12 @@ iframe {
 }
 .ins-option {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 4px;
 }
 .ins-option .radio-choice {
-  flex: 1;
+  flex: 1 1 0;
   min-width: 0;
 }
 .ins-list {
@@ -4174,9 +4175,17 @@ button.doc-card {
   padding-bottom: 10px;
   border-bottom: 1px solid #f3edf0;
 }
+.ins-wording p {
+  margin: 0 0 6px;
+}
+.ins-wording p:last-child {
+  margin-bottom: 0;
+}
 .ins-wording {
-  flex-basis: 100%;
-  margin: 6px 0 4px 28px;
+  /* Its own full-width line under the option, so the option itself keeps its width. */
+  flex: 0 0 100%;
+  box-sizing: border-box;
+  margin: 2px 0 6px 0;
   padding: 10px 12px;
   border-left: 3px solid #ee3e96;
   background: #fbf5f8;
