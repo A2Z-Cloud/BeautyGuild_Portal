@@ -42,7 +42,7 @@ function registerMediaRoutes(app, { enabled, getCurrentUser, getCrmHeaders, conf
       if (!ALLOWED_MIME_TYPES.has(mimeType)) fail('Choose a PNG, JPEG or WEBP image.');
       if (typeof dataBase64 !== 'string' || !dataBase64) fail('Choose a file to upload.');
       const buffer = Buffer.from(dataBase64, 'base64');
-      if (!buffer.length || buffer.length > MAX_IMAGE_BYTES) fail('The image must be under 8MB.');
+      if (!buffer.length || buffer.length > MAX_IMAGE_BYTES) fail('The image must be under 8MB. Please try again.');
       const defaultName = type === 'logo' ? 'school-logo' : 'school-image';
       const media = await uploadToWordPressMedia(
         {

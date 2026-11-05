@@ -285,6 +285,10 @@ function registerSchoolRoutes(
       creatorInvoiceReport: config.creatorInvoiceReport,
       fetchImpl,
     });
+  // The public email and mobile fields on the training centre, named by settings and checked as CRM API names before they are used.
+  const apiName = v => (/^[A-Za-z][A-Za-z0-9_]{0,49}$/.test(String(v || '')) ? String(v) : '');
+  const publicEmailField = apiName(config.schoolPublicEmailField),
+    publicMobileField = apiName(config.schoolPublicMobileField);
   const handle = fn => async (req, res, next) => {
     try {
       await fn(req, res);
@@ -403,6 +407,10 @@ function registerSchoolRoutes(
                   esc(
                     'Name,Town,County,Country,Postcode,Centre_Status,Contact_Name,Website,About_the_School,' +
                       'Facebook,Instagram,TikTok,LinkedIn,School_Image,School_Logo,' +
+                      [publicEmailField, publicMobileField]
+                        .filter(Boolean)
+                        .map(f => f + ',')
+                        .join('') +
                       Object.values(FACILITY_FIELDS).join(','),
                   ),
               )
@@ -453,6 +461,10 @@ function registerSchoolRoutes(
             linkedIn: centre?.LinkedIn || null,
             imageUrl: centre?.School_Image || null,
             logoUrl: centre?.School_Logo || null,
+            // Shown on the website. Only offered once the CRM fields are named in the settings.
+            publicContact: Boolean(publicEmailField || publicMobileField),
+            publicEmail: (publicEmailField && centre?.[publicEmailField]) || null,
+            publicMobile: (publicMobileField && centre?.[publicMobileField]) || null,
             facilities,
             wordpressUrl,
           },
@@ -870,6 +882,19 @@ function registerSchoolRoutes(
         ...(Object.hasOwn(body, 'logoId') ? { School_Logo_ID: mediaId(body.logoId, 'School logo') } : {}),
         ...Object.fromEntries(Object.entries(FACILITY_FIELDS).map(([key, field]) => [field, facilities.includes(key)])),
       };
+      // The public email and mobile are only written when the settings name the CRM fields and the page sent them.
+      if (publicEmailField && Object.hasOwn(body, 'publicEmail')) {
+        const email = shortText(body.publicEmail, 254, 'Public email', 'INVALID_PROFILE');
+        if (email && !/^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/.test(email))
+          fail('Enter a valid public email address.', 422, 'INVALID_PROFILE');
+        record[publicEmailField] = email ?? null;
+      }
+      if (publicMobileField && Object.hasOwn(body, 'publicMobile')) {
+        const mobile = shortText(body.publicMobile, 40, 'Public mobile', 'INVALID_PROFILE');
+        const issue = mobile && phoneIssue(mobile);
+        if (issue) fail('Public mobile: ' + issue, 422, 'INVALID_PROFILE');
+        record[publicMobileField] = mobile ?? null;
+      }
       await api.crmUpdate(req, 'Training_Centres', centreId, record);
       res.json({ ok: true });
     }),

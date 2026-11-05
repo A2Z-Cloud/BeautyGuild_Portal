@@ -146,6 +146,20 @@ Source: `Beauty-Guild Portal UAT v1.1  - Membership journey and Dashboard Commen
 | R3-19 | Dashboard personalised panels, GTi and Registers panels, new icons | Needs the CRM records for GTi students and register and directory entries, and the icons from Awais. |
 | R3-20 | Interest icons | The Guild offered to send them. |
 
+## Website UAT (school profile), 5 November 2026
+
+From the Guild's website UAT workbook (4 November), as the internal action log W01 to W12.
+
+| ID | Item | State |
+|---|---|---|
+| W01 | A picture uploads as soon as it is chosen, with a preview, so only Save changes is left. | Built (PR for review) |
+| W02 | Remove image, and the website falls back to the Guild placeholder. | Built. Clears the CRM fields; the placeholder is the website's. |
+| W03 | The WordPress media library mention is gone, with size guidance (school image 1600 x 900, logo 600 x 600, JPG or PNG). | Built |
+| W04 | Main contact is on Overview. A public email and mobile are on Contact and social. | Built behind two settings (`SCHOOL_PUBLIC_EMAIL_FIELD`, `SCHOOL_PUBLIC_MOBILE_FIELD`). Needs two new CRM fields on Training Centres, then switch on. |
+| W05 | "Please try again" on the 8MB message. | Built |
+| W06 to W09, W12 | Website sync items (UK numbers, latitude and longitude, course level, insurance eligible, code format). | Not the portal as far as we know: the CRM-to-WordPress sync. Latitude and Longitude exist on Training Centres but the portal does not fill them yet. Waiting on how V1 gets them. |
+| W10, W11 | Maximum class size per course, and the public page link wording. | Not built. Need the Guild's decision (M13) and the agreed wording (B11). |
+
 ## Switches that are on in Development
 
 | Switch | Where | State |

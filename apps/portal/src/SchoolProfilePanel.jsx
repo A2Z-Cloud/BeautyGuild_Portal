@@ -23,6 +23,8 @@ import './SchoolProfilePanel.css';
 // Keys are the existing Training_Centres profile fields accepted by PUT /schools/:id/profile.
 const editableFields = [
   'contactName',
+  'publicEmail',
+  'publicMobile',
   'website',
   'about',
   'facebook',
@@ -85,14 +87,20 @@ function Field({ label, value, onChange, disabled, maxLength = 255, type = 'text
     </label>
   );
 }
-function MediaUpload({ kind, label, value, state, onPick, onUpload, disabled }) {
-  const url = externalUrl(value);
+// Size guidance the Guild asked for (UAT, 5 November 2026). The picture uploads as soon as a file is chosen, so only Save changes is left.
+const MEDIA_GUIDANCE = {
+  logo: 'Logo: 600 x 600 pixels, JPG or PNG, under 8MB.',
+  image: 'School image: 1600 x 900 pixels, JPG or PNG, under 8MB.',
+};
+function MediaUpload({ kind, label, value, state, onPick, onRemove, disabled }) {
+  const saved = externalUrl(value);
+  const shown = state.preview || saved;
   const uploading = state.status === 'uploading';
   return (
     <section className="school-profile-media-item">
       <div className="school-profile-media-preview">
-        {url ? (
-          <img src={url} alt={label + ' currently saved for your school'} />
+        {shown ? (
+          <img src={shown} alt={label + ' currently saved for your school'} />
         ) : (
           <div className="school-profile-media-placeholder">
             <ImageIcon size={30} aria-hidden="true" />
@@ -107,30 +115,46 @@ function MediaUpload({ kind, label, value, state, onPick, onUpload, disabled }) 
             ? 'Your logo appears alongside your school listing.'
             : 'The main image represents your training centre.'}
         </p>
+        <small>{MEDIA_GUIDANCE[kind]}</small>
         {INTEGRATIONS.schoolMedia && !disabled ? (
           <>
-            <label className="school-profile-file-picker">
-              <Camera size={16} aria-hidden="true" />
-              <span>Choose {kind === 'logo' ? 'logo' : 'image'}</span>
-              <input
-                type="file"
-                accept="image/png,image/jpeg,image/webp"
-                disabled={uploading}
-                onChange={e => onPick(kind, e.target.files?.[0] || null)}
-              />
-            </label>
-            {state.file && (
-              <div className="school-profile-upload-row">
-                <span className="school-profile-filename">{state.file.name}</span>
-                <button type="button" className="btn btn-secondary" disabled={uploading} onClick={() => onUpload(kind)}>
-                  <UploadCloud size={15} aria-hidden="true" />
-                  {uploading ? 'Uploading…' : 'Upload image'}
+            <div className="school-profile-upload-row">
+              <label className="school-profile-file-picker">
+                <Camera size={16} aria-hidden="true" />
+                <span>
+                  {shown ? 'Change ' : 'Choose '}
+                  {kind === 'logo' ? 'logo' : 'image'}
+                </span>
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg"
+                  disabled={uploading}
+                  onChange={e => {
+                    const file = e.target.files?.[0] || null;
+                    e.target.value = '';
+                    if (file) onPick(kind, file);
+                  }}
+                />
+              </label>
+              {shown && (
+                <button type="button" className="btn btn-secondary" disabled={uploading} onClick={() => onRemove(kind)}>
+                  Remove {kind === 'logo' ? 'logo' : 'image'}
                 </button>
-              </div>
+              )}
+            </div>
+            {uploading && (
+              <span className="school-profile-media-success" role="status">
+                <UploadCloud size={15} aria-hidden="true" /> Uploading…
+              </span>
             )}
             {state.status === 'done' && (
-              <span className="school-profile-media-success">
-                <CheckCircle2 size={15} /> Uploaded. Save the profile to apply this image.
+              <span className="school-profile-media-success" role="status">
+                <CheckCircle2 size={15} /> Uploaded. Select Save changes to apply it.
+              </span>
+            )}
+            {state.status === 'removed' && (
+              <span className="school-profile-media-success" role="status">
+                Removed. Select Save changes to apply it. The website shows the Guild placeholder until you add another.
               </span>
             )}
           </>
@@ -144,8 +168,8 @@ function MediaUpload({ kind, label, value, state, onPick, onUpload, disabled }) 
             {state.error}
           </span>
         )}
-        {url && (
-          <a href={url} target="_blank" rel="noopener noreferrer">
+        {saved && !state.preview && (
+          <a href={saved} target="_blank" rel="noopener noreferrer">
             View current image <ExternalLink size={13} aria-hidden="true" />
           </a>
         )}
@@ -170,24 +194,23 @@ export default function SchoolProfilePanel({ data, schoolId, onDone }) {
   const [error, setError] = useState('');
   const [mediaIds, setMediaIds] = useState({});
   const [media, setMedia] = useState({
-    image: { file: null, status: 'idle', error: '' },
-    logo: { file: null, status: 'idle', error: '' },
+    image: { preview: '', status: 'idle', error: '' },
+    logo: { preview: '', status: 'idle', error: '' },
   });
   const canEdit = INTEGRATIONS.schoolWrites;
   const dirty = JSON.stringify(values) !== JSON.stringify(initial) || Object.keys(mediaIds).length > 0;
-  const pendingUpload = Boolean(media.image.file || media.logo.file);
   const uploading = media.image.status === 'uploading' || media.logo.status === 'uploading';
   const set = (key, value) => setValues(previous => ({ ...previous, [key]: value }));
 
   useEffect(() => {
-    if (!dirty && !pendingUpload) return;
+    if (!dirty && !uploading) return;
     const warn = e => {
       e.preventDefault();
       e.returnValue = '';
     };
     window.addEventListener('beforeunload', warn);
     return () => window.removeEventListener('beforeunload', warn);
-  }, [dirty, pendingUpload]);
+  }, [dirty, uploading]);
 
   const completion = [
     Boolean(values.about.trim()),
@@ -200,23 +223,19 @@ export default function SchoolProfilePanel({ data, schoolId, onDone }) {
   ];
   const count = completion.filter(Boolean).length;
   const percent = Math.round((count / completion.length) * 100);
-  function pickMedia(kind, file) {
-    setMedia(previous => ({ ...previous, [kind]: { file, status: 'idle', error: '' } }));
-  }
-  async function uploadMedia(kind) {
-    const file = media[kind].file;
-    if (!file) return;
-    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
-      setMedia(previous => ({
-        ...previous,
-        [kind]: { ...previous[kind], error: 'Choose a PNG, JPG or WebP image.' },
-      }));
+  // A picture uploads as soon as it is chosen, with a preview, so only Save changes is left to do (Guild, 5 November 2026).
+  async function pickMedia(kind, file) {
+    const problem = !['image/png', 'image/jpeg'].includes(file.type)
+      ? 'Choose a JPG or PNG image.'
+      : file.size > 8 * 1024 * 1024
+        ? 'The image must be under 8MB. Please try again.'
+        : '';
+    if (problem) {
+      setMedia(previous => ({ ...previous, [kind]: { ...previous[kind], status: 'error', error: problem } }));
       return;
     }
-    setMedia(previous => ({
-      ...previous,
-      [kind]: { ...previous[kind], status: 'uploading', error: '' },
-    }));
+    const preview = URL.createObjectURL(file);
+    setMedia(previous => ({ ...previous, [kind]: { preview, status: 'uploading', error: '' } }));
     try {
       const dataBase64 = await fileToBase64(file);
       const result = await portalApi.uploadSchoolMedia(kind, {
@@ -228,32 +247,45 @@ export default function SchoolProfilePanel({ data, schoolId, onDone }) {
         throw new Error('The media upload did not return an image and attachment ID.');
       set(kind === 'logo' ? 'logoUrl' : 'imageUrl', result.url);
       setMediaIds(previous => ({ ...previous, [kind === 'logo' ? 'logoId' : 'imageId']: result.mediaId }));
-      setMedia(previous => ({ ...previous, [kind]: { file: null, status: 'done', error: '' } }));
+      setMedia(previous => ({ ...previous, [kind]: { preview, status: 'done', error: '' } }));
     } catch (e) {
+      URL.revokeObjectURL(preview);
       setMedia(previous => ({
         ...previous,
-        [kind]: { ...previous[kind], status: 'error', error: e.message || 'Upload failed.' },
+        [kind]: { preview: '', status: 'error', error: e.message || 'Upload failed. Please try again.' },
       }));
     }
   }
+  // Removing a picture clears it and its attachment, so the website falls back to the Guild placeholder once the profile is saved.
+  function removeMedia(kind) {
+    set(kind === 'logo' ? 'logoUrl' : 'imageUrl', '');
+    setMediaIds(previous => ({ ...previous, [kind === 'logo' ? 'logoId' : 'imageId']: '' }));
+    setMedia(previous => ({ ...previous, [kind]: { preview: '', status: 'removed', error: '' } }));
+  }
   function discard() {
-    if ((dirty || pendingUpload) && !window.confirm('Discard your unsaved profile changes?')) return;
+    if (dirty && !window.confirm('Discard your unsaved profile changes?')) return;
     setValues(editableProfile(profile));
     setMediaIds({});
     setMedia({
-      image: { file: null, status: 'idle', error: '' },
-      logo: { file: null, status: 'idle', error: '' },
+      image: { preview: '', status: 'idle', error: '' },
+      logo: { preview: '', status: 'idle', error: '' },
     });
     setError('');
   }
   async function save(e) {
     e.preventDefault();
-    if (!canEdit || busy || uploading || pendingUpload || !dirty) return;
+    if (!canEdit || busy || uploading || !dirty) return;
     setBusy(true);
     setError('');
     try {
       // The only writable values are the current profile contract, plus existing WP media attachment IDs if replaced.
-      await portalApi.updateSchoolProfile(schoolId, { ...values, ...mediaIds });
+      const payload = { ...values, ...mediaIds };
+      // The public email and mobile are only sent when the CRM has fields for them.
+      if (!profile.publicContact) {
+        delete payload.publicEmail;
+        delete payload.publicMobile;
+      }
+      await portalApi.updateSchoolProfile(schoolId, payload);
       onDone();
     } catch (e) {
       setError(e.message || 'Profile could not be saved.');
@@ -367,6 +399,15 @@ export default function SchoolProfilePanel({ data, schoolId, onDone }) {
                 <h3>About your school</h3>
                 <p>Help prospective students understand what makes your academy different.</p>
               </div>
+              <div className="school-profile-fields-grid">
+                <Field
+                  label="Main contact name"
+                  maxLength={100}
+                  value={values.contactName}
+                  onChange={v => set('contactName', v)}
+                  disabled={!canEdit}
+                />
+              </div>
               <label className="school-profile-field">
                 <span>About the school</span>
                 <textarea
@@ -400,7 +441,7 @@ export default function SchoolProfilePanel({ data, schoolId, onDone }) {
                   value={values.logoUrl}
                   state={media.logo}
                   onPick={pickMedia}
-                  onUpload={uploadMedia}
+                  onRemove={removeMedia}
                   disabled={!canEdit}
                 />
                 <MediaUpload
@@ -409,13 +450,13 @@ export default function SchoolProfilePanel({ data, schoolId, onDone }) {
                   value={values.imageUrl}
                   state={media.image}
                   onPick={pickMedia}
-                  onUpload={uploadMedia}
+                  onRemove={removeMedia}
                   disabled={!canEdit}
                 />
               </div>
               <div className="school-profile-guidance">
-                <Info size={18} aria-hidden="true" /> Upload the image first, then save your profile to apply it. Images
-                upload to the existing WordPress media library.
+                <Info size={18} aria-hidden="true" /> A picture uploads as soon as you choose it. Then select Save
+                changes to apply it. School image: 1600 x 900 pixels. Logo: 600 x 600 pixels. JPG or PNG.
               </div>
             </div>
           )}
@@ -426,13 +467,27 @@ export default function SchoolProfilePanel({ data, schoolId, onDone }) {
                 <p>Maintain the contact information and social links already connected to your training centre.</p>
               </div>
               <div className="school-profile-fields-grid">
-                <Field
-                  label="Main contact name"
-                  maxLength={100}
-                  value={values.contactName}
-                  onChange={v => set('contactName', v)}
-                  disabled={!canEdit}
-                />
+                {profile.publicContact && (
+                  <>
+                    <Field
+                      label="Public email"
+                      type="email"
+                      value={values.publicEmail}
+                      onChange={v => set('publicEmail', v)}
+                      disabled={!canEdit}
+                      hint="Shown on your page on the Guild website."
+                    />
+                    <Field
+                      label="Public mobile"
+                      type="tel"
+                      maxLength={40}
+                      value={values.publicMobile}
+                      onChange={v => set('publicMobile', v)}
+                      disabled={!canEdit}
+                      hint="Shown on your page on the Guild website."
+                    />
+                  </>
+                )}
                 <Field
                   label="Website"
                   value={values.website}
@@ -525,7 +580,7 @@ export default function SchoolProfilePanel({ data, schoolId, onDone }) {
               <button type="button" className="btn btn-secondary" disabled={busy || uploading} onClick={discard}>
                 Discard changes
               </button>
-              <button type="submit" className="btn btn-primary" disabled={busy || uploading || pendingUpload || !dirty}>
+              <button type="submit" className="btn btn-primary" disabled={busy || uploading || !dirty}>
                 {busy ? 'Saving…' : 'Save changes'}
               </button>
             </div>
@@ -535,11 +590,6 @@ export default function SchoolProfilePanel({ data, schoolId, onDone }) {
             </small>
           )}
         </div>
-        {pendingUpload && (
-          <p className="school-profile-pending" role="status">
-            Upload or clear the selected image before saving.
-          </p>
-        )}
       </form>
     </div>
   );

@@ -71,6 +71,8 @@ function upstream(url) {
           Instagram: '@glowacademy',
           TikTok: '@glowacademy',
           LinkedIn: 'glow-academy',
+          Public_Email: 'hello@glow.test',
+          Public_Mobile: '07700 900111',
           School_Image: 'https://paula356.sg-host.com/wp-content/uploads/school.png',
           School_Logo: 'https://paula356.sg-host.com/wp-content/uploads/logo.png',
           Parking: true,
@@ -577,6 +579,62 @@ test('updates the training centre with the profile content, including clearing f
   assert.equal(data.Changing_Area, false);
 });
 
+const publicCfg = loadConfig({
+  PORTAL_SCHOOL_SERVICES_ENABLED: 'true',
+  PORTAL_SCHOOL_WRITES_ENABLED: 'true',
+  SCHOOL_PUBLIC_EMAIL_FIELD: 'Public_Email',
+  SCHOOL_PUBLIC_MOBILE_FIELD: 'Public_Mobile',
+});
+test('the public email and mobile are offered and read only when the settings name the CRM fields', async () => {
+  await withServer({ config: publicCfg }, async call => {
+    const p = (await call('/portal/management/schools/1011174000000000301/profile')).body.profile;
+    assert.equal(p.publicContact, true);
+    assert.equal(p.publicEmail, 'hello@glow.test');
+    assert.equal(p.publicMobile, '07700 900111');
+  });
+  await withServer({}, async call => {
+    const p = (await call('/portal/management/schools/1011174000000000301/profile')).body.profile;
+    assert.equal(p.publicContact, false);
+    assert.equal(p.publicEmail, null);
+    assert.equal(p.publicMobile, null);
+  });
+});
+test('the public email and mobile are written when set, validated, cleared when blank, and never written without the settings', async () => {
+  const run = async (config, body) => {
+    const writes = [];
+    let status;
+    await withServer(
+      {
+        config,
+        fetchImpl: async (u, o) => {
+          if ((o?.method || 'GET') === 'PUT' && String(u).includes('Training_Centres/401'))
+            writes.push(JSON.parse(o.body).data[0]);
+          return { status: 200, ok: true, json: async () => writeUpstream({ centreId: '401' })(u, o) };
+        },
+      },
+      async call => {
+        status = (await call('/portal/management/schools/1000000000301/profile', jput({ ...goodProfile, ...body })))
+          .status;
+      },
+    );
+    return { status, write: writes[0] };
+  };
+  const ok = await run(publicCfg, { publicEmail: ' hello@glow.test ', publicMobile: '07700 900111' });
+  assert.equal(ok.status, 200);
+  assert.equal(ok.write.Public_Email, 'hello@glow.test');
+  assert.equal(ok.write.Public_Mobile, '07700 900111');
+  const cleared = await run(publicCfg, { publicEmail: '', publicMobile: '' });
+  assert.equal(cleared.write.Public_Email, null);
+  assert.equal(cleared.write.Public_Mobile, null);
+  const silent = await run(publicCfg, {});
+  assert.equal(Object.hasOwn(silent.write, 'Public_Email'), false, 'not sent, not touched');
+  assert.equal((await run(publicCfg, { publicEmail: 'not an email' })).status, 422);
+  assert.equal((await run(publicCfg, { publicMobile: '12' })).status, 422);
+  const off = await run(writeCfg, { publicEmail: 'hello@glow.test', publicMobile: '07700 900111' });
+  assert.equal(off.status, 200);
+  assert.equal(Object.hasOwn(off.write, 'Public_Email'), false, 'no setting, no write');
+  assert.equal(Object.hasOwn(off.write, 'Public_Mobile'), false);
+});
 // The invoice PDF: only the member's own invoice, only a real PDF, never another member's.
 function pdfApi({ rows, file }) {
   const calls = [];
