@@ -15,7 +15,7 @@
 // the same basket names the real draft row just created for it (the `ids` map shared across the basket).
 const crypto = require('node:crypto');
 const { HttpError } = require('./errors');
-const { COVER_TYPE_BY_CODE, IPT_RATE } = require('./insurance');
+const { COVER_TYPE_BY_CODE, AD_HOC_COVER_TYPE, IPT_RATE } = require('./insurance');
 
 const uri = s => encodeURIComponent(String(s));
 const money2 = pence => Math.round(pence) / 100;
@@ -173,7 +173,7 @@ async function saveRevision({
           Policy: policy.id,
           Policy_Revision: revisionId,
           Cover_Type:
-            COVER_TYPE_BY_CODE[item.code] || (item.code.startsWith('TREATMENT_') ? 'Treatment' : 'Ad Hoc Adjustment'),
+            COVER_TYPE_BY_CODE[item.code] || (item.code.startsWith('TREATMENT_') ? 'Treatment' : AD_HOC_COVER_TYPE),
           Cover_Code: item.code,
           Sum_Insured: item.sumInsured || undefined,
           Premium_Net: money2(item.premiumPence),

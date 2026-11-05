@@ -47,6 +47,9 @@ const NON_SALON_EL = Object.freeze([
 // Expected answers to the seven underwriting declarations; any other answer is a REFER.
 const DECLARATION_EXPECTED = Object.freeze(['no', 'no', 'no', 'no', 'no', 'yes', 'yes']);
 // Cover row code -> Insurance_Extension.Cover_Type (an exact-match CRM picklist).
+// The cover type for a row that is not one of the named covers, spelt exactly as the Guild's Cover Type picklist spells it (with its "(REC)" tag
+// and full stop). Change it here if the picklist value is corrected.
+const AD_HOC_COVER_TYPE = 'Ad Hoc Adjustment (REC).';
 const COVER_TYPE_BY_CODE = Object.freeze({
   MEDMAL: 'MedMal',
   NAMED_EMPLOYEES: 'Named Person',
@@ -580,8 +583,7 @@ async function createRecords(
     const ipt = Math.round(row.premiumPence * IPT_RATE);
     const record = {
       Policy: policyId,
-      Cover_Type:
-        COVER_TYPE_BY_CODE[row.code] || (row.code.startsWith('TREATMENT_') ? 'Treatment' : 'Ad Hoc Adjustment'),
+      Cover_Type: COVER_TYPE_BY_CODE[row.code] || (row.code.startsWith('TREATMENT_') ? 'Treatment' : AD_HOC_COVER_TYPE),
       Cover_Code: row.code,
       Sum_Insured: sumInsured(row.code, ins),
       Premium_Net: money2(row.premiumPence),
@@ -652,6 +654,7 @@ async function createRecords(
 
 module.exports = {
   COVER_TYPE_BY_CODE,
+  AD_HOC_COVER_TYPE,
   sumInsured,
   IPT_RATE,
   IPT_SKU,

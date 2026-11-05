@@ -121,6 +121,9 @@ test('a Full member sees their membership, extras and insurance cover, people, p
         },
         { id: 'e4', Cover_Code: 'TEACHING', Cover_Type: 'Teaching', Premium_Net: 75, Status: 'Draft' },
         { id: 'e5', Cover_Code: 'BUSINESS_EQUIPMENT', Cover_Type: 'Equipment', Premium_Net: 100, Status: 'Superseded' },
+        // The Guild's picklist spells these "Expired (REC)." and "Scheduled": neither is current cover.
+        { id: 'e6', Cover_Code: 'MONEY', Cover_Type: 'Money', Premium_Net: 20, Status: 'Expired (REC).' },
+        { id: 'e7', Cover_Code: 'CONTENTS', Cover_Type: 'Contents', Premium_Net: 30, Status: 'Scheduled' },
       ],
       Insured_People: [
         { id: 'p1', Name: 'Ada Lee', Person_Type: 'Employees', Status: 'Active' },
@@ -166,7 +169,11 @@ test('a Full member sees their membership, extras and insurance cover, people, p
       );
       assert.match(c.insurance.covers[2].label, /SPMU|Microblading/);
       assert.equal(c.insurance.covers[0].grossPence, 3640);
-      assert.equal(c.insurance.covers.length, 3, 'a draft row and a superseded row are not current cover');
+      assert.equal(
+        c.insurance.covers.length,
+        3,
+        'draft, superseded, scheduled and "Expired (REC)." rows are not current cover',
+      );
       assert.deepEqual(c.insurance.people, [
         { id: 'p1', name: 'Ada Lee', type: 'employee' },
         { id: 'p2', name: 'Bo Ng', type: 'subcontractor' },

@@ -21,8 +21,24 @@ const policyGroup = p => {
   return status === 'Expired' ? 'ended' : PENDING_STATUSES.has(status) ? 'pending' : 'in_force';
 };
 // A cover row or person that has been replaced, cancelled or not yet confirmed is not part of the current cover.
-const NOT_CURRENT = new Set(['draft', 'cancelled', 'canceled', 'superseded', 'replaced', 'expired', 'removed']);
-const current = row => !NOT_CURRENT.has(text(row.Status).toLowerCase());
+// The Guild's CRM spells some picklist values with a "(REC)" tag and a full stop, for example "Expired (REC)." They mean the plain word.
+const plainStatus = v =>
+  text(v)
+    .replace(/\s*\(rec\)\.?\s*$/i, '')
+    .trim()
+    .toLowerCase();
+// Scheduled is a row dated in the future: it is not cover until its date.
+const NOT_CURRENT = new Set([
+  'draft',
+  'scheduled',
+  'cancelled',
+  'canceled',
+  'superseded',
+  'replaced',
+  'expired',
+  'removed',
+]);
+const current = row => !NOT_CURRENT.has(plainStatus(row.Status));
 
 const COVER_LABELS = Object.freeze({
   MEDMAL: 'Medical malpractice and public liability',
