@@ -1,0 +1,62 @@
+// ============================================================================
+// PATCH for Creator.process_membership_payment  (not a function on its own)
+// Purpose : record the discounts used on a first payment.
+//
+// Paste this block AFTER Stage 3 (the CRM fulfilment, which ends with the insurance policy block that
+// finishes `policy_id = policy_result.get("policy_id");`) and BEFORE Stage 4 (Books).
+//
+// It uses variables the function already has: metadata, contact_id, session_id, invoice_id, log_id.
+// Both calls do nothing when no discount was applied, and both are safe to run again on a retry.
+// The order matters: finish_discounts counts the rows that record_voucher_redemptions creates.
+// ============================================================================
+
+		//
+		// ---- Stage 3b: discounts (referral code, voucher, staff waiver) ----
+		// Record each redemption, then save the voucher usage count and mark any staff waiver Paid.
+		// Both do nothing when no discount was applied, and both are safe to run again on a retry.
+		redemption_result = thisapp.Creator.record_voucher_redemptions(metadata,contact_id,session_id,invoice_id,log_id.toString());
+		finish_result = thisapp.Creator.finish_discounts(metadata,session_id);
+		if(finish_result.get("problems").size() > 0)
+		{
+			info "Discount follow-ups had problems: " + finish_result.get("problems");
+		}
+
+// ============================================================================
+// NOT WIRED YET: the member's £25 GTi voucher (Stage 3c)
+// Waiting for the seven scripts in docs/delivery/vouchers-phase-4/ to be created in Creator under a
+// namespace called Vouchers. When they exist, add after Stage 3b, for a membership purchase only:
+//
+//   if(has_membership)
+//   {
+//       voucher_skus = List();
+//       for each  snap in lines_result.get("snapshot")
+//       {
+//           snap_code = ifnull(snap.get("split_from"),"");
+//           if(snap_code != "" && !voucher_skus.contains(snap_code))
+//           {
+//               voucher_skus.add(snap_code);
+//           }
+//       }
+//       voucher_profile_id = "";
+//       if(membership_id != "")
+//       {
+//           voucher_deal = zoho.crm.getRecordById("Deals",membership_id.toLong());
+//           voucher_profile = voucher_deal.get("Member_Profile");
+//           if(voucher_profile != null)
+//           {
+//               voucher_profile_id = ifnull(voucher_profile.get("id"),"").toString();
+//           }
+//       }
+//       voucher_first_name = ifnull(ifnull(customer_details.get("name"),"").toString().getPrefix(" "),"");
+//       voucher_result = thisapp.Vouchers.process_voucher_for_invoice(invoice.get("billing_reason"),ifnull(metadata.get("change_type"),""),voucher_skus,contact_id,voucher_profile_id,metadata.get("membership_start"),metadata.get("membership_expiry"),invoice_id,customer_email,voucher_first_name);
+//       for each  inv_voucher in Invoice_Records[ID == inv_rec_id]
+//       {
+//           inv_voucher.Voucher_Result=voucher_result.toString();
+//       }
+//   }
+//
+// Renewals (Creator.process_recurring_payment, inside the renewals_done >= 1 block, straight after the
+// membership has been extended) call process_voucher_for_invoice with "subscription_cycle", an empty
+// profile id, the term start (original start plus renewals_done years) and new_membership_expiry.
+// Needs an Invoice Records field Voucher_Result (multi-line text).
+// ============================================================================
