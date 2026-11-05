@@ -116,12 +116,14 @@ test('Notes and Activities related lists show the title, content, subject and du
   assert.match(v12,/function cellMarkup\(k,v\)/);
 });
 
-test('Edit in CRM remembers where the user was and the widget restores it on return',()=>{
+test('Edit in CRM asks for confirmation before leaving the workspace',()=>{
   const js=fs.readFileSync(path.join(app,'widget.js'),'utf8');
-  assert.match(js,/saveReturnPoint\(\);\s*await ZOHO\.CRM\.UI\.Record\.edit/);
-  assert.match(js,/function takeReturnPoint\(\)/);
-  assert.match(js,/else if\(back\)restoreReturnPoint\(back\)/);
-  assert.match(js,/function clearReturnPoint\(\)/);
+  assert.match(js,/if\(!await confirmLeaveForEdit\(\)\)return;\s*await ZOHO\.CRM\.UI\.Record\.edit/);
+  assert.match(js,/Leave the workspace to edit\?/);
+  assert.match(js,/Continue to CRM/);
+  assert.doesNotMatch(js,/saveReturnPoint|takeReturnPoint/);
+  const css=fs.readFileSync(path.join(app,'staff-ux.css'),'utf8');
+  assert.match(css,/\.bg-leave-dialog/);
 });
 
 test('table headings wrap instead of being clipped, and a finished list says all records are loaded',()=>{

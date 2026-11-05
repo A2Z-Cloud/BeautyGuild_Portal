@@ -904,38 +904,23 @@
     if(BROWSE_MODULE[next]){state.focus=null;state.focusEntityView=null;state.browseKind=next;state.browseSearch=state.browseSearchByKind[next]||'';state.browseFilter='all';const d=browseData(next);if(!d.loaded)return loadBrowse(next);render();return;}
     render();
   }
-  const RETURN_KEY='bg-staff-return-point';
-  function saveReturnPoint(){
-    const point={at:Date.now(),view:state.view,kind:state.browseKind,search:state.browseSearch||'',page:state.pages['browse:'+state.browseKind]||1,
-      focus:state.focus?{entity:state.focus.entity,id:String(state.focus.record.id)}:null,
-      history:(state.history||[]).slice(-10).filter(h=>h&&(h.entity?/^\d{8,30}$/.test(String(h.id||'')):true))};
-    const text=JSON.stringify(point);
-    for(const store of ['sessionStorage','localStorage']){try{window[store].setItem(RETURN_KEY,text);}catch(_){/* Storage can be blocked. */}}
-  }
-  function takeReturnPoint(){
-    for(const store of ['sessionStorage','localStorage']){
-      try{
-        const raw=window[store].getItem(RETURN_KEY),p=raw&&JSON.parse(raw);
-        if(p&&Date.now()-Number(p.at)<15*60*1000)return p;
-      }catch(_){/* Try the next store. */}
-    }
-    return null;
-  }
-  function clearReturnPoint(){for(const store of ['sessionStorage','localStorage']){try{window[store].removeItem(RETURN_KEY);}catch(_){/* Nothing to clear. */}}}
-  async function restoreReturnPoint(p){
-    if(!p)return false;
-    if(Array.isArray(p.history))state.history=p.history;
-    let done=false;
-    if(p.focus&&/^\d{8,30}$/.test(p.focus.id)&&/^[A-Za-z_]+$/.test(p.focus.entity)){await select(p.focus.entity,p.focus.id);done=true;}
-    else if(p.view&&p.view!=='overview'&&(BROWSE_MODULE[p.view]||p.view==='queue')){await changeView(p.view);if(p.page&&BROWSE_MODULE[p.view]){state.pages['browse:'+p.view]=p.page;render();}done=true;}
-    if(done)clearReturnPoint();
-    return done;
+  function confirmLeaveForEdit(){
+    return new Promise(resolve=>{
+      const d=document.createElement('dialog');d.className='bg-leave-dialog';d.setAttribute('aria-labelledby','bgLeaveTitle');
+      d.innerHTML='<form method="dialog"><h2 id="bgLeaveTitle">Leave the workspace to edit?</h2><p>Editing opens the standard CRM edit form and takes you out of the Staff Workspace. When you save or cancel there, you will come back to the workspace Overview, not to this record.</p><div class="bg-leave-actions"><button type="button" class="button secondary" data-leave="no">Stay here</button><button type="button" class="button" data-leave="yes">Continue to CRM</button></div></form>';
+      const done=v=>{try{d.close();}catch(_){}d.remove();resolve(v);};
+      d.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('[data-leave]');if(b)done(b.dataset.leave==='yes');});
+      d.addEventListener('cancel',e=>{e.preventDefault();done(false);});
+      document.body.appendChild(d);
+      if(typeof d.showModal==='function')d.showModal();else d.setAttribute('open','');
+      const first=d.querySelector('[data-leave="no"]');if(first&&first.focus)first.focus();
+    });
   }
   async function init(){installStaticIcons();document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>changeView(b.dataset.view)));$('#searchBtn').addEventListener('click',handleSearch);$('#globalSearch').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();handleSearch()}});$('#refreshBtn').addEventListener('click',()=>{if(state.view==='create'){render();}else if(state.focus)select(state.focus.entity,state.focus.record.id);else if(state.contact)select(M.CONTACT,state.contact.id);else if(state.view==='queue')loadBrowse(state.queueKind,{reset:true});else if(state.view==='overview')loadBrowse('customers',{reset:true});else if(BROWSE_MODULE[state.view])loadBrowse(state.view,{reset:true});else setNotice('Select a CRM record or choose a list to refresh.');});$('#contentArea').addEventListener('click',clickAction);$('#contentArea').addEventListener('input',event=>{if(window.BGJourney12&&window.BGJourney12.input(state.journey,event.target)){if(['checkbox','radio'].includes(event.target.type))render();}},true);$('#contentArea').addEventListener('change',event=>{if(window.BGJourney12&&window.BGJourney12.input(state.journey,event.target)&&['select-one'].includes(event.target.type))render();},true);$('#searchResults').addEventListener('click',clickAction);$('#cancelModal').addEventListener('click',()=>$('#actionModal').close());$('#cancelModal2').addEventListener('click',()=>$('#actionModal').close());$('#actionForm').addEventListener('submit',e=>{e.preventDefault();saveAction()});$('#contentArea').addEventListener('change',changeReviewField);
     $('#contentArea').addEventListener('change',event=>{const k=event.target?.dataset?.crmView;if(k)chooseCustomView(k,String(event.target.value||'')).catch(e=>setNotice(String(e.message||e),'error'));});document.addEventListener('change',event=>{const t=event.target;if(t&&t.dataset&&t.dataset.wfEdit)askWorkflowEdit(t.dataset.entity,t.dataset.id,t.dataset.field,t.value);});document.addEventListener('click',event=>{const b=event.target&&event.target.closest&&event.target.closest('[data-wf-save],[data-wf-cancel]');if(!b)return;event.preventDefault();if(b.dataset.wfSave)saveWorkflowEdit();else{wfHide();render();}});$('#contentArea').addEventListener('input',changeReviewField);$('#contentArea').addEventListener('input',event=>{if(event.target.dataset?.journeyCustomerSearch!==undefined){state.journey.customerSearch=event.target.value;}else if(event.target.dataset?.journeyNewContact){state.journey.newContact=state.journey.newContact||{};state.journey.newContact[event.target.dataset.journeyNewContact]=event.target.value;}else if(event.target.dataset?.browseSearch!==undefined){state.browseSearch=event.target.value;state.pages['browse:'+state.browseKind]=1;state.browseSearchByKind[state.browseKind]=state.browseSearch;const cursor=event.target.selectionStart;render();const el=document.querySelector('.browse-search');if(el){el.focus();if(typeof el.setSelectionRange==='function')el.setSelectionRange(cursor,cursor)}}else if(event.target.dataset?.journeyField){setJourneyField(event.target)}});$('#contentArea').addEventListener('change',event=>{if(event.target.dataset?.journeyField)setJourneyField(event.target)});render();
     
     if(!window.ZOHO||!ZOHO.embeddedApp){setNotice('Zoho CRM SDK could not load. Open the widget in Zoho CRM and check network permissions.','error');$('#connectionLabel').textContent='Not connected';return}
-    try{let pendingContext=null;ZOHO.embeddedApp.on('PageLoad',context=>{const c=matchContext(context);if(c){pendingContext=c;if(state.connected)select(c.entity,c.id)}});await ZOHO.embeddedApp.init();state.connected=true;$('#connectionDot').classList.add('connected');$('#connectionLabel').textContent='Connected';try{const me=await ZOHO.CRM.CONFIG.getCurrentUser();const record=asRows(me)[0]||me.users&&me.users[0]||me;state.currentUser=record;$('#identityLabel').textContent=record.full_name||record.name||record.email||''}catch(_){/* User display is optional. */}const params=new URLSearchParams(location.search);const candidate=matchContext({Entity:params.get('module'),EntityId:params.get('id')});const back=takeReturnPoint();if(pendingContext)select(pendingContext.entity,pendingContext.id);else if(candidate&&!state.focus)select(candidate.entity,candidate.id);else if(back)restoreReturnPoint(back).catch(()=>{})}catch(err){$('#connectionLabel').textContent='Connection failed';setNotice(`CRM SDK initialisation failed: ${err.message||err}`,'error')}}
+    try{let pendingContext=null;ZOHO.embeddedApp.on('PageLoad',context=>{const c=matchContext(context);if(c){pendingContext=c;if(state.connected)select(c.entity,c.id)}});await ZOHO.embeddedApp.init();state.connected=true;$('#connectionDot').classList.add('connected');$('#connectionLabel').textContent='Connected';try{const me=await ZOHO.CRM.CONFIG.getCurrentUser();const record=asRows(me)[0]||me.users&&me.users[0]||me;state.currentUser=record;$('#identityLabel').textContent=record.full_name||record.name||record.email||''}catch(_){/* User display is optional. */}const params=new URLSearchParams(location.search);const candidate=matchContext({Entity:params.get('module'),EntityId:params.get('id')});if(pendingContext)select(pendingContext.entity,pendingContext.id);else if(candidate&&!state.focus)select(candidate.entity,candidate.id)}catch(err){$('#connectionLabel').textContent='Connection failed';setNotice(`CRM SDK initialisation failed: ${err.message||err}`,'error')}}
   function changeReviewField(event){const el=event.target;if(!el||!el.dataset)return;const {entity,id,reviewCheck,reviewOutcome,reviewComment}=el.dataset;if(!reviewKind(entity)||!/^[0-9]{8,30}$/.test(id||''))return;const draft=reviewDraft(entity,id);if(reviewCheck){draft.checked[reviewCheck]=Boolean(el.checked);const count=Object.values(draft.checked).filter(Boolean).length;const counter=document.querySelector('.check-count');if(counter)counter.textContent=`${count} of ${REVIEW_GROUPS[reviewKind(entity)].checks.length}`;}if(reviewOutcome!==undefined)draft.outcome=el.value;if(reviewComment!==undefined)draft.comment=el.value;}
   async function clickAction(event){
     const el=event.target.closest('[data-action],[data-queue],[data-v12-add],[data-v12-remove],[data-v12-copy]');if(!el)return;if(window.BGJourney12&&(el.dataset.v12Add||el.dataset.v12Remove||el.dataset.v12Copy)){if(window.BGJourney12.click(state.journey,el))render();return;}if(window.BGCRM12&&await window.BGCRM12.action(el,state.focus,window.ZOHO?.CRM,render))return;
@@ -1112,7 +1097,7 @@
     else if(action==='open')await openCRM(entity,id);
     else if(action==='edit'){
       try{if(typeof ZOHO?.CRM?.UI?.Record?.edit!=='function')throw Error('Native CRM edit is not available in this widget context.');
-        saveReturnPoint();
+        if(!await confirmLeaveForEdit())return;
         await ZOHO.CRM.UI.Record.edit({Entity:entity,RecordID:String(id)});
       }catch(e){setNotice('Unable to open the native CRM edit screen: '+String(e.message||e),'error');}
     }
