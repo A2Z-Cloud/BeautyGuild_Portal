@@ -4110,3 +4110,37 @@ button.doc-card {
   flex-shrink: 0;
   white-space: nowrap;
 }
+
+/* Contact details and preferences on the Account page */
+.account-profile {
+  margin: 28px 0;
+  padding-top: 22px;
+  border-top: 1px solid #efe6ec;
+}
+.account-profile h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+.pref-group {
+  border: 0;
+  margin: 18px 0;
+  padding: 0;
+}
+.pref-group legend {
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+.pref-newsletter {
+  align-items: flex-start;
+}
+.pref-newsletter small {
+  display: block;
+  margin-top: 3px;
+  color: #6c5e6b;
+}
+.account-profile .notice,
+.account-profile .auth-unavailable {
+  margin-top: 14px;
+}

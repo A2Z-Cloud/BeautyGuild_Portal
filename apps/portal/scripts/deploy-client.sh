@@ -19,6 +19,8 @@ export VITE_ENABLED_LEGACY_APIS=courses,address
 export VITE_CATALYST_AUTH=true
 export VITE_PORTAL_RECORDS=true
 export VITE_PORTAL_DOCUMENTS=true
+# The member's own contact preferences and phone and address on the Account page. Keep in step with the function's PORTAL_PROFILE_ENABLED.
+export VITE_PORTAL_PROFILE="${VITE_PORTAL_PROFILE:-true}"
 export VITE_PORTAL_SCHOOL_SERVICES=true
 export VITE_PORTAL_SCHOOL_WRITES=true
 # Add a venue to a verified school, saved as a draft and paid for later (docs/delivery/uat-round1-fixes-spec.md, section H). The venue payment is

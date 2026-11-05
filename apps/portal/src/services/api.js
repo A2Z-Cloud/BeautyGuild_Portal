@@ -50,6 +50,10 @@ const documentsOn =
   import.meta.env.VITE_PORTAL_DOCUMENTS === 'true';
 const documentHttp = documentsOn ? createHttpClient({ baseUrl: integrationConfig.apiBaseUrl }) : null;
 const documentPath = (kind, id) => '/portal/documents/' + encodeURIComponent(kind) + '/' + encodeURIComponent(id);
+const profileOn = recordsOn && import.meta.env.VITE_PORTAL_PROFILE === 'true';
+const profileHttp = profileOn ? createHttpClient({ baseUrl: integrationConfig.apiBaseUrl }) : null;
+const profileReq = (path, options) =>
+  profileHttp ? profileHttp('/portal/profile' + path, options) : unavailable('Your contact preferences and details');
 const clone = obj => JSON.parse(JSON.stringify(obj));
 const unavailable = name => {
   throw new IntegrationUnavailableError(name);
@@ -65,6 +69,8 @@ export const INTEGRATIONS = Object.freeze({
   schoolWrites: schoolWritesOn,
   schoolMedia: mediaOn,
   crmRecords: recordsOn,
+  // The member's own contact preferences and phone and address (function PORTAL_PROFILE_ENABLED).
+  profile: profileOn,
   crmDrafts: draftsOn,
   // The accreditation application writes the V1 record set, so it has its own switch on top of saved drafts.
   crmAccreditation: draftsOn && import.meta.env.VITE_PORTAL_CRM_ACCREDITATION === 'true',
@@ -159,6 +165,10 @@ export const portalApi = Object.freeze({
   getIdentity: () => auth.currentUser(),
   // The signed-in member's contact details from the CRM, to fill in forms. Resolved on the server from the verified email.
   getMyDetails: async () => (await recordReq('/me')).details,
+  getContactPreferences: async () => (await profileReq('/preferences')).preferences,
+  saveContactPreferences: async preferences =>
+    (await profileReq('/preferences', { method: 'PUT', body: preferences })).preferences,
+  saveContactDetails: async details => await profileReq('/details', { method: 'PUT', body: details }),
   register: profile => auth.signUp(profile),
   signInEmbed: container => auth.signInEmbed(container),
   // Always uses the email of the verified signed-in user, never a typed address.
