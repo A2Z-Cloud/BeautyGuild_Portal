@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { portalApi } from './services/api.js';
 import { Notice } from './UiParts.jsx';
+import { coursesAt, venuesOf } from './courseVenues.js';
 
 const DELIVERY = ['Face to Face In the Classroom', 'Face to Face via Live Video Link', 'Online only', 'Other'];
 const ASSESS = [
@@ -172,6 +173,7 @@ export function SessionForm({ schoolId, onDone }) {
     };
   }, [schoolId]);
   const [values, setValues] = useState({
+    venueId: '',
     courseOfferingId: '',
     tutorId: '',
     availabilityType: 'Fixed Date',
@@ -187,13 +189,18 @@ export function SessionForm({ schoolId, onDone }) {
   const [busy, setBusy] = useState(false),
     [error, setError] = useState('');
   const set = (key, value) => setValues(p => ({ ...p, [key]: value }));
+  // One venue is chosen for the school; with several, the venue is picked first and the courses are those offered there.
+  const venues = venuesOf(state.offerings),
+    venueId = venues.length === 1 ? venues[0].id : values.venueId,
+    courses = coursesAt(state.offerings, venueId);
   async function submit(e) {
     e.preventDefault();
     if (busy) return;
     setBusy(true);
     setError('');
     try {
-      await portalApi.createCourseSession(schoolId, values);
+      const { venueId: _venue, ...session } = values;
+      await portalApi.createCourseSession(schoolId, session);
       onDone();
     } catch (err) {
       setError(err.message || 'Session could not be saved.');
@@ -210,16 +217,39 @@ export function SessionForm({ schoolId, onDone }) {
         <Notice title="Unable to load options">{state.error}</Notice>
       ) : (
         <>
+          {venues.length > 1 && (
+            <label>
+              Venue *
+              <select
+                required
+                value={venueId}
+                onChange={e => setValues(p => ({ ...p, venueId: e.target.value, courseOfferingId: '' }))}
+              >
+                <option value="">Choose a venue</option>
+                {venues.map(v => (
+                  <option value={v.id} key={v.id}>
+                    {v.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <label>
             Accredited course *
-            <select required value={values.courseOfferingId} onChange={e => set('courseOfferingId', e.target.value)}>
-              <option value="">Choose a course</option>
-              {state.offerings.map(o => (
+            <select
+              required
+              value={values.courseOfferingId}
+              disabled={!venueId}
+              onChange={e => set('courseOfferingId', e.target.value)}
+            >
+              <option value="">{venueId ? 'Choose a course' : 'Choose a venue first'}</option>
+              {courses.map(o => (
                 <option value={o.id} key={o.id}>
-                  {o.name} · {o.trainingCentre}
+                  {o.name}
                 </option>
               ))}
             </select>
+            {venues.length === 1 && <small>Venue: {venues[0].name}</small>}
           </label>
           <label>
             Tutor{' '}
