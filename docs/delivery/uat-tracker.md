@@ -158,7 +158,7 @@ From the Guild's website UAT workbook (4 November), as the internal action log W
 | W03 | The WordPress media library mention is gone, with size guidance (school image 1600 x 900, logo 600 x 600, JPG or PNG). | Built |
 | W04 | Main contact is on Overview. A public email and mobile are on Contact and social. | Built behind two settings (`SCHOOL_PUBLIC_EMAIL_FIELD`, `SCHOOL_PUBLIC_MOBILE_FIELD`). Needs two new CRM fields on Training Centres, then switch on. |
 | W05 | "Please try again" on the 8MB message. | Built |
-| W06 to W09, W12 | Website sync items (UK numbers, latitude and longitude, course level, insurance eligible, code format). | Not the portal as far as we know: the CRM-to-WordPress sync. Latitude and Longitude exist on Training Centres but the portal does not fill them yet. Waiting on how V1 gets them. |
+| W06 to W09, W12 | Website sync items (UK numbers, latitude and longitude, course level, insurance eligible, code format). | Not the portal as far as we know: the CRM-to-WordPress sync. Latitude and longitude (W07): built (PR for review). The application's centre step shows a map under the address with a pin looked up through Loqate (as V1 does); the school drags the pin, and it is saved in the `Latitude` and `Longitude` fields on the training centre. A softened map and a Guild pink pin. Correcting the pin later on the school profile is not built yet. |
 | W10, W11 | Maximum class size per course, and the public page link wording. | Not built. Need the Guild's decision (M13) and the agreed wording (B11). |
 
 ## Switches that are on in Development

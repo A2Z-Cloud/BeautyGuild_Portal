@@ -125,6 +125,7 @@ export function accreditationSteps(countries) {
         f('centreTown', 'Centre town / city'),
         f('centreCounty', 'Centre county', 'text', false),
         f('centrePostcode', 'Centre postcode', 'text', isUkCentre, { hint: 'Not needed for centres outside the UK.' }),
+        f('centreLocation', 'Centre location', 'location', false),
       ],
     },
     {
