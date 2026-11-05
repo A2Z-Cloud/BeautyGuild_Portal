@@ -153,6 +153,9 @@ export function SchoolsList() {
     </div>
   );
 }
+// A Creator number is shown as #41; a Books number (INV-000123) already reads as a reference, so no #.
+const numberLabel = r =>
+  /^\d+$/.test(String(r.invoiceNumber || '')) || !r.invoiceNumber ? '#' + (r.invoiceNumber || r.id) : r.invoiceNumber;
 export function InvoiceTable({ rows }) {
   const [selected, setSelected] = useState(null);
   return (
@@ -165,7 +168,7 @@ export function InvoiceTable({ rows }) {
               label: 'Invoice',
               render: r => (
                 <button type="button" className="text-button" onClick={() => setSelected(r)}>
-                  #{r.invoiceNumber || r.id}
+                  {numberLabel(r)}
                 </button>
               ),
             },
@@ -194,7 +197,7 @@ export function InvoiceTable({ rows }) {
             onClick={e => e.stopPropagation()}
           >
             <div className="school-dialog-head">
-              <h2>Invoice #{selected.invoiceNumber || selected.id}</h2>
+              <h2>Invoice {numberLabel(selected)}</h2>
               <button className="btn btn-secondary" type="button" onClick={() => setSelected(null)}>
                 Close
               </button>
@@ -204,6 +207,8 @@ export function InvoiceTable({ rows }) {
                 Type: selected.type,
                 Status: selected.status,
                 Amount: Number.isFinite(selected.amount) ? '£' + selected.amount.toFixed(2) : null,
+                'Net amount': Number.isFinite(selected.netAmount) ? '£' + selected.netAmount.toFixed(2) : null,
+                VAT: Number.isFinite(selected.vatAmount) ? '£' + selected.vatAmount.toFixed(2) : null,
                 'Invoice date': formatDate(selected.invoiceDate),
                 'Due date': formatDate(selected.dueDate),
                 'Payment date': formatDate(selected.paymentDate),
