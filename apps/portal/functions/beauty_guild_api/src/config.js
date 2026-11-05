@@ -135,6 +135,10 @@ function loadConfig(env = process.env) {
     // Lets signed-out visitors price a membership (no account, no CRM access). Needs billing on as well.
     publicQuotesEnabled: env.PUBLIC_QUOTES_ENABLED === 'true',
     documentsEnabled: env.PORTAL_DOCUMENTS_ENABLED === 'true',
+    // The Training_Centres fields that hold a public email and mobile shown on the website (school profile). Empty: the boxes are not shown and
+    // nothing is written, so the portal never writes a field the CRM does not have yet.
+    schoolPublicEmailField: String(env.SCHOOL_PUBLIC_EMAIL_FIELD || '').trim(),
+    schoolPublicMobileField: String(env.SCHOOL_PUBLIC_MOBILE_FIELD || '').trim(),
     // The member's own contact preferences and phone and address (src/profile.js). Needs records on as well.
     profileEnabled: env.PORTAL_PROFILE_ENABLED === 'true',
     // School referral code online (£10 off the joining fee) and the 30 day joining fee rule. Off unless 'true'. Needs billing on as well.
