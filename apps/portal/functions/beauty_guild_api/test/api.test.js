@@ -78,14 +78,27 @@ test('address/geocode returns a point, sends the key and a country code, and nev
     const url = new URL(calls[0]);
     assert.ok(url.pathname.endsWith('/Geocoding/International/Geocode/v1.10/json6.ws'));
     assert.equal(url.searchParams.get('Key'), SECRET);
-    assert.equal(url.searchParams.get('Country'), 'GBR');
+    assert.equal(url.searchParams.get('Country'), 'GB');
     assert.equal(url.searchParams.get('Location'), '1 High St, Derby, DE1 2AB');
     assert.ok(!JSON.stringify(r.body).includes(SECRET));
-    // A country name that is not a code is left out: the country in the address text does the work.
-    await get(base, '/address/geocode?country=France&location=10%20Rue%20de%20Rivoli%2C%20Paris%2C%20France');
-    assert.equal(new URL(calls[1]).searchParams.has('Country'), false);
-    await get(base, '/address/geocode?country=FR&location=10%20Rue%20de%20Rivoli%2C%20Paris');
-    assert.equal(new URL(calls[2]).searchParams.get('Country'), 'FR');
+    // A country name becomes its two letter code, spelt as the portal's list spells it.
+    for (const [name, code] of [
+      ['France', 'FR'],
+      ['Congo (Kinshasa)', 'CD'],
+      ['Bosnia and Herzegovina', 'BA'],
+      ['Saint Kitts and Nevis', 'KN'],
+      ['Sao Tome and Principe', 'ST'],
+      ['Turkey', 'TR'],
+      ['Isle of Man', 'IM'],
+    ]) {
+      await get(base, '/address/geocode?country=' + encodeURIComponent(name) + '&location=1%20Main%20Road%2C%20Town');
+      assert.equal(new URL(calls[calls.length - 1]).searchParams.get('Country'), code, name);
+    }
+    // A name that cannot be matched is left out: the country in the address text does the work.
+    await get(base, '/address/geocode?country=Atlantis&location=1%20Main%20Road%2C%20Atlantis');
+    assert.equal(new URL(calls[calls.length - 1]).searchParams.has('Country'), false);
+    await get(base, '/address/geocode?country=fr&location=10%20Rue%20de%20Rivoli%2C%20Paris');
+    assert.equal(new URL(calls[calls.length - 1]).searchParams.get('Country'), 'FR');
     reply = { Items: [] };
     assert.deepEqual((await get(base, '/address/geocode?country=GBR&location=Nowhere%20Lane%2C%20Nowhere')).body, {
       coordinates: null,

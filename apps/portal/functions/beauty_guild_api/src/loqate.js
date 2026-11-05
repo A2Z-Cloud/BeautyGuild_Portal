@@ -2,7 +2,52 @@
 const { HttpError } = require('./errors');
 
 const UPSTREAM_TIMEOUT_MS = 8000;
-const UK_NAMES = new Set(['united kingdom', 'uk', 'england', 'scotland', 'wales', 'northern ireland']);
+// Loqate's geocoder places an address far better with a two letter country code than with a name. The country on the form is a name, so it
+// is turned into its ISO code here. A name that cannot be matched is left out and the country in the address text does the work.
+const ALIASES = {
+  'united kingdom': 'GB',
+  uk: 'GB',
+  england: 'GB',
+  scotland: 'GB',
+  wales: 'GB',
+  'northern ireland': 'GB',
+  'cabo verde': 'CV',
+  myanmar: 'MM',
+  turkey: 'TR',
+  palestine: 'PS',
+  'saint vincent and the grenadines': 'VC',
+};
+const plain = name =>
+  String(name || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/&/g, ' and ')
+    .replace(/\bst\.?\s/g, 'saint ')
+    .replace(/[^a-z0-9 ]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+const NOT_COUNTRIES = new Set(['FX', 'EU', 'UN', 'QO', 'ZZ', 'AC', 'CP', 'DG', 'EA', 'IC', 'TA']);
+let codeByName = null;
+function countryCode(country) {
+  const c = String(country || '').trim();
+  if (/^[A-Za-z]{2,3}$/.test(c)) return c.toUpperCase();
+  const key = plain(c);
+  if (ALIASES[key]) return ALIASES[key];
+  if (!codeByName) {
+    codeByName = new Map();
+    const names = new Intl.DisplayNames(['en'], { type: 'region' });
+    for (let a = 65; a < 91; a++)
+      for (let b = 65; b < 91; b++) {
+        const code = String.fromCharCode(a, b),
+          name = names.of(code);
+        // The first code for a name wins, and the codes that are not countries (for example FX for France) are skipped.
+        if (name && name !== code && !NOT_COUNTRIES.has(code) && !codeByName.has(plain(name)))
+          codeByName.set(plain(name), code);
+      }
+  }
+  return codeByName.get(key) || '';
+}
 
 function mapAddress(item) {
   const physicalLine = [item.SubBuilding, item.BuildingName, item.BuildingNumber, item.Street]
@@ -71,8 +116,7 @@ function createLoqate({ config, fetchImpl = fetch, log = console.log }) {
     // country name in the address text does the work. No point found is null, never a guess.
     async geocode(country, location) {
       const params = { Location: location };
-      const c = String(country || '').trim();
-      const code = UK_NAMES.has(c.toLowerCase()) ? 'GBR' : /^[A-Za-z]{2,3}$/.test(c) ? c.toUpperCase() : '';
+      const code = countryCode(country);
       if (code) params.Country = code;
       const items = await call('/Geocoding/International/Geocode/v1.10/json6.ws', params);
       const item = items[0];
