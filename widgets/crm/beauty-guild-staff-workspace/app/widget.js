@@ -906,26 +906,30 @@
   }
   const RETURN_KEY='bg-staff-return-point';
   function saveReturnPoint(){
-    try{
-      const point={at:Date.now(),view:state.view,kind:state.browseKind,search:state.browseSearch||'',page:state.pages['browse:'+state.browseKind]||1,
-        focus:state.focus?{entity:state.focus.entity,id:String(state.focus.record.id)}:null,
-        history:(state.history||[]).slice(-10).filter(h=>h&&(h.entity?/^\d{8,30}$/.test(String(h.id||'')):true))};
-      sessionStorage.setItem(RETURN_KEY,JSON.stringify(point));
-    }catch(_){/* Storage can be blocked; the widget then opens at Overview as before. */}
+    const point={at:Date.now(),view:state.view,kind:state.browseKind,search:state.browseSearch||'',page:state.pages['browse:'+state.browseKind]||1,
+      focus:state.focus?{entity:state.focus.entity,id:String(state.focus.record.id)}:null,
+      history:(state.history||[]).slice(-10).filter(h=>h&&(h.entity?/^\d{8,30}$/.test(String(h.id||'')):true))};
+    const text=JSON.stringify(point);
+    for(const store of ['sessionStorage','localStorage']){try{window[store].setItem(RETURN_KEY,text);}catch(_){/* Storage can be blocked. */}}
   }
   function takeReturnPoint(){
-    try{
-      const raw=sessionStorage.getItem(RETURN_KEY);sessionStorage.removeItem(RETURN_KEY);
-      const p=raw&&JSON.parse(raw);
-      return p&&Date.now()-Number(p.at)<30*60*1000?p:null;
-    }catch(_){return null;}
+    for(const store of ['sessionStorage','localStorage']){
+      try{
+        const raw=window[store].getItem(RETURN_KEY),p=raw&&JSON.parse(raw);
+        if(p&&Date.now()-Number(p.at)<15*60*1000)return p;
+      }catch(_){/* Try the next store. */}
+    }
+    return null;
   }
+  function clearReturnPoint(){for(const store of ['sessionStorage','localStorage']){try{window[store].removeItem(RETURN_KEY);}catch(_){/* Nothing to clear. */}}}
   async function restoreReturnPoint(p){
     if(!p)return false;
     if(Array.isArray(p.history))state.history=p.history;
-    if(p.focus&&/^\d{8,30}$/.test(p.focus.id)&&/^[A-Za-z_]+$/.test(p.focus.entity)){await select(p.focus.entity,p.focus.id);return true;}
-    if(p.view&&p.view!=='overview'&&(BROWSE_MODULE[p.view]||p.view==='queue')){await changeView(p.view);if(p.page&&BROWSE_MODULE[p.view]){state.pages['browse:'+p.view]=p.page;render();}return true;}
-    return false;
+    let done=false;
+    if(p.focus&&/^\d{8,30}$/.test(p.focus.id)&&/^[A-Za-z_]+$/.test(p.focus.entity)){await select(p.focus.entity,p.focus.id);done=true;}
+    else if(p.view&&p.view!=='overview'&&(BROWSE_MODULE[p.view]||p.view==='queue')){await changeView(p.view);if(p.page&&BROWSE_MODULE[p.view]){state.pages['browse:'+p.view]=p.page;render();}done=true;}
+    if(done)clearReturnPoint();
+    return done;
   }
   async function init(){installStaticIcons();document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>changeView(b.dataset.view)));$('#searchBtn').addEventListener('click',handleSearch);$('#globalSearch').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();handleSearch()}});$('#refreshBtn').addEventListener('click',()=>{if(state.view==='create'){render();}else if(state.focus)select(state.focus.entity,state.focus.record.id);else if(state.contact)select(M.CONTACT,state.contact.id);else if(state.view==='queue')loadBrowse(state.queueKind,{reset:true});else if(state.view==='overview')loadBrowse('customers',{reset:true});else if(BROWSE_MODULE[state.view])loadBrowse(state.view,{reset:true});else setNotice('Select a CRM record or choose a list to refresh.');});$('#contentArea').addEventListener('click',clickAction);$('#contentArea').addEventListener('input',event=>{if(window.BGJourney12&&window.BGJourney12.input(state.journey,event.target)){if(['checkbox','radio'].includes(event.target.type))render();}},true);$('#contentArea').addEventListener('change',event=>{if(window.BGJourney12&&window.BGJourney12.input(state.journey,event.target)&&['select-one'].includes(event.target.type))render();},true);$('#searchResults').addEventListener('click',clickAction);$('#cancelModal').addEventListener('click',()=>$('#actionModal').close());$('#cancelModal2').addEventListener('click',()=>$('#actionModal').close());$('#actionForm').addEventListener('submit',e=>{e.preventDefault();saveAction()});$('#contentArea').addEventListener('change',changeReviewField);
     $('#contentArea').addEventListener('change',event=>{const k=event.target?.dataset?.crmView;if(k)chooseCustomView(k,String(event.target.value||'')).catch(e=>setNotice(String(e.message||e),'error'));});document.addEventListener('change',event=>{const t=event.target;if(t&&t.dataset&&t.dataset.wfEdit)askWorkflowEdit(t.dataset.entity,t.dataset.id,t.dataset.field,t.value);});document.addEventListener('click',event=>{const b=event.target&&event.target.closest&&event.target.closest('[data-wf-save],[data-wf-cancel]');if(!b)return;event.preventDefault();if(b.dataset.wfSave)saveWorkflowEdit();else{wfHide();render();}});$('#contentArea').addEventListener('input',changeReviewField);$('#contentArea').addEventListener('input',event=>{if(event.target.dataset?.journeyCustomerSearch!==undefined){state.journey.customerSearch=event.target.value;}else if(event.target.dataset?.journeyNewContact){state.journey.newContact=state.journey.newContact||{};state.journey.newContact[event.target.dataset.journeyNewContact]=event.target.value;}else if(event.target.dataset?.browseSearch!==undefined){state.browseSearch=event.target.value;state.pages['browse:'+state.browseKind]=1;state.browseSearchByKind[state.browseKind]=state.browseSearch;const cursor=event.target.selectionStart;render();const el=document.querySelector('.browse-search');if(el){el.focus();if(typeof el.setSelectionRange==='function')el.setSelectionRange(cursor,cursor)}}else if(event.target.dataset?.journeyField){setJourneyField(event.target)}});$('#contentArea').addEventListener('change',event=>{if(event.target.dataset?.journeyField)setJourneyField(event.target)});render();

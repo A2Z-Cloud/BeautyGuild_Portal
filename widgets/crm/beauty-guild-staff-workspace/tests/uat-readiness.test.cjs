@@ -121,7 +121,7 @@ test('Edit in CRM remembers where the user was and the widget restores it on ret
   assert.match(js,/saveReturnPoint\(\);\s*await ZOHO\.CRM\.UI\.Record\.edit/);
   assert.match(js,/function takeReturnPoint\(\)/);
   assert.match(js,/else if\(back\)restoreReturnPoint\(back\)/);
-  assert.match(js,/sessionStorage\.removeItem\(RETURN_KEY\)/);
+  assert.match(js,/function clearReturnPoint\(\)/);
 });
 
 test('table headings wrap instead of being clipped, and a finished list says all records are loaded',()=>{
