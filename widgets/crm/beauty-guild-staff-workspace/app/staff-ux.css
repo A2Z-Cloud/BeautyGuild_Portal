@@ -185,3 +185,7 @@ body.staff-dev-tools #staff-api-open{display:inline-flex}
 .v12-table tr:hover td:first-child,.v12-table tr:hover td.v12-action-cell{background:#fff9fc}
 .v12-table .v12-cell-link{background:none;border:0;border-radius:0;padding:0;font:inherit;font-weight:700;text-align:left;cursor:pointer;color:inherit;white-space:normal}
 .v12-table .v12-cell-link:hover,.v12-table .v12-cell-link:focus-visible{color:#c0176e;text-decoration:underline}
+
+.v12-table th{white-space:normal;line-height:1.25;vertical-align:bottom;min-width:84px;overflow-wrap:anywhere}
+.v12-table th.v12-action-cell{min-width:0;white-space:nowrap}
+.browse-all-loaded{margin:10px 2px 0}

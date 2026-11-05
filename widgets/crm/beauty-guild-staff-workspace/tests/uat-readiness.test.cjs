@@ -70,7 +70,7 @@ test('table status text does not break mid-word, and the stop banner is styled',
   assert.match(css,/\.v12-table td \.bg-state\{white-space:nowrap\}/);
   assert.match(css,/\.v12-stop-banner--stop/);
   const html=fs.readFileSync(path.join(app,'index.html'),'utf8');
-  assert.match(html,/widget\.js\?v=20261104-uatfix4/);
+  assert.match(html,/widget\.js\?v=20261104-uatfix5/);
 });
 
 test('buttons that only open the CRM record say so, and the note dialog names the record and hides the due date',()=>{
@@ -114,4 +114,19 @@ test('Notes and Activities related lists show the title, content, subject and du
   assert.match(v12,/Tasks:\['Subject','Status','Priority','Due_Date','Owner'\]/);
   assert.match(v12,/Open_Activities:\['Subject','Activity_Type','Status','Due_Date','Owner','Modified_Time'\]/);
   assert.match(v12,/function cellMarkup\(k,v\)/);
+});
+
+test('Edit in CRM remembers where the user was and the widget restores it on return',()=>{
+  const js=fs.readFileSync(path.join(app,'widget.js'),'utf8');
+  assert.match(js,/saveReturnPoint\(\);\s*await ZOHO\.CRM\.UI\.Record\.edit/);
+  assert.match(js,/function takeReturnPoint\(\)/);
+  assert.match(js,/else if\(back\)restoreReturnPoint\(back\)/);
+  assert.match(js,/sessionStorage\.removeItem\(RETURN_KEY\)/);
+});
+
+test('table headings wrap instead of being clipped, and a finished list says all records are loaded',()=>{
+  const css=fs.readFileSync(path.join(app,'staff-ux.css'),'utf8');
+  assert.match(css,/\.v12-table th\{white-space:normal/);
+  const js=fs.readFileSync(path.join(app,'widget.js'),'utf8');
+  assert.match(js,/are loaded\. CRM reports no more pages\./);
 });
