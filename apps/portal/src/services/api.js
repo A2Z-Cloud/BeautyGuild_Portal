@@ -159,6 +159,15 @@ export const portalApi = Object.freeze({
       ? (await schoolReq('/schools/' + encodeURIComponent(id) + '/sessions', { method: 'POST', body: data })).session
       : unavailable('Course session creation'),
   getAccountInvoices: async () => (await schoolReq('/invoices')).invoices,
+  // The PDF of one invoice (a plain link: the browser sends the sign-in cookie, as it does for documents).
+  getInvoicePdfUrl: (id, inline = false) =>
+    schoolHttp
+      ? integrationConfig.apiBaseUrl +
+        '/portal/management/invoices/' +
+        encodeURIComponent(id) +
+        '/pdf' +
+        (inline ? '?inline=1' : '')
+      : null,
   getMembershipInvoices: async id => (await schoolReq('/memberships/' + encodeURIComponent(id) + '/invoices')).invoices,
   getMembershipExtensions: async id =>
     (await schoolReq('/memberships/' + encodeURIComponent(id) + '/extensions')).extensions,

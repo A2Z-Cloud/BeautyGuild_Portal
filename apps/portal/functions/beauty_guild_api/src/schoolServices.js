@@ -24,6 +24,9 @@ const pick = (r, ...names) => {
   for (const n of names) if (r[n] !== undefined && r[n] !== null && r[n] !== '') return r[n];
   return null;
 };
+// The Creator file field that holds the invoice PDF Creator fetched from Books (Invoice Records > Invoice PDF).
+const PDF_FIELD = 'Invoice_PDF';
+const MAX_PDF = 5 * 1024 * 1024;
 const money = v => (v === null || !Number.isFinite(Number(v)) ? null : Number(v));
 function mapInvoice(r) {
   const descriptor = r.product_description;
@@ -31,6 +34,7 @@ function mapInvoice(r) {
     id: String(r.ID),
     // The Books invoice number is the one the member sees on their invoice. Older rows have none yet, so fall back to Creator's own number.
     invoiceNumber: pick(r, 'Books_Invoice_Number', 'books_invoice_number', 'invoice_number'),
+    hasPdf: Boolean(pick(r, PDF_FIELD, 'invoice_pdf')),
     netAmount: money(pick(r, 'Net_Amount', 'net_amount')),
     vatAmount: money(pick(r, 'VAT_Amount', 'vat_amount')),
     type:
@@ -143,6 +147,50 @@ function createSchoolApi({
       .sort((a, b) => (BigInt(b.id) > BigInt(a.id) ? 1 : BigInt(b.id) < BigInt(a.id) ? -1 : 0));
   }
 
+  // The PDF of ONE invoice, for the member it belongs to. The invoice is looked up with the member's own contact id, so another
+  // member's invoice id returns "not found". The file is read from Creator, so the member never needs a Books login.
+  async function invoicePdf(req, id, contactId) {
+    const notFound = () => fail('Invoice not found.', 404, 'NOT_FOUND');
+    if (!ID.test(String(id)) || !ID.test(String(contactId))) notFound();
+    const rows = await creator(
+      req,
+      creatorInvoiceReport,
+      '(ID == ' + id + ' && crm_contact_id == "' + contactId + '")',
+    );
+    const row = rows.find(r => String(r.ID) === String(id));
+    if (!row || !pick(row, PDF_FIELD, 'invoice_pdf')) notFound();
+    // If the report returns the contact, it must be this member's, whatever the search did.
+    const owner = pick(row, 'crm_contact_id');
+    if (owner !== null && String(owner?.ID ?? owner) !== String(contactId)) notFound();
+    const url =
+      creatorApiDomain +
+      '/creator/v2.1/data/' +
+      esc(creatorAccountOwner) +
+      '/' +
+      esc(creatorAppLinkName) +
+      '/report/' +
+      esc(creatorInvoiceReport) +
+      '/' +
+      esc(id) +
+      '/' +
+      esc(PDF_FIELD) +
+      '/download';
+    const unavailable = () => fail('The invoice could not be downloaded. Please try again.');
+    let response;
+    try {
+      response = await fetchImpl(url, { headers: await getCreatorHeaders(req), signal: AbortSignal.timeout(20000) });
+    } catch {
+      unavailable();
+    }
+    if (!response.ok) unavailable();
+    const buffer = Buffer.from(await response.arrayBuffer());
+    if (buffer.length > MAX_PDF) fail('This invoice is too large to download.', 413, 'FILE_TOO_LARGE');
+    // Only a real PDF goes to the member: anything else (an error page, say) is refused.
+    if (buffer.subarray(0, 5).toString('latin1') !== '%PDF-') unavailable();
+    const number = String(mapInvoice(row).invoiceNumber || id).replace(/[^A-Za-z0-9._-]/g, '');
+    return { buffer, name: 'Invoice-' + number + '.pdf' };
+  }
+
   async function crmCreate(req, module, data) {
     const url = crmApiDomain + '/crm/v3/' + module;
     let response;
@@ -217,7 +265,7 @@ function createSchoolApi({
     if (!response.ok || body?.code !== 3000 || !body.data?.ID) fail('Creator did not confirm the record was saved.');
     return String(body.data.ID);
   }
-  return { crm, creator, contact, acc, deal, invoices, crmCreate, crmUpdate, crmDelete, creatorCreate };
+  return { crm, creator, contact, acc, deal, invoices, invoicePdf, crmCreate, crmUpdate, crmDelete, creatorCreate };
 }
 function registerSchoolRoutes(
   app,
@@ -707,6 +755,20 @@ function registerSchoolRoutes(
     '/invoices',
     handle(async (req, res) => {
       res.json({ invoices: await api.invoices(req, 'crm_contact_id == "' + req.memberContact.id + '"') });
+    }),
+  );
+  router.get(
+    '/invoices/:id/pdf',
+    handle(async (req, res) => {
+      const file = await api.invoicePdf(req, req.params.id, req.memberContact.id);
+      res.set('Content-Type', 'application/pdf');
+      // ?inline=1 opens it in the browser tab; otherwise it downloads.
+      res.set(
+        'Content-Disposition',
+        (req.query.inline === '1' ? 'inline' : 'attachment') + "; filename*=UTF-8''" + encodeURIComponent(file.name),
+      );
+      res.set('Cache-Control', 'private, no-store');
+      res.send(file.buffer);
     }),
   );
   router.get(
