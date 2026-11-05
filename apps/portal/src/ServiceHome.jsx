@@ -209,11 +209,11 @@ export default function ServiceHome({ kind }) {
       )}
       {kind === 'accreditation' && (
         <>
-          <p>
+          <div className="service-extra-action">
             <Link to="/schools" className="btn btn-secondary">
               Manage my schools <ArrowRight size={15} />
             </Link>
-          </p>
+          </div>
           <CourseCatalogue />
         </>
       )}
