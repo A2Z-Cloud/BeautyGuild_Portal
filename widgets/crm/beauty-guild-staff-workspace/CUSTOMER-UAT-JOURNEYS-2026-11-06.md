@@ -17,11 +17,10 @@ Instead of a list of buttons to press, you will follow **seven short journeys**.
 
 | In this test | Not in this test (coming later) |
 | --- | --- |
-| Finding and reviewing members, membership, insurance and accreditation records | Starting a new insurance application |
-| Notes, creating, updating and completing tasks, and seeing your own open tasks | Reassigning tasks, or seeing other people's tasks (do this in CRM) |
-| Moving an early-stage application forward | Mid-term adjustments (MTAs) |
-| Opening the standard CRM edit screen | Vouchers |
-|  | Cancellations, renewals and upgrades |
+| Finding and reviewing members, membership, insurance and accreditation records | Reassigning tasks, or seeing other people's tasks (do this in CRM) |
+| Notes, creating, updating and completing tasks, and seeing your own open tasks | Mid-term adjustments (MTAs) |
+| Moving an early-stage application forward | Vouchers |
+| Opening the standard CRM edit screen | Cancellations, renewals and upgrades |
 
 If you cannot find one of the items in the right-hand column, that is correct.
 
@@ -50,7 +49,7 @@ For each step, note whether it did what we said, did it but was confusing or slo
 2. Look at the **Overview** page.
    **Expect:** it makes sense at a glance. You can tell what needs attention and where to go next.
 3. Look at the left-hand navigation.
-   **Expect:** you can see Applications, **My tasks**, Customers, Membership, Insurance and Accreditation. There is no "New application" option and no technical or test buttons along the top.
+   **Expect:** you can see Applications, **My tasks**, Customers, Membership, Insurance, Accreditation and **New application**. There are no technical or test buttons along the top.
 
 **Think about:** Would a new colleague know where to start without being told?
 
@@ -177,7 +176,6 @@ For each step, note whether it did what we said, did it but was confusing or slo
 
 Before you finish, try each of these. They should all be blocked or missing.
 
-- [ ] Start a new application from the workspace.
 - [ ] Find a button for MTAs, cancellations, vouchers, renewals or upgrades.
 - [ ] Change **Payment Status** or **Policy Status** from the workspace.
 
