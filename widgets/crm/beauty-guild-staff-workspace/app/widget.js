@@ -104,7 +104,7 @@
   };
   // Staff-assisted journey is a preview only; customer creation is an explicitly triggered live CRM write.
   const DEMO=false; // This CRM release cannot enter sample-data mode.
-  const state={tasks:{rows:[],loaded:false,loading:false,error:'',more:false,focus:null,focusId:'',focusLoading:false,focusError:'',saving:false},pages:{},limited:{},connected:false,demo:DEMO,view:'processing',contact:null,focus:null,focusRelation:{},lists:{},errors:{},queueKind:'insurance',queue:[],queueLimit:100,crmPageLimit:2,queueLoaded:false,browse:{},browseViews:{},browseSearchByKind:{},customerNames:{},browseFilter:'all',browseKind:'insurance',busy:false,requestId:0,searchResults:[],searchQuery:'',directory:[],directoryLoaded:false,nativeLists:{},nativeErrors:{},actionTarget:null,actionType:'note',currentUser:null,reviewDrafts:{},savingReview:false,history:[]};
+  const state={tasks:{rows:[],loaded:false,loading:false,error:'',more:false,focus:null,focusId:'',focusLoading:false,focusError:'',saving:false,names:{},pending:{}},pages:{},limited:{},connected:false,demo:DEMO,view:'processing',contact:null,focus:null,focusRelation:{},lists:{},errors:{},queueKind:'insurance',queue:[],queueLimit:100,crmPageLimit:2,queueLoaded:false,browse:{},browseViews:{},browseSearchByKind:{},customerNames:{},browseFilter:'all',browseKind:'insurance',busy:false,requestId:0,searchResults:[],searchQuery:'',directory:[],directoryLoaded:false,nativeLists:{},nativeErrors:{},actionTarget:null,actionType:'note',currentUser:null,reviewDrafts:{},savingReview:false,history:[]};
   const $=s=>document.querySelector(s);
   function esc(x){return String(x==null?'':x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
   function txt(x){if(x===null||x===undefined||x==='')return '—';if(typeof x==='boolean')return x?'Yes':'No';if(Array.isArray(x))return x.map(txt).join(', ');if(typeof x==='object')return x.name||x.display_value||x.id||'—';return String(x);}
@@ -914,8 +914,8 @@
   }
   function taskRelated(r){
     const w=r&&r.What_Id&&typeof r.What_Id==='object'?r.What_Id:null,who=r&&r.Who_Id&&typeof r.Who_Id==='object'?r.Who_Id:null;
-    if(w&&w.id)return{name:w.name||'Record',entity:r.$se_module||'',id:String(w.id)};
-    if(who&&who.id)return{name:who.name||'Contact',entity:'Contacts',id:String(who.id)};
+    if(w&&w.id)return{name:w.name||'',entity:r.$se_module||'',id:String(w.id)};
+    if(who&&who.id)return{name:who.name||'',entity:'Contacts',id:String(who.id)};
     return null;
   }
   async function loadTasks(){
@@ -934,12 +934,24 @@
         }catch(e){if(/NO_CONTENT|204|no content/i.test(String(e&&e.message||e)))return[];throw e;}
       };
       let rows;try{rows=await run(true)}catch(_){rows=await run(false)}
+      rows=rows.filter(r=>!TASK_CLOSED.test(String(r.Status||'')));
       sortTasks(rows);
       t.rows=rows;t.more=rows.length>=200;t.loaded=true;
     }catch(e){t.error='Your open tasks could not be loaded from CRM: '+String(e&&e.message||e);}
     finally{t.loading=false;if(state.view==='tasks')render();}
   }
 
+  const TASK_CLOSED=/^(completed|complete|closed|done|cancelled|canceled)$/i;
+  function taskRelKey(rel){return rel.entity+':'+rel.id;}
+  function resolveTaskNames(rows){
+    const t=state.tasks;
+    for(const r of rows){
+      const rel=taskRelated(r);if(!rel||!rel.entity||!ALL_ENTITIES.has(rel.entity))continue;
+      const k=taskRelKey(rel);if(rel.name||t.names[k]||t.pending[k])continue;
+      t.pending[k]=true;
+      getRecord(rel.entity,rel.id).then(rec=>{t.names[k]=rowTitle(rel.entity,rec)||'Open record';}).catch(()=>{t.names[k]='Open record';}).finally(()=>{delete t.pending[k];if(!Object.keys(t.pending).length&&state.view==='tasks'&&!t.focusId)render();});
+    }
+  }
   const TASK_STATUSES=['Not Started','In Progress','Waiting for input','Deferred','Completed'];
   const TASK_PRIORITIES=['Highest','High','Normal','Low','Lowest'];
   function taskOptions(field,fallback,current){
@@ -994,7 +1006,7 @@
     const t=state.tasks,id=t.focusId;if(!id||t.saving)return;
     const val=q=>{const e=$(q);return e?String(e.value||''):''};
     const subject=val('#taskSubject').trim();if(!subject){setNotice('A task needs a subject.','error');return;}
-    const done=(taskOptions('Status',TASK_STATUSES,'').find(x=>/^completed$/i.test(x)))||'Completed';
+    const done=(taskOptions('Status',TASK_STATUSES,'').find(x=>/^(completed|complete|closed|done)$/i.test(x)))||'Completed';
     const status=complete?done:val('#taskStatus');
     if(complete&&!await confirmDialog({title:'Mark this task complete?',body:'It will be set to Completed in CRM and leave your My tasks list. You can reopen it in CRM if you need to.',yes:'Mark complete',no:'Not yet'}))return;
     const data={id,Subject:subject,Status:status,Due_Date:val('#taskDue')||null,Description:val('#taskDescription')};
@@ -1002,7 +1014,7 @@
     t.saving=true;setNotice(complete?'Completing the task in CRM…':'Saving the task in CRM…','info');render();
     try{
       const res=await api().updateRecord({Entity:'Tasks',APIData:data,Trigger:['workflow']});assertSaved(res);
-      if(/^completed$/i.test(status)){t.rows=t.rows.filter(r=>String(r.id)!==String(id));t.focus=null;t.focusId='';setNotice('Task completed in CRM.','info');}
+      if(TASK_CLOSED.test(status)){t.rows=t.rows.filter(r=>String(r.id)!==String(id));t.focus=null;t.focusId='';setNotice('Task completed in CRM.','info');}
       else{t.rows=sortTasks(t.rows.map(r=>String(r.id)===String(id)?{...r,...data}:r));t.focus={...(t.focus||{}),...data};setNotice('Task saved in CRM.','info');}
     }catch(e){setNotice('The task was not saved: '+String(e&&e.message||e),'error');}
     finally{t.saving=false;render();}
@@ -1017,14 +1029,15 @@
     else if(t.error)body=`<div class="v12-warning" role="alert">${esc(t.error)}</div>`;
     else if(!t.rows.length)body=empty('No open tasks','Nothing is waiting for you in CRM. Tasks you create here stay on this list until they are completed in CRM.');
     else{
+      const pg=pageItems('tasks',t.rows,15);resolveTaskNames(pg.rows);
       const info=t.rows.map(r=>taskDueInfo(r.Due_Date)),late=info.filter(x=>x.cls==='danger').length,today=info.filter(x=>x.cls==='warning').length;
       desc=`${t.rows.length} open ${t.rows.length===1?'task':'tasks'} assigned to ${who}${late?` · ${late} overdue`:''}${today?` · ${today} due today`:''}`;
       body='<div class="v12-table-wrap"><table class="v12-table"><thead><tr><th scope="col">Task</th><th scope="col">Related to</th><th scope="col">Status</th><th scope="col">Priority</th><th scope="col">Due</th><th scope="col" class="v12-action-cell">Action</th></tr></thead><tbody>'+
-        t.rows.map((r,i)=>{
-          const rel=taskRelated(r),d=info[i],st=String(r.Status||'').toLowerCase(),pr=String(r.Priority||'');
-          const relCell=rel?(ALL_ENTITIES.has(rel.entity)?`<button class="v12-link" data-action="select" data-entity="${esc(rel.entity)}" data-id="${esc(rel.id)}">${esc(rel.name)}</button>`:esc(rel.name)):'—';
-          return `<tr><td><button class="v12-link v12-cell-link" data-action="task-open" data-id="${esc(r.id)}">${esc(r.Subject||'Untitled task')}</button></td><td>${relCell}</td><td><span class="bg-state bg-state-${tone[st]||'neutral'}">${esc(r.Status||'Not recorded')}</span></td><td>${pr?`<span class="bg-state bg-state-${/high/i.test(pr)?'danger':'neutral'}">${esc(pr)}</span>`:'—'}</td><td>${esc(d.text)}${d.label?` <span class="bg-state bg-state-${d.cls||'neutral'}">${esc(d.label)}</span>`:''}</td><td class="v12-action-cell"><button class="v12-link" data-action="task-open" data-id="${esc(r.id)}">Open</button></td></tr>`;
-        }).join('')+'</tbody></table></div>'+(t.more?'<p class="v12-muted">Showing the first 200 open tasks. Open the Tasks tab in CRM to see the rest.</p>':'');
+        pg.rows.map(r=>{
+          const rel=taskRelated(r),d=taskDueInfo(r.Due_Date),st=String(r.Status||'').toLowerCase(),pr=String(r.Priority||'');
+          const rname=rel?(rel.name||t.names[taskRelKey(rel)]||'Loading…'):'';const relCell=rel?(ALL_ENTITIES.has(rel.entity)?`<button class="v12-link" data-action="select" data-entity="${esc(rel.entity)}" data-id="${esc(rel.id)}">${esc(rname)}</button>`:esc(rname||'Related record')):'—';
+          return `<tr><td><button class="v12-link v12-cell-link" data-action="task-open" data-id="${esc(r.id)}">${esc(r.Subject||'Untitled task')}</button></td><td>${relCell}</td><td><span class="bg-state bg-state-${tone[st]||'neutral'}">${esc(r.Status||'Not recorded')}</span></td><td>${pr?`<span class="bg-state bg-state-${/high/i.test(pr)?'danger':'neutral'}">${esc(pr)}</span>`:'—'}</td><td class="bg-task-due">${esc(d.text)}${d.label?` <span class="bg-state bg-state-${d.cls||'neutral'}">${esc(d.label)}</span>`:''}</td><td class="v12-action-cell"><button class="v12-link" data-action="task-open" data-id="${esc(r.id)}">Open</button></td></tr>`;
+        }).join('')+'</tbody></table></div>'+pg.controls+(t.more?'<p class="v12-muted">Showing the first 200 open tasks. Open the Tasks tab in CRM to see the rest.</p>':'');
     }
     return panel('My open tasks',desc,body,refresh);
   }

@@ -222,3 +222,5 @@ body.staff-dev-tools #staff-api-open{display:inline-flex}
 .bg-latest-list{list-style:none;margin:6px 0 0;padding:0}
 .bg-latest-list li{padding:4px 0;font-size:13px}
 .bg-latest-list time{display:inline-block;min-width:104px;font-size:12px;color:#6b606b;font-variant-numeric:tabular-nums}
+
+.v12-table td.bg-task-due{min-width:175px}
