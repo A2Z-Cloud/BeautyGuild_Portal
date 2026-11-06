@@ -23,10 +23,10 @@ function delegate(action,entity,id){let t={dataset:{action,entity,id},closest:()
  const before=calls.notes.length;
  delegate('refresh-record','Insurance_Policy',ids.policy);await nap();
  assert.equal(calls.notes.length,before);
- // Operational UAT: the New application walkthrough is not available. Opening it must not start a journey or write anything.
+ // New applications are available again. Opening the walkthrough shows the application type chooser and writes nothing.
  nav[6].callbacks.click();await nap();
- assert.doesNotMatch(el['#contentArea'].innerHTML,/Select application type/);
+ assert.match(el['#contentArea'].innerHTML,/Select application type|journey-type-grid/);
  assert.doesNotMatch(el['#contentArea'].innerHTML,/checkoutUrl/);
  assert.equal(calls.tasks.length,1);
- console.log('PASS CRM mock SDK, browse-first lists, records, related lists, Notes/Tasks, native CRM actions and the blocked New application route');
+ console.log('PASS CRM mock SDK, browse-first lists, records, related lists, Notes/Tasks, native CRM actions and the New application chooser');
 })().catch(e=>{console.error(e);process.exit(1)});

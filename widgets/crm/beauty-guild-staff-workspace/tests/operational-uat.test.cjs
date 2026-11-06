@@ -9,10 +9,10 @@ const source=name=>fs.readFileSync(path.join(app,name),'utf8');
 const widget=require('../app/widget.js');
 
 test('operational UAT blocks excluded workflow entry points, retaining routine record actions',()=>{
- for(const action of ['journey-start','journey-save','membership-cancel-open','membership-cancel-confirm','membership-upgrade','membership-renew']){
+ for(const action of ['staff-mta-open','staff-voucher-open','membership-cancel-open','membership-cancel-confirm','membership-upgrade','membership-renew']){
    assert.equal(widget.isExcludedAction(action),true,action);
  }
- for(const action of ['select','open','edit','note','task','browse','paginate']){
+ for(const action of ['select','open','edit','note','task','browse','paginate','journey-start','journey-save','journey-type','task-open','task-save','task-complete']){
    assert.equal(widget.isExcludedAction(action),false,action);
  }
 });
@@ -35,7 +35,8 @@ test('CRM field editing and transaction workflows are retained but gated in UAT'
  assert.match(code,/async function saveWorkflowEdit\(/);
  assert.match(code,/Trigger:\['workflow'\]/);
  assert.match(code,/UAT_EDIT_FIELDS/);
- assert.match(html,/data-view="create" hidden/);
+ assert.doesNotMatch(html,/data-view="create" hidden/);
+ assert.match(code,/const NEW_APPLICATIONS=true/);
  assert.match(html,/id="staff-api-open" hidden/);
 });
 

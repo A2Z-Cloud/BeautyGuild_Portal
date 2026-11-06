@@ -8,7 +8,9 @@
   // but are inaccessible from its navigation and delegated actions.
   const OPERATIONAL_UAT=true;
   if(typeof window!=='undefined')window.BG_OPERATIONAL_UAT=OPERATIONAL_UAT;
-  const EXCLUDED_ACTION=/^(journey-|membership-cancel-|membership-renew$|membership-upgrade$|coming-soon$|staff-mta-|staff-voucher-)/;
+  // New applications are re-enabled now that portal pricing and checkout are stable. MTAs, vouchers, cancellations, renewals and upgrades stay out.
+  const NEW_APPLICATIONS=true;
+  const EXCLUDED_ACTION=/^(membership-cancel-|membership-renew$|membership-upgrade$|staff-mta-|staff-voucher-)/;
   const isExcludedAction=a=>OPERATIONAL_UAT&&EXCLUDED_ACTION.test(String(a||''));
   const M = Object.freeze({CONTACT:'Contacts',ACCOUNT:'Accounts',PROFILE:'Membership',DEAL:'Deals',ADDON:'Membership_Extension',POLICY:'Insurance_Policy',EXT:'Insurance_Extension',PERSON:'Insured_People',PREMISES:'Insured_Premises',DECLARATION:'Declarations',REVISION:'Policy_Revisions',RISK:'Risk_Screenings',ACC:'Training_Centre_Accred',CENTRE:'Training_Centres',QUAL:'Qualifications',OFFER:'TC_Course_Offering',TUTOR:'Tutor_Relationships',ACCLINK:'Accreditation_Centre_Link',ACCEXT:'Accreditation_Extensions',TASK:'Tasks'});
   const ICON_PATHS={
@@ -33,7 +35,7 @@
   };
   function icon(name){return '<svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'+(ICON_PATHS[name]||ICON_PATHS['file-search'])+'</svg>';}
   function installStaticIcons(){document.querySelectorAll('[data-icon]').forEach(el=>{el.innerHTML=icon(el.dataset.icon);});}
-  const VIEW_TITLES={processing:['Staff Workspace','Applications and customer records'],overview:['Customers','Contact, organisation and membership information'],membership:['Membership','Membership records and renewals'],insurance:['Insurance','Policies, cover and underwriting'],accreditation:['Accreditation','Applications, qualifications, centres and courses'],queue:['Applications','Applications requiring attention'],tasks:['My tasks','Open CRM tasks assigned to you'],create:['New application','Staff-assisted journey preview · stops before payment']};
+  const VIEW_TITLES={processing:['Staff Workspace','Applications and customer records'],overview:['Customers','Contact, organisation and membership information'],membership:['Membership','Membership records and renewals'],insurance:['Insurance','Policies, cover and underwriting'],accreditation:['Accreditation','Applications, qualifications, centres and courses'],queue:['Applications','Applications requiring attention'],tasks:['My tasks','Open CRM tasks assigned to you'],create:['New application','Staff-assisted application · prices come from the Beauty Guild pricing service']};
   const VIEWS_FOR={Contacts:'overview',Accounts:'overview',Membership:'membership',Deals:'membership',Membership_Extension:'membership',Insurance_Policy:'insurance',Insurance_Extension:'insurance',Declarations:'insurance',Insured_People:'insurance',Insured_Premises:'insurance',Policy_Revisions:'insurance',Risk_Screenings:'insurance',Training_Centre_Accred:'accreditation',Training_Centres:'accreditation',Qualifications:'accreditation',TC_Course_Offering:'accreditation',Tutor_Relationships:'accreditation'};
   const ALL_ENTITIES=new Set(Object.values(M));
   const CONTACT_RELATIONS=[['Membership','Contact'],['Deals','Contact_Name'],['Insurance_Policy','Contact'],['Training_Centre_Accred','Applicant_Contact'],['Qualifications','Contact'],['Training_Centres','Contact']];
@@ -407,7 +409,7 @@
     const modules=[['membership','Membership','Membership records, renewals and payments','users-round'],['insurance','Insurance','Policies, declarations and referrals','shield-check'],['accreditation','Accreditation','Applications, qualifications and centres','graduation-cap']];
     return `<div class="process-hero"><span class="process-kicker">APPLICATIONS</span><h2>Review applications</h2><p>Find a submitted application, review its details and continue processing in CRM.</p></div>
       <div class="process-entry-grid">${modules.map(([kind,label,desc,iconName])=>`<article class="process-entry process-entry--${kind}"><div class="entry-icon">${icon(iconName)}</div><h3>${label}</h3><p>${desc}</p><button type="button" class="button secondary" data-action="browse" data-kind="${kind}">View applications ${icon('chevron-right')}</button></article>`).join('')}</div>
-      ${OPERATIONAL_UAT?'<p class="v12-muted">Operational UAT: existing customer and application records only. New applications and financial journeys are not available in this release.</p>':`<div class="create-cta"><div><strong>Start a new application</strong><p>Start a combined Membership and Insurance or Accreditation application.</p></div><div class="create-cta-actions"><button type="button" class="button secondary" data-action="journey-start" data-kind="membership">Membership and Insurance</button><button type="button" class="button secondary" data-action="journey-start" data-kind="accreditation">Accreditation</button></div></div>`}`;
+      ${OPERATIONAL_UAT&&!NEW_APPLICATIONS?'<p class="v12-muted">Operational UAT: existing customer and application records only. New applications and financial journeys are not available in this release.</p>':`<div class="create-cta"><div><strong>Start a new application</strong><p>Start a combined Membership and Insurance or Accreditation application.</p></div><div class="create-cta-actions"><button type="button" class="button secondary" data-action="journey-start" data-kind="membership">Membership and Insurance</button><button type="button" class="button secondary" data-action="journey-start" data-kind="accreditation">Accreditation</button></div></div>`}`;
   }
   function processingPanel(entity,record){
     const kind=reviewKind(entity);if(!kind)return'';
@@ -1043,7 +1045,7 @@
   }
   async function changeView(next){
     state.history=[];state.view=next;state.searchResults=[];setNotice('');
-    if(next==='create'){if(OPERATIONAL_UAT){setNotice('New applications are outside Operational UAT.','info');return;}initJourney();render();return;}
+    if(next==='create'){if(OPERATIONAL_UAT&&!NEW_APPLICATIONS){setNotice('New applications are outside Operational UAT.','info');return;}initJourney();render();return;}
     if(next==='tasks'){state.focus=null;state.focusEntityView=null;state.contact=null;return loadTasks();}
     if(next==='overview'){state.focus=null;state.focusEntityView=null;state.contact=null;state.browseKind='customers';state.browseSearch=state.browseSearchByKind.customers||'';const data=browseData('customers');if(!data.loaded)return loadBrowse('customers');render();return;}
     if(next==='queue'){const d=browseData(state.queueKind);if(!d.loaded)return loadQueue(state.queueKind);render();return;}
