@@ -70,7 +70,7 @@ test('table status text does not break mid-word, and the stop banner is styled',
   assert.match(css,/\.v12-table td \.bg-state\{white-space:nowrap\}/);
   assert.match(css,/\.v12-stop-banner--stop/);
   const html=fs.readFileSync(path.join(app,'index.html'),'utf8');
-  assert.match(html,/widget\.js\?v=20261106-uatfix10/);
+  assert.match(html,/widget\.js\?v=20261106-uatfix11/);
 });
 
 test('buttons that only open the CRM record say so, and the note dialog names the record and hides the due date',()=>{
@@ -200,4 +200,14 @@ test('the timeline separates emails and automatic changes, and the record page s
   assert.match(src,/function latestActivity/);
   assert.match(src,/selection==='overview'\|\|selection==='details'\)main=latestActivity/);
   assert.match(src,/\['timeline','Timeline'\],\['details','All CRM fields'\]/);
+});
+
+test('the My tasks pager is allowed by the paginate action',()=>{
+  const js=fs.readFileSync(path.join(app,'widget.js'),'utf8');
+  const m=/action==='paginate'\)\{const key=el\.dataset\.key,n=Number\(el\.dataset\.page\);if\((\/.*?\/)\.test\(key/.exec(js);
+  assert.ok(m,'paginate guard not found');
+  const re=eval(m[1]);
+  assert.equal(re.test('tasks'),true);
+  assert.equal(re.test('browse:insurance'),true);
+  assert.equal(re.test('something-else'),false);
 });
