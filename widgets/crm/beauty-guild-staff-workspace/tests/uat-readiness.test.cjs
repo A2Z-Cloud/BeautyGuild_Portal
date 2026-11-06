@@ -70,7 +70,7 @@ test('table status text does not break mid-word, and the stop banner is styled',
   assert.match(css,/\.v12-table td \.bg-state\{white-space:nowrap\}/);
   assert.match(css,/\.v12-stop-banner--stop/);
   const html=fs.readFileSync(path.join(app,'index.html'),'utf8');
-  assert.match(html,/widget\.js\?v=20261106-uatfix7/);
+  assert.match(html,/widget\.js\?v=20261106-uatfix8/);
 });
 
 test('buttons that only open the CRM record say so, and the note dialog names the record and hides the due date',()=>{
@@ -133,7 +133,7 @@ test('table headings wrap instead of being clipped, and a finished list says all
   assert.match(js,/are loaded\. CRM reports no more pages\./);
 });
 
-test('My tasks lists only the signed-in user\'s open tasks, read-only, with plain due dates',()=>{
+test('My tasks lists only the signed-in user\'s open tasks, with plain due dates',()=>{
   const q=w.openTasksQuery('1011174000000099001',200);
   assert.match(q,/from Tasks where \(Owner = '1011174000000099001' and Status != 'Completed'\)/);
   assert.match(q,/order by Due_Date asc limit 200/);
@@ -151,7 +151,7 @@ test('My tasks lists only the signed-in user\'s open tasks, read-only, with plai
   assert.match(html,/data-view="tasks"/);
   const js=fs.readFileSync(path.join(app,'widget.js'),'utf8');
   assert.match(js,/tasks:\['My tasks'/);
-  assert.doesNotMatch(js.slice(js.indexOf('async function loadTasks'),js.indexOf('function tasksView')),/insertRecord|updateRecord|deleteRecord/);
+  assert.doesNotMatch(js.slice(js.indexOf('async function loadTasks'),js.indexOf('const TASK_STATUSES')),/insertRecord|updateRecord|deleteRecord/);
 });
 
 test('the record timeline reads the CRM v8 timeline and falls back to related activity when it is not connected',()=>{
@@ -170,4 +170,32 @@ test('the record timeline reads the CRM v8 timeline and falls back to related ac
   assert.match(src,/crm\/v8\//);
   assert.match(src,/Open full timeline in CRM/);
   assert.match(src,/relatedActivityTimeline\(entity,record,api,rerender,'<p class="v12-muted" role="status">The full CRM timeline is not connected yet/);
+});
+
+test('a task opens inside the workspace, can be updated or completed, and completing asks first',()=>{
+  const js=fs.readFileSync(path.join(app,'widget.js'),'utf8');
+  assert.match(js,/data-action="task-open"/);
+  assert.match(js,/action==='task-save'\)await saveTask\(false\)/);
+  assert.match(js,/action==='task-complete'\)await saveTask\(true\)/);
+  assert.match(js,/if\(complete&&!await confirmDialog\(\{title:'Mark this task complete\?'/);
+  assert.match(js,/updateRecord\(\{Entity:'Tasks',APIData:data,Trigger:\['workflow'\]\}\)/);
+  assert.match(js,/data-action="select" data-entity="\$\{esc\(x\.entity\)\}"/);
+  const rows=[{id:'1',Due_Date:'2026-12-01'},{id:'2'},{id:'3',Due_Date:'2026-11-01'}];
+  assert.deepEqual(w.sortTasks(rows).map(r=>r.id),['3','1','2']);
+});
+
+test('the timeline separates emails and automatic changes, and the record page shows latest activity first',()=>{
+  global.window=global;delete require.cache[require.resolve('../app/v12-crm.js')];require('../app/v12-crm.js');
+  const ev=global.BGCRM12.timelineEvents([
+    {audited_time:'2026-11-05T10:42:00Z',action:'added',related_record:{name:'Your policy is ready',module:{api_name:'Emails'}},automation_details:{type:'workflow',rule:{name:'Send welcome email'}}},
+    {audited_time:'2026-11-05T10:00:00Z',action:'updated',field_history:[{api_name:'Stage',field_label:'Stage',_value:{old:'A',new:'B'}}]},
+    {audited_time:'2026-11-05T09:00:00Z',action:'added',related_record:{name:'Call',module:{api_name:'Tasks'}}}]);
+  assert.equal(ev[0].kind,'email');assert.equal(ev[0].auto,true);assert.match(ev[0].automation,/Send welcome email/);
+  assert.equal(ev[1].kind,'fields');assert.equal(ev[1].auto,false);
+  assert.equal(ev[2].kind,'activity');
+  const src=fs.readFileSync(path.join(app,'v12-crm.js'),'utf8');
+  assert.match(src,/data-action="v12-timeline-filter"/);
+  assert.match(src,/function latestActivity/);
+  assert.match(src,/selection==='overview'\|\|selection==='details'\)main=latestActivity/);
+  assert.match(src,/\['timeline','Timeline'\],\['details','All CRM fields'\]/);
 });

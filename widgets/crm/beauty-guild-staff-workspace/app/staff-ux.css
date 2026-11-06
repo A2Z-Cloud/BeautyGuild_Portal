@@ -204,3 +204,21 @@ body.staff-dev-tools #staff-api-open{display:inline-flex}
 .bg-tl-old{text-decoration:line-through;color:var(--staff-muted,#5b5560)}
 .bg-tl-new{font-weight:700}
 .bg-tl-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+
+/* Task detail */
+.bg-task-back{margin:0 0 12px}
+.bg-task-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:4px 0 14px}
+.bg-task-facts span{display:block;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#6b606b}
+.bg-task-facts strong{font-size:14px}
+.bg-task-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px}
+
+.bg-tl-filters{margin:10px 0 4px;flex-wrap:wrap}
+.bg-tl-count{display:inline-block;min-width:18px;padding:0 5px;border-radius:9px;background:#f0e9ee;font-size:11px;text-align:center}
+.bg-tl-badge{display:inline-block;margin-left:4px;padding:1px 7px;border-radius:9px;font-size:10px;font-weight:750;letter-spacing:.03em;text-transform:uppercase;vertical-align:1px}
+.bg-tl-badge--email{background:#e8f0fb;color:#1d4f91}
+.bg-tl-badge--auto{background:#f3ecfa;color:#5b3a8a}
+.bg-tl-item--email:before{background:#1d4f91}
+.bg-latest{border-left:3px solid var(--staff-accent,#c2185b)}
+.bg-latest-list{list-style:none;margin:6px 0 0;padding:0}
+.bg-latest-list li{padding:4px 0;font-size:13px}
+.bg-latest-list time{display:inline-block;min-width:104px;font-size:12px;color:#6b606b;font-variant-numeric:tabular-nums}

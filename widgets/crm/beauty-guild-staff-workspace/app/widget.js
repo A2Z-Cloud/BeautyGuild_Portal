@@ -104,7 +104,7 @@
   };
   // Staff-assisted journey is a preview only; customer creation is an explicitly triggered live CRM write.
   const DEMO=false; // This CRM release cannot enter sample-data mode.
-  const state={tasks:{rows:[],loaded:false,loading:false,error:'',more:false},pages:{},limited:{},connected:false,demo:DEMO,view:'processing',contact:null,focus:null,focusRelation:{},lists:{},errors:{},queueKind:'insurance',queue:[],queueLimit:100,crmPageLimit:2,queueLoaded:false,browse:{},browseViews:{},browseSearchByKind:{},customerNames:{},browseFilter:'all',browseKind:'insurance',busy:false,requestId:0,searchResults:[],searchQuery:'',directory:[],directoryLoaded:false,nativeLists:{},nativeErrors:{},actionTarget:null,actionType:'note',currentUser:null,reviewDrafts:{},savingReview:false,history:[]};
+  const state={tasks:{rows:[],loaded:false,loading:false,error:'',more:false,focus:null,focusId:'',focusLoading:false,focusError:'',saving:false},pages:{},limited:{},connected:false,demo:DEMO,view:'processing',contact:null,focus:null,focusRelation:{},lists:{},errors:{},queueKind:'insurance',queue:[],queueLimit:100,crmPageLimit:2,queueLoaded:false,browse:{},browseViews:{},browseSearchByKind:{},customerNames:{},browseFilter:'all',browseKind:'insurance',busy:false,requestId:0,searchResults:[],searchQuery:'',directory:[],directoryLoaded:false,nativeLists:{},nativeErrors:{},actionTarget:null,actionType:'note',currentUser:null,reviewDrafts:{},savingReview:false,history:[]};
   const $=s=>document.querySelector(s);
   function esc(x){return String(x==null?'':x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
   function txt(x){if(x===null||x===undefined||x==='')return '—';if(typeof x==='boolean')return x?'Yes':'No';if(Array.isArray(x))return x.map(txt).join(', ');if(typeof x==='object')return x.name||x.display_value||x.id||'—';return String(x);}
@@ -934,16 +934,85 @@
         }catch(e){if(/NO_CONTENT|204|no content/i.test(String(e&&e.message||e)))return[];throw e;}
       };
       let rows;try{rows=await run(true)}catch(_){rows=await run(false)}
-      rows.sort((a,b)=>String(a.Due_Date||'9999').localeCompare(String(b.Due_Date||'9999')));
+      sortTasks(rows);
       t.rows=rows;t.more=rows.length>=200;t.loaded=true;
     }catch(e){t.error='Your open tasks could not be loaded from CRM: '+String(e&&e.message||e);}
     finally{t.loading=false;if(state.view==='tasks')render();}
+  }
+
+  const TASK_STATUSES=['Not Started','In Progress','Waiting for input','Deferred','Completed'];
+  const TASK_PRIORITIES=['Highest','High','Normal','Low','Lowest'];
+  function taskOptions(field,fallback,current){
+    let list=fallback;
+    try{const m=window.BGCRM12&&window.BGCRM12.metadata('Tasks'),f=m&&m.fields&&m.fields.find(x=>x.api_name===field),v=f&&Array.isArray(f.pick_list_values)?f.pick_list_values.map(o=>o.actual_value||o.display_value).filter(x=>x&&x!=='-None-'):[];if(v.length)list=v;}catch(_){/* Fall back to the standard CRM values. */}
+    if(current&&!list.includes(current))list=[current,...list];
+    return list;
+  }
+  function sortTasks(rows){return rows.sort((a,b)=>String(a.Due_Date||'9999').localeCompare(String(b.Due_Date||'9999')));}
+  function confirmDialog(o){
+    return new Promise(resolve=>{
+      const d=document.createElement('dialog');d.className='bg-leave-dialog';d.setAttribute('aria-labelledby','bgConfirmTitle');
+      d.innerHTML='<form method="dialog"><h2 id="bgConfirmTitle">'+esc(o.title)+'</h2><p>'+esc(o.body)+'</p><div class="bg-leave-actions"><button type="button" class="button secondary" data-leave="no">'+esc(o.no)+'</button><button type="button" class="button" data-leave="yes">'+esc(o.yes)+'</button></div></form>';
+      const done=v=>{try{d.close();}catch(_){}d.remove();resolve(v);};
+      d.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('[data-leave]');if(b)done(b.dataset.leave==='yes');});
+      d.addEventListener('cancel',e=>{e.preventDefault();done(false);});
+      document.body.appendChild(d);
+      if(typeof d.showModal==='function')d.showModal();else d.setAttribute('open','');
+      const first=d.querySelector('[data-leave="no"]');if(first&&first.focus)first.focus();
+    });
+  }
+  async function openTask(id){
+    const t=state.tasks;t.focusId=String(id);t.focus=t.rows.find(r=>String(r.id)===String(id))||null;t.focusError='';t.focusLoading=true;setNotice('');
+    try{if(window.BGCRM12&&window.ZOHO&&ZOHO.CRM)window.BGCRM12.prime('Tasks',ZOHO.CRM,render);}catch(_){/* Metadata only improves the drop-downs. */}
+    render();
+    try{const full=await getRecord('Tasks',id);if(t.focusId===String(id))t.focus={...(t.focus||{}),...full};}
+    catch(e){t.focusError='The full task could not be loaded, so only the list details are shown: '+String(e&&e.message||e);}
+    finally{t.focusLoading=false;if(state.view==='tasks')render();}
+  }
+  function taskDetailView(){
+    const t=state.tasks,r=t.focus||{},id=t.focusId;
+    const what=r.What_Id&&r.What_Id.id?{name:r.What_Id.name||'Record',entity:r.$se_module||'',id:String(r.What_Id.id)}:null;
+    const who=r.Who_Id&&r.Who_Id.id?{name:r.Who_Id.name||'Contact',entity:'Contacts',id:String(r.Who_Id.id)}:null;
+    const link=x=>x?(ALL_ENTITIES.has(x.entity)?`<button class="v12-link" data-action="select" data-entity="${esc(x.entity)}" data-id="${esc(x.id)}">${esc(x.name)}</button>`:esc(x.name)):'None';
+    const opts=(list,cur)=>list.map(o=>`<option value="${esc(o)}"${o===cur?' selected':''}>${esc(o)}</option>`).join('');
+    const status=String(r.Status||''),priority=String(r.Priority||''),due=taskDueInfo(r.Due_Date);
+    const owner=r.Owner&&(r.Owner.name||r.Owner.full_name)||'';
+    const back=`<button type="button" class="button secondary" data-action="task-back">${icon('arrow-left')} All my tasks</button>`;
+    const dis=t.saving?' disabled':'';
+    const body=`<div class="bg-task-facts"><div><span>Related to</span><strong>${link(what)}</strong></div><div><span>Contact</span><strong>${link(who)}</strong></div><div><span>Owner</span><strong>${esc(owner||'—')}</strong></div><div><span>Due</span><strong>${esc(due.text)}${due.label?` <span class="bg-state bg-state-${due.cls||'neutral'}">${esc(due.label)}</span>`:''}</strong></div></div>`+
+      (t.focusError?`<div class="v12-warning" role="alert">${esc(t.focusError)}</div>`:'')+
+      (t.focusLoading?'<p class="v12-muted" role="status">Loading the full task…</p>':'')+
+      `<form id="taskForm" class="v12-form-grid" onsubmit="return false"><div class="v12-form-field"><label for="taskSubject">Subject</label><input id="taskSubject" maxlength="255" value="${esc(r.Subject||'')}"></div>`+
+      `<div class="v12-form-field"><label for="taskStatus">Status</label><select id="taskStatus">${opts(taskOptions('Status',TASK_STATUSES,status),status)}</select></div>`+
+      `<div class="v12-form-field"><label for="taskPriority">Priority</label><select id="taskPriority">${opts(taskOptions('Priority',TASK_PRIORITIES,priority),priority)}</select></div>`+
+      `<div class="v12-form-field"><label for="taskDue">Due date</label><input id="taskDue" type="date" value="${esc(String(r.Due_Date||'').slice(0,10))}"></div>`+
+      `<div class="v12-form-field" style="grid-column:1/-1"><label for="taskDescription">Description</label><textarea id="taskDescription" rows="5">${esc(r.Description||'')}</textarea></div></form>`+
+      `<div class="bg-task-actions"><button type="button" class="button" data-action="task-save"${dis}>Save changes</button><button type="button" class="button secondary" data-action="task-complete"${dis}>Mark complete</button><button type="button" class="button secondary" data-action="open" data-entity="Tasks" data-id="${esc(id)}">Open in CRM</button></div>`;
+    return `<div class="bg-task-back">${back}</div>`+panel(r.Subject||'Task','Update this task here, or mark it complete. Changes are saved straight to CRM.',body,'');
+  }
+  async function saveTask(complete){
+    const t=state.tasks,id=t.focusId;if(!id||t.saving)return;
+    const val=q=>{const e=$(q);return e?String(e.value||''):''};
+    const subject=val('#taskSubject').trim();if(!subject){setNotice('A task needs a subject.','error');return;}
+    const done=(taskOptions('Status',TASK_STATUSES,'').find(x=>/^completed$/i.test(x)))||'Completed';
+    const status=complete?done:val('#taskStatus');
+    if(complete&&!await confirmDialog({title:'Mark this task complete?',body:'It will be set to Completed in CRM and leave your My tasks list. You can reopen it in CRM if you need to.',yes:'Mark complete',no:'Not yet'}))return;
+    const data={id,Subject:subject,Status:status,Due_Date:val('#taskDue')||null,Description:val('#taskDescription')};
+    if(val('#taskPriority'))data.Priority=val('#taskPriority');
+    t.saving=true;setNotice(complete?'Completing the task in CRM…':'Saving the task in CRM…','info');render();
+    try{
+      const res=await api().updateRecord({Entity:'Tasks',APIData:data,Trigger:['workflow']});assertSaved(res);
+      if(/^completed$/i.test(status)){t.rows=t.rows.filter(r=>String(r.id)!==String(id));t.focus=null;t.focusId='';setNotice('Task completed in CRM.','info');}
+      else{t.rows=sortTasks(t.rows.map(r=>String(r.id)===String(id)?{...r,...data}:r));t.focus={...(t.focus||{}),...data};setNotice('Task saved in CRM.','info');}
+    }catch(e){setNotice('The task was not saved: '+String(e&&e.message||e),'error');}
+    finally{t.saving=false;render();}
   }
   function tasksView(){
     const t=state.tasks,who=state.currentUser&&(state.currentUser.full_name||state.currentUser.name)||'you';
     const refresh=`<button type="button" class="button secondary" data-action="tasks-refresh">${icon('refresh-cw')} Refresh</button>`;
     const tone={'in progress':'info','waiting for input':'warning',deferred:'warning'};
-    let body,desc='Open tasks assigned to you in CRM, soonest due first. To complete or change a task, open it in CRM.';
+    if(t.focusId)return taskDetailView();
+    let body,desc='Open tasks assigned to you in CRM, soonest due first. Open a task to update or complete it.';
     if(t.loading&&!t.loaded)body=loading();
     else if(t.error)body=`<div class="v12-warning" role="alert">${esc(t.error)}</div>`;
     else if(!t.rows.length)body=empty('No open tasks','Nothing is waiting for you in CRM. Tasks you create here stay on this list until they are completed in CRM.');
@@ -954,7 +1023,7 @@
         t.rows.map((r,i)=>{
           const rel=taskRelated(r),d=info[i],st=String(r.Status||'').toLowerCase(),pr=String(r.Priority||'');
           const relCell=rel?(ALL_ENTITIES.has(rel.entity)?`<button class="v12-link" data-action="select" data-entity="${esc(rel.entity)}" data-id="${esc(rel.id)}">${esc(rel.name)}</button>`:esc(rel.name)):'—';
-          return `<tr><td>${esc(r.Subject||'Untitled task')}</td><td>${relCell}</td><td><span class="bg-state bg-state-${tone[st]||'neutral'}">${esc(r.Status||'Not recorded')}</span></td><td>${pr?`<span class="bg-state bg-state-${/high/i.test(pr)?'danger':'neutral'}">${esc(pr)}</span>`:'—'}</td><td>${esc(d.text)}${d.label?` <span class="bg-state bg-state-${d.cls||'neutral'}">${esc(d.label)}</span>`:''}</td><td class="v12-action-cell"><button class="v12-link" data-action="open" data-entity="Tasks" data-id="${esc(r.id)}">Open in CRM</button></td></tr>`;
+          return `<tr><td><button class="v12-link v12-cell-link" data-action="task-open" data-id="${esc(r.id)}">${esc(r.Subject||'Untitled task')}</button></td><td>${relCell}</td><td><span class="bg-state bg-state-${tone[st]||'neutral'}">${esc(r.Status||'Not recorded')}</span></td><td>${pr?`<span class="bg-state bg-state-${/high/i.test(pr)?'danger':'neutral'}">${esc(pr)}</span>`:'—'}</td><td>${esc(d.text)}${d.label?` <span class="bg-state bg-state-${d.cls||'neutral'}">${esc(d.label)}</span>`:''}</td><td class="v12-action-cell"><button class="v12-link" data-action="task-open" data-id="${esc(r.id)}">Open</button></td></tr>`;
         }).join('')+'</tbody></table></div>'+(t.more?'<p class="v12-muted">Showing the first 200 open tasks. Open the Tasks tab in CRM to see the rest.</p>':'');
     }
     return panel('My open tasks',desc,body,refresh);
@@ -1159,6 +1228,10 @@
     else if(action==='go-back'){const last=state.history.pop();if(last?.entity)await select(last.entity,last.id);else if(last){state.view=last.view;state.browseKind=last.kind||state.browseKind;state.browseSearch=last.search||'';if(last.page)state.pages['browse:'+state.browseKind]=last.page;state.focus=null;state.focusEntityView=null;if(last.view==='overview')state.contact=null;render();}}
     else if(action==='select'){state.history.push(state.focus?{entity:state.focus.entity,id:state.focus.record.id,view:state.view}:{view:state.view,kind:state.browseKind,page:state.pages['browse:'+state.browseKind]||1,search:state.browseSearch});await select(entity,id);}
     else if(action==='tasks-refresh')await loadTasks();
+    else if(action==='task-open')await openTask(id);
+    else if(action==='task-back'){state.tasks.focusId='';state.tasks.focus=null;setNotice('');render();}
+    else if(action==='task-save')await saveTask(false);
+    else if(action==='task-complete')await saveTask(true);
     else if(action==='open')await openCRM(entity,id);
     else if(action==='edit'){
       try{if(typeof ZOHO?.CRM?.UI?.Record?.edit!=='function')throw Error('Native CRM edit is not available in this widget context.');
@@ -1175,5 +1248,5 @@
   function demoQueue(){throw Error('Demo data is disabled');}
   function demoSearch(){throw Error('Demo data is disabled');}
   if(typeof document!=='undefined')document.addEventListener('DOMContentLoaded',init);
-  if(typeof module!=='undefined'&&module.exports)module.exports={openTasksQuery,taskDueInfo,taskRelated,isExcludedAction,customViewQuery,pageItems,SIZES,esc,asRows,matchContext,isQueueItem,refId,queryCriterion,statusClass,contactLookup,reviewKind,reviewSignals,insuranceBlocks,uatEditable,REVIEW_GROUPS,DEMO_RECORDS,M};
+  if(typeof module!=='undefined'&&module.exports)module.exports={sortTasks,openTasksQuery,taskDueInfo,taskRelated,isExcludedAction,customViewQuery,pageItems,SIZES,esc,asRows,matchContext,isQueueItem,refId,queryCriterion,statusClass,contactLookup,reviewKind,reviewSignals,insuranceBlocks,uatEditable,REVIEW_GROUPS,DEMO_RECORDS,M};
 })();
