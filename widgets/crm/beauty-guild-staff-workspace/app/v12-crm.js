@@ -169,9 +169,11 @@
   async function loadEmails(entity,id,api,page){
     const res=await api.CONNECTION.invoke(TIMELINE_CONNECTION,{method:'GET',url:TIMELINE_API+encodeURIComponent(entity)+'/'+encodeURIComponent(id)+'/Emails',parameters:{per_page:50,page:page||1},headers:{},param_type:1});
     const body=timelineBody(res),status=Number(res&&res.details&&res.details.statusCode);
-    if(status===204)return{rows:[],more:false};
-    if(!body||!Array.isArray(body.email_related_list))throw Error(String(body&&body.message||res&&res.message||res&&res.code||'CRM did not return emails.'));
-    return{rows:emailRows(body.email_related_list),more:!!(body.info&&body.info.more_records)};
+    if(status===204||!body)return{rows:[],more:false};
+    const list=body.email_related_list||body.emails||body.Emails||body.data;
+    if(Array.isArray(list))return{rows:emailRows(list),more:!!(body.info&&body.info.more_records)};
+    if(body.code&&!/^(SUCCESS|NO_CONTENT)$/i.test(String(body.code)))throw Error(String(body.message||body.code));
+    return{rows:[],more:false};
   }
   async function loadRelation(entity,id,list,api,rerender,{page=1}={}){
     const key=relationKey(entity,id,list), item=relatedCache.get(key)||{pages:new Map(),moreByPage:new Map(),more:false,error:null};

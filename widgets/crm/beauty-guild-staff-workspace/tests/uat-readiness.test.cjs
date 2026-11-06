@@ -70,7 +70,7 @@ test('table status text does not break mid-word, and the stop banner is styled',
   assert.match(css,/\.v12-table td \.bg-state\{white-space:nowrap\}/);
   assert.match(css,/\.v12-stop-banner--stop/);
   const html=fs.readFileSync(path.join(app,'index.html'),'utf8');
-  assert.match(html,/widget\.js\?v=20261106-uatfix13/);
+  assert.match(html,/widget\.js\?v=20261106-uatfix14/);
 });
 
 test('buttons that only open the CRM record say so, and the note dialog names the record and hides the due date',()=>{
@@ -224,4 +224,5 @@ test('the Emails related list reads CRM emails through the connection and shows 
   const src=fs.readFileSync(path.join(app,'v12-crm.js'),'utf8');
   assert.match(src,/\/Emails'/);
   assert.match(src,/email_related_list/);
+  assert.match(src,/if\(status===204\|\|!body\)return\{rows:\[\],more:false\}/);
 });
