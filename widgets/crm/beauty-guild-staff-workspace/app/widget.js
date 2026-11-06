@@ -10,7 +10,10 @@
   if(typeof window!=='undefined')window.BG_OPERATIONAL_UAT=OPERATIONAL_UAT;
   // New applications are re-enabled now that portal pricing and checkout are stable. MTAs, vouchers, cancellations, renewals and upgrades stay out.
   const NEW_APPLICATIONS=true;
-  const EXCLUDED_ACTION=/^(membership-cancel-|membership-renew$|membership-upgrade$|staff-mta-|staff-voucher-)/;
+  // MTA, voucher and cancellation screens are visible so the design can be reviewed. Anything that would quote, save, charge or cancel is blocked.
+  const PREVIEW_COMPONENTS=true;
+  if(typeof window!=='undefined')window.BG_PREVIEW_COMPONENTS=PREVIEW_COMPONENTS;
+  const EXCLUDED_ACTION=/^(membership-cancel-(quote|confirm|retry)$|staff-mta-(quote|save|payment)|staff-voucher-)/;
   const isExcludedAction=a=>OPERATIONAL_UAT&&EXCLUDED_ACTION.test(String(a||''));
   const M = Object.freeze({CONTACT:'Contacts',ACCOUNT:'Accounts',PROFILE:'Membership',DEAL:'Deals',ADDON:'Membership_Extension',POLICY:'Insurance_Policy',EXT:'Insurance_Extension',PERSON:'Insured_People',PREMISES:'Insured_Premises',DECLARATION:'Declarations',REVISION:'Policy_Revisions',RISK:'Risk_Screenings',ACC:'Training_Centre_Accred',CENTRE:'Training_Centres',QUAL:'Qualifications',OFFER:'TC_Course_Offering',TUTOR:'Tutor_Relationships',ACCLINK:'Accreditation_Centre_Link',ACCEXT:'Accreditation_Extensions',TASK:'Tasks'});
   const ICON_PATHS={
@@ -477,7 +480,7 @@
     const money=n=>n!==null&&n!==undefined&&n!==''&&Number.isSafeInteger(Number(n))?'£'+(Number(n)/100).toFixed(2):'Not supplied';
     const warnings=a=>Array.isArray(a)&&a.length?'<div class="staff-cancel-alert" role="note"><strong>Important information</strong><ul>'+a.map(v=>'<li>'+esc(v.message||v.code||String(v))+'</li>').join('')+'</ul></div>':'';
     const tabs=[['details','Membership'],['quote','Refund quote'],['review','Review & authorise'],['outcome','Outcome']];
-    const allowed=id=>id==='details'||id==='quote'&&!!c.response||id==='review'&&!!(c.response?.quotable&&q&&/^[a-f0-9]{32}$/i.test(c.response.inputsHash||''))||id==='outcome'&&!!(c.confirmed||c.failedCancellationId);
+    const allowed=id=>PREVIEW_COMPONENTS||id==='details'||id==='quote'&&!!c.response||id==='review'&&!!(c.response?.quotable&&q&&/^[a-f0-9]{32}$/i.test(c.response.inputsHash||''))||id==='outcome'&&!!(c.confirmed||c.failedCancellationId);
     const tabNav='<nav class="staff-cancellation-tabs" role="tablist" aria-label="Cancellation steps">'+tabs.map(([id,label],idx)=>'<button type="button" role="tab" id="staff-cancel-tab-'+id+'" aria-controls="staff-cancel-panel-'+id+'" aria-selected="'+(c.tab===id?'true':'false')+'" tabindex="'+(c.tab===id?'0':'-1')+'" class="staff-cancellation-tab '+(c.tab===id?'active':'')+'" data-action="membership-cancel-tab" data-tab="'+id+'" '+(allowed(id)?'':'disabled')+'>'+(idx+1)+'. '+label+'</button>').join('')+'</nav>';
     const breakdown=q?'<div class="staff-cancellation-amounts"><div><span>Membership refund</span><strong>'+money(q.membership?.refundPence)+'</strong></div><div><span>Insurance refund</span><strong>'+money(q.insurance?.refundPence)+'</strong></div><div><span>Cancellation fee</span><strong>'+money(q.feeAppliedPence)+'</strong></div><div class="staff-cancel-total"><span>Net refund</span><strong>'+money(q.netRefundPence)+'</strong></div></div>':'';
     const form='<div class="staff-cancellation-form"><label>Requested action<select id="staff-cancellation-scenario"><option value="cancel_associate" '+(c.scenario==='cancel_associate'?'selected':'')+'>Cancel Associate membership</option><option value="cancel_full" '+(c.scenario==='cancel_full'?'selected':'')+'>Cancel Full membership</option><option value="downgrade_full" '+(c.scenario==='downgrade_full'?'selected':'')+'>Downgrade Full to Associate</option></select></label><label>Effective date<input id="staff-cancellation-date" type="date" value="'+esc(c.effectiveDate)+'"></label></div>'+
@@ -485,16 +488,17 @@
       '<div class="staff-cancellation-actions"><button type="button" class="button primary" data-action="membership-cancel-quote" '+(c.busy?'disabled':'')+'>Calculate refund quote →</button></div>';
     const panel=(id,body)=>'<section class="staff-cancellation-panel" id="staff-cancel-panel-'+id+'" role="tabpanel" aria-labelledby="staff-cancel-tab-'+id+'" '+(c.tab===id?'':'hidden')+'>'+body+'</section>';
     return '<div class="staff-cancellation-head"><div><h2>Cancellation & downgrade</h2><p>'+esc(c.customerName||'Selected customer')+' · '+esc(c.memberType||'Membership')+'</p></div><button type="button" class="button secondary" data-action="membership-cancel-close">Close</button></div>'+
+      '<div class="bg-preview-banner" role="note"><strong>Preview</strong> This shows how cancellation and downgrade will look. Nothing is quoted, refunded or cancelled yet.</div>'+
       tabNav+
       '<div class="staff-cancellation-context"><span>Membership reference</span><strong>'+esc(c.dealId||'Not recorded')+'</strong><span class="staff-cancel-context-note">Quoting does not cancel membership or issue a refund.</span></div>'+
-      (c.busy?'<p role="status" class="staff-cancellation-busy">Checking CRM and Stripe…</p>':'')+
+      (c.busy?'<p role="status" class="staff-cancellation-busy">Checking CRM and the payment records…</p>':'')+
       (c.error?'<p class="v12-warning" role="alert">'+esc(c.error)+'</p>':'')+
       panel('details','<h3>What would the customer like to do?</h3>'+form)+
-      panel('quote','<h3>Refund quotation</h3>'+(c.response?(c.response.quotable&&q?breakdown+'<p class="v12-muted">Effective: '+esc(q.effectiveDate||'Not recorded')+' · Cooling off: '+(q.coolingOff?'Yes':'No')+'</p>':'<p class="v12-warning">The backend could not produce an eligible cancellation quote.</p>')+warnings(c.response.blocking)+warnings(c.response.warnings):'<p class="v12-muted">Calculate the refund using the current membership and Stripe information.</p>')+
+      panel('quote','<h3>Refund quotation</h3>'+(c.response?(c.response.quotable&&q?breakdown+'<p class="v12-muted">Effective: '+esc(q.effectiveDate||'Not recorded')+' · Cooling off: '+(q.coolingOff?'Yes':'No')+'</p>':'<p class="v12-warning">The backend could not produce an eligible cancellation quote.</p>')+warnings(c.response.blocking)+warnings(c.response.warnings):'<p class="v12-muted">Calculate the refund using the current membership and payment information.</p>')+
         '<div class="staff-cancellation-actions"><button type="button" class="button secondary" data-action="membership-cancel-tab" data-tab="details">← Edit request</button>'+(allowed('review')?'<button type="button" class="button primary" data-action="membership-cancel-tab" data-tab="review">Review & authorise →</button>':'')+'</div>')+
       panel('review','<h3>Review before processing</h3><p class="v12-muted">Confirm the refund, effective date and warnings with the customer. The backend will recheck the quote before performing any action.</p>'+breakdown+warnings(c.response?.blocking)+warnings(c.response?.warnings)+
         (allowed('review')?'<label class="staff-cancel-authorise"><input type="checkbox" id="staff-cancel-authorise"> I have reviewed this change, refund, effective date and warnings, and authorise the cancellation.</label><div class="staff-cancellation-actions"><button type="button" class="button secondary" data-action="membership-cancel-tab" data-tab="quote">← Refund quote</button><button type="button" class="button primary" data-action="membership-cancel-confirm" '+(c.busy?'disabled':'')+'>Confirm and process change</button></div>':'<p class="v12-warning">Obtain an eligible quotation first.</p>'))+
-      panel('outcome','<h3>Processing outcome</h3>'+(c.confirmed?'<div class="staff-cancel-outcome"><p><strong>Status:</strong> '+esc(c.confirmed.status||'Not recorded')+'</p><p><strong>Cancellation reference:</strong> '+esc(c.confirmed.cancellationId||'Not returned')+'</p><p><strong>Net refund:</strong> '+money(c.confirmed.netRefundPence)+'</p><p><strong>Refund operations:</strong> '+esc((c.confirmed.refunds||[]).length)+' recorded</p></div><p class="v12-muted">Refresh CRM Membership and policy records to confirm authoritative statuses.</p>':'<p class="v12-muted">No completed cancellation recorded in this session.</p>')+
+      panel('outcome','<h3>Processing outcome</h3>'+(c.confirmed?'<div class="staff-cancel-outcome"><p><strong>Status:</strong> '+esc(c.confirmed.status||'Not recorded')+'</p><p><strong>Cancellation reference:</strong> '+esc(c.confirmed.cancellationId||'Not returned')+'</p><p><strong>Net refund:</strong> '+money(c.confirmed.netRefundPence)+'</p><p><strong>Refund operations:</strong> '+esc((c.confirmed.refunds||[]).length)+' recorded</p></div><p class="v12-muted">Refresh the CRM Membership and policy records to see the latest statuses.</p>':'<p class="v12-muted">No completed cancellation recorded in this session.</p>')+
         (c.failedCancellationId?'<div class="staff-cancellation-actions"><button type="button" class="button secondary" data-action="membership-cancel-retry" '+(c.busy?'disabled':'')+'>Retry incomplete cancellation</button></div>':''));
   }
   function saveCancellationForm(){
@@ -620,14 +624,14 @@
         (deals.length?deals.map(d=>row(pick(d,['Deal_Name','Name']), 'Payment: '+pick(d,['Payment_Status'])+' · '+pick(d,['Stage'])+' · Expires: '+pick(d,['Expiry_Date','Renewal_Date']),recordLink(M.DEAL,d,'View transaction'))).join(''):'<p class="v12-muted">No membership transactions returned from CRM.</p>')+
         '<div class="membership-service-actions">'+recordLink(M.PROFILE,currentProfile,'View member profile')+'</div></section>'+
       '<section><h4>Insurance and changes</h4>'+
-        (shown.length?shown.map(p=>row(pick(p,['Policy_Number','Name']), 'Cover: '+pick(p,['Policy_Status','Application_Status'])+' · Payment: '+pick(p,['Payment_Status'])+' · Ends: '+pick(p,['Policy_End_Date','End_Date']),recordLink(M.POLICY,p,OPERATIONAL_UAT?'View policy':'View policy / MTA'))).join(''):'<p class="v12-muted">No linked insurance policies returned from CRM.</p>')+
-        '<p class="v12-muted">'+(OPERATIONAL_UAT?'Open a policy to review its cover and status.':'Open a policy to review current cover, request an MTA, quote and save the revision.')+'</p></section>'+
+        (shown.length?shown.map(p=>row(pick(p,['Policy_Number','Name']), 'Cover: '+pick(p,['Policy_Status','Application_Status'])+' · Payment: '+pick(p,['Payment_Status'])+' · Ends: '+pick(p,['Policy_End_Date','End_Date']),recordLink(M.POLICY,p,OPERATIONAL_UAT&&!PREVIEW_COMPONENTS?'View policy':'View policy / MTA'))).join(''):'<p class="v12-muted">No linked insurance policies returned from CRM.</p>')+
+        '<p class="v12-muted">'+(OPERATIONAL_UAT&&!PREVIEW_COMPONENTS?'Open a policy to review its cover and status.':'Open a policy to review current cover, request an MTA, quote and save the revision.')+'</p></section>'+
       '<section><h4>Membership extensions</h4>'+
         (extensions.length?extensions.map(x=>row(pick(x,['Name','Extension_Name','Product_Name']), 'Status: '+pick(x,['Status','Payment_Status'])+' · '+pick(x,['Quantity']),recordLink(M.ADDON,x,'Open extension'))).join(''):'<p class="v12-muted">No extensions loaded for this membership. See the transaction’s related lists for the full list.</p>')+
-      '</section><section><h4>'+(OPERATIONAL_UAT?'Current transaction':'Renewal and service actions')+'</h4>'+
-        (OPERATIONAL_UAT?'':'<p class="v12-muted">Renewals and upgrades follow the existing application and checkout logic. Payment is verified from CRM after Creator processes the Stripe event.</p>')+
+      '</section><section><h4>'+(OPERATIONAL_UAT&&!PREVIEW_COMPONENTS?'Current transaction':'Renewal and service actions')+'</h4>'+
+        (OPERATIONAL_UAT&&!PREVIEW_COMPONENTS?'':'<p class="v12-muted">Renewals and upgrades use the same application and payment steps. The payment status in CRM updates once payment is received. Cancellation and downgrade are a preview for now.</p>')+
         '<div class="membership-service-actions">'+
-          (activeDeal?.id?'<button type="button" class="button secondary" data-action="membership-cancel-open" data-id="'+esc(activeDeal.id)+'">Cancellation / downgrade quote</button>':'')+
+          (activeDeal?.id?'<button type="button" class="button secondary" data-action="membership-cancel-open" data-id="'+esc(activeDeal.id)+'">Cancellation / downgrade quote <span class="bg-preview-tag">Preview</span></button>':'')+
           '<button type="button" class="button primary" data-action="journey-start" data-kind="membership">New membership</button>'+ (activeDeal?.id?'<button type="button" class="button secondary" data-action="membership-renew" data-id="'+esc(activeDeal.id)+'">Renew membership</button>'+(/associate/i.test(String(currentProfile?.Current_Member_Type||activeDeal?.Membership_Type||''))&&/^(united kingdom|england|scotland|wales|northern ireland)$/i.test(String(c.Correspondence_Country||c.Mailing_Country||c.Country||'').trim())?'<button type="button" class="button secondary" data-action="membership-upgrade" data-id="'+esc(activeDeal.id)+'">Upgrade to Full with insurance</button>':''):'')+
           recordLink(M.DEAL,activeDeal,'Review current transaction')+
         '</div></section></div></section>';
@@ -1039,6 +1043,7 @@
     return list;
   }
   function sortTasks(rows){return rows.sort((a,b)=>String(a.Due_Date||'9999').localeCompare(String(b.Due_Date||'9999')));}
+  if(typeof window!=='undefined')window.BGConfirmDialog=confirmDialog;
   function confirmDialog(o){
     return new Promise(resolve=>{
       const d=document.createElement('dialog');d.className='bg-leave-dialog';d.setAttribute('aria-labelledby','bgConfirmTitle');
@@ -1151,7 +1156,7 @@
     const el=event.target.closest('[data-action],[data-queue],[data-v12-add],[data-v12-remove],[data-v12-copy]');if(!el)return;if(window.BGJourney12&&(el.dataset.v12Add||el.dataset.v12Remove||el.dataset.v12Copy)){if(window.BGJourney12.click(state.journey,el))render();return;}if(window.BGCRM12&&await window.BGCRM12.action(el,state.focus,window.ZOHO?.CRM,render))return;
     if(el.dataset.queue){state.browseFilter='attention';state.browseSearch='';return loadQueue(el.dataset.queue);}
     const action=el.dataset.action,entity=el.dataset.entity,id=el.dataset.id;
-    if(isExcludedAction(action)){setNotice('This function is not available in the Staff Workspace. Use the CRM record instead.','info');return;}
+    if(isExcludedAction(action)){setNotice('Preview only. This screen shows how it will look. Nothing is sent, quoted or changed yet.','info');return;}
     if(action==='browse'){state.view=el.dataset.kind;state.focus=null;state.focusEntityView=null;state.browseKind=el.dataset.kind;state.browseFilter='all';state.browseSearch=state.browseSearchByKind[state.browseKind]||'';const d=browseData(state.browseKind);if(!d.loaded)await loadBrowse(state.browseKind);else render();}
     else if(action==='launchqueue'){state.view='queue';await loadQueue(el.dataset.kind||'insurance');}
     else if(action==='browse-refresh')await loadBrowse(el.dataset.kind,{reset:true});

@@ -6,7 +6,7 @@ The workspace is a single screen inside Zoho CRM where your team can find a memb
 
 ## How this test works
 
-Instead of a list of buttons to press, you will follow **eight short journeys**. Each one is a realistic piece of a working day. Work through them in order the first time, because later journeys build on earlier ones.
+Instead of a list of buttons to press, you will follow **nine short journeys**. Each one is a realistic piece of a working day. Work through them in order the first time, because later journeys build on earlier ones.
 
 - Allow about **90 minutes to two hours** in total. Journeys are 5 to 15 minutes each.
 - Use the **test records** we give you (listed below). Please do not use live member records.
@@ -18,9 +18,9 @@ Instead of a list of buttons to press, you will follow **eight short journeys**.
 | In this test | Not in this test (coming later) |
 | --- | --- |
 | Finding and reviewing members, membership, insurance and accreditation records | Reassigning tasks, or seeing other people's tasks (do this in CRM) |
-| Notes, creating, updating and completing tasks, and seeing your own open tasks | Mid-term adjustments (MTAs) |
-| Moving an early-stage application forward | Vouchers |
-| Opening the standard CRM edit screen | Cancellations, renewals and upgrades |
+| Notes, creating, updating and completing tasks, and seeing your own open tasks | Mid-term adjustments (MTAs), vouchers and waivers, and cancellations: you can look at the screens, marked **Preview**, but they do not quote, charge or change anything yet |
+| Moving an early-stage application forward | |
+| Opening the standard CRM edit screen | |
 
 If you cannot find one of the items in the right-hand column, that is correct.
 
@@ -208,11 +208,28 @@ For each step, note whether it did what we said, did it but was confusing or slo
 
 ---
 
+## Journey 9: Look at the screens that are coming next
+
+*These screens are marked **Preview**. They show how mid-term adjustments, vouchers and cancellations will look. Nothing is quoted, charged, saved or cancelled.*
+
+1. Open an insurance policy and click **Manage changes (MTA)**.
+   **Expect:** A change screen opens with a **Preview** banner. It has steps for the current policy, the change, the quote and payment.
+2. Move through the steps, then click **Calculate live quote**.
+   **Expect:** The screen says it is a preview. No quote is asked for and nothing is saved.
+3. Open a membership and click **Voucher / waiver**.
+   **Expect:** The voucher and waiver screen opens with a **Preview** banner, and nothing is applied.
+4. On the membership, click **Cancellation / downgrade quote**.
+   **Expect:** A cancellation screen opens with a **Preview** banner and four steps. You can look at each step. Pressing **Calculate refund quote** says it is a preview and does nothing.
+
+**Think about:** Is this the information and the order you would want when you take a change or a cancellation from a customer? What is missing?
+
+---
+
 ## Final check: what should not be possible
 
 Before you finish, try each of these. They should all be blocked or missing.
 
-- [ ] Find a button for MTAs, cancellations, vouchers, renewals or upgrades.
+- [ ] Press any button on an MTA, voucher or cancellation screen and see a quote, a payment or a cancellation actually happen.
 - [ ] Change **Payment Status** or **Policy Status** from the workspace.
 
 If any of them works, please tell us straight away.

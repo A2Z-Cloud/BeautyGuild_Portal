@@ -154,11 +154,8 @@ body.staff-dev-tools #staff-api-open{display:inline-flex}
 .journey-type-card:focus-visible,.process-entry .button:focus-visible{outline:2px solid #be2d78;outline-offset:2px}
 
 
-/* Operational UAT: MTAs, vouchers, cancellations, renewals and upgrades stay hidden. New applications are available. */
-#staff-api-open,
-[data-action^="membership-cancel-"],
-[data-action="membership-renew"],[data-action="membership-upgrade"],
-[data-staff-addon="mta"],[data-staff-addon="discount"] { display:none !important; }
+/* Only the developer test console stays hidden. MTA, voucher and cancellation screens are visible as previews. */
+#staff-api-open { display:none !important; }
 .browse-controls select[data-crm-view]{min-height:38px;max-width:290px;width:100%;border:1px solid #d9dce3;border-radius:8px;padding:8px 10px;background:#fff;color:#26323d;font:inherit}
 .browse-controls [data-crm-view]:focus-visible{outline:2px solid #9c357e;outline-offset:2px}
 .uat-field-editors{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:10px}
@@ -275,3 +272,7 @@ body.staff-dev-tools #staff-api-open{display:inline-flex}
 .v12-journey-tools select{display:block;margin:6px 0 10px;max-width:100%;padding:9px 10px;border:1px solid #d9cfd6;border-radius:8px;font:inherit;background:#fff}
 .v12-field-label{display:block;font-size:12px;font-weight:650;margin-top:8px}
 .v12-opt-item{padding:4px 0}
+
+.bg-preview-banner{margin:10px 0 14px;padding:10px 14px;border:1px dashed #c7a7ba;border-radius:10px;background:#fbf3f8;color:#5b3a4d;font-size:13px}
+.bg-preview-banner strong{margin-right:6px;padding:2px 8px;border-radius:9px;background:#9d2a68;color:#fff;font-size:10px;letter-spacing:.05em;text-transform:uppercase}
+.bg-preview-tag{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:9px;background:#f3ecfa;color:#5b3a8a;font-size:10px;font-weight:750;letter-spacing:.03em;text-transform:uppercase;vertical-align:1px}

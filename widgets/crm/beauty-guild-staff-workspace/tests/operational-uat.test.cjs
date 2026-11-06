@@ -9,10 +9,10 @@ const source=name=>fs.readFileSync(path.join(app,name),'utf8');
 const widget=require('../app/widget.js');
 
 test('operational UAT blocks excluded workflow entry points, retaining routine record actions',()=>{
- for(const action of ['staff-mta-open','staff-voucher-open','membership-cancel-open','membership-cancel-confirm','membership-upgrade','membership-renew']){
+ for(const action of ['staff-mta-quote','staff-mta-save','staff-mta-payment','staff-voucher-redeem','membership-cancel-quote','membership-cancel-confirm','membership-cancel-retry']){
    assert.equal(widget.isExcludedAction(action),true,action);
  }
- for(const action of ['select','open','edit','note','task','browse','paginate','journey-start','journey-save','journey-type','task-open','task-save','task-complete']){
+ for(const action of ['select','open','edit','note','task','browse','paginate','journey-start','journey-save','journey-type','task-open','task-save','task-complete','membership-cancel-open','membership-cancel-tab','membership-cancel-close','membership-renew','membership-upgrade']){
    assert.equal(widget.isExcludedAction(action),false,action);
  }
 });

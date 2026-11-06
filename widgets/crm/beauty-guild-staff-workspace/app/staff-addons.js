@@ -6,17 +6,19 @@ const state={record:null,entity:'',mode:'',quote:null,payload:null,savedRevision
 const reasons=['Goodwill Gesture','Complaint','Upgrade','Promotion','Payment Problem','Other'];
 const eligible=[['','No waiver'],['MEM-JOIN','Joining fee']];
 const $=id=>document.getElementById(id);
+const PREVIEW=()=>Boolean(global.BG_PREVIEW_COMPONENTS);
+const previewBanner=()=>'<div class="bg-preview-banner" role="note"><strong>Preview</strong> This shows how this process will look. Nothing is quoted, saved, charged or sent yet.</div>';
 function field(id,label,extra=''){return '<label for="'+id+'">'+label+'</label><input id="'+id+'" '+extra+' />';}
 function note(text){return '<p class="staff-addon-info">'+esc(text)+'</p>';}
 function action(entity,record){
  if(!['Insurance_Policy','Deals','Membership'].includes(entity))return '';
  const mode=entity==='Insurance_Policy'?'mta':'discount';
- return '<button type="button" class="button secondary" data-staff-addon="'+mode+'" data-staff-id="'+esc(record.id)+'">'+(mode==='mta'?'Manage changes (MTA)':'Voucher / waiver')+'</button>';
+ return '<button type="button" class="button secondary" data-staff-addon="'+mode+'" data-staff-id="'+esc(record.id)+'">'+(mode==='mta'?'Manage changes (MTA)':'Voucher / waiver')+' <span class="bg-preview-tag">Preview</span></button>';
 }
 function journeyPanel(kind){
  if(kind!=='membership')return '';
  return '<section class="staff-addon-panel"><h3>Staff voucher and waiver</h3>'+discountFields()+
- note('Code and waiver inputs are only applied after a signed server-side quote. Bespoke voucher redemption stays unavailable until Creator tracking is ready.')+
+ note('Codes and waivers are only applied once the Portal has quoted them. Bespoke voucher redemption is not available yet.')+
  '<button class="button secondary" type="button" data-staff-addon="validate-discount">Validate inputs</button><output id="staff-discount-outcome" aria-live="polite"></output></section>';
 }
 function discountFields(){
@@ -42,7 +44,7 @@ function mtaFields(){
    '<dl class="staff-addon-details"><dt>Policy</dt><dd>'+esc(state.record?.Policy_Number||state.record?.Name||state.record?.id)+'</dd><dt>Status</dt><dd>'+esc(state.record?.Policy_Status||'Not recorded')+'</dd><dt>Cover end</dt><dd>'+esc(state.record?.Policy_End_Date||state.record?.End_Date||'Not recorded')+'</dd></dl>'+
    '<details class="staff-mta-linkage" '+(needsLink?'open':'')+'><summary>Customer and membership links '+(needsLink?'— action needed':'— verified by backend')+'</summary>'+
      field('staff-mta-contact','CRM Contact ID','inputmode="numeric" value="'+esc(known)+'" placeholder="Required: selected policy owner"')+
-     note('The backend independently verifies the Contact, policy and Membership/Deal relationship.')+
+     note('The Portal checks that the customer, policy and membership belong together.')+
      field('staff-mta-record','Membership / Deal ID','inputmode="numeric" value="'+esc(linkedDeal)+'" placeholder="Required for revision save"')+
    '</details>'+
    '<div class="staff-addon-actions"><button type="button" class="button secondary" data-staff-addon="cover">Refresh current cover</button></div>'+
@@ -108,18 +110,19 @@ function open(mode,record,entity){
  state.mode=mode;state.entity=entity||'';state.record=record;state.cover=null;state.quote=null;state.payload=null;state.savedRevision=null;state.checkoutUrl='';state.busy=false;state.activeStep='policy';
  let d=$('staff-addon-dialog');if(!d){d=document.createElement('dialog');d.id='staff-addon-dialog';d.className='staff-addon-dialog';document.body.appendChild(d);}
  d.classList.toggle('staff-mta-dialog',mode==='mta');
- d.innerHTML='<div class="staff-addon-head"><div><small>STAFF WORKSPACE</small><h2>'+(mode==='mta'?'Change policy cover':'Voucher / waiver')+'</h2><p>'+esc(record?.Name||record?.Policy_Number||record?.Deal_Name||'Selected record')+'</p></div><button type="button" class="button secondary" data-staff-addon="close">Close</button></div>'+
- (mode==='mta'?'<div class="staff-mta-grid"><section class="staff-mta-main">'+mtaFields()+'</section><aside class="staff-mta-summary" aria-label="Policy and adjustment quote"><h3>Adjustment summary</h3><div id="staff-mta-summary-body"></div></aside></div>':discountFields()+note('Referral and waiver inputs are ready for a membership quote. No discount is applied without a signed quote response.')+'<output id="staff-discount-outcome"></output>');
+ d.innerHTML='<div class="staff-addon-head"><div><small>STAFF WORKSPACE</small><h2>'+(mode==='mta'?'Change policy cover':'Voucher / waiver')+'</h2><p>'+esc(record?.Name||record?.Policy_Number||record?.Deal_Name||'Selected record')+'</p></div><button type="button" class="button secondary" data-staff-addon="close">Close</button></div>'+(PREVIEW()?previewBanner():'')+
+ (mode==='mta'?'<div class="staff-mta-grid"><section class="staff-mta-main">'+mtaFields()+'</section><aside class="staff-mta-summary" aria-label="Policy and adjustment quote"><h3>Adjustment summary</h3><div id="staff-mta-summary-body"></div></aside></div>':discountFields()+note('Referral and waiver inputs are ready for a membership quote. No discount is applied until the Portal confirms it.')+'<output id="staff-discount-outcome"></output>');
  if(d.showModal)d.showModal();else d.setAttribute('open','');
  if(mode==='mta'){setMtaStep('policy');updateMtaSummary();loadCover();}
 }
 async function loadCover(){
  const target=$('staff-mta-cover');if(!target)return;
+ if(PREVIEW()){target.textContent='Preview only. The current cover will be shown here.';return;}
  const contact=String($('staff-mta-contact')?.value||'').trim();
  const recordId=String($('staff-mta-record')?.value||'').trim();
  if(!/^\d{10,25}$/.test(contact)||!/^\d{10,25}$/.test(recordId)){target.textContent='Enter the Contact and Membership IDs to load current cover.';return;}
- target.textContent='Loading authoritative existing cover…';
- try{const response=await global.BGStaffApi.call('cover',{contactId:contact,recordId});state.cover=response?.cover||null;target.innerHTML='<strong>Current cover loaded from the staff API.</strong><details><summary>Inspect source details</summary><pre>'+esc(JSON.stringify(state.cover||response,null,2))+'</pre></details>';updateMtaSummary();}
+ target.textContent='Loading the current cover…';
+ try{const response=await global.BGStaffApi.call('cover',{contactId:contact,recordId});state.cover=response?.cover||null;target.innerHTML='<strong>Current cover loaded.</strong><details><summary>Inspect source details</summary><pre>'+esc(JSON.stringify(state.cover||response,null,2))+'</pre></details>';updateMtaSummary();}
  catch(e){target.textContent='Current cover could not be loaded: '+String(e.message||e);}
 }
 function payload(){
@@ -155,22 +158,24 @@ function result(message,error=false){
  updateMtaSummary();
 }
 async function quote(){
+ if(PREVIEW()){result('Preview only. The live quote will appear here. Nothing is requested or saved yet.');return;}
  if(state.busy)return;
  try{
-   const p=payload();state.busy=true;result('Requesting quote from Catalyst…');
-   if(!global.BGStaffApi?.call)throw Error('Staff API adapter is not loaded.');
+   const p=payload();state.busy=true;result('Requesting the quote…');
+   if(!global.BGStaffApi?.call)throw Error('The pricing connection is not available. Refresh the Staff Workspace and try again.');
    const response=await global.BGStaffApi.call('quote',p);
    if(response?.error||response?.code||response?.ok===false)throw Error(response.message||response.error||response.code);
-   if(!response?.quote)throw Error('Backend returned no quote. Check the response contract.');
+   if(!response?.quote)throw Error('The pricing service did not return a quote. Try again.');
    state.quote=response;state.payload=p;state.savedRevision=null;state.checkoutUrl='';setMtaStep('quote');
    result(response);const button=$('staff-mta-save');if(button)button.disabled=false; // Referred changes must also be saved for staff review; only payment is blocked.
  }catch(e){state.quote=null;state.payload=null;result(e.message||String(e),true);const b=$('staff-mta-save');if(b)b.disabled=true;}
  finally{state.busy=false;}
 }
 async function save(){
+ if(PREVIEW()){result('Preview only. Nothing is saved.');return;}
  if(state.busy||!state.quote||!state.payload)return;
  if(JSON.stringify(payload())!==JSON.stringify(state.payload)){result('Form changed after quote. Request a new quote before saving.',true);return;}
- if(!global.confirm('Create a CRM insurance revision for this Development test record? This may write draft rows. Active cover must remain unchanged.'))return;
+ if(!(global.BGConfirmDialog?await global.BGConfirmDialog({title:'Save this change?',body:'This saves the quoted change to CRM as a draft revision. The active cover stays as it is until the change is paid for.',yes:'Save change',no:'Not yet'}):global.confirm('Save the quoted change to CRM as a draft revision?')))return;
  try{
    state.busy=true;result('Saving quoted revision…');
    const response=await global.BGStaffApi.call('save_revision',state.payload);
@@ -184,18 +189,19 @@ async function save(){
 }
 async function payment(){
  const output=$('staff-mta-payment-result');
+ if(PREVIEW()){if(output)output.textContent='Preview only. No payment link is created.';return;}
  if(state.busy||!state.savedRevision||!state.quote?.quote?.payable||!state.payload)return;
  if(!$('staff-mta-accepted')?.checked){if(output)output.textContent='Customer acceptance of the Code of Ethics and terms must be confirmed.';return;}
  try{
    if(JSON.stringify(payload())!==JSON.stringify(state.payload))throw Error('MTA details changed. Requote and save the revision again.');
-   if(!global.confirm('Generate a test-mode Stripe Checkout link for this customer’s saved MTA revision?'))return;
-   state.busy=true;if(output)output.textContent='Requesting secure Checkout link…';
+   if(!(global.BGConfirmDialog?await global.BGConfirmDialog({title:'Create a payment link?',body:'This creates a secure payment link for this customer’s saved change.',yes:'Create link',no:'Not yet'}):global.confirm('Create a secure payment link for this change?')))return;
+   state.busy=true;if(output)output.textContent='Creating the payment link…';
    const result=await global.BGStaffApi.call('payment_link',{...state.payload,accepted:'yes'});
-   if(result?.alreadyPaid){if(output)output.textContent='Already paid according to Stripe. Refresh the CRM record to view the authoritative payment status.';return;}
+   if(result?.alreadyPaid){if(output)output.textContent='This has already been paid. Refresh the CRM record to see the latest payment status.';return;}
    const link=String(result?.checkoutUrl||'');
-   if(!/^https:\/\/checkout\.stripe\.com\//.test(link))throw Error('The backend returned no valid Stripe Checkout URL.');
+   if(!/^https:\/\/checkout\.stripe\.com\//.test(link))throw Error('The payment service did not return a valid payment link.');
    state.checkoutUrl=link;
-   if(output)output.innerHTML='<button type="button" class="button secondary" data-staff-addon="copy-mta-payment">Copy payment link</button> <button type="button" class="button secondary" data-staff-addon="open-mta-payment">Open Stripe Checkout</button>';
+   if(output)output.innerHTML='<button type="button" class="button secondary" data-staff-addon="copy-mta-payment">Copy payment link</button> <button type="button" class="button secondary" data-staff-addon="open-mta-payment">Open payment page</button>';
  }catch(e){if(output)output.textContent=String(e.message||e);}
  finally{state.busy=false;}
 }

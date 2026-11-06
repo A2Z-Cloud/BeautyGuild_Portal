@@ -4,6 +4,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
 const w=require('../app/widget.js');
+const w2=w;
 const app=path.resolve(__dirname,'../app');
 
 test('status colours use whole words: negative words are never read as positive ones',()=>{
@@ -70,7 +71,7 @@ test('table status text does not break mid-word, and the stop banner is styled',
   assert.match(css,/\.v12-table td \.bg-state\{white-space:nowrap\}/);
   assert.match(css,/\.v12-stop-banner--stop/);
   const html=fs.readFileSync(path.join(app,'index.html'),'utf8');
-  assert.match(html,/widget\.js\?v=20261106-uatfix23/);
+  assert.match(html,/widget\.js\?v=20261106-uatfix24/);
 });
 
 test('buttons that only open the CRM record say so, and the note dialog names the record and hides the due date',()=>{
@@ -97,11 +98,11 @@ test('switching record sections returns to the top of the record, so a shorter s
   assert.match(v12,/chosen\.set\(key,tab\);rerender\(\);try\{const top=document\.querySelector\('\.v12-record'\)/);
 });
 
-test('Operational UAT no longer mentions MTA, renewals or cancellations on membership and policy records',()=>{
+test('UAT wording for MTA, renewals and cancellations is kept for when the previews are switched off',()=>{
   const js=fs.readFileSync(path.join(app,'widget.js'),'utf8');
-  assert.match(js,/OPERATIONAL_UAT\?'View policy':'View policy \/ MTA'/);
-  assert.match(js,/OPERATIONAL_UAT\?'Open a policy to review its cover and status\.'/);
-  assert.match(js,/OPERATIONAL_UAT\?'Current transaction':'Renewal and service actions'/);
+  assert.match(js,/OPERATIONAL_UAT&&!PREVIEW_COMPONENTS\?'View policy':'View policy \/ MTA'/);
+  assert.match(js,/OPERATIONAL_UAT&&!PREVIEW_COMPONENTS\?'Open a policy to review its cover and status\.'/);
+  assert.match(js,/OPERATIONAL_UAT&&!PREVIEW_COMPONENTS\?'Current transaction':'Renewal and service actions'/);
   assert.match(js,/window\.BG_OPERATIONAL_UAT=OPERATIONAL_UAT/);
   const v12=fs.readFileSync(path.join(app,'v12-crm.js'),'utf8');
   assert.match(v12,/ctx\.operationalUat\|\|global\.BG_OPERATIONAL_UAT/);
@@ -250,8 +251,8 @@ test('the stylesheet no longer hides New application or the journey buttons',()=
   assert.doesNotMatch(hidden,/data-view="create"/);
   assert.doesNotMatch(hidden,/data-action\^="journey-"/);
   assert.doesNotMatch(hidden,/\.create-cta/);
-  assert.match(hidden,/data-action\^="membership-cancel-"/);
-  assert.match(hidden,/data-staff-addon="mta"/);
+  assert.match(hidden,/#staff-api-open/);
+  assert.doesNotMatch(hidden,/membership-cancel-|membership-renew|membership-upgrade|data-staff-addon/);
 });
 
 test('module files are plain .js, because Slate serves .mjs as application/octet-stream and browsers refuse to run it',()=>{
@@ -306,4 +307,22 @@ test('draft policies can be continued, drafts are readable, the membership is ch
   assert.match(j,/Open the application record/);
   assert.match(j,/Open the customer record/);
   assert.doesNotMatch(w,/CRM confirmation: '\+JSON\.stringify/);
+});
+
+test('MTA, voucher and cancellation screens are visible as previews, and every action that would quote, save, charge or cancel is blocked',()=>{
+  const w=fs.readFileSync(path.join(app,'widget.js'),'utf8');
+  const a=fs.readFileSync(path.join(app,'staff-addons.js'),'utf8');
+  assert.match(w,/const PREVIEW_COMPONENTS=true/);
+  assert.match(w,/membership-cancel-\(quote\|confirm\|retry\)/);
+  assert.match(w,/bg-preview-banner/);
+  assert.match(a,/function quote\(\)\{\s*if\(PREVIEW\(\)\)/);
+  assert.match(a,/async function save\(\)\{\s*if\(PREVIEW\(\)\)/);
+  assert.match(a,/async function payment\(\)\{[\s\S]{0,120}if\(PREVIEW\(\)\)/);
+  assert.match(a,/loadCover[\s\S]{0,260}if\(PREVIEW\(\)\)/);
+  assert.doesNotMatch(a,/global\.confirm\('Create a CRM insurance revision for this Development/);
+  const v=fs.readFileSync(path.join(app,'v12-crm.js'),'utf8');
+  assert.match(v,/!global\.BG_PREVIEW_COMPONENTS/);
+  assert.ok(widgetModule().isExcludedAction('membership-cancel-confirm'));
+  assert.ok(!widgetModule().isExcludedAction('membership-cancel-open'));
+  function widgetModule(){return w2;}
 });

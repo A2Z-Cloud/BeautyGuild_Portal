@@ -153,7 +153,7 @@
     const fallback=fallbackRelated[entity]||[];
     for(const s of fallback){if(!rows.some(x=>x.id===s))rows.push({id:s,label:pretty(s),mod:null,fallback:true});}
     // Operational UAT leaves out the related lists of features that are not part of it (cancellations, vouchers and waivers).
-    const outOfScope=r=>global.BG_OPERATIONAL_UAT&&/cancell|voucher|waive/i.test(r.id+' '+r.label);
+    const outOfScope=r=>global.BG_OPERATIONAL_UAT&&!global.BG_PREVIEW_COMPONENTS&&/cancell|voucher|waive/i.test(r.id+' '+r.label);
     return rows.filter(r=>{if(outOfScope(r)||seen.has(r.id))return false;seen.add(r.id);return true;});
   }
   function relationKey(entity,id,list){return entity+':'+id+':'+list;}
@@ -394,7 +394,7 @@ if(selection==='overview'&&['Deals','Membership'].includes(entity))main=membersh
       main='<section class="v12-detail-section"><h3>Processing and decisions</h3>'+fieldRows(entity,record,['Application_Status','Application_Stage','Underwriting_Status','Risk_Status','Sanctions_Status','Payment_Status','Policy_Status','Finance_Sync_Status','Next_Action','Next_Action_Date','Stop_Reason','Manual_Review_Outcome'],true)+'<div class="v12-warning">Risk decisions and payment status are confirmed in CRM and the Portal. This screen does not clear a referral or activate cover.</div></section>'+(typeof ctx.processing==='function'?ctx.processing(entity,record):'');
     }else{main=relationContent(entity,record,selection,ctx.crm,ctx.rerender);}
     if(selection==='overview'||selection==='details')main=latestActivity(entity,record,ctx.crm,ctx.rerender)+main;
-    const extraAction=(ctx.operationalUat||global.BG_OPERATIONAL_UAT)?'':(global.BGStaffAddons?.action(entity,record)||'');
+    const extraAction=((ctx.operationalUat||global.BG_OPERATIONAL_UAT)&&!global.BG_PREVIEW_COMPONENTS)?'':(global.BGStaffAddons?.action(entity,record)||'');
     const header='<header class="v12-record-head"><div><span class="v12-kicker">'+safe(appNames[entity]||pretty(entity))+'</span><h2>'+safe(ctx.title(entity,record))+'</h2><p>'+safe(ctx.summary(entity,record)||'')+'</p></div><div class="v12-status-row">'+statusBar(entity,record)+'</div></header>'+stopBanner(entity,record);
     const navigation=[...(['Deals','Membership'].includes(entity)?[['overview','Membership overview']]:[]),['timeline','Timeline'],['details','All CRM fields'],['processing','Processing'],...(editable?[['updates','Field updates']]:[])].map(p=>'<button class="v12-side-link '+(selection===p[0]?'active':'')+'" data-action="v12-tab" data-tab="'+p[0]+'">'+safe(p[1])+'</button>').join('');
     const related=relations.map(r=>{
@@ -404,7 +404,7 @@ if(selection==='overview'&&['Deals','Membership'].includes(entity))main=membersh
       return '<button class="v12-side-link '+(selection===r.id?'active':'')+'" data-action="v12-tab" data-tab="'+safe(r.id)+'"><span>'+safe(r.label)+'</span>'+count+'</button>';
     }).join('');
     const metaText=meta.loading?'Loading the CRM layout…':meta.problems?.length?'Some CRM layout details could not be loaded, so some fields or lists may be missing.':'Fields and lists follow your CRM layout.';
-    return '<div class="v12-record">'+header+'<div class="v12-member-actions"><div class="v12-member-primary-actions">'+ctx.actions(entity,id)+'</div>'+(extraAction?'<div class="v12-member-service-actions"><span>Membership services</span>'+extraAction+'</div>':'')+'</div><div class="v12-record-layout"><div class="v12-main">'+main+'<p class="v12-meta-note">'+safe(metaText)+'</p></div><aside class="v12-side" aria-label="Record sections and related lists"><h3>Record</h3>'+navigation+'<h3>Related Lists</h3>'+related+'</aside></div></div>';
+    return '<div class="v12-record">'+header+'<div class="v12-member-actions"><div class="v12-member-primary-actions">'+ctx.actions(entity,id)+'</div>'+(extraAction?'<div class="v12-member-service-actions"><span>Membership services · Preview</span>'+extraAction+'</div>':'')+'</div><div class="v12-record-layout"><div class="v12-main">'+main+'<p class="v12-meta-note">'+safe(metaText)+'</p></div><aside class="v12-side" aria-label="Record sections and related lists"><h3>Record</h3>'+navigation+'<h3>Related Lists</h3>'+related+'</aside></div></div>';
   }
   async function action(el,focus,crm,rerender){
     if(!focus)return false;
