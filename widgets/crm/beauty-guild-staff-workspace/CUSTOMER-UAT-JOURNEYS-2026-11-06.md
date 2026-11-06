@@ -6,7 +6,7 @@ The workspace is a single screen inside Zoho CRM where your team can find a memb
 
 ## How this test works
 
-Instead of a list of buttons to press, you will follow **seven short journeys**. Each one is a realistic piece of a working day. Work through them in order the first time, because later journeys build on earlier ones.
+Instead of a list of buttons to press, you will follow **eight short journeys**. Each one is a realistic piece of a working day. Work through them in order the first time, because later journeys build on earlier ones.
 
 - Allow about **60 to 90 minutes** in total. Journeys are 5 to 15 minutes each.
 - Use the **test records** we give you (listed below). Please do not use live member records.
@@ -29,6 +29,7 @@ If you cannot find one of the items in the right-hand column, that is correct.
 | What | Record to use |
 | --- | --- |
 | A member to look up | `<TEST MEMBER NAME>` |
+| A new customer to create | `<NEW TEST NAME AND EMAIL YOU CONTROL>` |
 | A membership to review | `<TEST MEMBERSHIP RECORD>` |
 | An insurance policy to review (any stage) | `<TEST POLICY NUMBER>` |
 | A **draft** insurance policy you can change | `<TEST DRAFT POLICY NUMBER>` |
@@ -169,6 +170,35 @@ For each step, note whether it did what we said, did it but was confusing or slo
 5. Tell us what you would change on each page if you could change one thing.
 
 **Think about:** Would you use this instead of CRM, alongside it, or not at all, and why?
+
+---
+
+## Journey 8: Take a new customer and a new application through to payment
+
+*A new customer wants to join and take out cover. Create them, take the application, and take payment.*
+
+1. Open **Customers** and click **New customer**. Enter a first name, surname and a new email address (use a test address you control), then click **Create customer**.
+   **Expect:** The customer is created in CRM and their record opens in the workspace, with the message "Customer created in CRM."
+2. Click **New customer** again and use the same email address.
+   **Expect:** You are told a customer with that email already exists, and you can choose **Open existing customer** instead of creating a duplicate.
+3. Open **New application** and choose **Membership and Insurance**. Search for the customer you just created and select them.
+   **Expect:** The customer is confirmed at the top of the application, and the steps for the application appear.
+4. Work through the questions, answering as a real customer would. Use **Next** and **Back** to move between steps.
+   **Expect:** The questions flow in a sensible order, only relevant questions appear, and you cannot skip required answers. The **Price summary** on the right updates as you go.
+5. Look at **Documents and links** under the price summary, before and after you ask for insurance.
+   **Expect:** Links to the Terms of Business, Privacy Policy and Code of Ethics are shown and open the Guild's pages. When insurance is requested, the list of policy documents that come with the chosen cover appears, and it changes if you change the cover.
+6. Click **Save draft**.
+   **Expect:** "CRM draft saved." appears. The draft can be found again with **Find draft applications**.
+7. Calculate the quote.
+   **Expect:** The Price summary shows a verified quote with the amount and any payment plan.
+8. Confirm the customer has accepted the terms, then click **Create payment link** and confirm.
+   **Expect:** A secure payment link is created and can be opened or copied.
+9. Open the payment link and pay using the test card details your A2Z Cloud contact gives you. Then come back and refresh the payment status.
+   **Expect:** Payment completes, and the record in CRM shows Payment Status as Paid.
+10. Start an **Accreditation** application for a customer, complete it and submit it.
+   **Expect:** You are asked to confirm before it is submitted, and the application appears in the Accreditation list afterwards.
+
+**Think about:** Did the questions make sense in the order you would ask them on the phone? Would you take payment this way with a customer on the line?
 
 ---
 
