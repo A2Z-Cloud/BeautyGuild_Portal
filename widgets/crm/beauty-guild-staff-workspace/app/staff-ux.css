@@ -224,3 +224,4 @@ body.staff-dev-tools #staff-api-open{display:inline-flex}
 .bg-latest-list time{display:inline-block;min-width:104px;font-size:12px;color:#6b606b;font-variant-numeric:tabular-nums}
 
 .v12-table td.bg-task-due{min-width:175px}
+.v12-table td.bg-task-due .bg-state{display:flex;margin-top:3px;white-space:normal}

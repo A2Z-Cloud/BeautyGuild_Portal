@@ -249,7 +249,7 @@
   }
   // Turns the CRM v8 __timeline response into plain events. Defensive: CRM adds fields over time.
   function timelineEvents(list){
-    const verbs={added:'created',updated:'updated',deleted:'deleted',converted:'converted',approved:'approved',rejected:'rejected',unlinked:'unlinked',linked:'linked'};
+    const verbs={function_executed:'ran',added:'created',updated:'updated',deleted:'deleted',converted:'converted',approved:'approved',rejected:'rejected',unlinked:'unlinked',linked:'linked'};
     return (Array.isArray(list)?list:[]).map(x=>{
       const action=String(x&&x.action||'').toLowerCase(),verb=verbs[action]||(action||'changed');
       const rel=x&&x.related_record&&typeof x.related_record==='object'?x.related_record:null;
@@ -261,13 +261,16 @@
       const auto=!!(rule||adType)||/workflow|blueprint|automation|schedule|macro|assignment|approval/i.test(String(x&&x.source||''));
       const isEmail=/e-?mail/i.test(relModule+' '+ext)||/mail/i.test(action);
       const isActivity=/note|task|call|event|meeting|activit/i.test(relModule);
+      const cap=t=>String(t||'').replace(/_/g,' ').replace(/^./,c=>c.toUpperCase());
+      const ran=/function|executed|workflow/i.test(action);
       let title;
-      if(isEmail)title='Email'+(rel&&rel.name?': '+rel.name:/sent/i.test(action)?' sent':' '+verb);
+      if(ran)title='Automation ran'+(rule?': '+rule:'');
+      else if(isEmail)title='Email'+(rel&&rel.name?': '+rel.name:/sent/i.test(action)?' sent':' '+verb);
       else if(rel)title=(relModule?pretty(relModule).replace(/([^s])s$/,'$1')+' ':'Related record ')+(action==='added'?'added':verb)+(rel.name?': '+rel.name:'');
       else if(action==='updated'&&changes.length)title=changes.length===1?changes[0].label+' updated':changes.length+' fields updated';
       else title='Record '+verb;
       const kind=isEmail?'email':rel?(isActivity?'activity':'related'):(changes.length?'fields':'record');
-      return{date:String(x&&x.audited_time||''),who:String(x&&x.done_by&&(x.done_by.name||x.done_by.full_name)||''),title,kind,auto,changes:rel?[]:changes,automation:rule?(adType?pretty(adType)+': ':'')+String(rule):(adType?pretty(adType):'')};
+      return{date:String(x&&x.audited_time||''),who:String(x&&x.done_by&&(x.done_by.name||x.done_by.full_name)||''),title,kind,auto,changes:rel?[]:changes,automation:rule?(adType?cap(adType)+': ':'')+String(rule):(adType?cap(adType):'')};
     }).filter(e=>e.date||e.title);
   }
   async function loadTimeline(entity,id,crm,rerender,page){
@@ -293,7 +296,7 @@
     const d=e.date?new Date(e.date):null,time=d&&!isNaN(d)?d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):'';
     return '<li class="bg-tl-item bg-tl-item--'+safe(e.kind)+'"><time>'+safe(time)+'</time><div><strong>'+safe(e.title)+'</strong> '+timelineBadges(e)+(e.who?' <span class="bg-tl-who">by '+safe(e.who)+'</span>':'')+
       (e.changes.length?'<ul class="bg-tl-changes">'+e.changes.map(c=>'<li><b>'+safe(c.label)+'</b> <span class="bg-tl-old">'+safe(c.from)+'</span> &rarr; <span class="bg-tl-new">'+safe(c.to)+'</span></li>').join('')+'</ul>':'')+
-      (e.automation?'<p class="v12-muted">Sent or changed by CRM rule: '+safe(e.automation)+'</p>':'')+'</div></li>';
+      (e.automation?'<p class="v12-muted">Triggered by '+safe(e.automation)+'</p>':'')+'</div></li>';
   }
   function crmTimeline(entity,record,api,rerender){
     const id=String(record.id),key=entity+':'+id;

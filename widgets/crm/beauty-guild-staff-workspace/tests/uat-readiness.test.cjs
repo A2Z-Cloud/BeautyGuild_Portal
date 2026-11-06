@@ -70,7 +70,7 @@ test('table status text does not break mid-word, and the stop banner is styled',
   assert.match(css,/\.v12-table td \.bg-state\{white-space:nowrap\}/);
   assert.match(css,/\.v12-stop-banner--stop/);
   const html=fs.readFileSync(path.join(app,'index.html'),'utf8');
-  assert.match(html,/widget\.js\?v=20261106-uatfix9/);
+  assert.match(html,/widget\.js\?v=20261106-uatfix10/);
 });
 
 test('buttons that only open the CRM record say so, and the note dialog names the record and hides the due date',()=>{
@@ -191,6 +191,8 @@ test('the timeline separates emails and automatic changes, and the record page s
     {audited_time:'2026-11-05T10:00:00Z',action:'updated',field_history:[{api_name:'Stage',field_label:'Stage',_value:{old:'A',new:'B'}}]},
     {audited_time:'2026-11-05T09:00:00Z',action:'added',related_record:{name:'Call',module:{api_name:'Tasks'}}}]);
   assert.equal(ev[0].kind,'email');assert.equal(ev[0].auto,true);assert.match(ev[0].automation,/Send welcome email/);
+  const run=global.BGCRM12.timelineEvents([{audited_time:'2026-11-05T17:31:00Z',action:'function_executed',related_record:{name:'BG000143',module:{api_name:'Insurance_Policy'}},automation_details:{type:'workflow rule',rule:{name:'A2Z - INS Retroactive Date'}}}]);
+  assert.equal(run[0].title,'Automation ran: A2Z - INS Retroactive Date');assert.equal(run[0].auto,true);assert.equal(run[0].automation,'Workflow rule: A2Z - INS Retroactive Date');
   assert.equal(ev[1].kind,'fields');assert.equal(ev[1].auto,false);
   assert.equal(ev[2].kind,'activity');
   const src=fs.readFileSync(path.join(app,'v12-crm.js'),'utf8');
