@@ -70,7 +70,7 @@ test('table status text does not break mid-word, and the stop banner is styled',
   assert.match(css,/\.v12-table td \.bg-state\{white-space:nowrap\}/);
   assert.match(css,/\.v12-stop-banner--stop/);
   const html=fs.readFileSync(path.join(app,'index.html'),'utf8');
-  assert.match(html,/widget\.js\?v=20261106-uatfix18/);
+  assert.match(html,/widget\.js\?v=20261106-uatfix19/);
 });
 
 test('buttons that only open the CRM record say so, and the note dialog names the record and hides the due date',()=>{
@@ -236,7 +236,7 @@ test('journeys use the page dialog (browser confirm is blocked in the CRM frame)
   assert.match(js,/data-action="new-customer"/);
   assert.match(js,/function createContactRecord/);
   assert.match(js,/A customer with this email already exists\./);
-  const j=fs.readFileSync(path.join(app,'v12-journeys.mjs'),'utf8');
+  const j=fs.readFileSync(path.join(app,'v12-journeys.js'),'utf8');
   assert.match(j,/import \{LEGAL,policyDocuments\} from '\.\/portal-defs\/legal\.js'/);
   assert.match(j,/documentsPanel\(j\)\+'<\/aside>'/);
   const legal=fs.readFileSync(path.join(app,'portal-defs/legal.js'),'utf8');
@@ -252,4 +252,16 @@ test('the stylesheet no longer hides New application or the journey buttons',()=
   assert.doesNotMatch(hidden,/\.create-cta/);
   assert.match(hidden,/data-action\^="membership-cancel-"/);
   assert.match(hidden,/data-staff-addon="mta"/);
+});
+
+test('module files are plain .js, because Slate serves .mjs as application/octet-stream and browsers refuse to run it',()=>{
+  const html=fs.readFileSync(path.join(app,'index.html'),'utf8');
+  assert.match(html,/type="module" src="v12-journeys\.js\?v=/);
+  assert.doesNotMatch(html,/\.mjs/);
+  assert.ok(fs.existsSync(path.join(app,'v12-journeys.js')));assert.ok(fs.existsSync(path.join(app,'portal-defs/logic.js')));
+  assert.ok(!fs.existsSync(path.join(app,'v12-journeys.mjs')));assert.ok(!fs.existsSync(path.join(app,'portal-defs/logic.mjs')));
+  for(const f of ['v12-journeys.js','portal-defs/accreditationInputs.js','portal-defs/insuranceInputs.js'])assert.doesNotMatch(fs.readFileSync(path.join(app,f),'utf8'),/from '[^']*\.mjs'/,f);
+  const w=fs.readFileSync(path.join(app,'widget.js'),'utf8');
+  const err=w.slice(w.indexOf('The current application form did not load'),w.indexOf('The current application form did not load')+700);
+  assert.match(err,/data-action="journey-back"/);assert.match(err,/data-action="journey-exit"/);
 });

@@ -1,6 +1,6 @@
 // The accreditation application questions, from the V1 wizard and the UAT decisions (AL-ACC-016, 025, 030, 032, 046, 059).
 // The server maps these answers onto the same CRM records V1 writes (functions/beauty_guild_api/src/accreditationDrafts.js).
-import { UK_COUNTRIES } from './logic.mjs';
+import { UK_COUNTRIES } from './logic.js';
 import { startLimits } from './startDate.js';
 import { LEGAL_LINKS } from './legal.js';
 

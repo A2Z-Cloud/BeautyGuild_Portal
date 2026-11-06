@@ -3,7 +3,7 @@
  * create a quote, CRM application, payment link or imply that customer declarations were verified. */
 import {INSURANCE_STEPS,visibleSteps,stopMessages,TREATMENT_OPTIONS,toRequest as insuranceRequest} from './portal-defs/insuranceInputs.js';
 import {accreditationSteps,resolveFields,COPY_HOME_MAP} from './portal-defs/accreditationInputs.js';
-import {validate as validatePortal} from './portal-defs/logic.mjs';
+import {validate as validatePortal} from './portal-defs/logic.js';
 import {startLimits} from './portal-defs/startDate.js';
 import {LEGAL,policyDocuments} from './portal-defs/legal.js';
 const countries=[

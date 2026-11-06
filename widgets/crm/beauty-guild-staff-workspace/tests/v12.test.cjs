@@ -9,7 +9,7 @@ const read=p=>fs.readFileSync(path.join(APP,p),'utf8');
 const js=name=>{const w={};vm.runInNewContext(read(name),{window:w,console,Intl,Date,Map,Set,Promise});return w.BGCRM12};
 test('Slate entry serves V1.2 modules without changing framework',()=>{
  const html=read('index.html');
- for(const f of ['v12.css','v12-crm.js','v12-journeys.mjs','widget.js'])assert.match(html,new RegExp(f.replace('.','\\.')));
+ for(const f of ['v12.css','v12-crm.js','v12-journeys.js','widget.js'])assert.match(html,new RegExp(f.replace('.','\\.')));
  assert.match(read('.catalyst/slate-config.toml'),/framework = "static"/);
 });
 test('CRM metadata respects invisible fields and provides related-list navigator',async()=>{
@@ -33,10 +33,10 @@ test('The widget uses live CRM SDK and does not contain test payment calls',()=>
  assert.match(widget,/BGCRM12\.detailPage/);
  assert.match(widget,/BGJourney12\.render/);
  assert.match(widget,/searchBrowse/);
- assert.doesNotMatch(read('v12-journeys.mjs'),/stripe\.checkout\.sessions\.create|createCheckoutSession/);
+ assert.doesNotMatch(read('v12-journeys.js'),/stripe\.checkout\.sessions\.create|createCheckoutSession/);
 });
 test('Staff questionnaire imports the same Portal V2 question sources',()=>{
- const journey=read('v12-journeys.mjs');
+ const journey=read('v12-journeys.js');
  const insurance=read('portal-defs/insuranceInputs.js');
  const accreditation=read('portal-defs/accreditationInputs.js');
  assert.ok(journey.includes('import {INSURANCE_STEPS,visibleSteps,stopMessages,'));
@@ -47,7 +47,7 @@ test('Staff questionnaire imports the same Portal V2 question sources',()=>{
  assert.match(journey,/staff-authorised Catalyst adapter/i);
 });
 test('No secrets are embedded in new frontend modules',()=>{
- for(const name of ['v12-crm.js','v12-journeys.mjs']){
+ for(const name of ['v12-crm.js','v12-journeys.js']){
   const txt=read(name);
   assert.doesNotMatch(txt,/sk_test_[A-Za-z0-9]{8}|sk_live_[A-Za-z0-9]{8}|Authorization\s*:\s*Bearer\s+[A-Za-z0-9_-]+/);
  }
