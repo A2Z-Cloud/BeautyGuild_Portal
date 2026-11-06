@@ -186,13 +186,13 @@
         try{const em=await loadEmails(entity,id,api,page);item.pages.set(page,em.rows);item.more=em.more;item.moreByPage.set(page,em.more);return;}
         catch(e){emailProblem=String(e&&e.message||e);}
       }
-      if(typeof api?.API?.getRelatedRecords!=='function')throw Error('CRM SDK related-list access is unavailable');
+      if(typeof api?.API?.getRelatedRecords!=='function')throw Error('Related lists are not available right now');
       const result=await api.API.getRelatedRecords({Entity:entity,RecordID:String(id),RelatedList:list,page,per_page:100});
       if(result?.code&&result.code!=='SUCCESS'&&result.code!=='NO_CONTENT'&&!Array.isArray(result.data))throw Error(result.message||result.code);
       const rows=Array.isArray(result?.data)?result.data:Array.isArray(result)?result:[];
       item.pages.set(page,rows);
       item.more=result?.info?.more_records===true||(result?.info?.more_records==null&&rows.length===100);item.moreByPage.set(page,item.more);
-      if(emailProblem&&!rows.length)item.error='Emails could not be read from CRM ('+emailProblem+'). The CRM connection may need email read access.';
+      if(emailProblem&&!rows.length)item.error='Emails could not be loaded from CRM ('+emailProblem+'). Tell your A2Z Cloud contact if this keeps happening.';
     }catch(e){item.error=String(e.message||e);}
     finally{item.loading=false;rerender();}
   }
@@ -209,9 +209,10 @@
     let columns=preferred.filter(x=>rows.some(r=>r[x]!==undefined)&&(meta.size===0||meta.has(x)));
     if(!columns.length&&rows.length)columns=Object.keys(rows[0]).filter(k=>k!=='id'&&!k.startsWith('$')&&(meta.size===0||meta.has(k))).slice(0,6);
     if(!columns.length)columns=['Name'];
-    const headings=columns.map(k=>'<th scope="col">'+safe(meta.get(k)?.field_label||pretty(k))+'</th>').join('');
+    const labels=columns.map(k=>meta.get(k)?.field_label||pretty(k));
+    const headings=labels.map(l=>'<th scope="col">'+safe(l)+'</th>').join('');
     return '<div class="v12-table-wrap"><table class="v12-table"><thead><tr>'+headings+(navigable.has(entity)?'<th scope="col" class="v12-action-cell">Action</th>':'')+'</tr></thead><tbody>'+
-      rows.map(r=>'<tr>'+columns.map((k,i)=>'<td>'+(i===0&&navigable.has(entity)?'<button class="v12-link v12-cell-link" data-action="select" data-entity="'+safe(entity)+'" data-id="'+safe(r.id)+'">'+cellMarkup(k,r[k])+'</button>':cellMarkup(k,r[k]))+'</td>').join('')+
+      rows.map(r=>'<tr>'+columns.map((k,i)=>'<td data-label="'+safe(labels[i])+'">'+(i===0&&navigable.has(entity)?'<button class="v12-link v12-cell-link" data-action="select" data-entity="'+safe(entity)+'" data-id="'+safe(r.id)+'">'+cellMarkup(k,r[k])+'</button>':cellMarkup(k,r[k]))+'</td>').join('')+
       (navigable.has(entity)?'<td class="v12-action-cell"><button class="v12-link" data-action="select" data-entity="'+safe(entity)+'" data-id="'+safe(r.id)+'">Open</button></td>':'')+'</tr>').join('')+
       '</tbody></table></div>';
   }
@@ -329,7 +330,7 @@
     const item=timelineCache.get(key);
     const openBtn='<button type="button" class="button secondary" data-action="open" data-entity="'+safe(entity)+'" data-id="'+safe(id)+'">Open full timeline in CRM</button>';
     if(item.loading&&!item.events.length)return '<section class="v12-detail-section"><h3>Timeline</h3><p class="v12-muted" role="status">Loading the CRM timeline…</p></section>';
-    if(item.unavailable)return relatedActivityTimeline(entity,record,api,rerender,'<p class="v12-muted" role="status">The full CRM timeline is not connected yet, so this shows notes, tasks and other related activity only. '+openBtn+'</p>');
+    if(item.unavailable)return relatedActivityTimeline(entity,record,api,rerender,'<p class="v12-muted" role="status">The full CRM timeline could not be loaded, so this shows notes, tasks and other related activity only. '+openBtn+'</p>');
     const active=timelineFilter.get(key)||'all',def=TIMELINE_FILTERS.find(f=>f[0]===active)||TIMELINE_FILTERS[0];
     const chips='<div class="v12-tabs bg-tl-filters" role="group" aria-label="Filter the timeline">'+TIMELINE_FILTERS.map(f=>'<button type="button" class="'+(f[0]===def[0]?'selected':'')+'" data-action="v12-timeline-filter" data-filter="'+f[0]+'">'+safe(f[1])+' <span class="bg-tl-count">'+item.events.filter(f[2]).length+'</span></button>').join('')+'</div>';
     const shown=item.events.filter(def[2]),days=new Map();
@@ -390,7 +391,7 @@ if(selection==='overview'&&['Deals','Membership'].includes(entity))main=membersh
     }else if(selection==='timeline'){
       main=crmTimeline(entity,record,ctx.crm,ctx.rerender);
     }else if(selection==='processing'){
-      main='<section class="v12-detail-section"><h3>Processing and decisions</h3>'+fieldRows(entity,record,['Application_Status','Application_Stage','Underwriting_Status','Risk_Status','Sanctions_Status','Payment_Status','Policy_Status','Finance_Sync_Status','Next_Action','Next_Action_Date','Stop_Reason','Manual_Review_Outcome'],true)+'<div class="v12-warning">Risk decisions and payment status must be verified in CRM and the authoritative Catalyst service. This screen does not clear a referral or activate cover.</div></section>'+(typeof ctx.processing==='function'?ctx.processing(entity,record):'');
+      main='<section class="v12-detail-section"><h3>Processing and decisions</h3>'+fieldRows(entity,record,['Application_Status','Application_Stage','Underwriting_Status','Risk_Status','Sanctions_Status','Payment_Status','Policy_Status','Finance_Sync_Status','Next_Action','Next_Action_Date','Stop_Reason','Manual_Review_Outcome'],true)+'<div class="v12-warning">Risk decisions and payment status are confirmed in CRM and the Portal. This screen does not clear a referral or activate cover.</div></section>'+(typeof ctx.processing==='function'?ctx.processing(entity,record):'');
     }else{main=relationContent(entity,record,selection,ctx.crm,ctx.rerender);}
     if(selection==='overview'||selection==='details')main=latestActivity(entity,record,ctx.crm,ctx.rerender)+main;
     const extraAction=(ctx.operationalUat||global.BG_OPERATIONAL_UAT)?'':(global.BGStaffAddons?.action(entity,record)||'');
@@ -402,7 +403,7 @@ if(selection==='overview'&&['Deals','Membership'].includes(entity))main=membersh
       const count=loaded?'<span class="staff-rel-count" aria-label="'+loaded.length+' loaded on current page">'+loaded.length+(cache.moreByPage?.get(cache.page||1)?'+':'')+'</span>':'';
       return '<button class="v12-side-link '+(selection===r.id?'active':'')+'" data-action="v12-tab" data-tab="'+safe(r.id)+'"><span>'+safe(r.label)+'</span>'+count+'</button>';
     }).join('');
-    const metaText=meta.loading?'CRM layout metadata loading…':meta.problems?.length?'Some CRM metadata could not be loaded; fields and relationships may be incomplete.':'CRM layout and field labels';
+    const metaText=meta.loading?'Loading the CRM layout…':meta.problems?.length?'Some CRM layout details could not be loaded, so some fields or lists may be missing.':'Fields and lists follow your CRM layout.';
     return '<div class="v12-record">'+header+'<div class="v12-member-actions"><div class="v12-member-primary-actions">'+ctx.actions(entity,id)+'</div>'+(extraAction?'<div class="v12-member-service-actions"><span>Membership services</span>'+extraAction+'</div>':'')+'</div><div class="v12-record-layout"><div class="v12-main">'+main+'<p class="v12-meta-note">'+safe(metaText)+'</p></div><aside class="v12-side" aria-label="Record sections and related lists"><h3>Record</h3>'+navigation+'<h3>Related Lists</h3>'+related+'</aside></div></div>';
   }
   async function action(el,focus,crm,rerender){

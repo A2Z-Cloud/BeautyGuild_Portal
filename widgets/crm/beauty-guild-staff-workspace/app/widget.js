@@ -35,7 +35,7 @@
   };
   function icon(name){return '<svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'+(ICON_PATHS[name]||ICON_PATHS['file-search'])+'</svg>';}
   function installStaticIcons(){document.querySelectorAll('[data-icon]').forEach(el=>{el.innerHTML=icon(el.dataset.icon);});}
-  const VIEW_TITLES={processing:['Staff Workspace','Applications and customer records'],overview:['Customers','Contact, organisation and membership information'],membership:['Membership','Membership records and renewals'],insurance:['Insurance','Policies, cover and underwriting'],accreditation:['Accreditation','Applications, qualifications, centres and courses'],queue:['Applications','Applications requiring attention'],tasks:['My tasks','Open CRM tasks assigned to you'],create:['New application','Staff-assisted application · prices come from the Beauty Guild pricing service']};
+  const VIEW_TITLES={processing:['Staff Workspace','Applications and customer records'],overview:['Customers','Contact, organisation and membership information'],membership:['Membership','Membership records and renewals'],insurance:['Insurance','Policies, cover and underwriting'],accreditation:['Accreditation','Applications, qualifications, centres and courses'],queue:['Applications','Applications requiring attention'],tasks:['My tasks','Open CRM tasks assigned to you'],create:['New application','Take an application with a customer']};
   const VIEWS_FOR={Contacts:'overview',Accounts:'overview',Membership:'membership',Deals:'membership',Membership_Extension:'membership',Insurance_Policy:'insurance',Insurance_Extension:'insurance',Declarations:'insurance',Insured_People:'insurance',Insured_Premises:'insurance',Policy_Revisions:'insurance',Risk_Screenings:'insurance',Training_Centre_Accred:'accreditation',Training_Centres:'accreditation',Qualifications:'accreditation',TC_Course_Offering:'accreditation',Tutor_Relationships:'accreditation'};
   const ALL_ENTITIES=new Set(Object.values(M));
   const CONTACT_RELATIONS=[['Membership','Contact'],['Deals','Contact_Name'],['Insurance_Policy','Contact'],['Training_Centre_Accred','Applicant_Contact'],['Qualifications','Contact'],['Training_Centres','Contact']];
@@ -178,7 +178,7 @@
       Investigation_Status:{options:['Open','Cleared','Confirmed'],workflow:'Sanctions checks only: rolls the result up to the policy sanctions status and creates a staff task if review is needed.'}
     },
     Training_Centre_Accred:{
-      Application_Stage:{options:['Draft','Quote Saved','Submitted','Qualifications Outstanding','Awaiting Payment','Paid','Payment Failed','Needs Processing','Under Review','Needs Information','Approved','Rejected','Cancelled','Payment Processing'],workflow:'Approved: emails the approval and acceptance letter. Paid: emails payment confirmation. Payment Failed: emails the payment failed notice. Payment Processing: updates the Stripe payment log.'},
+      Application_Stage:{options:['Draft','Quote Saved','Submitted','Qualifications Outstanding','Awaiting Payment','Paid','Payment Failed','Needs Processing','Under Review','Needs Information','Approved','Rejected','Cancelled','Payment Processing'],workflow:'Approved: emails the approval and acceptance letter. Paid: emails payment confirmation. Payment Failed: emails the payment failed notice. Payment Processing: updates the payment log.'},
       Accreditation_Status:{options:['Verified','Unverified'],workflow:'Verified: publishes the accreditation to the website.'}
     },
     TC_Course_Offering:{
@@ -279,7 +279,7 @@
   async function fetchNativeRelated(entity,id,token){
     const cfg=NATIVE_RELATIONS[entity]||[];if(!cfg.length)return;
     if(typeof api().getRelatedRecords!=='function'){
-      cfg.forEach(([name])=>{state.nativeErrors[entity+':'+id+':'+name]='CRM SDK related-list access is unavailable.';});render();return;
+      cfg.forEach(([name])=>{state.nativeErrors[entity+':'+id+':'+name]='Related lists are not available right now.';});render();return;
     }
     await Promise.all(cfg.map(async ([name])=>{
       const key=entity+':'+id+':'+name;
@@ -597,7 +597,7 @@
         (shown.length?shown.map(p=>row(pick(p,['Policy_Number','Name']), 'Cover: '+pick(p,['Policy_Status','Application_Status'])+' · Payment: '+pick(p,['Payment_Status'])+' · Ends: '+pick(p,['Policy_End_Date','End_Date']),recordLink(M.POLICY,p,OPERATIONAL_UAT?'View policy':'View policy / MTA'))).join(''):'<p class="v12-muted">No linked insurance policies returned from CRM.</p>')+
         '<p class="v12-muted">'+(OPERATIONAL_UAT?'Open a policy to review its cover and status.':'Open a policy to review current cover, request an MTA, quote and save the revision.')+'</p></section>'+
       '<section><h4>Membership extensions</h4>'+
-        (extensions.length?extensions.map(x=>row(pick(x,['Name','Extension_Name','Product_Name']), 'Status: '+pick(x,['Status','Payment_Status'])+' · '+pick(x,['Quantity']),recordLink(M.ADDON,x,'Open extension'))).join(''):'<p class="v12-muted">No extensions loaded for this membership. See the transaction’s related lists for the authoritative record set.</p>')+
+        (extensions.length?extensions.map(x=>row(pick(x,['Name','Extension_Name','Product_Name']), 'Status: '+pick(x,['Status','Payment_Status'])+' · '+pick(x,['Quantity']),recordLink(M.ADDON,x,'Open extension'))).join(''):'<p class="v12-muted">No extensions loaded for this membership. See the transaction’s related lists for the full list.</p>')+
       '</section><section><h4>'+(OPERATIONAL_UAT?'Current transaction':'Renewal and service actions')+'</h4>'+
         (OPERATIONAL_UAT?'':'<p class="v12-muted">Renewals and upgrades follow the existing application and checkout logic. Payment is verified from CRM after Creator processes the Stripe event.</p>')+
         '<div class="membership-service-actions">'+
@@ -621,7 +621,7 @@
   };
   const J=(name,label,type='text',options=null,required=false,when=null)=>({name,label,type,options,required,when});
   const JOURNEY_FLOW={
-    membership:{title:'Membership and Insurance',description:'The staff-assisted combined application uses the Portal V2 membership decision and pricing service.',steps:[]},
+    membership:{title:'Membership and Insurance',description:'Take a membership application, with insurance where the customer needs it. The Portal decides eligibility and prices.',steps:[]},
     insurance:{title:'Insurance',description:'Use the existing Guild insurance quotation questions and referral process.',steps:[
       {title:'How you work',description:'Select each relevant way the applicant works.',fields:[
         J('insWorking','How you work','multi',[['insWorkingFromHome','I work from home'],['insMobile','I work on a mobile basis'],['insRentedRoom','I rent a treatment room'],['insSubcontractor','I am a self-employed subcontractor'],['insSalon','I own or operate a salon']],true),
@@ -635,7 +635,7 @@
         J('insEquipmentTier','Equipment cover','select',[['0','None'],['5000','Up to £5,000'],['10000','Up to £10,000'],['15000','Up to £15,000'],['20000','Up to £20,000']]),
         J('insContents','Contents cover','radio',JOPTIONS.yn),J('insBuildingsCover','Buildings cover','radio',JOPTIONS.yn,null,a=>(a.insWorking||[]).includes('insSalon')),
         J('insPremisesPostcode','Premises postcode') ]},
-      {title:'Underwriting declarations',description:'Any referral or stop decision belongs to the existing Catalyst and CRM automations.',fields:[
+      {title:'Underwriting declarations',description:'Any referral or stop decision is made by the Portal and CRM automations, not by staff.',fields:[
         J('insClaims','Previous claims or losses','radio',JOPTIONS.yn,true),J('insDeclined','Insurance previously declined','radio',JOPTIONS.yn,true),
         J('insFloodHistory','Flood history','radio',JOPTIONS.yn),J('insSubsidenceHistory','Subsidence history','radio',JOPTIONS.yn)]},
       {title:'Review and confirmations',description:'Check the details before seeking a real quote.',fields:[
@@ -648,7 +648,7 @@
         J('schoolName','School or training organisation','text',null,true),J('phone','School telephone','tel'),J('email','School email','email'),J('website','Website')]},
       {title:'Training centre',description:'The centre country determines UK or international accreditation.',fields:[
         J('centreName','Training centre name','text',null,true),J('centreAddress1','Address line 1'),J('centreTown','Town / city'),J('centrePostcode','Postcode'),J('centreCountry','Centre country','select',JOPTIONS.countries,true)]},
-      {title:'Tutors and additional venues',description:'Collect the number of tutors and venues, then link the actual records through the existing Portal V2 services.',fields:[
+      {title:'Tutors and additional venues',description:'Collect the number of tutors and venues. The Portal links the actual records.',fields:[
         J('otherTutors','Additional tutors used','radio',JOPTIONS.yn,true),J('tutorsCount','Number of tutors','number',null,false,a=>a.otherTutors==='yes'),
         J('additionalCentres','Additional training centres','radio',JOPTIONS.yn,true)]},
       {title:'Courses',description:'Course offerings must be selected from live permitted GTi courses in production.',fields:[
@@ -670,11 +670,11 @@
     return `<label class="journey-field" for="${id}"><span>${esc(f.label)}${f.required?' *':''}</span>${input}</label>`;
   }
   function visibleJourneySteps(){const j=state.journey;return(j&&JOURNEY_FLOW[j.kind]?.steps||[]).filter(x=>!x.when||x.when(j.answers));}
-  function renderJourney(){initJourney();const j=state.journey;if(j.kind&&j.step>=0){if(window.BGJourney12)return window.BGJourney12.render(j);return '<section class="journey-shell"><div class="journey-validation" role="alert">The current application form did not load. Refresh the Staff Workspace and check the Portal V2 form module. Your entries cannot be saved until it loads.</div><div class="journey-top-nav"><button type="button" class="button secondary" data-action="journey-back">← Back</button> <button type="button" class="button secondary" data-action="journey-reset">Start again</button> <button type="button" class="button secondary" data-action="journey-exit">Leave New application</button></div></section>';}if(!j.kind){return `<section class="journey-shell"><div class="journey-top-nav"><button type="button" class="button secondary journey-top-back" data-action="journey-exit">← Back to workspace</button></div><div class="journey-heading"><span class="process-kicker">NEW APPLICATION</span><h2>Select application type</h2><p>Start a staff-assisted Guild application for an existing or new CRM customer.</p></div><div class="journey-draft-entry"><strong>Resume an existing application</strong><p>Choose a customer below, or use the current CRM customer, to retrieve their saved applications.</p><button type="button" class="button secondary" data-action="journey-find-drafts">Find draft applications</button></div><div class="journey-type-grid">${Object.entries(JOURNEY_FLOW).filter(([kind])=>kind!=='insurance').map(([kind,c])=>`<button class="journey-type-card journey-type-card--${kind}" data-action="journey-type" data-kind="${kind}"><strong>${esc(c.title)}</strong><small>${esc(c.description)}</small><span>Start journey →</span></button>`).join('')}</div></section>`;}
+  function renderJourney(){initJourney();const j=state.journey;if(j.kind&&j.step>=0){if(window.BGJourney12)return window.BGJourney12.render(j);return '<section class="journey-shell"><div class="journey-validation" role="alert">The application form did not load. Refresh the Staff Workspace and try again. If it still does not load, tell your A2Z Cloud contact. Your entries cannot be saved until it loads.</div><div class="journey-top-nav"><button type="button" class="button secondary" data-action="journey-back">← Back</button> <button type="button" class="button secondary" data-action="journey-reset">Start again</button> <button type="button" class="button secondary" data-action="journey-exit">Leave New application</button></div></section>';}if(!j.kind){return `<section class="journey-shell"><div class="journey-top-nav"><button type="button" class="button secondary journey-top-back" data-action="journey-exit">← Back to workspace</button></div><div class="journey-heading"><span class="process-kicker">NEW APPLICATION</span><h2>Select application type</h2><p>Start a staff-assisted Guild application for an existing or new CRM customer.</p></div><div class="journey-draft-entry"><strong>Resume an existing application</strong><p>Choose a customer below, or use the current CRM customer, to retrieve their saved applications.</p><button type="button" class="button secondary" data-action="journey-find-drafts">Find draft applications</button></div><div class="journey-type-grid">${Object.entries(JOURNEY_FLOW).filter(([kind])=>kind!=='insurance').map(([kind,c])=>`<button class="journey-type-card journey-type-card--${kind}" data-action="journey-type" data-kind="${kind}"><strong>${esc(c.title)}</strong><small>${esc(c.description)}</small><span>Start journey →</span></button>`).join('')}</div></section>`;}
     const cfg=JOURNEY_FLOW[j.kind],steps=visibleJourneySteps(),index=Math.min(j.step,steps.length);const current=steps[index],isContact=index<0,atPay=index>=steps.length;
     const labels=['Customer',...steps.map(x=>x.title),'Payment'];const active=isContact?0:atPay?labels.length-1:index+1;
     const bar=`<div class="journey-progress">${labels.map((l,i)=>`<span class="${i===active?'current':i<active?'done':''}">${i+1}. ${esc(l)}</span>`).join('')}</div>`;
-    const notice='<div class="journey-preview-notice"><strong>Customer selection</strong><span>Select or create the CRM Contact first. The application form then provides Save to CRM and Resume draft using the deployed Staff API.</span></div>';
+    const notice='<div class="journey-preview-notice"><strong>Customer selection</strong><span>Choose the customer first, or create them if they are new. You can then save the application to CRM and resume it later.</span></div>';
     let body='';
     if(isContact){
       const person=j.contact;
@@ -752,7 +752,7 @@
   }
   async function createJourneyContact(){const j=state.journey,values=j.newContact||{};const first=String(values.First_Name||'').trim(),last=String(values.Last_Name||'').trim(),email=String(values.Email||'').trim().toLowerCase();if(!first||!last||!/^\S+@\S+\.\S+$/.test(email)){j.formError='Enter first name, surname and a valid email before creating the CRM Contact.';render();return;}
     if(j.contactCreating)return;j.contactCreating=true;j.formError='';render();try{const existing=asRows(await api().searchRecord({Entity:M.CONTACT,Type:'email',Query:email,page:1,per_page:20})).filter(x=>String(x.Email||'').trim().toLowerCase()===email);if(existing.length){j.contactResults=existing;j.formError='A Contact with this email already exists. Select the matching record instead.';return;}
-      const result=await api().insertRecord({Entity:M.CONTACT,APIData:{First_Name:first,Last_Name:last,Email:email,...(values.Mobile?{Mobile:values.Mobile}:{})}});const entry=asRows(result)[0];const id=String(entry?.details?.id||result?.data?.[0]?.details?.id||'');if(entry?.status==='error'||!id)throw Error(entry?.message||'CRM did not return a Contact ID.');const contact=await getRecord(M.CONTACT,id);j.contact=contact;state.contact=contact;j.newContact={};setNotice('CRM Contact created. Continue the application preview.','success');
+      const result=await api().insertRecord({Entity:M.CONTACT,APIData:{First_Name:first,Last_Name:last,Email:email,...(values.Mobile?{Mobile:values.Mobile}:{})}});const entry=asRows(result)[0];const id=String(entry?.details?.id||result?.data?.[0]?.details?.id||'');if(entry?.status==='error'||!id)throw Error(entry?.message||'CRM did not return a Contact ID.');const contact=await getRecord(M.CONTACT,id);j.contact=contact;state.contact=contact;j.newContact={};setNotice('Customer created in CRM. Continue the application.','success');
     }catch(e){j.formError='Unable to create CRM Contact: '+(e.message||e)}finally{j.contactCreating=false;render();}
   }
 
@@ -809,7 +809,7 @@
     if(!entity||slot.loading||slot.loaded)return;
     slot.loading=true;slot.error='';
     try{
-      if(typeof window.ZOHO?.CRM?.META?.getCustomViews!=='function')throw Error('Custom-view metadata is unavailable with this CRM SDK.');
+      if(typeof window.ZOHO?.CRM?.META?.getCustomViews!=='function')throw Error('CRM views are not available right now.');
       const response=await ZOHO.CRM.META.getCustomViews({Entity:entity});
       const views=Array.isArray(response?.custom_views)?response.custom_views:
         Array.isArray(response?.data?.custom_views)?response.data.custom_views:[];
@@ -857,8 +857,8 @@
   }
   async function getCustomViewPage(kind,page){
     const entity=BROWSE_MODULE[kind],view=selectedCustomView(kind);
-    if(!view)throw Error('The selected CRM view could not be verified against CRM metadata.');
-    if(typeof api().coql!=='function')throw Error('CRM COQL is not available to retrieve this custom view.');
+    if(!view)throw Error('The selected CRM view could not be checked. Choose All accessible records, or try again.');
+    if(typeof api().coql!=='function')throw Error('CRM views are not available right now.');
     const offset=(page-1)*100;if(offset>=2000)throw Error('This view exceeds the current 2,000-record paging window. Open the native CRM view for more records.');
     const cols=crmViewColumns(kind);
     const query=customViewQuery(entity,view.id,cols,page);
@@ -1084,14 +1084,14 @@
         pg.rows.map(r=>{
           const rel=taskRelated(r),d=taskDueInfo(r.Due_Date),st=String(r.Status||'').toLowerCase(),pr=String(r.Priority||'');
           const rname=rel?(rel.name||t.names[taskRelKey(rel)]||'Loading…'):'';const relCell=rel?(ALL_ENTITIES.has(rel.entity)?`<button class="v12-link" data-action="select" data-entity="${esc(rel.entity)}" data-id="${esc(rel.id)}">${esc(rname)}</button>`:esc(rname||'Related record')):'—';
-          return `<tr><td><button class="v12-link v12-cell-link" data-action="task-open" data-id="${esc(r.id)}">${esc(r.Subject||'Untitled task')}</button></td><td>${relCell}</td><td><span class="bg-state bg-state-${tone[st]||'neutral'}">${esc(r.Status||'Not recorded')}</span></td><td>${pr?`<span class="bg-state bg-state-${/high/i.test(pr)?'danger':'neutral'}">${esc(pr)}</span>`:'—'}</td><td class="bg-task-due">${esc(d.text)}${d.label?` <span class="bg-state bg-state-${d.cls||'neutral'}">${esc(d.label)}</span>`:''}</td><td class="v12-action-cell"><button class="v12-link" data-action="task-open" data-id="${esc(r.id)}">Open</button></td></tr>`;
+          return `<tr><td data-label="Task"><button class="v12-link v12-cell-link" data-action="task-open" data-id="${esc(r.id)}">${esc(r.Subject||'Untitled task')}</button></td><td data-label="Related to">${relCell}</td><td data-label="Status"><span class="bg-state bg-state-${tone[st]||'neutral'}">${esc(r.Status||'Not recorded')}</span></td><td data-label="Priority">${pr?`<span class="bg-state bg-state-${/high/i.test(pr)?'danger':'neutral'}">${esc(pr)}</span>`:'—'}</td><td class="bg-task-due" data-label="Due">${esc(d.text)}${d.label?` <span class="bg-state bg-state-${d.cls||'neutral'}">${esc(d.label)}</span>`:''}</td><td class="v12-action-cell"><button class="v12-link" data-action="task-open" data-id="${esc(r.id)}">Open</button></td></tr>`;
         }).join('')+'</tbody></table></div>'+pg.controls+(t.more?'<p class="v12-muted">Showing the first 200 open tasks. Open the Tasks tab in CRM to see the rest.</p>':'');
     }
     return panel('My open tasks',desc,body,refresh);
   }
   async function changeView(next){
     state.history=[];state.view=next;state.searchResults=[];setNotice('');
-    if(next==='create'){if(OPERATIONAL_UAT&&!NEW_APPLICATIONS){setNotice('New applications are outside Operational UAT.','info');return;}initJourney();render();return;}
+    if(next==='create'){if(OPERATIONAL_UAT&&!NEW_APPLICATIONS){setNotice('New applications are not available.','info');return;}initJourney();render();return;}
     if(next==='tasks'){state.focus=null;state.focusEntityView=null;state.contact=null;return loadTasks();}
     if(next==='overview'){state.focus=null;state.focusEntityView=null;state.contact=null;state.browseKind='customers';state.browseSearch=state.browseSearchByKind.customers||'';const data=browseData('customers');if(!data.loaded)return loadBrowse('customers');render();return;}
     if(next==='queue'){const d=browseData(state.queueKind);if(!d.loaded)return loadQueue(state.queueKind);render();return;}
@@ -1113,14 +1113,14 @@
   async function init(){installStaticIcons();document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>changeView(b.dataset.view)));$('#searchBtn').addEventListener('click',handleSearch);$('#globalSearch').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();handleSearch()}});$('#refreshBtn').addEventListener('click',()=>{if(state.view==='create'){render();}else if(state.focus)select(state.focus.entity,state.focus.record.id);else if(state.contact)select(M.CONTACT,state.contact.id);else if(state.view==='queue')loadBrowse(state.queueKind,{reset:true});else if(state.view==='overview')loadBrowse('customers',{reset:true});else if(BROWSE_MODULE[state.view])loadBrowse(state.view,{reset:true});else setNotice('Select a CRM record or choose a list to refresh.');});$('#contentArea').addEventListener('click',clickAction);$('#contentArea').addEventListener('input',event=>{if(window.BGJourney12&&window.BGJourney12.input(state.journey,event.target)){if(['checkbox','radio'].includes(event.target.type))render();}},true);$('#contentArea').addEventListener('change',event=>{if(window.BGJourney12&&window.BGJourney12.input(state.journey,event.target)&&['select-one'].includes(event.target.type))render();},true);$('#searchResults').addEventListener('click',clickAction);$('#cancelModal').addEventListener('click',()=>$('#actionModal').close());$('#cancelModal2').addEventListener('click',()=>$('#actionModal').close());$('#actionForm').addEventListener('submit',e=>{e.preventDefault();saveAction()});$('#contentArea').addEventListener('change',changeReviewField);
     $('#contentArea').addEventListener('change',event=>{const k=event.target?.dataset?.crmView;if(k)chooseCustomView(k,String(event.target.value||'')).catch(e=>setNotice(String(e.message||e),'error'));});document.addEventListener('change',event=>{const t=event.target;if(t&&t.dataset&&t.dataset.wfEdit)askWorkflowEdit(t.dataset.entity,t.dataset.id,t.dataset.field,t.value);});document.addEventListener('click',event=>{const b=event.target&&event.target.closest&&event.target.closest('[data-wf-save],[data-wf-cancel]');if(!b)return;event.preventDefault();if(b.dataset.wfSave)saveWorkflowEdit();else{wfHide();render();}});$('#contentArea').addEventListener('input',changeReviewField);$('#contentArea').addEventListener('input',event=>{if(event.target.dataset?.journeyCustomerSearch!==undefined){state.journey.customerSearch=event.target.value;}else if(event.target.dataset?.journeyNewContact){state.journey.newContact=state.journey.newContact||{};state.journey.newContact[event.target.dataset.journeyNewContact]=event.target.value;}else if(event.target.dataset?.browseSearch!==undefined){state.browseSearch=event.target.value;state.pages['browse:'+state.browseKind]=1;state.browseSearchByKind[state.browseKind]=state.browseSearch;const cursor=event.target.selectionStart;render();const el=document.querySelector('.browse-search');if(el){el.focus();if(typeof el.setSelectionRange==='function')el.setSelectionRange(cursor,cursor)}}else if(event.target.dataset?.journeyField){setJourneyField(event.target)}});$('#contentArea').addEventListener('change',event=>{if(event.target.dataset?.journeyField)setJourneyField(event.target)});render();
     
-    if(!window.ZOHO||!ZOHO.embeddedApp){setNotice('Zoho CRM SDK could not load. Open the widget in Zoho CRM and check network permissions.','error');$('#connectionLabel').textContent='Not connected';return}
-    try{let pendingContext=null;ZOHO.embeddedApp.on('PageLoad',context=>{const c=matchContext(context);if(c){pendingContext=c;if(state.connected)select(c.entity,c.id)}});await ZOHO.embeddedApp.init();state.connected=true;$('#connectionDot').classList.add('connected');$('#connectionLabel').textContent='Connected';try{const me=await ZOHO.CRM.CONFIG.getCurrentUser();const record=asRows(me)[0]||me.users&&me.users[0]||me;state.currentUser=record;$('#identityLabel').textContent=record.full_name||record.name||record.email||''}catch(_){/* User display is optional. */}const params=new URLSearchParams(location.search);const candidate=matchContext({Entity:params.get('module'),EntityId:params.get('id')});if(pendingContext)select(pendingContext.entity,pendingContext.id);else if(candidate&&!state.focus)select(candidate.entity,candidate.id)}catch(err){$('#connectionLabel').textContent='Connection failed';setNotice(`CRM SDK initialisation failed: ${err.message||err}`,'error')}}
+    if(!window.ZOHO||!ZOHO.embeddedApp){setNotice('The Staff Workspace could not connect to Zoho CRM. Open it from its Zoho CRM tab and check your network connection.','error');$('#connectionLabel').textContent='Not connected';return}
+    try{let pendingContext=null;ZOHO.embeddedApp.on('PageLoad',context=>{const c=matchContext(context);if(c){pendingContext=c;if(state.connected)select(c.entity,c.id)}});await ZOHO.embeddedApp.init();state.connected=true;$('#connectionDot').classList.add('connected');$('#connectionLabel').textContent='Connected';try{const me=await ZOHO.CRM.CONFIG.getCurrentUser();const record=asRows(me)[0]||me.users&&me.users[0]||me;state.currentUser=record;$('#identityLabel').textContent=record.full_name||record.name||record.email||''}catch(_){/* User display is optional. */}const params=new URLSearchParams(location.search);const candidate=matchContext({Entity:params.get('module'),EntityId:params.get('id')});if(pendingContext)select(pendingContext.entity,pendingContext.id);else if(candidate&&!state.focus)select(candidate.entity,candidate.id)}catch(err){$('#connectionLabel').textContent='Connection failed';setNotice(`Could not connect to Zoho CRM: ${err.message||err}`,'error')}}
   function changeReviewField(event){const el=event.target;if(!el||!el.dataset)return;const {entity,id,reviewCheck,reviewOutcome,reviewComment}=el.dataset;if(!reviewKind(entity)||!/^[0-9]{8,30}$/.test(id||''))return;const draft=reviewDraft(entity,id);if(reviewCheck){draft.checked[reviewCheck]=Boolean(el.checked);const count=Object.values(draft.checked).filter(Boolean).length;const counter=document.querySelector('.check-count');if(counter)counter.textContent=`${count} of ${REVIEW_GROUPS[reviewKind(entity)].checks.length}`;}if(reviewOutcome!==undefined)draft.outcome=el.value;if(reviewComment!==undefined)draft.comment=el.value;}
   async function clickAction(event){
     const el=event.target.closest('[data-action],[data-queue],[data-v12-add],[data-v12-remove],[data-v12-copy]');if(!el)return;if(window.BGJourney12&&(el.dataset.v12Add||el.dataset.v12Remove||el.dataset.v12Copy)){if(window.BGJourney12.click(state.journey,el))render();return;}if(window.BGCRM12&&await window.BGCRM12.action(el,state.focus,window.ZOHO?.CRM,render))return;
     if(el.dataset.queue){state.browseFilter='attention';state.browseSearch='';return loadQueue(el.dataset.queue);}
     const action=el.dataset.action,entity=el.dataset.entity,id=el.dataset.id;
-    if(isExcludedAction(action)){setNotice('This function is outside Operational UAT. Use the existing CRM record for authorised operational activity.','info');return;}
+    if(isExcludedAction(action)){setNotice('This function is not available in the Staff Workspace. Use the CRM record instead.','info');return;}
     if(action==='browse'){state.view=el.dataset.kind;state.focus=null;state.focusEntityView=null;state.browseKind=el.dataset.kind;state.browseFilter='all';state.browseSearch=state.browseSearchByKind[state.browseKind]||'';const d=browseData(state.browseKind);if(!d.loaded)await loadBrowse(state.browseKind);else render();}
     else if(action==='launchqueue'){state.view='queue';await loadQueue(el.dataset.kind||'insurance');}
     else if(action==='browse-refresh')await loadBrowse(el.dataset.kind,{reset:true});
@@ -1155,7 +1155,7 @@
       state.view='create';initJourney('membership');state.journey.contact={...state.contact};state.journey.step=0;
       state.journey.answers={previousId:String(deal.id),changeType:upgrading?'upgrade':'renewal',purchaseType:upgrading?'upgrade':'renewal',...(upgrading?{insuranceRequired:'yes'}:{})};
       window.BGJourney12?.prefill(state.journey);render();
-      setNotice('The existing membership is linked. Complete the membership questions and obtain an authoritative quote before taking payment.','info');
+      setNotice('The existing membership is linked. Complete the membership questions and get a quote before taking payment.','info');
     }
     else if(action==='membership-cancel-open'){const deal=allFor(M.DEAL).find(x=>String(x.id)===String(el.dataset.id));if(deal)openCancellation(deal);}
     else if(action==='membership-cancel-quote')await quoteCancellation();
@@ -1221,7 +1221,7 @@
         const out=await window.BGStaffApi.call(j.remote?'drafts_update':'drafts_save',request);
         const d=out?.draft;if(!d?.id||!d?.revision)throw Error('Draft save was not confirmed by the server.');
         j.remote={id:String(d.id),service:d.service||service,journeyId:d.journeyId||request.journeyId,revision:d.revision};
-        j.draftsMessage='CRM draft saved. The customer can resume this application in Portal V2.';
+        j.draftsMessage='CRM draft saved. The customer can continue this application in the Portal.';
       }catch(e){j.draftsError=String(e.message||e);}
       finally{j.draftsBusy=false;render();}
     }
@@ -1230,7 +1230,7 @@
       if(j.discountedQuote){j.paymentError='Discounted quotations cannot be converted into staff payment links. Obtain a new undiscounted quote.';render();return;}
       j.customerAccepted=Boolean(document.getElementById('staff-customer-accepted')?.checked);if(!j.customerAccepted){j.paymentError='Confirm the customer has explicitly accepted the Code of Ethics and terms.';render();return;}
       if(window.BGStaffAddons?.quoteInputs){const discounts=window.BGStaffAddons.quoteInputs();if(discounts.voucherCode||discounts.waivers?.length){j.paymentError='Discounted payment links are not supported. Remove all vouchers and waivers, then obtain a fresh quote.';render();return;}}
-      if(!await confirmDialog({title:'Create a payment link?',body:'This creates a Stripe Checkout payment link for this customer and the current application. Share it with the customer, or open it to pay on their behalf.',yes:'Create link',no:'Not yet'}))return;
+      if(!await confirmDialog({title:'Create a payment link?',body:'This creates a secure payment link for this customer and the current application. Share it with the customer, or open it to take payment for them.',yes:'Create link',no:'Not yet'}))return;
       j.paymentBusy=true;j.paymentError='';render();
       try{
         const body={...window.BGJourney12.apiRequest(j),accepted:'yes'};
@@ -1238,7 +1238,7 @@
         const response=await withTimeout(window.BGStaffApi.call('payment_link',body),60000,'The payment service did not answer in time. Try again.');
         if(response?.alreadyPaid){j.paymentAlreadyPaid=true;j.paymentLink='';}
         else if(/^https:\/\/checkout\.stripe\.com\//.test(response?.checkoutUrl||''))j.paymentLink=response.checkoutUrl;
-        else throw Error('The server did not return a valid Stripe Checkout URL.');
+        else throw Error('The payment service did not return a valid payment link.');
       }catch(e){j.paymentError=String(e.message||e);}
       finally{j.paymentBusy=false;render();}
     }
@@ -1263,14 +1263,14 @@
       if(!j?.contact?.id||!j.kind||j.quotePending)return;
       j.quotePending=true;j.quoteError='';j.liveQuote=null;render();
       try{
-        if(!window.BGStaffApi?.call)throw Error('Signed staff API integration unavailable.');
+        if(!window.BGStaffApi?.call)throw Error('The pricing connection is not available. Refresh the Staff Workspace and try again.');
         const kind=j.kind;
         if(j.kind==='accreditation'&&!j.accreditationSubmitted)throw Error('Save and submit Accreditation before requesting its payable quote.');
         const base=window.BGJourney12.apiRequest(j);
         const payload={...base};
         if(window.BGStaffAddons?.quoteInputs&&kind==='membership')Object.assign(payload,window.BGStaffAddons.quoteInputs());
         const result=await withTimeout(window.BGStaffApi.call('quote',payload),60000,'The pricing service did not answer in time. Press Calculate live quotation to try again.');
-        if(result?.error||result?.ok===false||!result?.quote)throw Error(result?.message||result?.error||'No authoritative quote returned by the Staff API.');
+        if(result?.error||result?.ok===false||!result?.quote)throw Error(result?.message||result?.error||'The pricing service did not return a quote. Try again.');
         j.liveQuote=result;j.lastQuoteInputs=JSON.stringify(base);j.discountedQuote=Boolean(payload.voucherCode||payload.waivers?.length||result.quote?.discount||result.quote?.discounts?.length);
       }catch(error){j.quoteError=String(error?.message||error);}
       finally{j.quotePending=false;render();}
@@ -1296,10 +1296,10 @@
     else if(action==='task-complete')await saveTask(true);
     else if(action==='open')await openCRM(entity,id);
     else if(action==='edit'){
-      try{if(typeof ZOHO?.CRM?.UI?.Record?.edit!=='function')throw Error('Native CRM edit is not available in this widget context.');
+      try{if(typeof ZOHO?.CRM?.UI?.Record?.edit!=='function')throw Error('Editing in CRM is not available here. Open the record in CRM instead.');
         if(!await confirmLeaveForEdit())return;
         await ZOHO.CRM.UI.Record.edit({Entity:entity,RecordID:String(id)});
-      }catch(e){setNotice('Unable to open the native CRM edit screen: '+String(e.message||e),'error');}
+      }catch(e){setNotice('Unable to open the CRM edit screen: '+String(e.message||e),'error');}
     }
     else if(action==='email'||action==='crm-actions'){await openCRM(entity,id);setNotice(action==='email'?'Use the native CRM record Send Email action.':'Use the authorised CRM buttons and workflow controls on the opened record.','info');}
     else if(action==='note'||action==='task')openAction(action,entity,id);

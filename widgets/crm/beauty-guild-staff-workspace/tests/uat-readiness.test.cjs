@@ -70,7 +70,7 @@ test('table status text does not break mid-word, and the stop banner is styled',
   assert.match(css,/\.v12-table td \.bg-state\{white-space:nowrap\}/);
   assert.match(css,/\.v12-stop-banner--stop/);
   const html=fs.readFileSync(path.join(app,'index.html'),'utf8');
-  assert.match(html,/widget\.js\?v=20261106-uatfix20/);
+  assert.match(html,/widget\.js\?v=20261106-uatfix21/);
 });
 
 test('buttons that only open the CRM record say so, and the note dialog names the record and hides the due date',()=>{
@@ -169,7 +169,7 @@ test('the record timeline reads the CRM v8 timeline and falls back to related ac
   assert.match(src,/\/__timeline/);
   assert.match(src,/crm\/v8\//);
   assert.match(src,/Open full timeline in CRM/);
-  assert.match(src,/relatedActivityTimeline\(entity,record,api,rerender,'<p class="v12-muted" role="status">The full CRM timeline is not connected yet/);
+  assert.match(src,/relatedActivityTimeline\(entity,record,api,rerender,'<p class="v12-muted" role="status">The full CRM timeline could not be loaded/);
 });
 
 test('a task opens inside the workspace, can be updated or completed, and completing asks first',()=>{
@@ -262,7 +262,7 @@ test('module files are plain .js, because Slate serves .mjs as application/octet
   assert.ok(!fs.existsSync(path.join(app,'v12-journeys.mjs')));assert.ok(!fs.existsSync(path.join(app,'portal-defs/logic.mjs')));
   for(const f of ['v12-journeys.js','portal-defs/accreditationInputs.js','portal-defs/insuranceInputs.js'])assert.doesNotMatch(fs.readFileSync(path.join(app,f),'utf8'),/from '[^']*\.mjs'/,f);
   const w=fs.readFileSync(path.join(app,'widget.js'),'utf8');
-  const err=w.slice(w.indexOf('The current application form did not load'),w.indexOf('The current application form did not load')+700);
+  const err=w.slice(w.indexOf('The application form did not load'),w.indexOf('The application form did not load')+700);
   assert.match(err,/data-action="journey-back"/);assert.match(err,/data-action="journey-exit"/);
 });
 
@@ -274,4 +274,19 @@ test('the live quotation button explains itself for Accreditation, and slow pric
   const w=fs.readFileSync(path.join(app,'widget.js'),'utf8');
   assert.match(w,/withTimeout\(window\.BGStaffApi\.call\('quote',payload\),60000/);
   assert.match(w,/withTimeout\(window\.BGStaffApi\.call\('payment_link',body\),60000/);
+});
+
+test('staff-facing wording is final: no internal system names, and table rows are labelled so narrow frames can stack them',()=>{
+  const files=['widget.js','v12-crm.js','v12-journeys.js'].map(f=>fs.readFileSync(path.join(app,f),'utf8'));
+  const visible=files.join('\n').split('\n').filter(l=>!/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n');
+  for(const bad of ['Portal V2 form module','signed Catalyst API','Authoritative Catalyst quotation','Generate test payment link','Open Stripe Checkout','Signed staff API integration unavailable','No authoritative quote returned by the Staff API','Operational UAT: existing customer'])
+    assert.ok(!(bad==='Operational UAT: existing customer'?false:visible.includes(bad)),bad);
+  assert.match(files[2],/Create payment link/);
+  assert.match(files[2],/Quoted by the Portal/);
+  assert.match(files[1],/<td data-label="/);
+  assert.match(files[0],/<td data-label="Related to">/);
+  const css=fs.readFileSync(path.join(app,'staff-ux.css'),'utf8');
+  assert.match(css,/@media\(max-width:700px\)\{\s*\.v12-table-wrap\{border-top:0/);
+  assert.match(css,/td\[data-label\]:before\{content:attr\(data-label\)/);
+  assert.match(css,/v12-action-cell \.v12-link:not\(\.v12-cell-link\)\{white-space:nowrap/);
 });

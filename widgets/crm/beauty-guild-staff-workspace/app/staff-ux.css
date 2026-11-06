@@ -244,3 +244,23 @@ body.staff-dev-tools #staff-api-open{display:inline-flex}
 .v12-quote-steps{margin:0 0 10px;padding-left:20px;font-size:13px}
 .v12-quote-steps li{padding:2px 0}
 .v12-quote-steps li.done{color:#2f7a4b;font-weight:700}
+
+/* Table actions: never wrap the label, and keep a comfortable touch size */
+.v12-table td.v12-action-cell{min-width:84px}
+.v12-table td.v12-action-cell .v12-link:not(.v12-cell-link){white-space:nowrap;max-width:none;min-height:36px;padding:7px 14px}
+/* Narrow frames: each row becomes a card, so nothing is cut off or hidden behind a sticky column */
+@media(max-width:700px){
+  .v12-table-wrap{border-top:0;overflow:visible}
+  .v12-table{min-width:0!important;border:0;background:transparent}
+  .v12-table thead{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
+  .v12-table,.v12-table tbody,.v12-table tr,.v12-table td{display:block;width:100%;box-sizing:border-box}
+  .v12-table tr{border:1px solid #e9dfe5;border-radius:10px;margin:0 0 10px;padding:6px 12px;background:#fff}
+  .v12-table td,.v12-table td:first-child,.v12-table td.v12-action-cell{position:static!important;box-shadow:none!important;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:7px 0;border:0;text-align:right;min-width:0!important;background:transparent!important}
+  .v12-table td[data-label]:before{content:attr(data-label);flex:0 0 36%;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#6b606b;text-align:left}
+  .v12-table td:first-child{font-weight:700}
+  .v12-table td.v12-action-cell{justify-content:flex-end;margin-top:4px;padding-top:10px;border-top:1px solid #f0e9ee}
+  .v12-table td.v12-action-cell:before{content:none}
+  .v12-table td.v12-action-cell .v12-link:not(.v12-cell-link){min-height:40px;padding:9px 18px;border:1px solid #d9cfd6;border-radius:8px}
+  .v12-table td .v12-link{text-align:right}
+  .v12-table td.bg-task-due .bg-state{margin-top:0}
+}
