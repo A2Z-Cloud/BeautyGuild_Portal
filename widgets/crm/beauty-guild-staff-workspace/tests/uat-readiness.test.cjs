@@ -70,7 +70,7 @@ test('table status text does not break mid-word, and the stop banner is styled',
   assert.match(css,/\.v12-table td \.bg-state\{white-space:nowrap\}/);
   assert.match(css,/\.v12-stop-banner--stop/);
   const html=fs.readFileSync(path.join(app,'index.html'),'utf8');
-  assert.match(html,/widget\.js\?v=20261106-uatfix12/);
+  assert.match(html,/widget\.js\?v=20261106-uatfix13/);
 });
 
 test('buttons that only open the CRM record say so, and the note dialog names the record and hides the due date',()=>{
@@ -210,4 +210,18 @@ test('the My tasks pager is allowed by the paginate action',()=>{
   assert.equal(re.test('tasks'),true);
   assert.equal(re.test('browse:insurance'),true);
   assert.equal(re.test('something-else'),false);
+});
+
+test('the Emails related list reads CRM emails through the connection and shows sender, recipient, time and status',()=>{
+  global.window=global;delete require.cache[require.resolve('../app/v12-crm.js')];require('../app/v12-crm.js');
+  const rows=global.BGCRM12.emailRows([{message_id:'m1',subject:'Your policy is ready',from:{user_name:'Beauty Guild',email:'info@bg.test'},to:[{user_name:'Sam',email:'sam@x.test'}],sent:true,time:'2026-11-05T10:00:00+00:00',status:[{type:'sent'},{type:'opened'},{type:'sent'}]},{message_id:'m2',from:{email:'a@b.test'},sent:false}]);
+  assert.equal(rows[0].Subject,'Your policy is ready');
+  assert.equal(rows[0].From,'Beauty Guild <info@bg.test>');
+  assert.equal(rows[0].To,'Sam <sam@x.test>');
+  assert.equal(rows[0].Direction,'Sent');
+  assert.equal(rows[0].Status,'Sent, Opened');
+  assert.equal(rows[1].Subject,'(no subject)');assert.equal(rows[1].Direction,'Received');
+  const src=fs.readFileSync(path.join(app,'v12-crm.js'),'utf8');
+  assert.match(src,/\/Emails'/);
+  assert.match(src,/email_related_list/);
 });

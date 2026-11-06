@@ -13,6 +13,7 @@
     Insurance_Policy:['Name','Contact','Policy_Type','Application_Status','Underwriting_Status','Payment_Status','Policy_Status','Policy_End_Date'],
     Training_Centre_Accred:['Name','Applicant_Contact','Account','Application_Stage','Accreditation_Status','Payment_Status','Valid_To'],
     Notes:['Note_Title','Note_Content','Owner','Modified_Time'],
+    Emails:['Subject','From','To','Sent_Time','Direction','Status'],
     Tasks:['Subject','Status','Priority','Due_Date','Owner'],
     Activities:['Subject','Activity_Type','Status','Due_Date','Owner','Modified_Time'],
     Open_Activities:['Subject','Activity_Type','Status','Due_Date','Owner','Modified_Time'],
@@ -156,18 +157,40 @@
     return rows.filter(r=>{if(outOfScope(r)||seen.has(r.id))return false;seen.add(r.id);return true;});
   }
   function relationKey(entity,id,list){return entity+':'+id+':'+list;}
+
+  // CRM keeps emails behind their own API, so the SDK related-list call returns nothing for them.
+  function emailAddress(x){return x&&typeof x==='object'?(x.user_name&&x.email?x.user_name+' <'+x.email+'>':String(x.email||x.user_name||'')):String(x||'');}
+  function emailRows(list){
+    return (Array.isArray(list)?list:[]).map(m=>{
+      const st=Array.isArray(m&&m.status)?[...new Set(m.status.map(x=>String(x&&(x.type||x.status)||'')).filter(Boolean).map(x=>x.replace(/_/g,' ').replace(/^./,c=>c.toUpperCase())))].join(', '):String(m&&m.status||'');
+      return{id:String(m&&(m.message_id||m.id)||''),Subject:String(m&&m.subject||'(no subject)'),From:emailAddress(m&&m.from),To:(Array.isArray(m&&m.to)?m.to:[]).map(emailAddress).join(', '),Sent_Time:String(m&&(m.time||m.sent_time||m.date_time)||''),Direction:m&&m.sent===true?'Sent':m&&m.sent===false?'Received':'',Status:st};
+    });
+  }
+  async function loadEmails(entity,id,api,page){
+    const res=await api.CONNECTION.invoke(TIMELINE_CONNECTION,{method:'GET',url:TIMELINE_API+encodeURIComponent(entity)+'/'+encodeURIComponent(id)+'/Emails',parameters:{per_page:50,page:page||1},headers:{},param_type:1});
+    const body=timelineBody(res),status=Number(res&&res.details&&res.details.statusCode);
+    if(status===204)return{rows:[],more:false};
+    if(!body||!Array.isArray(body.email_related_list))throw Error(String(body&&body.message||res&&res.message||res&&res.code||'CRM did not return emails.'));
+    return{rows:emailRows(body.email_related_list),more:!!(body.info&&body.info.more_records)};
+  }
   async function loadRelation(entity,id,list,api,rerender,{page=1}={}){
     const key=relationKey(entity,id,list), item=relatedCache.get(key)||{pages:new Map(),moreByPage:new Map(),more:false,error:null};
     if(item.loading)return;
     if(item.pages.has(page)){item.page=page;relatedCache.set(key,item);rerender();return;}
     item.loading=true;item.page=page;item.error=null;relatedCache.set(key,item);rerender();
+    let emailProblem='';
     try{
+      if(/^emails$/i.test(String(list))&&typeof api?.CONNECTION?.invoke==='function'){
+        try{const em=await loadEmails(entity,id,api,page);item.pages.set(page,em.rows);item.more=em.more;item.moreByPage.set(page,em.more);return;}
+        catch(e){emailProblem=String(e&&e.message||e);}
+      }
       if(typeof api?.API?.getRelatedRecords!=='function')throw Error('CRM SDK related-list access is unavailable');
       const result=await api.API.getRelatedRecords({Entity:entity,RecordID:String(id),RelatedList:list,page,per_page:100});
       if(result?.code&&result.code!=='SUCCESS'&&result.code!=='NO_CONTENT'&&!Array.isArray(result.data))throw Error(result.message||result.code);
       const rows=Array.isArray(result?.data)?result.data:Array.isArray(result)?result:[];
       item.pages.set(page,rows);
       item.more=result?.info?.more_records===true||(result?.info?.more_records==null&&rows.length===100);item.moreByPage.set(page,item.more);
+      if(emailProblem&&!rows.length)item.error='Emails could not be read from CRM ('+emailProblem+'). The CRM connection may need email read access.';
     }catch(e){item.error=String(e.message||e);}
     finally{item.loading=false;rerender();}
   }
@@ -406,5 +429,5 @@ if(selection==='overview'&&['Deals','Membership'].includes(entity))main=membersh
     }
     return false;
   }
-  global.BGCRM12={timelineEvents,timelineBody,prime,detailPage,tableRows,action,getFocusedRecord:()=>focusedRecord,metadata:entity=>metaCache.get(entity)||null,relationList,format};
+  global.BGCRM12={emailRows,timelineEvents,timelineBody,prime,detailPage,tableRows,action,getFocusedRecord:()=>focusedRecord,metadata:entity=>metaCache.get(entity)||null,relationList,format};
 })(window);
