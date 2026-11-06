@@ -705,6 +705,51 @@
     j.formError='';j.step=Math.min(steps.length,j.step+1);render();
   }
   async function searchJourneyContacts(){const j=state.journey,q=j.customerSearch.trim();if(q.length<2){j.formError='Enter at least two characters.';render();return;}try{const result=await api().searchRecord({Entity:M.CONTACT,Type:q.includes('@')?'email':'word',Query:q,page:1,per_page:15});j.contactResults=asRows(result);j.formError=j.contactResults.length?'':'No matching Contact found. Create a Contact if appropriate.';}catch(e){j.formError='CRM Contact search failed: '+(e.message||e)}render();}
+
+  // Creates a CRM Contact after checking for an existing one with the same email. Used by New customer.
+  async function createContactRecord(values){
+    const first=String(values.First_Name||'').trim(),last=String(values.Last_Name||'').trim(),email=String(values.Email||'').trim().toLowerCase(),mobile=String(values.Mobile||'').trim();
+    if(!first||!last||!/^\S+@\S+\.\S+$/.test(email))throw Error('Enter a first name, surname and a valid email address.');
+    let existing=[];
+    try{existing=asRows(await api().searchRecord({Entity:M.CONTACT,Type:'email',Query:email,page:1,per_page:20})).filter(x=>String(x.Email||'').trim().toLowerCase()===email);}
+    catch(e){if(!/NO_CONTENT|204|no content/i.test(String(e&&e.message||e)))throw e;}
+    if(existing.length){const err=Error('A customer with this email already exists.');err.existing=existing[0];throw err;}
+    const result=await api().insertRecord({Entity:M.CONTACT,APIData:{First_Name:first,Last_Name:last,Email:email,...(mobile?{Mobile:mobile}:{})}});
+    const entry=asRows(result)[0];const id=String(entry&&entry.details&&entry.details.id||result&&result.data&&result.data[0]&&result.data[0].details&&result.data[0].details.id||'');
+    if((entry&&entry.status==='error')||!id)throw Error(entry&&entry.message||'CRM did not return a Contact ID.');
+    return getRecord(M.CONTACT,id);
+  }
+  function newCustomerDialog(){
+    return new Promise(resolve=>{
+      const d=document.createElement('dialog');d.className='bg-leave-dialog bg-contact-dialog';d.setAttribute('aria-labelledby','bgContactTitle');
+      d.innerHTML='<form method="dialog" novalidate><h2 id="bgContactTitle">New customer</h2><p>This creates a real Contact in CRM. We check for an existing customer with the same email first.</p><div class="bg-contact-fields"><label>First name<input name="First_Name" autocomplete="off"></label><label>Surname<input name="Last_Name" autocomplete="off"></label><label>Email<input name="Email" type="email" autocomplete="off"></label><label>Mobile (optional)<input name="Mobile" type="tel" autocomplete="off"></label></div><p class="bg-contact-error" role="alert" hidden></p><div class="bg-leave-actions"><button type="button" class="button secondary" data-c="cancel">Cancel</button><button type="button" class="button secondary" data-c="existing" hidden>Open existing customer</button><button type="button" class="button" data-c="create">Create customer</button></div></form>';
+      let existing=null;const err=d.querySelector('.bg-contact-error'),create=d.querySelector('[data-c="create"]'),open=d.querySelector('[data-c="existing"]');
+      const done=v=>{try{d.close();}catch(_){}d.remove();resolve(v);};
+      const val=n=>{const e=d.querySelector('[name="'+n+'"]');return e?e.value:'';};
+      d.addEventListener('click',async e=>{
+        const b=e.target.closest&&e.target.closest('[data-c]');if(!b)return;
+        if(b.dataset.c==='cancel')return done(null);
+        if(b.dataset.c==='existing'&&existing)return done({existing});
+        if(b.dataset.c==='create'){
+          err.hidden=true;open.hidden=true;create.disabled=true;create.textContent='Creating…';
+          try{done({created:await createContactRecord({First_Name:val('First_Name'),Last_Name:val('Last_Name'),Email:val('Email'),Mobile:val('Mobile')})});}
+          catch(ex){existing=ex.existing||null;err.textContent=String(ex&&ex.message||ex);err.hidden=false;open.hidden=!existing;create.disabled=false;create.textContent='Create customer';}
+        }
+      });
+      d.addEventListener('cancel',e=>{e.preventDefault();done(null);});
+      document.body.appendChild(d);
+      if(typeof d.showModal==='function')d.showModal();else d.setAttribute('open','');
+      const first=d.querySelector('[name="First_Name"]');if(first&&first.focus)first.focus();
+    });
+  }
+  async function startNewCustomer(){
+    if(state.demo){setNotice('Demo mode: creating customers is available only inside Zoho CRM.');return;}
+    const out=await newCustomerDialog();if(!out)return;
+    const rec=out.created||out.existing;if(!rec||!rec.id)return;
+    state.history=[];
+    await select(M.CONTACT,String(rec.id));
+    setNotice(out.created?'Customer created in CRM.':'This customer already exists. Showing their record.','info');
+  }
   async function createJourneyContact(){const j=state.journey,values=j.newContact||{};const first=String(values.First_Name||'').trim(),last=String(values.Last_Name||'').trim(),email=String(values.Email||'').trim().toLowerCase();if(!first||!last||!/^\S+@\S+\.\S+$/.test(email)){j.formError='Enter first name, surname and a valid email before creating the CRM Contact.';render();return;}
     if(j.contactCreating)return;j.contactCreating=true;j.formError='';render();try{const existing=asRows(await api().searchRecord({Entity:M.CONTACT,Type:'email',Query:email,page:1,per_page:20})).filter(x=>String(x.Email||'').trim().toLowerCase()===email);if(existing.length){j.contactResults=existing;j.formError='A Contact with this email already exists. Select the matching record instead.';return;}
       const result=await api().insertRecord({Entity:M.CONTACT,APIData:{First_Name:first,Last_Name:last,Email:email,...(values.Mobile?{Mobile:values.Mobile}:{})}});const entry=asRows(result)[0];const id=String(entry?.details?.id||result?.data?.[0]?.details?.id||'');if(entry?.status==='error'||!id)throw Error(entry?.message||'CRM did not return a Contact ID.');const contact=await getRecord(M.CONTACT,id);j.contact=contact;state.contact=contact;j.newContact={};setNotice('CRM Contact created. Continue the application preview.','success');
@@ -888,7 +933,7 @@
     const p=pageItems(key,rows,SIZES.queue);
     const view=selectedCustomView(kind);
     return `<div class="browse-shell"><div class="browse-header"><div><span class="process-kicker">LIVE CRM RECORDS</span><h2>${esc(META[entity]?.title||entity)}</h2><p>Browse the records your CRM account can access. Search is optional.</p></div><div class="browse-counter">${available.length} ${data.serverActive?'CRM search matches for '+esc(data.serverTerm||''):'loaded'}${(data.serverActive?data.serverHasMore:data.hasMore)?' · more may exist':''}</div></div>
-    <div class="browse-controls">${customViewControls(kind)}<label class="browse-search-label">Filter loaded records or enter CRM search<input class="browse-search" type="search" data-browse-search="true" placeholder="Customer, reference or status" value="${esc(state.browseSearch||'')}" /></label><button class="button secondary" data-action="browse-search-crm" data-kind="${kind}" ${data.serverBusy||view?"disabled":""}>Search all CRM</button>${data.serverActive?`<button class="button secondary" data-action="browse-clear-crm" data-kind="${kind}">Clear CRM search</button>`:""}${kind==='customers'?'':`<div class="filter-switch"><button class="${onlyAttention?'':'selected'}" data-action="browse-filter" data-filter="all">All records</button><button class="${onlyAttention?'selected':''}" data-action="browse-filter" data-filter="attention">Requires attention (loaded only)</button></div>`}<button class="button secondary" data-action="browse-refresh" data-kind="${kind}">${icon('refresh-cw')} Refresh list</button></div>
+    <div class="browse-controls">${customViewControls(kind)}<label class="browse-search-label">Filter loaded records or enter CRM search<input class="browse-search" type="search" data-browse-search="true" placeholder="Customer, reference or status" value="${esc(state.browseSearch||'')}" /></label><button class="button secondary" data-action="browse-search-crm" data-kind="${kind}" ${data.serverBusy||view?"disabled":""}>Search all CRM</button>${data.serverActive?`<button class="button secondary" data-action="browse-clear-crm" data-kind="${kind}">Clear CRM search</button>`:""}${kind==='customers'?`<button class="button" data-action="new-customer">${icon('plus-circle')} New customer</button>`:`<div class="filter-switch"><button class="${onlyAttention?'':'selected'}" data-action="browse-filter" data-filter="all">All records</button><button class="${onlyAttention?'selected':''}" data-action="browse-filter" data-filter="attention">Requires attention (loaded only)</button></div>`}<button class="button secondary" data-action="browse-refresh" data-kind="${kind}">${icon('refresh-cw')} Refresh list</button></div>
     ${view?'<p class="v12-muted">CRM custom view: '+esc(view.name)+'. CRM applies this view; text search and the attention filter only narrow loaded records.</p>':''}
     ${data.error?`<div class="notice error">CRM could not load ${esc(META[entity]?.title||entity)}: ${esc(data.error)} <button data-action="browse-refresh" data-kind="${kind}">Retry</button></div>`:''}
     ${data.loading&&!data.rows.length?loading():rows.length?(window.BGCRM12?window.BGCRM12.tableRows(entity,p.rows,{columns:view?.fields||null}):p.rows.map(r=>recordRow(entity,r)).join(''))+p.controls:empty(onlyAttention?'No matching attention records':'No records on this page',data.hasMore?'More records may be available on the next CRM page.':'No records match the current filter.')}
@@ -1140,7 +1185,7 @@
     else if(action==='journey-discard'){
       const j=state.journey,id=el.dataset.id,service=el.dataset.service;
       if(!j?.contact?.id||!/^\d{10,25}$/.test(String(id||''))||!['membership','insurance','combined','accreditation'].includes(service))return;
-      if(!window.confirm('Discard this customer draft in CRM? This cannot be undone.'))return;
+      if(!await confirmDialog({title:'Discard this draft?',body:'This discards the customer draft in CRM and cannot be undone.',yes:'Discard draft',no:'Keep it'}))return;
       j.draftsBusy=true;j.draftsError='';render();
       try{
         await window.BGStaffApi.call('drafts_discard',{contactId:String(j.contact.id),service,id});
@@ -1153,7 +1198,7 @@
     else if(action==='journey-accreditation-submit'){
       const j=state.journey;
       if(j?.kind!=='accreditation'||!j.remote?.id||j.draftsBusy)return;
-      if(!window.confirm('Submit this saved Accreditation draft to CRM for processing?'))return;
+      if(!await confirmDialog({title:'Submit this accreditation?',body:'This submits the saved Accreditation draft to CRM for processing.',yes:'Submit',no:'Not yet'}))return;
       j.draftsBusy=true;j.draftsError='';render();
       try{
         const request={contactId:String(j.contact.id),service:'accreditation',id:j.remote.id,journeyId:j.remote.journeyId,revision:j.remote.revision,step:j.step,answers:j.answers};
@@ -1184,7 +1229,7 @@
       if(j.discountedQuote){j.paymentError='Discounted quotations cannot be converted into staff payment links. Obtain a new undiscounted quote.';render();return;}
       j.customerAccepted=Boolean(document.getElementById('staff-customer-accepted')?.checked);if(!j.customerAccepted){j.paymentError='Confirm the customer has explicitly accepted the Code of Ethics and terms.';render();return;}
       if(window.BGStaffAddons?.quoteInputs){const discounts=window.BGStaffAddons.quoteInputs();if(discounts.voucherCode||discounts.waivers?.length){j.paymentError='Discounted payment links are not supported. Remove all vouchers and waivers, then obtain a fresh quote.';render();return;}}
-      if(!window.confirm('Create a test-mode Stripe Checkout link for this customer and the current application?'))return;
+      if(!await confirmDialog({title:'Create a payment link?',body:'This creates a Stripe Checkout payment link for this customer and the current application. Share it with the customer, or open it to pay on their behalf.',yes:'Create link',no:'Not yet'}))return;
       j.paymentBusy=true;j.paymentError='';render();
       try{
         const body={...window.BGJourney12.apiRequest(j),accepted:'yes'};
@@ -1242,6 +1287,7 @@
     else if(action==='savereview')await saveReview(entity,id);
     else if(action==='go-back'){const last=state.history.pop();if(last?.entity)await select(last.entity,last.id);else if(last){state.view=last.view;state.browseKind=last.kind||state.browseKind;state.browseSearch=last.search||'';if(last.page)state.pages['browse:'+state.browseKind]=last.page;state.focus=null;state.focusEntityView=null;if(last.view==='overview')state.contact=null;render();}}
     else if(action==='select'){state.history.push(state.focus?{entity:state.focus.entity,id:state.focus.record.id,view:state.view}:{view:state.view,kind:state.browseKind,page:state.pages['browse:'+state.browseKind]||1,search:state.browseSearch});await select(entity,id);}
+    else if(action==='new-customer')await startNewCustomer();
     else if(action==='tasks-refresh')await loadTasks();
     else if(action==='task-open')await openTask(id);
     else if(action==='task-back'){state.tasks.focusId='';state.tasks.focus=null;setNotice('');render();}

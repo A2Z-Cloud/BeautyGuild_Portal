@@ -70,7 +70,7 @@ test('table status text does not break mid-word, and the stop banner is styled',
   assert.match(css,/\.v12-table td \.bg-state\{white-space:nowrap\}/);
   assert.match(css,/\.v12-stop-banner--stop/);
   const html=fs.readFileSync(path.join(app,'index.html'),'utf8');
-  assert.match(html,/widget\.js\?v=20261106-uatfix15/);
+  assert.match(html,/widget\.js\?v=20261106-uatfix16/);
 });
 
 test('buttons that only open the CRM record say so, and the note dialog names the record and hides the due date',()=>{
@@ -225,4 +225,20 @@ test('the Emails related list reads CRM emails through the connection and shows 
   assert.match(src,/\/Emails'/);
   assert.match(src,/email_related_list/);
   assert.match(src,/if\(status===204\|\|!body\)return\{rows:\[\],more:false\}/);
+});
+
+test('journeys use the page dialog (browser confirm is blocked in the CRM frame) and show policy documents and legal links',()=>{
+  const js=fs.readFileSync(path.join(app,'widget.js'),'utf8');
+  const clickAction=js.slice(js.indexOf('async function clickAction'),js.indexOf('async function clickAction')+60000);
+  const journeyPart=clickAction.slice(clickAction.indexOf("action==='journey-save'"),clickAction.indexOf("action==='journey-exit'"));
+  assert.doesNotMatch(journeyPart,/window\.confirm\(/);
+  assert.match(journeyPart,/title:'Create a payment link\?'/);
+  assert.match(js,/data-action="new-customer"/);
+  assert.match(js,/function createContactRecord/);
+  assert.match(js,/A customer with this email already exists\./);
+  const j=fs.readFileSync(path.join(app,'v12-journeys.mjs'),'utf8');
+  assert.match(j,/import \{LEGAL,policyDocuments\} from '\.\/portal-defs\/legal\.js'/);
+  assert.match(j,/documentsPanel\(j\)\+'<\/aside>'/);
+  const legal=fs.readFileSync(path.join(app,'portal-defs/legal.js'),'utf8');
+  for(const u of ['Terms-Of-Business','Legal/Privacy','Treatments-We-Cover','Code-Of-Ethics'])assert.ok(legal.includes(u),u);
 });

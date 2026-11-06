@@ -5,6 +5,7 @@ import {INSURANCE_STEPS,visibleSteps,stopMessages,TREATMENT_OPTIONS,toRequest as
 import {accreditationSteps,resolveFields,COPY_HOME_MAP} from './portal-defs/accreditationInputs.js';
 import {validate as validatePortal} from './portal-defs/logic.mjs';
 import {startLimits} from './portal-defs/startDate.js';
+import {LEGAL,policyDocuments} from './portal-defs/legal.js';
 const countries=[
   'United Kingdom',
   'England',
@@ -399,6 +400,16 @@ function quoteSummary(result){
  (q.codeResult?.message?'<p class="v12-warning">'+esc(q.codeResult.message)+'</p>':'')+
  '</section>';
 }
+function documentsPanel(j){
+ const a=j.answers||{},insured=j.kind==='membership'&&requestedInsurance(a);
+ const docs=insured?policyDocuments(a):[];
+ const keys=insured?['terms','privacy','treatments','ethics']:['terms','privacy','ethics'];
+ const links=keys.map(k=>'<a href="'+esc(LEGAL[k].href)+'" target="_blank" rel="noopener noreferrer">'+esc(LEGAL[k].label)+'</a>').join(' · ');
+ return '<div class="staff-price-docs"><h4>Documents and links</h4>'+
+  (docs.length?'<ul>'+docs.map(d=>'<li><span>'+esc(d.name)+'</span><small>Included</small></li>').join('')+'</ul>':'')+
+  '<p class="staff-price-copy">Share before the customer buys: '+links+'.</p>'+
+  (docs.length?'<p class="staff-price-copy">The customer receives these policy documents with their cover.</p>':'')+'</div>';
+}
 function pricingAside(j){
  const a=j.answers||{},q=j.liveQuote?.quote;
  const fmt=v=>v===undefined||v===null?'—':pounds(v);
@@ -414,7 +425,7 @@ function pricingAside(j){
  '<p class="staff-price-customer">'+esc(kind)+(j.contact?' · '+esc([j.contact.First_Name,j.contact.Last_Name].filter(Boolean).join(' ')||j.contact.Full_Name||'Selected customer'):'')+'</p>'+
  (q?lines:selections)+extra+
  '<div style="padding-top:13px"><span class="staff-price-copy">'+(q?'Quoted amount':'Pay today')+'</span><div class="staff-price-total">'+(q?fmt(q.totalPence):'—')+'</div>'+
- '<p class="staff-price-copy">'+message+'</p></div></aside>';
+ '<p class="staff-price-copy">'+message+'</p></div>'+documentsPanel(j)+'</aside>';
 }
 function render(j){
  if(!j?.kind||j.step<0)return '';
