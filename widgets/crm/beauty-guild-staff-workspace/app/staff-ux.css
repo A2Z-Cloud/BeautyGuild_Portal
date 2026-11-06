@@ -240,3 +240,7 @@ body.staff-dev-tools #staff-api-open{display:inline-flex}
 .staff-price-docs small{color:#2f7a4b;font-weight:700}
 .staff-price-docs a{color:#9d2a68}
 .bg-contact-dialog [hidden]{display:none!important}
+
+.v12-quote-steps{margin:0 0 10px;padding-left:20px;font-size:13px}
+.v12-quote-steps li{padding:2px 0}
+.v12-quote-steps li.done{color:#2f7a4b;font-weight:700}

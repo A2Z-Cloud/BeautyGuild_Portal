@@ -70,7 +70,7 @@ test('table status text does not break mid-word, and the stop banner is styled',
   assert.match(css,/\.v12-table td \.bg-state\{white-space:nowrap\}/);
   assert.match(css,/\.v12-stop-banner--stop/);
   const html=fs.readFileSync(path.join(app,'index.html'),'utf8');
-  assert.match(html,/widget\.js\?v=20261106-uatfix19/);
+  assert.match(html,/widget\.js\?v=20261106-uatfix20/);
 });
 
 test('buttons that only open the CRM record say so, and the note dialog names the record and hides the due date',()=>{
@@ -264,4 +264,14 @@ test('module files are plain .js, because Slate serves .mjs as application/octet
   const w=fs.readFileSync(path.join(app,'widget.js'),'utf8');
   const err=w.slice(w.indexOf('The current application form did not load'),w.indexOf('The current application form did not load')+700);
   assert.match(err,/data-action="journey-back"/);assert.match(err,/data-action="journey-exit"/);
+});
+
+test('the live quotation button explains itself for Accreditation, and slow pricing calls time out instead of leaving it greyed',()=>{
+  const j=fs.readFileSync(path.join(app,'v12-journeys.js'),'utf8');
+  assert.match(j,/Save the application to CRM with/);
+  assert.match(j,/The Submit button appears here once the application is saved to CRM\./);
+  assert.match(j,/title="Save and submit the Accreditation application first"/);
+  const w=fs.readFileSync(path.join(app,'widget.js'),'utf8');
+  assert.match(w,/withTimeout\(window\.BGStaffApi\.call\('quote',payload\),60000/);
+  assert.match(w,/withTimeout\(window\.BGStaffApi\.call\('payment_link',body\),60000/);
 });

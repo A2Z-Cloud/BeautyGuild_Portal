@@ -1020,6 +1020,7 @@
       const first=d.querySelector('[data-leave="no"]');if(first&&first.focus)first.focus();
     });
   }
+  function withTimeout(promise,ms,message){let t;return Promise.race([promise,new Promise((_,rej)=>{t=setTimeout(()=>rej(Error(message)),ms);})]).finally(()=>clearTimeout(t));}
   async function openTask(id){
     const t=state.tasks;t.focusId=String(id);t.focus=t.rows.find(r=>String(r.id)===String(id))||null;t.focusError='';t.focusLoading=true;setNotice('');
     try{if(window.BGCRM12&&window.ZOHO&&ZOHO.CRM)window.BGCRM12.prime('Tasks',ZOHO.CRM,render);}catch(_){/* Metadata only improves the drop-downs. */}
@@ -1234,7 +1235,7 @@
       try{
         const body={...window.BGJourney12.apiRequest(j),accepted:'yes'};
         if(j.lastQuoteInputs&&JSON.stringify(window.BGJourney12.apiRequest(j))!==j.lastQuoteInputs)throw Error('Answers changed after quotation. Calculate a fresh quote before generating a link.');
-        const response=await window.BGStaffApi.call('payment_link',body);
+        const response=await withTimeout(window.BGStaffApi.call('payment_link',body),60000,'The payment service did not answer in time. Try again.');
         if(response?.alreadyPaid){j.paymentAlreadyPaid=true;j.paymentLink='';}
         else if(/^https:\/\/checkout\.stripe\.com\//.test(response?.checkoutUrl||''))j.paymentLink=response.checkoutUrl;
         else throw Error('The server did not return a valid Stripe Checkout URL.');
@@ -1268,7 +1269,7 @@
         const base=window.BGJourney12.apiRequest(j);
         const payload={...base};
         if(window.BGStaffAddons?.quoteInputs&&kind==='membership')Object.assign(payload,window.BGStaffAddons.quoteInputs());
-        const result=await window.BGStaffApi.call('quote',payload);
+        const result=await withTimeout(window.BGStaffApi.call('quote',payload),60000,'The pricing service did not answer in time. Press Calculate live quotation to try again.');
         if(result?.error||result?.ok===false||!result?.quote)throw Error(result?.message||result?.error||'No authoritative quote returned by the Staff API.');
         j.liveQuote=result;j.lastQuoteInputs=JSON.stringify(base);j.discountedQuote=Boolean(payload.voucherCode||payload.waivers?.length||result.quote?.discount||result.quote?.discounts?.length);
       }catch(error){j.quoteError=String(error?.message||error);}
