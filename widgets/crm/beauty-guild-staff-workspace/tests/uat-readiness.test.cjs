@@ -70,7 +70,7 @@ test('table status text does not break mid-word, and the stop banner is styled',
   assert.match(css,/\.v12-table td \.bg-state\{white-space:nowrap\}/);
   assert.match(css,/\.v12-stop-banner--stop/);
   const html=fs.readFileSync(path.join(app,'index.html'),'utf8');
-  assert.match(html,/widget\.js\?v=20261104-uatfix5/);
+  assert.match(html,/widget\.js\?v=20261106-uatfix6/);
 });
 
 test('buttons that only open the CRM record say so, and the note dialog names the record and hides the due date',()=>{
@@ -131,4 +131,43 @@ test('table headings wrap instead of being clipped, and a finished list says all
   assert.match(css,/\.v12-table th\{white-space:normal/);
   const js=fs.readFileSync(path.join(app,'widget.js'),'utf8');
   assert.match(js,/are loaded\. CRM reports no more pages\./);
+});
+
+test('My tasks lists only the signed-in user\'s open tasks, read-only, with plain due dates',()=>{
+  const q=w.openTasksQuery('1011174000000099001',200);
+  assert.match(q,/from Tasks where \(Owner = '1011174000000099001' and Status != 'Completed'\)/);
+  assert.match(q,/order by Due_Date asc limit 200/);
+  assert.match(w.openTasksQuery('1011174000000099001',200,false),/^select Subject, Status, Priority, Due_Date, What_Id, Who_Id from Tasks/);
+  assert.throws(()=>w.openTasksQuery("1' or '1'='1"));
+  const now=new Date('2026-11-06T09:00:00');
+  assert.equal(w.taskDueInfo('2026-11-04',now).label,'Overdue by 2 days');
+  assert.equal(w.taskDueInfo('2026-11-06',now).label,'Due today');
+  assert.equal(w.taskDueInfo('2026-11-07',now).label,'Due tomorrow');
+  assert.equal(w.taskDueInfo('',now).text,'No due date');
+  assert.deepEqual(w.taskRelated({What_Id:{id:'1',name:'POL-1'},$se_module:'Insurance_Policy'}),{name:'POL-1',entity:'Insurance_Policy',id:'1'});
+  assert.equal(w.taskRelated({Who_Id:{id:'2',name:'Sam'}}).entity,'Contacts');
+  assert.equal(w.taskRelated({}),null);
+  const html=fs.readFileSync(path.join(app,'index.html'),'utf8');
+  assert.match(html,/data-view="tasks"/);
+  const js=fs.readFileSync(path.join(app,'widget.js'),'utf8');
+  assert.match(js,/tasks:\['My tasks'/);
+  assert.doesNotMatch(js.slice(js.indexOf('async function loadTasks'),js.indexOf('function tasksView')),/insertRecord|updateRecord|deleteRecord/);
+});
+
+test('the record timeline reads the CRM v8 timeline and falls back to related activity when it is not connected',()=>{
+  global.window=global;delete require.cache[require.resolve('../app/v12-crm.js')];require('../app/v12-crm.js');
+  const ev=global.BGCRM12.timelineEvents([
+    {audited_time:'2026-11-05T10:42:00+00:00',action:'updated',done_by:{name:'Sam'},field_history:[{api_name:'Application_Status',field_label:'Application Status',_value:{old:'Draft',new:'In Progress'}}]},
+    {audited_time:'2026-11-05T09:00:00+00:00',action:'added',related_record:{name:'Call member',module:{api_name:'Tasks'}},done_by:{name:'Sam'}},
+    {audited_time:'2026-11-04T09:00:00+00:00',action:'added',done_by:{name:'Sam'}}]);
+  assert.equal(ev[0].title,'Application Status updated');
+  assert.deepEqual(ev[0].changes[0],{label:'Application Status',from:'Draft',to:'In Progress'});
+  assert.equal(ev[1].title,'Task added: Call member');
+  assert.equal(ev[2].title,'Record created');
+  assert.deepEqual(global.BGCRM12.timelineBody({details:{statusMessage:'{"__timeline":[]}'}}),{__timeline:[]});
+  const src=fs.readFileSync(path.join(app,'v12-crm.js'),'utf8');
+  assert.match(src,/\/__timeline/);
+  assert.match(src,/crm\/v8\//);
+  assert.match(src,/Open full timeline in CRM/);
+  assert.match(src,/relatedActivityTimeline\(entity,record,api,rerender,'<p class="v12-muted" role="status">The full CRM timeline is not connected yet/);
 });

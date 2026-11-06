@@ -191,3 +191,16 @@ body.staff-dev-tools #staff-api-open{display:inline-flex}
 .browse-all-loaded{margin:10px 2px 0}
 
 .bg-leave-dialog{border:0;border-radius:14px;padding:22px 24px;max-width:420px;width:calc(100% - 32px);box-shadow:0 18px 50px rgba(40,20,40,.28)}.bg-leave-dialog::backdrop{background:rgba(30,20,30,.45)}.bg-leave-dialog h2{margin:0 0 8px;font-size:17px}.bg-leave-dialog p{margin:0 0 18px;color:#5d525d;font-size:13px;line-height:1.5}.bg-leave-actions{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
+
+/* Native-style record timeline (CRM v8) */
+.bg-tl-day{margin:18px 0 6px;font-size:13px;font-weight:750;color:var(--staff-muted,#5b5560)}
+.bg-tl-list{list-style:none;margin:0;padding:0 0 0 14px;border-left:2px solid var(--staff-line,#e4dfe6)}
+.bg-tl-item{display:grid;grid-template-columns:52px 1fr;gap:10px;padding:8px 0;position:relative}
+.bg-tl-item:before{content:"";position:absolute;left:-20px;top:14px;width:10px;height:10px;border-radius:50%;background:var(--staff-accent,#c2185b)}
+.bg-tl-item time{font-size:12px;color:var(--staff-muted,#5b5560);font-variant-numeric:tabular-nums}
+.bg-tl-who{font-size:12px;color:var(--staff-muted,#5b5560)}
+.bg-tl-changes{list-style:none;margin:6px 0 0;padding:0;font-size:13px}
+.bg-tl-changes li{padding:2px 0}
+.bg-tl-old{text-decoration:line-through;color:var(--staff-muted,#5b5560)}
+.bg-tl-new{font-weight:700}
+.bg-tl-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}

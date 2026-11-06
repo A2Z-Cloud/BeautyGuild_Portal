@@ -2,6 +2,8 @@
  * CRM SDK remains the source of records and permissions; this file has no credentials. */
 (function(global){
   'use strict';
+  const TIMELINE_CONNECTION='bg_crm_timeline', TIMELINE_API='https://www.zohoapis.eu/crm/v8/';
+  const timelineCache=new Map();
   const metaCache=new Map(), relatedCache=new Map(), chosen=new Map(), fieldModes=new Map();
   const tableColumns={
     Contacts:['Full_Name','Email','Mobile','Phone','Owner','Modified_Time'],
@@ -203,7 +205,7 @@
        '<div class="v12-pager"><button class="button secondary" data-action="v12-rel-page" data-list="'+safe(name)+'" data-page="'+((item.page||1)-1)+'" '+((item.page||1)===1?'disabled':'')+'>Previous</button><span>Page '+(item.page||1)+'</span><button class="button secondary" data-action="v12-rel-page" data-list="'+safe(name)+'" data-page="'+((item.page||1)+1)+'" '+(!hasNext?'disabled':'')+'>Next</button></div>';
   }
   let focusedRecord=null;
-  function crmTimeline(entity,record,api,rerender){
+  function relatedActivityTimeline(entity,record,api,rerender,notice){
     const id=String(record.id);
     const lists=relationList(entity);
     const selected=lists.filter(r=>/notes|tasks|activities|calls|meetings/i.test(r.id+' '+r.label)).slice(0,5);
@@ -226,11 +228,78 @@
     }
     events.sort((a,b)=>b.date.localeCompare(a.date));
     const content=events.map(x=>'<li class="staff-timeline-event"><time>'+safe(x.date?new Date(x.date).toLocaleString('en-GB',{dateStyle:'medium',timeStyle:'short'}):'Date not recorded')+'</time><div><strong>'+safe(x.title)+'</strong>'+(x.module?'<span class="staff-timeline-type">'+safe(x.module)+'</span>':'')+(x.description?'<p>'+safe(x.description)+'</p>':'')+'</div></li>').join('');
-    return '<section class="v12-detail-section"><h3>Record timeline</h3><p class="v12-muted">CRM record events and available related activity, newest first. The full CRM audit history remains available in native CRM.</p>'+
+    return '<section class="v12-detail-section"><h3>Timeline</h3>'+(notice||'')+'<p class="v12-muted">CRM record events and available related activity, newest first. The full CRM audit history remains available in native CRM.</p>'+
       (pending?'<p class="v12-muted" role="status">Loading CRM activities…</p>':'')+
       (errors?'<p class="v12-warning">Some CRM related activity could not be retrieved with the current permissions.</p>':'')+
       '<ol class="staff-timeline">'+(content||'<li class="v12-muted">No dated activity is available for this record.</li>')+'</ol>'+
       '<button type="button" class="button secondary" data-action="v12-timeline-refresh">Refresh timeline</button></section>';
+  }
+
+  function timelineValue(v){
+    if(v===null||v===undefined||v==='')return 'empty';
+    if(typeof v==='boolean')return v?'Yes':'No';
+    if(Array.isArray(v))return v.map(timelineValue).join(', ')||'empty';
+    if(typeof v==='object')return String(v.name||v.display_value||v.value||v.id||'empty');
+    return String(v);
+  }
+  function timelineBody(res){
+    let b=res&&res.details&&res.details.statusMessage!==undefined?res.details.statusMessage:(res&&res.details!==undefined?res.details:res);
+    if(typeof b==='string'){try{b=JSON.parse(b)}catch(_){return null}}
+    return b&&typeof b==='object'?b:null;
+  }
+  // Turns the CRM v8 __timeline response into plain events. Defensive: CRM adds fields over time.
+  function timelineEvents(list){
+    const verbs={added:'created',updated:'updated',deleted:'deleted',converted:'converted',approved:'approved',rejected:'rejected',unlinked:'unlinked',linked:'linked'};
+    return (Array.isArray(list)?list:[]).map(x=>{
+      const action=String(x&&x.action||'').toLowerCase(),verb=verbs[action]||(action||'changed');
+      const rel=x&&x.related_record&&typeof x.related_record==='object'?x.related_record:null;
+      const relModule=rel&&rel.module&&(rel.module.api_name||rel.module.name)||'';
+      const changes=(Array.isArray(x&&x.field_history)?x.field_history:[]).map(f=>({label:f.field_label||pretty(f.api_name||'Field'),from:timelineValue(f._value&&f._value.old),to:timelineValue(f._value&&f._value.new)}));
+      const rule=x&&x.automation_details&&x.automation_details.rule&&x.automation_details.rule.name||'';
+      let title;
+      if(rel)title=(relModule?pretty(relModule).replace(/([^s])s$/,'$1')+' ':'Related record ')+(action==='added'?'added':verb)+(rel.name?': '+rel.name:'');
+      else if(action==='updated'&&changes.length)title=changes.length===1?changes[0].label+' updated':changes.length+' fields updated';
+      else title='Record '+verb;
+      return{date:String(x&&x.audited_time||''),who:String(x&&x.done_by&&(x.done_by.name||x.done_by.full_name)||''),title,changes:rel?[]:changes,automation:rule?String(rule):''};
+    }).filter(e=>e.date||e.title);
+  }
+  async function loadTimeline(entity,id,crm,rerender,page){
+    const key=entity+':'+id,prev=timelineCache.get(key);
+    const item=page>1&&prev?prev:{events:[],page:0,more:false};
+    item.loading=true;item.error='';item.unavailable=false;timelineCache.set(key,item);
+    try{
+      if(!crm||!crm.CONNECTION||typeof crm.CONNECTION.invoke!=='function')throw Error('The CRM connection feature is not available in this widget.');
+      const res=await crm.CONNECTION.invoke(TIMELINE_CONNECTION,{method:'GET',url:TIMELINE_API+encodeURIComponent(entity)+'/'+encodeURIComponent(id)+'/__timeline',parameters:{per_page:50,page:page||1},headers:{},param_type:1});
+      const body=timelineBody(res),status=Number(res&&res.details&&res.details.statusCode);
+      if(status===204||(body&&body.info&&body.info.count===0&&!body.__timeline)){item.events=page>1?item.events:[];item.more=false;}
+      else if(!body||!Array.isArray(body.__timeline))throw Error(String(body&&body.message||res&&res.message||res&&res.code||'CRM did not return a timeline.'));
+      else{item.events=(page>1?item.events:[]).concat(timelineEvents(body.__timeline));item.more=!!(body.info&&body.info.more_records);item.page=page||1;}
+    }catch(e){item.unavailable=true;item.events=page>1?item.events:[];item.error=String(e&&e.message||e);}
+    finally{item.loading=false;try{rerender();}catch(_){/* The page may have changed. */}}
+  }
+  function crmTimeline(entity,record,api,rerender){
+    const id=String(record.id),key=entity+':'+id;
+    if(!timelineCache.has(key))loadTimeline(entity,id,api,rerender,1);
+    const item=timelineCache.get(key);
+    const openBtn='<button type="button" class="button secondary" data-action="open" data-entity="'+safe(entity)+'" data-id="'+safe(id)+'">Open full timeline in CRM</button>';
+    if(item.loading&&!item.events.length)return '<section class="v12-detail-section"><h3>Timeline</h3><p class="v12-muted" role="status">Loading the CRM timeline…</p></section>';
+    if(item.unavailable)return relatedActivityTimeline(entity,record,api,rerender,'<p class="v12-muted" role="status">The full CRM timeline is not connected yet, so this shows notes, tasks and other related activity only. '+openBtn+'</p>');
+    const days=new Map();
+    for(const e of item.events){
+      const d=e.date?new Date(e.date):null,day=d&&!isNaN(d)?d.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'}):'Date not recorded';
+      if(!days.has(day))days.set(day,[]);days.get(day).push(e);
+    }
+    const html=[...days].map(([day,list])=>'<h4 class="bg-tl-day">'+safe(day)+'</h4><ol class="bg-tl-list">'+list.map(e=>{
+      const d=e.date?new Date(e.date):null,time=d&&!isNaN(d)?d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):'';
+      return '<li class="bg-tl-item"><time>'+safe(time)+'</time><div><strong>'+safe(e.title)+'</strong>'+(e.who?' <span class="bg-tl-who">by '+safe(e.who)+'</span>':'')+
+        (e.changes.length?'<ul class="bg-tl-changes">'+e.changes.map(c=>'<li><b>'+safe(c.label)+'</b> <span class="bg-tl-old">'+safe(c.from)+'</span> &rarr; <span class="bg-tl-new">'+safe(c.to)+'</span></li>').join('')+'</ul>':'')+
+        (e.automation?'<p class="v12-muted">Automatic change by CRM rule: '+safe(e.automation)+'</p>':'')+'</div></li>';
+    }).join('')+'</ol>').join('');
+    return '<section class="v12-detail-section"><h3>Timeline</h3><p class="v12-muted">Everything that has happened on this record in CRM, newest first.</p>'+
+      (html||'<p class="v12-muted">Nothing has been recorded on this record yet.</p>')+
+      (item.loading?'<p class="v12-muted" role="status">Loading earlier activity…</p>':'')+
+      '<div class="bg-tl-actions">'+(item.more&&!item.loading?'<button type="button" class="button secondary" data-action="v12-timeline-more">Show earlier activity</button>':'')+
+      '<button type="button" class="button secondary" data-action="v12-timeline-refresh">Refresh timeline</button></div></section>';
   }
   function membershipOverview(entity,r){
     if(!['Deals','Membership'].includes(entity))return '';
@@ -268,7 +337,7 @@ if(selection==='overview'&&['Deals','Membership'].includes(entity))main=membersh
     }else{main=relationContent(entity,record,selection,ctx.crm,ctx.rerender);}
     const extraAction=(ctx.operationalUat||global.BG_OPERATIONAL_UAT)?'':(global.BGStaffAddons?.action(entity,record)||'');
     const header='<header class="v12-record-head"><div><span class="v12-kicker">'+safe(appNames[entity]||pretty(entity))+'</span><h2>'+safe(ctx.title(entity,record))+'</h2><p>'+safe(ctx.summary(entity,record)||'')+'</p></div><div class="v12-status-row">'+statusBar(entity,record)+'</div></header>'+stopBanner(entity,record);
-    const navigation=[...(['Deals','Membership'].includes(entity)?[['overview','Membership overview']]:[]),['details','All CRM fields'],['timeline','Activity timeline'],['processing','Processing'],...(editable?[['updates','Field updates']]:[])].map(p=>'<button class="v12-side-link '+(selection===p[0]?'active':'')+'" data-action="v12-tab" data-tab="'+p[0]+'">'+safe(p[1])+'</button>').join('');
+    const navigation=[...(['Deals','Membership'].includes(entity)?[['overview','Membership overview']]:[]),['details','All CRM fields'],['timeline','Timeline'],['processing','Processing'],...(editable?[['updates','Field updates']]:[])].map(p=>'<button class="v12-side-link '+(selection===p[0]?'active':'')+'" data-action="v12-tab" data-tab="'+p[0]+'">'+safe(p[1])+'</button>').join('');
     const related=relations.map(r=>{
       const cache=relatedCache.get(relationKey(entity,id,r.id));
       const loaded=cache?.pages?.get(cache.page||1);
@@ -283,7 +352,9 @@ if(selection==='overview'&&['Deals','Membership'].includes(entity))main=membersh
     const a=el?.dataset?.action;
     if(!a||!a.startsWith('v12-'))return false;
     const entity=focus.entity,record=focus.record,key=entity+':'+record.id;
+    if(a==='v12-timeline-more'){const it=timelineCache.get(key);if(it&&!it.loading){const p=loadTimeline(entity,String(record.id),crm,rerender,(it.page||1)+1);rerender();await p;}return true;}
     if(a==='v12-timeline-refresh'){
+      timelineCache.delete(key);
       for(const rel of relationList(entity).filter(r=>/notes|tasks|activities|calls|meetings/i.test(r.id+' '+r.label)))relatedCache.delete(relationKey(entity,record.id,rel.id));
       rerender();return true;
     }
@@ -301,5 +372,5 @@ if(selection==='overview'&&['Deals','Membership'].includes(entity))main=membersh
     }
     return false;
   }
-  global.BGCRM12={prime,detailPage,tableRows,action,getFocusedRecord:()=>focusedRecord,metadata:entity=>metaCache.get(entity)||null,relationList,format};
+  global.BGCRM12={timelineEvents,timelineBody,prime,detailPage,tableRows,action,getFocusedRecord:()=>focusedRecord,metadata:entity=>metaCache.get(entity)||null,relationList,format};
 })(window);

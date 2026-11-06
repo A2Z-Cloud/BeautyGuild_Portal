@@ -33,7 +33,7 @@
   };
   function icon(name){return '<svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'+(ICON_PATHS[name]||ICON_PATHS['file-search'])+'</svg>';}
   function installStaticIcons(){document.querySelectorAll('[data-icon]').forEach(el=>{el.innerHTML=icon(el.dataset.icon);});}
-  const VIEW_TITLES={processing:['Staff Workspace','Applications and customer records'],overview:['Customers','Contact, organisation and membership information'],membership:['Membership','Membership records and renewals'],insurance:['Insurance','Policies, cover and underwriting'],accreditation:['Accreditation','Applications, qualifications, centres and courses'],queue:['Applications','Applications requiring attention'],create:['New application','Staff-assisted journey preview · stops before payment']};
+  const VIEW_TITLES={processing:['Staff Workspace','Applications and customer records'],overview:['Customers','Contact, organisation and membership information'],membership:['Membership','Membership records and renewals'],insurance:['Insurance','Policies, cover and underwriting'],accreditation:['Accreditation','Applications, qualifications, centres and courses'],queue:['Applications','Applications requiring attention'],tasks:['My tasks','Open CRM tasks assigned to you'],create:['New application','Staff-assisted journey preview · stops before payment']};
   const VIEWS_FOR={Contacts:'overview',Accounts:'overview',Membership:'membership',Deals:'membership',Membership_Extension:'membership',Insurance_Policy:'insurance',Insurance_Extension:'insurance',Declarations:'insurance',Insured_People:'insurance',Insured_Premises:'insurance',Policy_Revisions:'insurance',Risk_Screenings:'insurance',Training_Centre_Accred:'accreditation',Training_Centres:'accreditation',Qualifications:'accreditation',TC_Course_Offering:'accreditation',Tutor_Relationships:'accreditation'};
   const ALL_ENTITIES=new Set(Object.values(M));
   const CONTACT_RELATIONS=[['Membership','Contact'],['Deals','Contact_Name'],['Insurance_Policy','Contact'],['Training_Centre_Accred','Applicant_Contact'],['Qualifications','Contact'],['Training_Centres','Contact']];
@@ -104,7 +104,7 @@
   };
   // Staff-assisted journey is a preview only; customer creation is an explicitly triggered live CRM write.
   const DEMO=false; // This CRM release cannot enter sample-data mode.
-  const state={pages:{},limited:{},connected:false,demo:DEMO,view:'processing',contact:null,focus:null,focusRelation:{},lists:{},errors:{},queueKind:'insurance',queue:[],queueLimit:100,crmPageLimit:2,queueLoaded:false,browse:{},browseViews:{},browseSearchByKind:{},customerNames:{},browseFilter:'all',browseKind:'insurance',busy:false,requestId:0,searchResults:[],searchQuery:'',directory:[],directoryLoaded:false,nativeLists:{},nativeErrors:{},actionTarget:null,actionType:'note',currentUser:null,reviewDrafts:{},savingReview:false,history:[]};
+  const state={tasks:{rows:[],loaded:false,loading:false,error:'',more:false},pages:{},limited:{},connected:false,demo:DEMO,view:'processing',contact:null,focus:null,focusRelation:{},lists:{},errors:{},queueKind:'insurance',queue:[],queueLimit:100,crmPageLimit:2,queueLoaded:false,browse:{},browseViews:{},browseSearchByKind:{},customerNames:{},browseFilter:'all',browseKind:'insurance',busy:false,requestId:0,searchResults:[],searchQuery:'',directory:[],directoryLoaded:false,nativeLists:{},nativeErrors:{},actionTarget:null,actionType:'note',currentUser:null,reviewDrafts:{},savingReview:false,history:[]};
   const $=s=>document.querySelector(s);
   function esc(x){return String(x==null?'':x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
   function txt(x){if(x===null||x===undefined||x==='')return '—';if(typeof x==='boolean')return x?'Yes':'No';if(Array.isArray(x))return x.map(txt).join(', ');if(typeof x==='object')return x.name||x.display_value||x.id||'—';return String(x);}
@@ -717,7 +717,7 @@
     finally{j.draftsBusy=false;render();}
   }
   function createView(){return renderJourney();}
-  function render(){const [title,subtitle]=VIEW_TITLES[state.view];$('#pageTitle').textContent=title;$('#pageSubtitle').textContent=subtitle;document.querySelectorAll('[data-view]').forEach(b=>{b.classList.toggle('active',b.dataset.view===state.view);b.setAttribute('aria-current',b.dataset.view===state.view?'page':'false')});let html='';if(state.busy){html=loading()}else if(state.view==='processing'){html=processingHome()}else if(state.view==='overview'){html=state.focus?.entity===M.ACCOUNT?accountCard():state.focus?.entity===M.CONTACT&&state.contact?`${state.history.length?'<button type="button" class="button secondary" data-action="go-back">'+icon('arrow-left')+' Previous record or list</button>':''}<button class="button secondary" data-action="back-to-list" data-kind="customers">${icon('arrow-left')} All customers</button>${contextCard()}`:browserList('customers')}else if(state.view==='queue'){html=queueView()}else if(state.view==='create'){html=createView()}else{html=sectionView(state.view)}$('#contentArea').innerHTML=html;$('#searchResults').hidden=!state.searchResults.length;if(state.searchResults.length){$('#searchResults').innerHTML=panel('Search results',`${state.searchResults.length} matches`,pageItems('search',state.searchResults,SIZES.search).rows.map(x=>recordRow(x.entity,x.record)).join('')+pageItems('search',state.searchResults,SIZES.search).controls)}}
+  function render(){const [title,subtitle]=VIEW_TITLES[state.view];$('#pageTitle').textContent=title;$('#pageSubtitle').textContent=subtitle;document.querySelectorAll('[data-view]').forEach(b=>{b.classList.toggle('active',b.dataset.view===state.view);b.setAttribute('aria-current',b.dataset.view===state.view?'page':'false')});let html='';if(state.busy){html=loading()}else if(state.view==='processing'){html=processingHome()}else if(state.view==='overview'){html=state.focus?.entity===M.ACCOUNT?accountCard():state.focus?.entity===M.CONTACT&&state.contact?`${state.history.length?'<button type="button" class="button secondary" data-action="go-back">'+icon('arrow-left')+' Previous record or list</button>':''}<button class="button secondary" data-action="back-to-list" data-kind="customers">${icon('arrow-left')} All customers</button>${contextCard()}`:browserList('customers')}else if(state.view==='queue'){html=queueView()}else if(state.view==='tasks'){html=tasksView()}else if(state.view==='create'){html=createView()}else{html=sectionView(state.view)}$('#contentArea').innerHTML=html;$('#searchResults').hidden=!state.searchResults.length;if(state.searchResults.length){$('#searchResults').innerHTML=panel('Search results',`${state.searchResults.length} matches`,pageItems('search',state.searchResults,SIZES.search).rows.map(x=>recordRow(x.entity,x.record)).join('')+pageItems('search',state.searchResults,SIZES.search).controls)}}
   function api(){if(!state.connected||!window.ZOHO||!ZOHO.CRM||!ZOHO.CRM.API)throw Error('CRM connection is not ready. Open the widget inside Zoho CRM.');return ZOHO.CRM.API;}
   async function getRecord(entity,id){if(state.demo)return demoGet(entity,id);let out=await api().getRecord({Entity:entity,RecordID:String(id)});const row=asRows(out)[0];if(!row)throw Error(`${entity} record was not returned by CRM`);return row;}
   function queryCriterion(field,id){if(!/^[A-Za-z_][A-Za-z0-9_]*$/.test(field)||!/^[0-9]{8,30}$/.test(String(id)))throw Error('Invalid CRM record context');return`(${field}:equals:${id})`;}
@@ -896,9 +896,73 @@
   function openAction(type,entity,id){if(!ALL_ENTITIES.has(entity)||!/^\d{8,30}$/.test(String(id||''))){setNotice('Select a valid CRM record first.');return}state.actionType=type;state.actionTarget={entity,id};$('#modalTitle').textContent=type==='note'?'Add note':'Create follow-up task';const target=state.focus&&state.focus.record&&idsEqual(state.focus.record.id,id)?rowTitle(entity,state.focus.record):(state.contact&&entity===M.CONTACT&&idsEqual(state.contact.id,id)?rowTitle(M.CONTACT,state.contact):'');$('#modalContext').textContent=target?`For ${target} (${(META[entity]?.title||entity).toLowerCase()})`:`For the selected ${(META[entity]?.title||'record').toLowerCase()}`;$('#actionSubject').value='';$('#actionDescription').value='';$('#actionSubjectLabel').textContent=type==='note'?'Note title':'Task subject';$('#actionDescriptionLabel').textContent=type==='note'?'Note content':'Task description';$('#dueRow').hidden=type!=='task';$('#actionDue').required=type==='task';$('#actionDue').value='';$('#saveAction').textContent=type==='note'?'Save note':'Create task';$('#actionModal').showModal();$('#actionSubject').focus()}
   function assertSaved(r){if(r&&r.status==='error')throw Error(r.message||'CRM save rejected');const rows=asRows(r);if(rows.length&&(rows[0].status==='error'||rows[0].code==='INVALID_DATA'))throw Error(rows[0].message||rows[0].code||'CRM save rejected');if(r&&r.code&&r.code!=='SUCCESS'&&r.status!=='success'&&!rows.length)throw Error(r.message||r.code);return r}
   async function saveAction(){const {entity,id}=state.actionTarget||{};if(!entity)return;const type=state.actionType;const title=$('#actionSubject').value.trim(),description=$('#actionDescription').value.trim(),due=$('#actionDue').value;if(!title){setNotice('A title or subject is required.');return}if(type==='task'&&!due){setNotice('Select a due date.');return}$('#saveAction').disabled=true;setNotice('');try{if(state.demo){await new Promise(resolve=>setTimeout(resolve,20));$('#actionModal').close();setNotice('Demo mode: no CRM record was created.','info');return}let result;if(type==='note')result=await api().addNotes({Entity:entity,RecordID:id,Title:title,Content:description||title});else{let payload={Subject:title,Status:'Not Started',Priority:'Normal',Due_Date:due,Description:description};if(entity===M.CONTACT)payload.Who_Id={id:String(id)};else{payload.What_Id={id:String(id)};payload.$se_module=entity;if(state.contact&&state.contact.id)payload.Who_Id={id:String(state.contact.id)};}result=await api().insertRecord({Entity:M.TASK,APIData:payload})}assertSaved(result);$('#actionModal').close();setNotice(type==='note'?'Note saved.':'Task created.','success');}catch(err){setNotice(`Could not create ${type}: ${err.message||err}`,'error')}finally{$('#saveAction').disabled=false}}
+
+  // My tasks: read-only list of open CRM tasks owned by the signed-in user. Managing a task stays in CRM.
+  function openTasksQuery(userId,limit,withModule){
+    if(!/^[0-9]{8,30}$/.test(String(userId)))throw Error('Invalid CRM user');
+    const n=Math.min(200,Math.max(1,Number(limit)||200));
+    return `select Subject, Status, Priority, Due_Date, What_Id, Who_Id${withModule===false?'':', $se_module'} from Tasks where (Owner = '${userId}' and Status != 'Completed') order by Due_Date asc limit ${n}`;
+  }
+  function taskDueInfo(v,now){
+    if(!v)return{text:'No due date',cls:'',label:''};
+    const d=new Date(String(v).slice(0,10)+'T00:00:00');if(isNaN(d))return{text:String(v),cls:'',label:''};
+    const t=new Date(now||Date.now());t.setHours(0,0,0,0);
+    const diff=Math.round((d-t)/86400000),text=d.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+    if(diff<0)return{text,cls:'danger',label:`Overdue by ${-diff} ${-diff===1?'day':'days'}`,days:diff};
+    if(diff===0)return{text,cls:'warning',label:'Due today',days:0};
+    return{text,cls:'',label:diff===1?'Due tomorrow':'',days:diff};
+  }
+  function taskRelated(r){
+    const w=r&&r.What_Id&&typeof r.What_Id==='object'?r.What_Id:null,who=r&&r.Who_Id&&typeof r.Who_Id==='object'?r.Who_Id:null;
+    if(w&&w.id)return{name:w.name||'Record',entity:r.$se_module||'',id:String(w.id)};
+    if(who&&who.id)return{name:who.name||'Contact',entity:'Contacts',id:String(who.id)};
+    return null;
+  }
+  async function loadTasks(){
+    const t=state.tasks;t.loading=true;t.error='';render();
+    try{
+      if(state.demo){t.rows=[];t.more=false;t.loaded=true;return;}
+      const uid=String(state.currentUser&&state.currentUser.id||'');
+      if(!/^[0-9]{8,30}$/.test(uid))throw Error('CRM did not say who you are, so your tasks cannot be listed. Refresh the page and try again.');
+      if(typeof api().coql!=='function')throw Error('CRM query support is not available, so your tasks cannot be listed.');
+      const run=async withModule=>{
+        try{
+          const res=await api().coql({select_query:openTasksQuery(uid,200,withModule)});
+          if(res?.code==='NO_CONTENT'||res?.status===204)return[];
+          if(res?.code&&res.code!=='SUCCESS'&&!Array.isArray(res.data))throw Error(res.message||res.code);
+          return asRows(res);
+        }catch(e){if(/NO_CONTENT|204|no content/i.test(String(e&&e.message||e)))return[];throw e;}
+      };
+      let rows;try{rows=await run(true)}catch(_){rows=await run(false)}
+      rows.sort((a,b)=>String(a.Due_Date||'9999').localeCompare(String(b.Due_Date||'9999')));
+      t.rows=rows;t.more=rows.length>=200;t.loaded=true;
+    }catch(e){t.error='Your open tasks could not be loaded from CRM: '+String(e&&e.message||e);}
+    finally{t.loading=false;if(state.view==='tasks')render();}
+  }
+  function tasksView(){
+    const t=state.tasks,who=state.currentUser&&(state.currentUser.full_name||state.currentUser.name)||'you';
+    const refresh=`<button type="button" class="button secondary" data-action="tasks-refresh">${icon('refresh-cw')} Refresh</button>`;
+    const tone={'in progress':'info','waiting for input':'warning',deferred:'warning'};
+    let body,desc='Open tasks assigned to you in CRM, soonest due first. To complete or change a task, open it in CRM.';
+    if(t.loading&&!t.loaded)body=loading();
+    else if(t.error)body=`<div class="v12-warning" role="alert">${esc(t.error)}</div>`;
+    else if(!t.rows.length)body=empty('No open tasks','Nothing is waiting for you in CRM. Tasks you create here stay on this list until they are completed in CRM.');
+    else{
+      const info=t.rows.map(r=>taskDueInfo(r.Due_Date)),late=info.filter(x=>x.cls==='danger').length,today=info.filter(x=>x.cls==='warning').length;
+      desc=`${t.rows.length} open ${t.rows.length===1?'task':'tasks'} assigned to ${who}${late?` · ${late} overdue`:''}${today?` · ${today} due today`:''}`;
+      body='<div class="v12-table-wrap"><table class="v12-table"><thead><tr><th scope="col">Task</th><th scope="col">Related to</th><th scope="col">Status</th><th scope="col">Priority</th><th scope="col">Due</th><th scope="col" class="v12-action-cell">Action</th></tr></thead><tbody>'+
+        t.rows.map((r,i)=>{
+          const rel=taskRelated(r),d=info[i],st=String(r.Status||'').toLowerCase(),pr=String(r.Priority||'');
+          const relCell=rel?(ALL_ENTITIES.has(rel.entity)?`<button class="v12-link" data-action="select" data-entity="${esc(rel.entity)}" data-id="${esc(rel.id)}">${esc(rel.name)}</button>`:esc(rel.name)):'—';
+          return `<tr><td>${esc(r.Subject||'Untitled task')}</td><td>${relCell}</td><td><span class="bg-state bg-state-${tone[st]||'neutral'}">${esc(r.Status||'Not recorded')}</span></td><td>${pr?`<span class="bg-state bg-state-${/high/i.test(pr)?'danger':'neutral'}">${esc(pr)}</span>`:'—'}</td><td>${esc(d.text)}${d.label?` <span class="bg-state bg-state-${d.cls||'neutral'}">${esc(d.label)}</span>`:''}</td><td class="v12-action-cell"><button class="v12-link" data-action="open" data-entity="Tasks" data-id="${esc(r.id)}">Open in CRM</button></td></tr>`;
+        }).join('')+'</tbody></table></div>'+(t.more?'<p class="v12-muted">Showing the first 200 open tasks. Open the Tasks tab in CRM to see the rest.</p>':'');
+    }
+    return panel('My open tasks',desc,body,refresh);
+  }
   async function changeView(next){
     state.history=[];state.view=next;state.searchResults=[];setNotice('');
     if(next==='create'){if(OPERATIONAL_UAT){setNotice('New applications are outside Operational UAT.','info');return;}initJourney();render();return;}
+    if(next==='tasks'){state.focus=null;state.focusEntityView=null;state.contact=null;return loadTasks();}
     if(next==='overview'){state.focus=null;state.focusEntityView=null;state.contact=null;state.browseKind='customers';state.browseSearch=state.browseSearchByKind.customers||'';const data=browseData('customers');if(!data.loaded)return loadBrowse('customers');render();return;}
     if(next==='queue'){const d=browseData(state.queueKind);if(!d.loaded)return loadQueue(state.queueKind);render();return;}
     if(BROWSE_MODULE[next]){state.focus=null;state.focusEntityView=null;state.browseKind=next;state.browseSearch=state.browseSearchByKind[next]||'';state.browseFilter='all';const d=browseData(next);if(!d.loaded)return loadBrowse(next);render();return;}
@@ -1094,6 +1158,7 @@
     else if(action==='savereview')await saveReview(entity,id);
     else if(action==='go-back'){const last=state.history.pop();if(last?.entity)await select(last.entity,last.id);else if(last){state.view=last.view;state.browseKind=last.kind||state.browseKind;state.browseSearch=last.search||'';if(last.page)state.pages['browse:'+state.browseKind]=last.page;state.focus=null;state.focusEntityView=null;if(last.view==='overview')state.contact=null;render();}}
     else if(action==='select'){state.history.push(state.focus?{entity:state.focus.entity,id:state.focus.record.id,view:state.view}:{view:state.view,kind:state.browseKind,page:state.pages['browse:'+state.browseKind]||1,search:state.browseSearch});await select(entity,id);}
+    else if(action==='tasks-refresh')await loadTasks();
     else if(action==='open')await openCRM(entity,id);
     else if(action==='edit'){
       try{if(typeof ZOHO?.CRM?.UI?.Record?.edit!=='function')throw Error('Native CRM edit is not available in this widget context.');
@@ -1110,5 +1175,5 @@
   function demoQueue(){throw Error('Demo data is disabled');}
   function demoSearch(){throw Error('Demo data is disabled');}
   if(typeof document!=='undefined')document.addEventListener('DOMContentLoaded',init);
-  if(typeof module!=='undefined'&&module.exports)module.exports={isExcludedAction,customViewQuery,pageItems,SIZES,esc,asRows,matchContext,isQueueItem,refId,queryCriterion,statusClass,contactLookup,reviewKind,reviewSignals,insuranceBlocks,uatEditable,REVIEW_GROUPS,DEMO_RECORDS,M};
+  if(typeof module!=='undefined'&&module.exports)module.exports={openTasksQuery,taskDueInfo,taskRelated,isExcludedAction,customViewQuery,pageItems,SIZES,esc,asRows,matchContext,isQueueItem,refId,queryCriterion,statusClass,contactLookup,reviewKind,reviewSignals,insuranceBlocks,uatEditable,REVIEW_GROUPS,DEMO_RECORDS,M};
 })();
