@@ -2,7 +2,7 @@
  * CRM SDK remains the source of records and permissions; this file has no credentials. */
 (function(global){
   'use strict';
-  const TIMELINE_CONNECTION='bg_crm_timeline', TIMELINE_API='https://www.zohoapis.eu/crm/v8/';
+  const TIMELINE_CONNECTION='zoho_crm', TIMELINE_API='https://www.zohoapis.eu/crm/v8/';
   const timelineCache=new Map();
   const metaCache=new Map(), relatedCache=new Map(), chosen=new Map(), fieldModes=new Map();
   const tableColumns={
