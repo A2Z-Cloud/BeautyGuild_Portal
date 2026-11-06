@@ -239,3 +239,4 @@ body.staff-dev-tools #staff-api-open{display:inline-flex}
 .staff-price-docs li{display:flex;justify-content:space-between;gap:8px;padding:3px 0}
 .staff-price-docs small{color:#2f7a4b;font-weight:700}
 .staff-price-docs a{color:#9d2a68}
+.bg-contact-dialog [hidden]{display:none!important}
