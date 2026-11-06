@@ -70,7 +70,7 @@ test('table status text does not break mid-word, and the stop banner is styled',
   assert.match(css,/\.v12-table td \.bg-state\{white-space:nowrap\}/);
   assert.match(css,/\.v12-stop-banner--stop/);
   const html=fs.readFileSync(path.join(app,'index.html'),'utf8');
-  assert.match(html,/widget\.js\?v=20261106-uatfix22/);
+  assert.match(html,/widget\.js\?v=20261106-uatfix23/);
 });
 
 test('buttons that only open the CRM record say so, and the note dialog names the record and hides the due date',()=>{
@@ -289,4 +289,21 @@ test('staff-facing wording is final: no internal system names, and table rows ar
   assert.match(css,/@media\(max-width:700px\)\{\s*\.v12-table-wrap\{border-top:0/);
   assert.match(css,/td\[data-label\]:before\{content:attr\(data-label\)/);
   assert.match(css,/v12-action-cell \.v12-link:not\(\.v12-cell-link\)\{white-space:nowrap/);
+});
+
+test('draft policies can be continued, drafts are readable, the membership is chosen from a list, and the new records can be opened',()=>{
+  const w=fs.readFileSync(path.join(app,'widget.js'),'utf8');
+  const j=fs.readFileSync(path.join(app,'v12-journeys.js'),'utf8');
+  assert.match(w,/data-action=\"continue-draft\"/);
+  assert.match(w,/else if\(action==='continue-draft'\)await continueDraft\(entity,id\)/);
+  assert.match(w,/No saved application draft was found for this customer\./);
+  assert.match(w,/function ensureJourneyMemberships/);
+  assert.match(w,/searchRecords\(M\.DEAL,'Contact_Name'/);
+  assert.doesNotMatch(j,/CRM Membership Deal ID/);
+  assert.match(j,/Which membership\?/);
+  assert.match(j,/Saved drafts for this customer/);
+  assert.match(j,/Go to the records/);
+  assert.match(j,/Open the application record/);
+  assert.match(j,/Open the customer record/);
+  assert.doesNotMatch(w,/CRM confirmation: '\+JSON\.stringify/);
 });

@@ -384,6 +384,37 @@ function prefill(j){
  if(j.kind==='membership'&&a.working)a.insWorking=[a.working];
  j.answers=a;
 }
+
+const SERVICE_LABEL={combined:'Membership and Insurance',membership:'Membership',insurance:'Insurance',accreditation:'Accreditation'};
+function readable(o,depth){
+ depth=depth||0;
+ if(o===null||o===undefined||o==='')return '<span class="v12-muted">None</span>';
+ if(Array.isArray(o))return o.length?o.map(x=>typeof x==='object'&&depth<2?'<div class="v12-opt-item">'+readable(x,depth+1)+'</div>':esc(String(x))).join(''):'<span class="v12-muted">None</span>';
+ if(typeof o==='object'){
+  if(depth>=2)return esc(Object.values(o).filter(x=>typeof x!=='object').join(', '));
+  return '<dl class="v12-review">'+Object.entries(o).map(([k,x])=>'<div><dt>'+esc(String(k).replace(/_/g,' ').replace(/([a-z])([A-Z])/g,'$1 $2').replace(/^./,c=>c.toUpperCase()))+'</dt><dd>'+readable(x,depth+1)+'</dd></div>').join('')+'</dl>';
+ }
+ if(typeof o==='boolean')return o?'Yes':'No';
+ return esc(String(o));
+}
+function draftList(j){
+ const list=Array.isArray(j.availableDrafts)?j.availableDrafts:[];if(!list.length)return '';
+ const when=d=>{const t=d.updatedAt||d.modifiedAt||d.updated_at||d.lastSavedAt||d.createdAt||'';const x=t?new Date(t):null;return x&&!isNaN(x)?x.toLocaleString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}):'';};
+ return '<section class="v12-detail-section"><h3>Saved drafts for this customer</h3><p class="v12-muted">Choose a draft to carry on where it was left.</p>'+list.map(d=>'<div class="v12-draft-row"><div><strong>'+esc(SERVICE_LABEL[d.service]||String(d.service||'Application'))+' application</strong><small>'+esc([when(d)?'Saved '+when(d):'',d.step!==undefined&&d.step!==null&&Number.isFinite(Number(d.step))?'Stopped at step '+(Number(d.step)+1):''].filter(Boolean).join(' · ')||'Draft')+'</small></div><div class="v12-draft-actions"><button type="button" class="button" data-action="journey-load-draft" data-id="'+esc(d.id)+'" data-service="'+esc(d.service)+'">Continue</button><button type="button" class="button secondary" data-action="journey-discard" data-id="'+esc(d.id)+'" data-service="'+esc(d.service)+'">Discard</button></div></div>').join('')+'</section>';
+}
+function nextLinks(j){
+ const rec=j.kind==='accreditation'?{module:'Training_Centre_Accred',id:j.accreditationRecordId}:j.remote&&j.remote.id?{module:'Deals',id:j.remote.id}:null;
+ const ok=rec&&/^\d{10,25}$/.test(String(rec.id||''));
+ const cust=j.contact&&j.contact.id&&/^\d{10,25}$/.test(String(j.contact.id));
+ if(!ok&&!cust)return '';
+ return '<div class="v12-next-links"><strong>Go to the records</strong>'+(ok?'<button type="button" class="button secondary" data-action="select" data-entity="'+esc(rec.module)+'" data-id="'+esc(rec.id)+'">Open the application record</button>':'')+(cust?'<button type="button" class="button secondary" data-action="select" data-entity="Contacts" data-id="'+esc(j.contact.id)+'">Open the customer record</button>':'')+'</div>';
+}
+function membershipPicker(j){
+ const choices=Array.isArray(j.membershipChoices)?j.membershipChoices:[];
+ if(j.membershipChoicesLoading&&!j.membershipChoices)return '<p class="v12-muted" role="status">Finding this customer’s memberships…</p>';
+ if(!choices.length)return '<p class="v12-muted">This customer has no existing membership to renew or upgrade.</p>';
+ return '<label class="v12-field-label" for="staff-membership-record-id">Which membership?</label><select id="staff-membership-record-id"><option value="">Choose a membership</option>'+choices.map(c=>'<option value="'+esc(c.id)+'"'+(String(j.selectedMembership||'')===String(c.id)?' selected':'')+'>'+esc(c.label)+'</option>').join('')+'</select><button class="button secondary" type="button" data-action="journey-membership-options" '+(j.membershipOptionsLoading?'disabled':'')+'>See what is available</button>';
+}
 const pounds=p=>Number.isFinite(Number(p))?'£'+(Number(p)/100).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2}):'Not provided';
 function quoteSummary(result){
  const q=result?.quote;if(!q)return '';
@@ -445,7 +476,7 @@ function render(j){
      (j.liveQuote?quoteSummary(j.liveQuote):'')+
      
      (j.liveQuote?.quote?.payable&&!j.liveQuote?.quote?.alreadyPaid&&!j.discountedQuote?'<div class="v12-payment-panel"><h4>Secure customer payment</h4><label class="v12-choice"><input type="checkbox" id="staff-customer-accepted" '+(j.customerAccepted?'checked':'')+' /><span>I confirm that the customer explicitly agreed to the Code of Ethics and Terms of Business.</span></label><p class="v12-muted">The customer pays on a secure payment page. The payment status in CRM updates once payment is received.</p><button class="button primary" type="button" data-action="journey-payment" '+(j.paymentBusy?'disabled':'')+'>Create payment link</button>'+(j.paymentError?'<p class="v12-warning">'+esc(j.paymentError)+'</p>':'')+(j.paymentAlreadyPaid?'<p>This has already been paid. Refresh the CRM record to see the latest payment status.</p>':'')+(j.paymentLink?'<p><button type="button" class="button secondary" data-action="journey-copy-payment">Copy payment link</button> <button type="button" class="button secondary" data-action="journey-open-payment">Open payment page</button></p>':'')+
- '<p><button type="button" class="button secondary" data-action="journey-refresh-payment" '+(j.paymentStatusBusy?'disabled':'')+'>Refresh CRM payment status</button></p>'+
+ '<p><button type="button" class="button secondary" data-action="journey-refresh-payment" '+(j.paymentStatusBusy?'disabled':'')+'>Refresh CRM payment status</button></p>'+nextLinks(j)+
  (j.paymentCrm?'<dl class="v12-review">'+[['Payment status',j.paymentCrm.Payment_Status],['Application status',j.paymentCrm.Application_Status||j.paymentCrm.Application_Stage],['Policy status',j.paymentCrm.Policy_Status],['CRM stage',j.paymentCrm.Stage],['Checked at',j.paymentCrm.checkedAt]].map(([k,v])=>'<div><dt>'+esc(k)+'</dt><dd>'+esc(v??'Not recorded')+'</dd></div>').join('')+'</dl>':'')+'</div>':(j.discountedQuote?'<p class="v12-warning">This quotation includes a voucher or waiver. Staff payment links cannot redeem discounts yet. Remove discounts and requote before payment.</p>':'<p class="v12-muted">Obtain a successful quotation before initiating payment.</p>'));
  }else{
    const errors=j.v12Errors||{};
@@ -458,11 +489,11 @@ function render(j){
  return '<section class="v12-journey"><header><span class="process-kicker">STAFF-ASSISTED APPLICATION</span><h2>'+esc(j.kind[0].toUpperCase()+j.kind.slice(1))+'</h2></header>'+
    '<p class="v12-muted">Take this application with the customer. It is saved to CRM as a draft, and the customer can continue it in the Portal.</p>' +
   ctx+crumb+
-  (j.kind==='membership'&&j.step>=0&&!window.BG_OPERATIONAL_UAT?'<section class="v12-journey-tools"><strong>Existing membership changes</strong><p class="v12-muted">For a renewal or upgrade, retrieve eligible options from the selected customer’s existing CRM membership.</p><input id="staff-membership-record-id" inputmode="numeric" placeholder="CRM Membership Deal ID" /><button class="button secondary" type="button" data-action="journey-membership-options" '+(j.membershipOptionsLoading?'disabled':'')+'>Load membership options</button>'+(j.optionsError?'<p role="alert" class="v12-warning">'+esc(j.optionsError)+'</p>':'')+(j.membershipOptions?'<pre class="v12-quote-output">'+esc(JSON.stringify(j.membershipOptions,null,2))+'</pre>':'')+'</section>':'')+
+  (j.kind==='membership'&&j.step>=0?'<section class="v12-journey-tools"><strong>Existing membership</strong><p class="v12-muted">If this customer already has a membership, choose it to see what can be renewed or upgraded.</p>'+membershipPicker(j)+(j.optionsError?'<p role="alert" class="v12-warning">'+esc(j.optionsError)+'</p>':'')+(j.membershipOptions?'<div class="v12-quote-output">'+readable(j.membershipOptions)+'</div>':'')+'</section>':'')+
   '<div class="staff-journey-grid"><div class="staff-journey-primary"><div class="v12-journey-body">'+body+'</div></div>'+pricingAside(j)+'</div>'+
-  (j.draftsMessage?'<p role="status" class="v12-muted">'+esc(j.draftsMessage)+'</p>':'')+
+  (j.draftsMessage?'<p role="status" class="v12-muted">'+esc(j.draftsMessage)+'</p>':'')+(j.accreditationSubmitted?nextLinks(j):'')+
   (j.draftsError?'<p role="alert" class="v12-warning">'+esc(j.draftsError)+'</p>':'')+
-  (Array.isArray(j.availableDrafts)&&j.availableDrafts.length?'<section class="v12-detail-section"><h3>Saved customer drafts</h3>'+j.availableDrafts.map(d=>'<button type="button" class="button secondary" data-action="journey-load-draft" data-id="'+esc(d.id)+'" data-service="'+esc(d.service)+'">Resume '+esc(d.service)+' · '+esc(d.id)+'</button>').join('')+'</section>':'')+
+  draftList(j)+
   (j.formError?'<div class="v12-form-error" role="alert">'+esc(j.formError)+'</div>':'')+
   (review&&j.kind==='membership'?(window.BGStaffAddons?.journeyPanel('membership')||''):'')+
   '<footer class="journey-footer"><button class="button secondary" type="button" data-action="journey-back">Back</button>'+

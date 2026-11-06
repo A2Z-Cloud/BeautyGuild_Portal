@@ -257,8 +257,34 @@
       state.wfSaving=null;await select(p.entity,p.id);setNotice(`${wfLabel(p.key)} updated to ${wfText(cfg,p.value)}. CRM workflows have been triggered.`,'success');
     }catch(err){state.wfSaving=null;render();setNotice(`Could not update ${wfLabel(p.key)}: ${err.message||err}`,'error')}
   }
+
+  // A policy that is still a draft can be carried on from its saved application draft.
+  const DRAFT_STATES={Insurance_Policy:{field:'Application_Status',values:['','Draft','In Progress','Quote Saved','Referred']},Training_Centre_Accred:{field:'Application_Stage',values:['Draft','In Progress']}};
+  function isDraftRecord(entity,record){
+    const d=DRAFT_STATES[entity];if(!d||!record)return false;
+    if(entity==='Insurance_Policy'&&/^(active|issued)$/i.test(String(record.Policy_Status||'')))return false;
+    return d.values.includes(record[d.field]==null?'':String(record[d.field]));
+  }
+  async function continueDraft(entity,id){
+    const rec=state.focus&&state.focus.entity===entity&&String(state.focus.record.id)===String(id)?state.focus.record:null;
+    const owner=rec&&(rec.Contact||rec.Contact_Name||rec.Applicant_Contact);
+    if(!owner||!owner.id){setNotice('This record has no customer, so the application cannot be continued here. Use Edit in CRM instead.','error');return;}
+    try{
+      const contact=await getRecord(M.CONTACT,String(owner.id));
+      const kind=entity===M.ACC?'accreditation':'membership';
+      state.journey=null;initJourney(kind);const j=state.journey;
+      j.contact=contact;state.contact=contact;j.kind=kind;j.step=-1;j.answers={};
+      state.view='create';state.focus=null;state.focusEntityView=null;state.history=[];setNotice('');render();
+      await loadJourneyDrafts(j);
+      const fit=(j.availableDrafts||[]).filter(d=>kind==='accreditation'?d.service==='accreditation':['combined','membership','insurance'].includes(d.service));
+      if(fit.length===1){await clickAction({target:{closest:()=>({dataset:{action:'journey-load-draft',id:String(fit[0].id),service:String(fit[0].service)}})}});}
+      else if(!fit.length){j.draftsMessage='No saved application draft was found for this customer. Use Edit in CRM to change this record, or start a new application.';render();}
+    }catch(e){setNotice('The application could not be reopened: '+String(e&&e.message||e),'error');}
+  }
   function crmActionBar(entity,id){
-    return `<div class="sheet-actions workspace-actions"><button type="button" class="button secondary" data-action="edit" data-entity="${esc(entity)}" data-id="${esc(id)}">${icon('link')} Edit in CRM</button><button type="button" class="button secondary" data-action="email" data-entity="${esc(entity)}" data-id="${esc(id)}">${icon('link')} Send email (opens CRM)</button><button type="button" class="button secondary" data-action="crm-actions" data-entity="${esc(entity)}" data-id="${esc(id)}">${icon('arrow-up-right')} More CRM actions (opens CRM)</button><button type="button" class="button secondary" data-action="note" data-entity="${esc(entity)}" data-id="${esc(id)}">${icon('sticky-note')} Add note</button><button type="button" class="button secondary" data-action="task" data-entity="${esc(entity)}" data-id="${esc(id)}">${icon('list-todo')} Create task</button></div>`;
+    const focusRec=state.focus&&state.focus.entity===entity&&String(state.focus.record.id)===String(id)?state.focus.record:null;
+    const cont=isDraftRecord(entity,focusRec)?`<button type="button" class="button" data-action="continue-draft" data-entity="${esc(entity)}" data-id="${esc(id)}">${icon('chevron-right')} Continue application</button>`:'';
+    return `<div class="sheet-actions workspace-actions">${cont}<button type="button" class="button secondary" data-action="edit" data-entity="${esc(entity)}" data-id="${esc(id)}">${icon('link')} Edit in CRM</button><button type="button" class="button secondary" data-action="email" data-entity="${esc(entity)}" data-id="${esc(id)}">${icon('link')} Send email (opens CRM)</button><button type="button" class="button secondary" data-action="crm-actions" data-entity="${esc(entity)}" data-id="${esc(id)}">${icon('arrow-up-right')} More CRM actions (opens CRM)</button><button type="button" class="button secondary" data-action="note" data-entity="${esc(entity)}" data-id="${esc(id)}">${icon('sticky-note')} Add note</button><button type="button" class="button secondary" data-action="task" data-entity="${esc(entity)}" data-id="${esc(id)}">${icon('list-todo')} Create task</button></div>`;
   }
   const RELATED_MODULES={Insurance_Extensions:M.EXT,Insurance_Policy:M.POLICY,Accreditation1:M.ACC,Membership:M.PROFILE,Membership_Extension1:M.ADDON,Training_Centre_Course_Offering:M.OFFER,Tutor_Relationship:M.TUTOR};
   function nativeRow(list,row){
@@ -670,7 +696,12 @@
     return `<label class="journey-field" for="${id}"><span>${esc(f.label)}${f.required?' *':''}</span>${input}</label>`;
   }
   function visibleJourneySteps(){const j=state.journey;return(j&&JOURNEY_FLOW[j.kind]?.steps||[]).filter(x=>!x.when||x.when(j.answers));}
-  function renderJourney(){initJourney();const j=state.journey;if(j.kind&&j.step>=0){if(window.BGJourney12)return window.BGJourney12.render(j);return '<section class="journey-shell"><div class="journey-validation" role="alert">The application form did not load. Refresh the Staff Workspace and try again. If it still does not load, tell your A2Z Cloud contact. Your entries cannot be saved until it loads.</div><div class="journey-top-nav"><button type="button" class="button secondary" data-action="journey-back">← Back</button> <button type="button" class="button secondary" data-action="journey-reset">Start again</button> <button type="button" class="button secondary" data-action="journey-exit">Leave New application</button></div></section>';}if(!j.kind){return `<section class="journey-shell"><div class="journey-top-nav"><button type="button" class="button secondary journey-top-back" data-action="journey-exit">← Back to workspace</button></div><div class="journey-heading"><span class="process-kicker">NEW APPLICATION</span><h2>Select application type</h2><p>Start a staff-assisted Guild application for an existing or new CRM customer.</p></div><div class="journey-draft-entry"><strong>Resume an existing application</strong><p>Choose a customer below, or use the current CRM customer, to retrieve their saved applications.</p><button type="button" class="button secondary" data-action="journey-find-drafts">Find draft applications</button></div><div class="journey-type-grid">${Object.entries(JOURNEY_FLOW).filter(([kind])=>kind!=='insurance').map(([kind,c])=>`<button class="journey-type-card journey-type-card--${kind}" data-action="journey-type" data-kind="${kind}"><strong>${esc(c.title)}</strong><small>${esc(c.description)}</small><span>Start journey →</span></button>`).join('')}</div></section>`;}
+  function ensureJourneyMemberships(j){
+    if(!j||j.kind!=='membership'||!j.contact||!j.contact.id||j.step<0||j.membershipChoices||j.membershipChoicesLoading||state.demo)return;
+    j.membershipChoicesLoading=true;
+    searchRecords(M.DEAL,'Contact_Name',String(j.contact.id)).then(rows=>{j.membershipChoices=rows.map(r=>({id:String(r.id),label:[r.Deal_Name||r.Name||'Membership',r.Membership_Type,r.Stage,r.Expiry_Date?'expires '+r.Expiry_Date:''].filter(Boolean).join(' · ')}));}).catch(()=>{j.membershipChoices=[];}).finally(()=>{j.membershipChoicesLoading=false;if(state.view==='create')render();});
+  }
+  function renderJourney(){initJourney();const j=state.journey;if(j.kind&&j.step>=0){if(window.BGJourney12){ensureJourneyMemberships(j);return window.BGJourney12.render(j);}return '<section class="journey-shell"><div class="journey-validation" role="alert">The application form did not load. Refresh the Staff Workspace and try again. If it still does not load, tell your A2Z Cloud contact. Your entries cannot be saved until it loads.</div><div class="journey-top-nav"><button type="button" class="button secondary" data-action="journey-back">← Back</button> <button type="button" class="button secondary" data-action="journey-reset">Start again</button> <button type="button" class="button secondary" data-action="journey-exit">Leave New application</button></div></section>';}if(!j.kind){return `<section class="journey-shell"><div class="journey-top-nav"><button type="button" class="button secondary journey-top-back" data-action="journey-exit">← Back to workspace</button></div><div class="journey-heading"><span class="process-kicker">NEW APPLICATION</span><h2>Select application type</h2><p>Start a staff-assisted Guild application for an existing or new CRM customer.</p></div><div class="journey-draft-entry"><strong>Resume an existing application</strong><p>Choose a customer below, or use the current CRM customer, to retrieve their saved applications.</p><button type="button" class="button secondary" data-action="journey-find-drafts">Find draft applications</button></div><div class="journey-type-grid">${Object.entries(JOURNEY_FLOW).filter(([kind])=>kind!=='insurance').map(([kind,c])=>`<button class="journey-type-card journey-type-card--${kind}" data-action="journey-type" data-kind="${kind}"><strong>${esc(c.title)}</strong><small>${esc(c.description)}</small><span>Start journey →</span></button>`).join('')}</div></section>`;}
     const cfg=JOURNEY_FLOW[j.kind],steps=visibleJourneySteps(),index=Math.min(j.step,steps.length);const current=steps[index],isContact=index<0,atPay=index>=steps.length;
     const labels=['Customer',...steps.map(x=>x.title),'Payment'];const active=isContact?0:atPay?labels.length-1:index+1;
     const bar=`<div class="journey-progress">${labels.map((l,i)=>`<span class="${i===active?'current':i<active?'done':''}">${i+1}. ${esc(l)}</span>`).join('')}</div>`;
@@ -1136,8 +1167,8 @@
     else if(action==='journey-membership-options'){
       const j=state.journey;
       if(!j?.contact?.id||j.kind!=='membership')return;
-      const recordId=String(document.getElementById('staff-membership-record-id')?.value||'').trim();
-      if(!/^\d{10,25}$/.test(recordId)){j.optionsError='Enter an existing CRM Membership Deal ID.';render();return;}
+      const recordId=String(document.getElementById('staff-membership-record-id')?.value||'').trim();j.selectedMembership=recordId;
+      if(!/^\d{10,25}$/.test(recordId)){j.optionsError='Choose a membership first.';render();return;}
       j.optionsError='';j.membershipOptionsLoading=true;render();
       try{
         const response=await window.BGStaffApi.call('membership_options',{contactId:String(j.contact.id),recordId});
@@ -1206,7 +1237,7 @@
         const response=await window.BGStaffApi.call('accreditation_submit',request);
         if(!response?.accreditation?.id)throw Error('Accreditation submission was not confirmed.');
         j.accreditationSubmitted=true;j.accreditationRecordId=String(response.accreditation.id);
-        j.draftsMessage='Accreditation submitted. CRM confirmation: '+JSON.stringify(response);
+        j.draftsMessage='Accreditation submitted to CRM. You can open the record below.';
       }catch(e){j.draftsError=String(e.message||e);}
       finally{j.draftsBusy=false;render();}
     }
@@ -1289,6 +1320,7 @@
     else if(action==='go-back'){const last=state.history.pop();if(last?.entity)await select(last.entity,last.id);else if(last){state.view=last.view;state.browseKind=last.kind||state.browseKind;state.browseSearch=last.search||'';if(last.page)state.pages['browse:'+state.browseKind]=last.page;state.focus=null;state.focusEntityView=null;if(last.view==='overview')state.contact=null;render();}}
     else if(action==='select'){state.history.push(state.focus?{entity:state.focus.entity,id:state.focus.record.id,view:state.view}:{view:state.view,kind:state.browseKind,page:state.pages['browse:'+state.browseKind]||1,search:state.browseSearch});await select(entity,id);}
     else if(action==='new-customer')await startNewCustomer();
+    else if(action==='continue-draft')await continueDraft(entity,id);
     else if(action==='tasks-refresh')await loadTasks();
     else if(action==='task-open')await openTask(id);
     else if(action==='task-back'){state.tasks.focusId='';state.tasks.focus=null;setNotice('');render();}

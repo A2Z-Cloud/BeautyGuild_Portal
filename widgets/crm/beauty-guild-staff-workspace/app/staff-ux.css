@@ -267,3 +267,11 @@ body.staff-dev-tools #staff-api-open{display:inline-flex}
 }
 .v12-table th{min-width:100px;overflow-wrap:break-word}
 .v12-table th.v12-action-cell{min-width:0}
+
+.v12-draft-row{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 0;border-top:1px solid #f0e9ee}
+.v12-draft-row small{display:block;color:#6b606b;margin-top:2px}
+.v12-draft-actions{display:flex;gap:8px;flex-wrap:wrap}
+.v12-next-links{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:12px 0 4px;padding-top:12px;border-top:1px solid #eee5eb}
+.v12-journey-tools select{display:block;margin:6px 0 10px;max-width:100%;padding:9px 10px;border:1px solid #d9cfd6;border-radius:8px;font:inherit;background:#fff}
+.v12-field-label{display:block;font-size:12px;font-weight:650;margin-top:8px}
+.v12-opt-item{padding:4px 0}

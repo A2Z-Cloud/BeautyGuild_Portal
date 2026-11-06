@@ -175,7 +175,7 @@ For each step, note whether it did what we said, did it but was confusing or slo
 
 ## Journey 8: Take a new customer and a new application through to payment
 
-*A new customer wants to join and take out cover. Create them, take the application, and take payment.*
+*A new customer wants to join and take out cover. Create them, take the application, carry on from a draft, take payment, and find the records.*
 
 1. Open **Customers** and click **New customer**. Enter a first name, surname and a new email address (use a test address you control), then click **Create customer**.
    **Expect:** The customer is created in CRM and their record opens in the workspace, with the message "Customer created in CRM."
@@ -187,18 +187,24 @@ For each step, note whether it did what we said, did it but was confusing or slo
    **Expect:** The questions flow in a sensible order, only relevant questions appear, and you cannot skip required answers. The **Price summary** on the right updates as you go.
 5. Look at **Documents and links** under the price summary, before and after you ask for insurance.
    **Expect:** Links to the Terms of Business, Privacy Policy and Code of Ethics are shown and open the Guild's pages. When insurance is requested, the list of policy documents that come with the chosen cover appears, and it changes if you change the cover.
-6. Click **Save draft**.
-   **Expect:** "CRM draft saved." appears. The draft can be found again with **Find draft applications**.
-7. Calculate the quote.
+6. For a customer who already has a membership, look at **Existing membership** near the top of the application.
+   **Expect:** You choose the membership from a list of that customer's memberships. You are never asked to type an ID. **See what is available** shows what can be renewed or upgraded in plain language.
+7. Click **Save to CRM**, then leave the application by opening **Insurance** and the draft policy it created.
+   **Expect:** "CRM draft saved." appears. On the draft policy, a **Continue application** button is shown.
+8. Click **Continue application**.
+   **Expect:** The application reopens at the step where you stopped, with your answers still filled in. You can also reach drafts with **Find saved drafts for this customer**, which lists each draft by type and when it was saved.
+9. Calculate the quote.
    **Expect:** The Price summary shows a verified quote with the amount and any payment plan.
-8. Confirm the customer has accepted the terms, then click **Create payment link** and confirm.
+10. Confirm the customer has accepted the terms, then click **Create payment link** and confirm.
    **Expect:** A secure payment link is created and can be opened or copied.
-9. Open the payment link and pay using the test card details your A2Z Cloud contact gives you. Then come back and refresh the payment status.
+11. Open the payment page and pay using the test card details your A2Z Cloud contact gives you. Then come back and refresh the payment status.
    **Expect:** Payment completes, and the record in CRM shows Payment Status as Paid.
-10. Start an **Accreditation** application for a customer, complete it and submit it.
-   **Expect:** You are asked to confirm before it is submitted, and the application appears in the Accreditation list afterwards.
+12. Under **Go to the records**, click **Open the application record**, then go back and click **Open the customer record**.
+   **Expect:** Each opens inside the workspace, showing the new purchase, its status and its Timeline, and you can get back to the application.
+13. Start an **Accreditation** application for a customer, complete it, click **Save to CRM**, then **Submit saved Accreditation application**.
+   **Expect:** You are asked to confirm before it is submitted. A message confirms it, and **Open the application record** takes you to the new accreditation.
 
-**Think about:** Did the questions make sense in the order you would ask them on the phone? Would you take payment this way with a customer on the line?
+**Think about:** Did the questions make sense in the order you would ask them on the phone? Could you always find your way back to the draft, the customer and the new records?
 
 ---
 
