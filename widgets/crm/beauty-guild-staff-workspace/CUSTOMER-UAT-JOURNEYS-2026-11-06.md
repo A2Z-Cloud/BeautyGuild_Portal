@@ -18,7 +18,7 @@ Instead of a list of buttons to press, you will follow **seven short journeys**.
 | In this test | Not in this test (coming later) |
 | --- | --- |
 | Finding and reviewing members, membership, insurance and accreditation records | Starting a new insurance application |
-| Notes, creating a task, and seeing your own open tasks | Completing, editing or reassigning tasks (do this in CRM) |
+| Notes, creating, updating and completing tasks, and seeing your own open tasks | Reassigning tasks, or seeing other people's tasks (do this in CRM) |
 | Moving an early-stage application forward | Mid-term adjustments (MTAs) |
 | Opening the standard CRM edit screen | Vouchers |
 |  | Cancellations, renewals and upgrades |
@@ -84,7 +84,7 @@ For each step, note whether it did what we said, did it but was confusing or slo
 3. Open your test policy.
    **Expect:** you see its cover, current status and any warnings, such as an underwriting stop or a payment that is not recorded as paid.
 4. Look through the tabs and sections on the policy: **Details**, **Related lists** (for example Notes and Attachments) and **Timeline**.
-   **Expect:** everything opens without errors. The Timeline lists what has happened on the record, newest first, grouped by day, with who did it and what changed (for example Application Status changing from Draft to In Progress).
+   **Expect:** everything opens without errors. Near the top of the record, **Latest activity** shows the last few things that happened. The **Timeline** tab lists everything, newest first, grouped by day, with who did it and what changed. Use the filters to see only **Emails**, **Automatic** changes, **Notes and tasks** or **Field changes**. Emails and automations that CRM ran are labelled.
 5. Look at the fields **Payment Status**, **Policy Status**, **Document Status** and **Manual Review Outcome**.
    **Expect:** these are shown as plain text. You cannot change them here.
 
@@ -92,9 +92,9 @@ For each step, note whether it did what we said, did it but was confusing or slo
 
 ---
 
-## Journey 4: Leave a note and log a follow-up
+## Journey 4: Leave a note and manage a follow-up
 
-*You have spoken to the member. Record it, log a follow-up, and find it again later.*
+*You have spoken to the member. Record it, log a follow-up, then find it, update it and close it.*
 
 1. On your **draft test policy**, click **Add note**. Type a short note such as "Spoke to member about cover, will call back" and save.
    **Expect:** the message **Note saved.** appears.
@@ -103,11 +103,15 @@ For each step, note whether it did what we said, did it but was confusing or slo
 3. Open the **Notes** and **Open activities** lists on that record.
    **Expect:** your note shows its title and text. Your task shows its subject, type, status and due date.
 4. Open **My tasks** in the left-hand navigation.
-   **Expect:** a list of the open tasks assigned to you, soonest due first. Your new task is in it, showing what it is about, its status, priority and due date. Overdue and due-today tasks are marked. Completed tasks are not listed.
-5. Click the name in the **Related to** column.
-   **Expect:** the workspace opens the record the task is about.
-6. Click **Open in CRM** on a task.
-   **Expect:** the task opens in standard CRM, where you complete or change it. The workspace does not complete or edit tasks.
+   **Expect:** a list of the open tasks assigned to you, soonest due first, 15 to a page. Your new task is in it, showing what it is about, its status, priority and due date. Overdue and due-today tasks are marked. Completed tasks are not listed.
+5. Click your task's name.
+   **Expect:** the task opens inside the workspace, showing what it is related to, the contact, the owner, the due date and its description.
+6. Click the **Related to** link.
+   **Expect:** the record the task is about opens in the workspace, and **Previous record or list** brings you back to the task.
+7. Change the **Due date** or **Priority** and click **Save changes**.
+   **Expect:** "Task saved in CRM." Check the same task in CRM to see the change.
+8. Click **Mark complete**.
+   **Expect:** you are asked to confirm. After you confirm, the task is set to Completed in CRM and disappears from your list.
 
 **Think about:** Is "My tasks" what you would look at first thing in the morning? What else would you want to see or filter by? Would you trust this enough to use it every day?
 

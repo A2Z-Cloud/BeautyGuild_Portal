@@ -225,3 +225,4 @@ body.staff-dev-tools #staff-api-open{display:inline-flex}
 
 .v12-table td.bg-task-due{min-width:175px}
 .v12-table td.bg-task-due .bg-state{display:flex;margin-top:3px;white-space:normal}
+.v12-table td .v12-link:not(.v12-cell-link){white-space:normal;text-align:left;max-width:230px;overflow-wrap:anywhere}
