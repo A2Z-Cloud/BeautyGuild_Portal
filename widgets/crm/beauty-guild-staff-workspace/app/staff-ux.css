@@ -154,9 +154,9 @@ body.staff-dev-tools #staff-api-open{display:inline-flex}
 .journey-type-card:focus-visible,.process-entry .button:focus-visible{outline:2px solid #be2d78;outline-offset:2px}
 
 
-/* Operational UAT: operational CRM records only. Business transaction code is retained, not exposed. */
-[data-view="create"], #staff-api-open, .create-cta,
-[data-action^="journey-"],[data-action^="membership-cancel-"],
+/* Operational UAT: MTAs, vouchers, cancellations, renewals and upgrades stay hidden. New applications are available. */
+#staff-api-open,
+[data-action^="membership-cancel-"],
 [data-action="membership-renew"],[data-action="membership-upgrade"],
 [data-staff-addon="mta"],[data-staff-addon="discount"] { display:none !important; }
 .browse-controls select[data-crm-view]{min-height:38px;max-width:290px;width:100%;border:1px solid #d9dce3;border-radius:8px;padding:8px 10px;background:#fff;color:#26323d;font:inherit}

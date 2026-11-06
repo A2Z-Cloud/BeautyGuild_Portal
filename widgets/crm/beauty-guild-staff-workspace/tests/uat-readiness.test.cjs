@@ -70,7 +70,7 @@ test('table status text does not break mid-word, and the stop banner is styled',
   assert.match(css,/\.v12-table td \.bg-state\{white-space:nowrap\}/);
   assert.match(css,/\.v12-stop-banner--stop/);
   const html=fs.readFileSync(path.join(app,'index.html'),'utf8');
-  assert.match(html,/widget\.js\?v=20261106-uatfix16/);
+  assert.match(html,/widget\.js\?v=20261106-uatfix17/);
 });
 
 test('buttons that only open the CRM record say so, and the note dialog names the record and hides the due date',()=>{
@@ -241,4 +241,15 @@ test('journeys use the page dialog (browser confirm is blocked in the CRM frame)
   assert.match(j,/documentsPanel\(j\)\+'<\/aside>'/);
   const legal=fs.readFileSync(path.join(app,'portal-defs/legal.js'),'utf8');
   for(const u of ['Terms-Of-Business','Legal/Privacy','Treatments-We-Cover','Code-Of-Ethics'])assert.ok(legal.includes(u),u);
+});
+
+test('the stylesheet no longer hides New application or the journey buttons',()=>{
+  const css=fs.readFileSync(path.join(app,'staff-ux.css'),'utf8');
+  const rule=/\{\s*display:none !important;?\s*\}/;
+  const hidden=css.split('}').filter(r=>/display:\s*none\s*!important/.test(r)).join('}');
+  assert.doesNotMatch(hidden,/data-view="create"/);
+  assert.doesNotMatch(hidden,/data-action\^="journey-"/);
+  assert.doesNotMatch(hidden,/\.create-cta/);
+  assert.match(hidden,/data-action\^="membership-cancel-"/);
+  assert.match(hidden,/data-staff-addon="mta"/);
 });
