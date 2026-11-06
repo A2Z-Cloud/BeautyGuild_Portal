@@ -8,7 +8,7 @@ The workspace is a single screen inside Zoho CRM where your team can find a memb
 
 Instead of a list of buttons to press, you will follow **eight short journeys**. Each one is a realistic piece of a working day. Work through them in order the first time, because later journeys build on earlier ones.
 
-- Allow about **60 to 90 minutes** in total. Journeys are 5 to 15 minutes each.
+- Allow about **90 minutes to two hours** in total. Journeys are 5 to 15 minutes each.
 - Use the **test records** we give you (listed below). Please do not use live member records.
 - Do not worry about breaking anything. If something looks wrong or confusing, that is exactly what we want to hear about.
 - This is as much about **how you would really use the workspace** as whether it works. Say out loud what you expect before you click, what you wish was there, and what you would do differently. There are no wrong answers.
