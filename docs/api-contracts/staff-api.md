@@ -1,6 +1,6 @@
 # Staff API (foundation)
 
-**Status (27 October 2026):** the signature check, the staff user and role check, and two routes (`/staff/ping`, `/staff/me`) are built in `apps/portal/functions/beauty_guild_api/src/staff.js` and covered by tests. **Off by default and not deployed.** Quote, assess, save, waiver and payment-link routes are **not built**; this is the base they will sit on.
+**Status (10 November 2026):** the Staff API is **live in Development**. The signature check, the staff user and role check, and the routes in `apps/portal/functions/beauty_guild_api/src/staff.js` are built and covered by tests: `/staff/ping`, `/staff/me`, `/staff/quote` (also the assessment), `/staff/insurance-change/revision`, `/staff/membership-options`, `/staff/cover`, the shared drafts under `/staff/drafts`, and `/staff/payment-link` (own switch, test mode only). The switches below still default to off, so any new environment must set them. Staff routes for vouchers are not built. The status line of 27 October ("off by default and not deployed") is out of date.
 **Design and the reasons behind it:** `widgets/crm/beauty-guild-staff-workspace/STAFF-API-AND-IDENTITY.md` (on the Slate branch, PR 92). **How to wire up the CRM side:** [staff-api-handoff.md](../delivery/staff-api-handoff.md).
 
 ## What it is for
