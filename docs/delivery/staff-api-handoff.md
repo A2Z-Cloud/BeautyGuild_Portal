@@ -105,6 +105,8 @@ map staff_api_call(string action, string body)
 }
 ```
 
+**No change is needed in this function for the combined membership flow** (2 November 2026). It takes `action` and `body`, maps the action to a fixed route and signs the body exactly as given, so it never reads `level` or `answers`. The widget now builds `answers: { country, insuranceRequired, working }` for a membership, with no `level`, and the Catalyst function decides the level (see [staff-api.md](../api-contracts/staff-api.md), Membership answers and the decision). The action names, routes and signing stay the same. Keep the body untouched between hashing and sending, as the sketch already says.
+
 When the function exists, **first** check it reproduces the test vector, then call `/staff/ping`, then `/staff/me`.
 
 ## 5. Test the Catalyst side without the CRM
