@@ -1,0 +1,46 @@
+map Creator.apply_scheduled_revisions()
+{
+	// ============================================================================
+	// DRAFT, UNTESTED. Do not enable until the CRM automation check in creator-payments-app.md 6.7 is done.
+	//
+	// Creator.apply_scheduled_revisions
+	// Purpose : Run DAILY (Creator's lowest schedule frequency). Apply every paid insurance change whose start
+	//           date has come (creator-payments-app.md 6.5):
+	//   - revisions Scheduled with a Requested_Effective_Date on or before today, and
+	//   - revisions stuck in Approved with a date on or before today (a failed earlier apply), so they are retried.
+	// Each one is applied by CRM.apply_policy_revision, which is safe to run again.
+	// A revision that fails stays Scheduled or Approved and is retried on the next run. A revision stuck past its date
+	// shows in the result and the log, and is an exception for the office.
+	// Returns {"applied":n,"failed":[..]}
+	//
+	// Create it as a Creator schedule that runs once a day, early in the morning UK time.
+	// ============================================================================
+	applied = 0;
+	failed = List();
+	today_text = zoho.currentdate.toString("yyyy-MM-dd");
+	statuses = {"Scheduled","Approved"};
+	for each  wanted_status in statuses
+	{
+		due = zoho.crm.searchRecords("Policy_Revisions","((Revision_Status:equals:" + wanted_status + ")and(Requested_Effective_Date:less_equal:" + today_text + "))");
+		for each  due_revision in ifnull(due,List())
+		{
+			if(due_revision.get("id") != null)
+			{
+				apply_result = thisapp.CRM.apply_policy_revision(due_revision.get("id").toString(),"");
+				if(apply_result.get("status") == "success")
+				{
+					applied = applied + 1;
+				}
+				else
+				{
+					failed.add("Revision " + due_revision.get("id") + ": " + apply_result.get("message"));
+				}
+			}
+		}
+	}
+	info "Scheduled revisions applied: " + applied + ". Failed: " + failed;
+	result = Map();
+	result.put("applied",applied);
+	result.put("failed",failed);
+	return result;
+}

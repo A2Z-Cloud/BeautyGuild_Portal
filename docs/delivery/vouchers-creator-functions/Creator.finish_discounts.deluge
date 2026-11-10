@@ -1,0 +1,106 @@
+map Creator.finish_discounts(map session_metadata, string stripe_session_id)
+{
+	// ============================================================================
+	// Creator.finish_discounts
+	// Purpose : After a first payment succeeds and the redemptions are recorded:
+	//   1. For each voucher used, recount its uses and save the total on the
+	//      voucher in the CRM (Discount_Voucher.Current_Usage_Count).
+	//   2. For each staff waiver, change the Waive Logs row from Pending to Paid.
+	// Safe to run twice: the voucher total is recounted, not added to, and a
+	// waiver that is already Paid is left alone.
+	// Returns : {"vouchers_updated":n,"waivers_paid":n,"problems":[...]}
+	//
+	// Parameters, in this order:
+	//   session_metadata  MAP     the metadata map of the verified Stripe checkout session
+	//   stripe_session_id STRING  the Stripe checkout session id (cs_...)
+	//
+	// Run it straight AFTER Creator.record_voucher_redemptions, because it counts the rows that
+	// function creates.
+	// ============================================================================
+
+	vouchers_updated = 0;
+	waivers_paid = 0;
+	problems = List();
+	result = Map();
+
+	// ---- Step 1. Read the discounts list from the checkout metadata ------------
+	discounts_text = ifnull(session_metadata.get("discounts"),"");
+	if(discounts_text == "")
+	{
+		result.put("vouchers_updated",0);
+		result.put("waivers_paid",0);
+		result.put("problems",problems);
+		return result;
+	}
+	entries = discounts_text.toJSONList();
+
+	// Vouchers already handled in this run, so a voucher used on two items is recounted once.
+	done_vouchers = List();
+
+	for each  entry in entries
+	{
+		source = ifnull(entry.get("source"),"");
+
+		// ---- Step 2. Voucher: recount its uses and save the total ----------
+		if(source == "voucher")
+		{
+			voucher_id = ifnull(entry.get("voucher_id"),"");
+			if(voucher_id != "" && !done_vouchers.contains(voucher_id))
+			{
+				done_vouchers.add(voucher_id);
+
+				// Reserved and Used both count against the limit. Reversed does not.
+				// The Voucher lookup is compared as TEXT (Creator rejects a number here).
+				// A voucher only discounts one item (the joining fee) per checkout today, so one row is one use.
+				// If a voucher ever covers several items, count distinct Stripe_Session_ID values instead.
+				rows = Voucher_Redemptions[Voucher == voucher_id && (Status == "Used" || Status == "Reserved")];
+				used_total = rows.count();
+
+				update_map = Map();
+				update_map.put("Current_Usage_Count",used_total);
+				update_response = zoho.crm.updateRecord("Discount_Voucher",voucher_id,update_map);
+				if(update_response.get("id") == null && update_response.get("data") == null)
+				{
+					problems.add("Voucher " + voucher_id + " count not saved: " + update_response);
+				}
+				else
+				{
+					vouchers_updated = vouchers_updated + 1;
+				}
+			}
+		}
+
+		// ---- Step 3. Staff waiver: Pending to Paid -------------------------
+		if(source == "staff_waiver")
+		{
+			// The portal saved the waiver with this checkout session id, so find it that way.
+			// Only Pending ones are changed, so running twice does nothing the second time.
+			criteria = "((Stripe_Checkout_Session:equals:" + stripe_session_id + ")and(Status:equals:Pending))";
+			found = zoho.crm.searchRecords("Waive_Logs",criteria);
+			if(found.isEmpty() || found.get(0) == null)
+			{
+				// Nothing Pending. Either already Paid or never written. Not an error on a repeat.
+				continue;
+			}
+			for each  waiver in found
+			{
+				paid_map = Map();
+				paid_map.put("Status","Paid");
+				paid_response = zoho.crm.updateRecord("Waive_Logs",waiver.get("id"),paid_map);
+				if(paid_response.get("id") == null && paid_response.get("data") == null)
+				{
+					problems.add("Waiver " + waiver.get("id") + " not marked Paid: " + paid_response);
+				}
+				else
+				{
+					waivers_paid = waivers_paid + 1;
+				}
+			}
+		}
+	}
+
+	result.put("vouchers_updated",vouchers_updated);
+	result.put("waivers_paid",waivers_paid);
+	result.put("problems",problems);
+	return result;
+}
