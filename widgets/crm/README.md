@@ -9,6 +9,6 @@ CRM widgets are independently packaged and deployed to Zoho CRM. They do **not**
 
 The current design covers a live CRM work overview, paginated application queues, Contacts and Accounts, universal record views and in-widget related-record navigation. Native CRM retains business-process actions. Future staff-assisted applications and shared Catalyst checkout are specified with explicit security and validation gates.
 
-**Implementation status:** documentation exists here; the earlier widget candidate source is not yet in this repository. Its implementation, ZET package, live installation and UAT are separate deliverables. Do not treat documentation as a deployed CRM widget.
+**Implementation status (10 November 2026):** the V1.1 widget source is in this repository under `beauty-guild-staff-workspace/app/` and is the **test candidate**. The V1.2 build in the specification is the target and is not built. The ZET package, installation in CRM and UAT are separate deliverables, so do not treat the source here as a deployed widget. The Staff API it will call is live in Development (see [staff-api.md](../../docs/api-contracts/staff-api.md)).
 
 Create a separate directory for each future CRM widget. Do not copy customer portal authentication or API credentials into CRM-hosted clients.

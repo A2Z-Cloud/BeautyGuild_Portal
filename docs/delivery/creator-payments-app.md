@@ -4,6 +4,8 @@ Written 24 October 2026 so the Creator work can be picked up later. The portal s
 
 ## 1. Where things stand
 
+**Update, 10 November 2026:** everything goes from Creator to Books except mid-term changes (MTAs) and vouchers, which are still being worked on. The next steps in section 5 were written on 24 October and are kept as the original order; steps 4 and 6 (the first full slice and the Books push) now cover everything except those two. Webhook cutover from the V1 handler and the real-payment checks listed below should be confirmed against Creator before this note is relied on.
+
 **Portal (Development, `main` plus [PR 65](https://github.com/A2Z-Cloud/BeautyGuild_Portal/pull/65), which is deployed but not yet merged)**
 - Price list v2 is built. Prices are found in Stripe by **lookup key** (the price list code), so a price change is a new Stripe price and no deployment.
 - Every membership level is £55 (£38.00 zero-rated, £14.17 standard-rated, £2.83 VAT). Named employees pay a £55 membership fee as well as any premium.

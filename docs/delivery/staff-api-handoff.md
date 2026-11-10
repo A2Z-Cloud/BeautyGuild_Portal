@@ -1,20 +1,20 @@
 # Staff API: handoff note for the Staff Workspace build
 
-**Status (28 October 2026):** the backend foundation and the first routes (`/staff/quote`, `/staff/insurance-change/revision`) are built and tested; the foundation is on `main`. **Nothing is deployed.** This note is for the people building the CRM side and the widget. The contract is [staff-api.md](../api-contracts/staff-api.md). The design is `STAFF-API-AND-IDENTITY.md` in the Staff Workspace folder on the Slate branch.
+**Status (10 November 2026):** the Staff API is **live in Development**. The backend and its routes are built and tested and are on `main`. The earlier status of 28 October ("Nothing is deployed") is out of date. This note is for the people building the CRM side and the widget. The contract is [staff-api.md](../api-contracts/staff-api.md). The design is `STAFF-API-AND-IDENTITY.md` in the Staff Workspace folder on the Slate branch.
 
 ## What exists and what does not
 
-| Exists (in the portal function, off by default) | Does not exist yet |
+| Exists (in the portal function, live in Development) | Does not exist yet |
 | --- | --- |
-| Signature check (hex or base64), time window, nonce check | The CRM custom function that signs requests |
-| CRM user lookup, active check and role allow-list | Assessment history (see below), vouchers on payment links |
-| `GET /staff/ping` and `GET /staff/me` | A deployed, switched-on Development endpoint |
-| `POST /staff/quote` (also the assessment), `POST /staff/insurance-change/revision`, `GET /staff/membership-options`, `GET /staff/cover`, the shared drafts under `/staff/drafts`, and `POST /staff/payment-link` (own switch, test mode, no discounts yet) | Vouchers (needs a Creator reader for use history) |
-| `POST /staff/quote` (also the assessment) and `POST /staff/insurance-change/revision` | A staff payment link or any charge |
-| Staff waivers on the quote (joining fee, once per person) | Vouchers (needs a Creator reader for use history) |
-| Tests and two checked test vectors | CRM-visible audit records beyond an optional text field |
+| Signature check (hex or base64), time window, nonce check | Assessment history (see below), vouchers on payment links |
+| CRM user lookup, active check and role allow-list | Vouchers (needs a Creator reader for use history) |
+| `GET /staff/ping` and `GET /staff/me` | CRM-visible audit records beyond an optional text field |
+| `POST /staff/quote` (also the assessment), `POST /staff/insurance-change/revision`, `GET /staff/membership-options`, `GET /staff/cover`, the shared drafts under `/staff/drafts` | Production use (Development and Stripe test mode only) |
+| `POST /staff/payment-link` (own switch, test mode, no discounts yet) | |
+| Staff waivers on the quote (joining fee, once per person) | |
+| Tests and two checked test vectors | |
 
-The function is not deployed with this change. A person with deploy access sets the secret and the switch in Development when you are ready (section 6).
+The function is deployed to Development. For a new environment, a person with deploy access sets the secret and the switch (section 6).
 
 ## 1. The idea in one paragraph
 
