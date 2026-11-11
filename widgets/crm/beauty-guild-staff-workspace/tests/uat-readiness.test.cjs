@@ -71,7 +71,7 @@ test('table status text does not break mid-word, and the stop banner is styled',
   assert.match(css,/\.v12-table td \.bg-state\{white-space:nowrap\}/);
   assert.match(css,/\.v12-stop-banner--stop/);
   const html=fs.readFileSync(path.join(app,'index.html'),'utf8');
-  assert.match(html,/widget\.js\?v=20261111-uatfix25/);
+  assert.match(html,/widget\.js\?v=20261111-uatfix26/);
 });
 
 test('buttons that only open the CRM record say so, and the note dialog names the record and hides the due date',()=>{
