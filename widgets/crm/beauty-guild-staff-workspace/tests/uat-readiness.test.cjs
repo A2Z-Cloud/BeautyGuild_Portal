@@ -71,7 +71,7 @@ test('table status text does not break mid-word, and the stop banner is styled',
   assert.match(css,/\.v12-table td \.bg-state\{white-space:nowrap\}/);
   assert.match(css,/\.v12-stop-banner--stop/);
   const html=fs.readFileSync(path.join(app,'index.html'),'utf8');
-  assert.match(html,/widget\.js\?v=20261111-uatfix27/);
+  assert.match(html,/widget\.js\?v=20261111-uatfix28/);
 });
 
 test('buttons that only open the CRM record say so, and the note dialog names the record and hides the due date',()=>{
@@ -333,9 +333,11 @@ test('Generate documents lets staff pick the customer then a sub-record and open
   assert.match(w,/else if\(action==='docs-open'\)await openDocsDialog\(entity,id\)/);
   assert.match(w,/Target:'_blank'/);
   assert.match(w,/\[M\.PROFILE,'Contact','Membership'\],\[M\.DEAL,'Contact_Name','Membership purchases'\],\[M\.POLICY,'Contact','Insurance policies'\],\[M\.ACC,'Applicant_Contact','Accreditations'\]/);
-  assert.match(w,/Open Mail Merge in CRM/);
+  assert.match(w,/async function openDocsDirect/);
+  assert.match(w,/if\(entity!==M\.CONTACT\)return openDocsDirect\(entity,id\)/);
+  assert.match(w,/Array\.isArray\(state\.lists\[e\]\)/);
   assert.match(w,/Open WorkDrive folder/);
-  const body=w.slice(w.indexOf('async function openDocsDialog'),w.indexOf('const DOCS_ENTITIES'));
+  const body=w.slice(w.indexOf('async function openDocsDirect'),w.indexOf('const DOCS_ENTITIES'));
   assert.doesNotMatch(body,/download_mail_merge|BGStaffApi|insertRecord|updateRecord/);
   assert.equal(w2.workdriveLinkOf({Workdrive_Link:'https://workdrive.zoho.eu/folder/abc123'}),'https://workdrive.zoho.eu/folder/abc123');
   assert.equal(w2.workdriveLinkOf({Workdrive_Link:'https://evil.example/workdrive.zoho.eu/x'}),'');

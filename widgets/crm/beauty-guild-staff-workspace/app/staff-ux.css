@@ -286,3 +286,13 @@ body.staff-dev-tools #staff-api-open{display:inline-flex}
 .bg-docs-steps{margin:8px 0 10px;padding-left:20px;font-size:13px}
 .bg-docs-steps li{padding:2px 0}
 .bg-docs-dialog [hidden]{display:none!important}
+
+/* Generate documents: keep each radio next to its label */
+.bg-docs-dialog{max-width:540px}
+.bg-docs-dialog .bg-docs-item{display:grid;grid-template-columns:22px 1fr;column-gap:10px;align-items:start;text-align:left;width:100%;padding:8px 0;margin:0}
+.bg-docs-dialog .bg-docs-item input[type=radio]{width:16px!important;height:16px;min-width:0;margin:3px 0 0;padding:0;justify-self:start}
+.bg-docs-dialog .bg-docs-text{display:block;text-align:left}
+.bg-docs-dialog .bg-docs-text strong{display:block}
+.bg-docs-dialog .bg-docs-text small{display:block;margin-top:1px}
+.bg-docs-none{margin:8px 0;font-size:12px;color:#6b606b}
+.bg-docs-how{margin:10px 0;font-size:13px}

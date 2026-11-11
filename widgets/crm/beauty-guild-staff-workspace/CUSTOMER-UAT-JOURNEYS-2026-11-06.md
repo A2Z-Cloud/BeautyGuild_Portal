@@ -231,8 +231,8 @@ For each step, note whether it did what we said, did it but was confusing or slo
 
 1. Open a customer and click **Generate documents**.
    **Expect:** A window lists the customer, then their memberships, membership purchases, insurance policies and accreditations, so you can choose what the document is for.
-2. Choose an insurance policy and click **Open Mail Merge in CRM**.
-   **Expect:** CRM opens in a new tab on that policy. Click the Mail Merge button, then select a template from the Zoho Writer window.
+2. In the window, choose an insurance policy and click **Open in CRM**. Then open that policy and click **Generate documents** on it.
+   **Expect:** CRM opens in a new tab on that policy. Click the Mail Merge button, then select a template from the Zoho Writer window. From the policy itself, Generate documents opens CRM straight away with no window, because the document is for that policy.
 3. Change any text you need in the merged document, then download it.
    **Expect:** The template opens in Writer, in another tab, ready to merge. You can change the text, merge it and download the file.
 4. Email the downloaded file to the customer, and/or upload it to the record's WorkDrive folder.

@@ -296,30 +296,40 @@
     return '';
   }
   function docsStatus(entity,r){
-    const f={Insurance_Policy:['Application_Status','Policy_Status'],Deals:['Stage'],Membership:['Current_Membership_Status'],Training_Centre_Accred:['Application_Stage']}[entity]||[];
+    const f={Insurance_Policy:['Policy_Type','Application_Status','Policy_Status'],Deals:['Membership_Type','Stage'],Membership:['Current_Member_Type','Current_Membership_Status'],Training_Centre_Accred:['Application_Stage','Accreditation_Status']}[entity]||[];
     return f.map(k=>txt(r[k])).filter(v=>v&&v!=='—').join(' · ');
   }
+  // From a policy, membership or accreditation the document is for that record, so go straight to it in CRM.
+  async function openDocsDirect(entity,id){
+    try{
+      await ZOHO.CRM.UI.Record.open({Entity:entity,RecordID:String(id),Target:'_blank'});
+      setNotice('Opened in a new tab. There, click the Mail Merge button, choose a template, change any text, merge and download. To make a document for a different record, open the customer and choose Generate documents.','info');
+    }catch(e){setNotice('CRM could not open the record: '+String(e&&e.message||e),'error');}
+  }
+  // From the customer, choose which of their records the document is for.
   async function openDocsDialog(entity,id){
-    let cid='';
-    if(entity===M.CONTACT)cid=String(id);
-    else{const rec=state.focus&&state.focus.entity===entity&&String(state.focus.record.id)===String(id)?state.focus.record:null;const o=rec&&(rec.Contact||rec.Contact_Name||rec.Applicant_Contact);cid=o&&o.id?String(o.id):'';}
-    if(!cid){setNotice('This record has no customer, so open the customer first and choose Generate documents there.','error');return;}
+    if(entity!==M.CONTACT)return openDocsDirect(entity,id);
+    const cid=String(id);
     setNotice('Finding this customer’s records…','info');
-    let contact,items=[];
+    let contact,items=[];const failed=[];
     try{
       contact=state.focus&&state.focus.entity===M.CONTACT&&String(state.focus.record.id)===cid?state.focus.record:await getRecord(M.CONTACT,cid);
       const defs=[[M.PROFILE,'Contact','Membership'],[M.DEAL,'Contact_Name','Membership purchases'],[M.POLICY,'Contact','Insurance policies'],[M.ACC,'Applicant_Contact','Accreditations']];
-      const found=await Promise.allSettled(defs.map(([e,f])=>searchRecords(e,f,cid)));
-      items.push({group:'Customer',entity:M.CONTACT,id:cid,title:rowTitle(M.CONTACT,contact)||'This customer',meta:'',record:contact});
-      found.forEach((res,i)=>{if(res.status!=='fulfilled')return;for(const r of res.value)items.push({group:defs[i][2],entity:defs[i][0],id:String(r.id),title:rowTitle(defs[i][0],r)||String(r.Name||r.id),meta:docsStatus(defs[i][0],r),record:r});});
+      const loaded=state.contact&&String(state.contact.id)===cid;
+      const found=await Promise.allSettled(defs.map(([e,f])=>loaded&&Array.isArray(state.lists[e])?Promise.resolve(state.lists[e]):searchRecords(e,f,cid)));
+      items.push({group:'Customer',entity:M.CONTACT,id:cid,title:rowTitle(M.CONTACT,contact)||'This customer',meta:'The customer’s own record',record:contact});
+      found.forEach((res,i)=>{
+        if(res.status!=='fulfilled'){failed.push(defs[i][2]);return;}
+        for(const r of res.value)items.push({group:defs[i][2],entity:defs[i][0],id:String(r.id),title:rowTitle(defs[i][0],r)||String(r.Name||r.id),meta:docsStatus(defs[i][0],r),record:r});
+      });
     }catch(e){setNotice('Could not load this customer’s records: '+String(e&&e.message||e),'error');return;}
     setNotice('');
-    const pre=items.find(x=>x.entity===entity&&x.id===String(id))||items[0];
     return new Promise(resolve=>{
       const d=document.createElement('dialog');d.className='bg-leave-dialog bg-docs-dialog';d.setAttribute('aria-labelledby','bgDocsTitle');
       const groups=[...new Set(items.map(x=>x.group))];
-      const list=groups.map(g=>'<fieldset class="bg-docs-group"><legend>'+esc(g)+'</legend>'+items.filter(x=>x.group===g).map(x=>'<label class="bg-docs-item"><input type="radio" name="docsTarget" value="'+esc(x.entity+'|'+x.id)+'"'+(x===pre?' checked':'')+'><span><strong>'+esc(x.title)+'</strong>'+(x.meta?'<small>'+esc(x.meta)+'</small>':'')+'</span></label>').join('')+'</fieldset>').join('');
-      d.innerHTML='<form method="dialog" novalidate><h2 id="bgDocsTitle">Generate documents</h2><p>For <strong>'+esc(rowTitle(M.CONTACT,contact)||'this customer')+'</strong>. Choose what the document is for, then open it in CRM.</p><div class="bg-docs-list">'+list+'</div><ol class="bg-docs-steps"><li>CRM opens in a <strong>new tab</strong> on the record you chose. Click the <strong>Mail Merge</strong> button, then select the template you want in the Zoho Writer window.</li><li>Writer opens in another tab. Change any text you need, merge, then download the file.</li><li>Email it to the customer, and/or upload it to the record’s WorkDrive folder.</li></ol><p class="bg-contact-error" role="alert" hidden></p><div class="bg-leave-actions"><button type="button" class="button secondary" data-docs="close">Close</button><button type="button" class="button secondary" data-docs="workdrive" hidden>Open WorkDrive folder</button><button type="button" class="button" data-docs="merge">Open Mail Merge in CRM</button></div></form>';
+      const list=groups.map(g=>'<fieldset class="bg-docs-group"><legend>'+esc(g)+'</legend>'+items.filter(x=>x.group===g).map((x,n)=>'<label class="bg-docs-item"><input type="radio" name="docsTarget" value="'+esc(x.entity+'|'+x.id)+'"'+(x===items[0]?' checked':'')+'><span class="bg-docs-text"><strong>'+esc(x.title)+'</strong>'+(x.meta?'<small>'+esc(x.meta)+'</small>':'')+'</span></label>').join('')+'</fieldset>').join('');
+      const none=['Membership','Membership purchases','Insurance policies','Accreditations'].filter(g=>!groups.includes(g)&&!failed.includes(g));
+      d.innerHTML='<form method="dialog" novalidate><h2 id="bgDocsTitle">Generate documents</h2><p>For <strong>'+esc(rowTitle(M.CONTACT,contact)||'this customer')+'</strong>. Choose what the document is for.</p><div class="bg-docs-list">'+list+(none.length?'<p class="bg-docs-none">No '+esc(none.join(', ').toLowerCase())+' found for this customer.</p>':'')+(failed.length?'<p class="bg-docs-none">Could not load: '+esc(failed.join(', ').toLowerCase())+'.</p>':'')+'</div><p class="bg-docs-how">CRM opens the record in a <strong>new tab</strong>. Click the <strong>Mail Merge</strong> button there, choose a template, change any text, merge and download. Then email it to the customer and/or upload it to the record’s WorkDrive folder.</p><p class="bg-contact-error" role="alert" hidden></p><div class="bg-leave-actions"><button type="button" class="button secondary" data-docs="close">Close</button><button type="button" class="button secondary" data-docs="workdrive" hidden>Open WorkDrive folder</button><button type="button" class="button" data-docs="merge">Open in CRM</button></div></form>';
       const err=d.querySelector('.bg-contact-error'),wd=d.querySelector('[data-docs="workdrive"]');
       const selected=()=>{const r=d.querySelector('input[name="docsTarget"]:checked');if(!r)return null;const [e,i]=r.value.split('|');return items.find(x=>x.entity===e&&x.id===i)||null;};
       const sync=()=>{const s=selected(),link=s?workdriveLinkOf(s.record):'';wd.hidden=!link;wd.dataset.url=link;};
