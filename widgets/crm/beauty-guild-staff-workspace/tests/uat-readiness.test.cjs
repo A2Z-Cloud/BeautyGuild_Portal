@@ -71,7 +71,7 @@ test('table status text does not break mid-word, and the stop banner is styled',
   assert.match(css,/\.v12-table td \.bg-state\{white-space:nowrap\}/);
   assert.match(css,/\.v12-stop-banner--stop/);
   const html=fs.readFileSync(path.join(app,'index.html'),'utf8');
-  assert.match(html,/widget\.js\?v=20261111-uatfix29/);
+  assert.match(html,/widget\.js\?v=20261111-uatfix30/);
 });
 
 test('buttons that only open the CRM record say so, and the note dialog names the record and hides the due date',()=>{
@@ -98,11 +98,9 @@ test('switching record sections returns to the top of the record, so a shorter s
   assert.match(v12,/chosen\.set\(key,tab\);rerender\(\);try\{const top=document\.querySelector\('\.v12-record'\)/);
 });
 
-test('UAT wording for MTA, renewals and cancellations is kept for when the previews are switched off',()=>{
+test('the membership hub keeps the UAT limits and the preview switch',()=>{
   const js=fs.readFileSync(path.join(app,'widget.js'),'utf8');
-  assert.match(js,/OPERATIONAL_UAT&&!PREVIEW_COMPONENTS\?'View policy':'View policy \/ MTA'/);
-  assert.match(js,/OPERATIONAL_UAT&&!PREVIEW_COMPONENTS\?'Open a policy to review its cover and status\.'/);
-  assert.match(js,/OPERATIONAL_UAT&&!PREVIEW_COMPONENTS\?'Current transaction':'Renewal and service actions'/);
+  assert.match(js,/preview:PREVIEW_COMPONENTS/);
   assert.match(js,/window\.BG_OPERATIONAL_UAT=OPERATIONAL_UAT/);
   const v12=fs.readFileSync(path.join(app,'v12-crm.js'),'utf8');
   assert.match(v12,/ctx\.operationalUat\|\|global\.BG_OPERATIONAL_UAT/);
@@ -344,4 +342,30 @@ test('Generate documents lets staff pick the customer then a sub-record and open
   assert.equal(w2.workdriveLinkOf({Workdrive_Link:'https://workdrive.zoho.eu/folder/abc123'}),'https://workdrive.zoho.eu/folder/abc123');
   assert.equal(w2.workdriveLinkOf({Workdrive_Link:'https://evil.example/workdrive.zoho.eu/x'}),'');
   assert.equal(w2.workdriveLinkOf({Name:'x'}),'');
+});
+
+test('shared interface pieces: expiry sentences, status tiles and the membership hub are built from one set of parts',()=>{
+  const UI=require('../app/bg-ui.js');
+  const now='2026-11-11T09:00:00';
+  assert.equal(UI.expiry('2027-11-08',now).value,'362 days left');
+  assert.equal(UI.expiry('2027-11-08',now).tone,'success');
+  assert.equal(UI.expiry('2026-12-01',now).tone,'warning');
+  assert.equal(UI.expiry('2026-11-01',now).tone,'danger');
+  assert.match(UI.expiry('2026-11-01',now).sub,/10 days ago/);
+  assert.equal(UI.expiry('',now).tone,'warning');
+  assert.equal(UI.initials('Tester Dani 2'),'TD');
+  assert.match(UI.pill('<b>x</b>','success'),/&lt;b&gt;/);
+  assert.match(UI.row({title:'A',attrs:'data-action="select"',pills:[['Paid','success']],aside:'Expires 1 Jan 2027'}),/class="bg-row" data-action="select"/);
+  const html=w.membershipHubHtml({ui:UI,icon:()=>'',contact:{id:'1011174000000000001',Email:'a@b.test'},contactName:'Tester Dani 2',now,
+    deals:[{id:'11',Deal_Name:'One',Payment_Status:'Paid',Stage:'Active',Expiry_Date:'2027-11-08'},{id:'12',Deal_Name:'Two'},{id:'13',Deal_Name:'Three'}],
+    policies:[],extensions:[],activeDeal:{id:'11',Payment_Status:'Paid',Stage:'Active',Expiry_Date:'2027-11-08'},currentProfile:{id:'31',Current_Membership_Status:'Current',Current_Member_Type:'Full Member Non-Salon'},preview:true});
+  assert.match(html,/362 days left/);
+  assert.match(html,/Show 1 earlier/);
+  assert.match(html,/No insurance yet/);
+  assert.match(html,/data-action="docs-open"/);
+  assert.match(html,/Cancellation \/ downgrade quote <span class="bg-preview-tag">Preview/);
+  assert.doesNotMatch(html,/View transaction/);
+  const idx=fs.readFileSync(path.join(app,'index.html'),'utf8');
+  assert.ok(idx.indexOf('staff-ux.css')<idx.indexOf('bg-ui.css'),'bg-ui.css must load after staff-ux.css');
+  assert.match(idx,/bg-ui\.js/);
 });

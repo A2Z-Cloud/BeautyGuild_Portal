@@ -406,19 +406,23 @@
   function contextBar(actions=true){const c=state.contact;if(!c)return'';return`<div class="context-strip"><div><small>CURRENT CUSTOMER</small><strong>${esc(rowTitle('Contacts',c))}</strong><small>${esc(c.Email||'No email recorded')} · ${esc(c.Mobile||c.Phone||'No phone recorded')}</small></div>${actions?`<div class="action-bar"><button class="button tiny secondary" data-action="note" data-entity="Contacts" data-id="${esc(c.id)}">${icon('sticky-note')} Add note</button><button class="button tiny secondary" data-action="task" data-entity="Contacts" data-id="${esc(c.id)}">${icon('list-todo')} Add task</button><button class="button tiny secondary" data-action="email" data-entity="Contacts" data-id="${esc(c.id)}">Send email (opens CRM)</button><button class="button tiny secondary" data-action="crm-actions" data-entity="Contacts" data-id="${esc(c.id)}">More CRM actions (opens CRM)</button></div>`:""}</div>`;}
   function allFor(entity){return state.lists[entity]||[];}
   function customerProfileSnapshot(){
-    const c=state.contact;if(!c)return '';
-    const profiles=allFor(M.PROFILE),memberships=allFor(M.DEAL),policies=allFor(M.POLICY),accreditations=allFor(M.ACC);
-    const sorted=(items)=>[...items].sort((a,b)=>String(b.Modified_Time||b.Created_Time||'').localeCompare(String(a.Modified_Time||a.Created_Time||'')));
+    const c=state.contact;if(!c||!window.BGUI)return '';
+    const UI=window.BGUI,cid=esc(c.id);
+    const byRecent=(x,y)=>String(y.Modified_Time||y.Created_Time||'').localeCompare(String(x.Modified_Time||x.Created_Time||''));
+    const profiles=allFor(M.PROFILE),memberships=allFor(M.DEAL).slice().sort(byRecent),policies=allFor(M.POLICY).slice().sort(byRecent),accreditations=allFor(M.ACC).slice().sort(byRecent);
     const member=profiles.find(p=>String(p.Current_Membership_Status||'').toLowerCase()==='current')||profiles[0];
-    const membership=sorted(memberships)[0],policy=sorted(policies)[0],accreditation=sorted(accreditations)[0];
-    const summary=(label,title,status,detail,entity,record)=>'<article class="staff-profile-tile staff-profile-tile--'+esc(label.toLowerCase())+'"><span class="staff-profile-label">'+esc(label)+'</span><strong>'+esc(title||'No record found')+'</strong><span class="staff-profile-state staff-profile-state--'+esc(statusClass(status))+'">'+esc(status||'Not recorded')+'</span><p>'+esc(detail||'')+'</p>'+(record?.id?'<button type="button" class="button secondary" data-action="select" data-entity="'+esc(entity)+'" data-id="'+esc(record.id)+'">View record</button>':'')+'</article>';
+    const membership=memberships[0],policy=policies[0],accreditation=accreditations[0];
+    const link=(entity,record,tile)=>record&&record.id?'<button type="button" class="bg-tile-btn" data-action="select" data-entity="'+esc(entity)+'" data-id="'+esc(record.id)+'" aria-label="Open this record">'+tile+'</button>':tile;
+    const mk=(label,iconName,title,status,detail,entity,record)=>link(entity,record,UI.tile({icon:icon(iconName),label,value:title||'None yet',sub:(status||'Not recorded')+(detail?' · '+detail:''),tone:record?uiTone(status):'neutral'}));
     const restrictions=memberships.filter(d=>d.Banned_From_Membership||d.Banned_From_Insurance||d.Has_Insurance_Issue);
-    return '<section class="staff-profile-overview" aria-label="Customer profile overview"><div class="staff-profile-heading"><div><span class="v12-kicker">CUSTOMER PROFILE</span><h2>'+esc(rowTitle(M.CONTACT,c))+'</h2><p>'+esc(c.Email||'Email not recorded')+(c.Mobile||c.Phone?' · '+esc(c.Mobile||c.Phone):'')+'</p></div><button type="button" class="button secondary" data-action="journey-start">New application</button></div>'+
+    const header=UI.header({kicker:'Customer profile',name:rowTitle(M.CONTACT,c),badge:member?.Current_Member_Type||'',chips:[c.Email||'Email not recorded',c.Mobile||c.Phone].filter(Boolean).map(x=>txt(x)),actions:
+      `<button type="button" class="button secondary" data-action="note" data-entity="Contacts" data-id="${cid}">${icon('sticky-note')} Add note</button><button type="button" class="button secondary" data-action="task" data-entity="Contacts" data-id="${cid}">${icon('list-todo')} Create task</button><button type="button" class="button secondary" data-action="docs-open" data-entity="Contacts" data-id="${cid}">${icon('file-plus')} Generate documents</button><button type="button" class="button primary" data-action="journey-start">New application</button>`});
+    return '<section class="staff-profile-overview bg-hub" aria-label="Customer profile overview">'+header+
       (restrictions.length?'<p class="v12-warning">Potential membership or insurance restrictions are recorded. Review linked records before proceeding.</p>':'')+
-      '<div class="staff-profile-grid">'+
-      summary('Membership',member?.Current_Member_Type||membership?.Deal_Name||'No linked membership',member?.Current_Membership_Status||membership?.Stage||'Not recorded',memberships.length+' membership transaction(s)',member?M.PROFILE:M.DEAL,member||membership)+
-      summary('Insurance',policy?.Policy_Number||policy?.Name||'No linked policy',policy?.Policy_Status||policy?.Application_Status||'Not recorded','Payment: '+(policy?.Payment_Status||'Not recorded')+' · '+policies.length+' policy record(s)',M.POLICY,policy)+
-      summary('Accreditation',accreditation?.Accreditation_Reference||accreditation?.Name||'No linked accreditation',accreditation?.Application_Stage||accreditation?.Accreditation_Status||'Not recorded','Payment: '+(accreditation?.Payment_Status||'Not recorded')+' · '+accreditations.length+' application(s)',M.ACC,accreditation)+
+      '<div class="bg-tiles bg-tiles--3">'+
+      mk('Membership','users-round',member?.Current_Member_Type||membership?.Deal_Name||'No linked membership',member?.Current_Membership_Status||membership?.Stage||'',memberships.length+' transaction'+(memberships.length===1?'':'s'),member?M.PROFILE:M.DEAL,member||membership)+
+      mk('Insurance','shield-check',policy?.Policy_Number||policy?.Name||'No linked policy',policy?.Policy_Status||policy?.Application_Status||'',policies.length+' polic'+(policies.length===1?'y':'ies'),M.POLICY,policy)+
+      mk('Accreditation','graduation-cap',accreditation?.Accreditation_Reference||accreditation?.Name||'No linked accreditation',accreditation?.Application_Stage||accreditation?.Accreditation_Status||'',accreditations.length+' application'+(accreditations.length===1?'':'s'),M.ACC,accreditation)+
       '</div></section>';
   }
   function contextCard(){const c=state.contact;if(c&&window.BGCRM12){window.BGCRM12.prime(M.CONTACT,ZOHO.CRM,render);return contextBar()+customerProfileSnapshot()+window.BGCRM12.detailPage(M.CONTACT,c,{crm:ZOHO.CRM,rerender:render,title:rowTitle,summary:recordSummary,actions:crmActionBar,editableFields:operationalFieldEditors,operationalUat:OPERATIONAL_UAT,processing:processingPanel});}if(!c)return empty('Select a customer','Search for a contact, or open this widget from a CRM Contact, Membership, Insurance Policy or Accreditation record.');const profiles=allFor(M.PROFILE),deals=allFor(M.DEAL),policies=allFor(M.POLICY),apps=allFor(M.ACC);const current=profiles.find(p=>p.Current_Membership_Status==='Current')||profiles[0];const risky=deals.filter(d=>d.Banned_From_Membership||d.Banned_From_Insurance||d.Has_Insurance_Issue);return`${contextBar()}${risky.length?'<div class="risk-banner"><strong>Customer restrictions or insurance issues are recorded.</strong> Review the relevant Membership transaction before proceeding.</div>':''}<div class="stats">${stat('Member profile',current?current.Current_Member_Type:'Not found',current?current.Current_Membership_Status:'No member profile linked')}${stat('Insurance policies',policies.length,'Across linked policy records')}${stat('Accreditation applications',apps.length,'Across the applicant contact')}</div>${crmActionBar('Contacts',c.id)}${panel('Customer details','Contact record',kvs(M.CONTACT,c))}${nativeRelatedPanel()}<div class="columns">${listPanel(M.PROFILE,profiles)}${listPanel(M.POLICY,policies)}</div><div class="columns">${listPanel(M.DEAL,deals)}${listPanel(M.ACC,apps)}</div>${allFor(M.ACCOUNT).length?listPanel(M.ACCOUNT,allFor(M.ACCOUNT)):''}`;}
@@ -680,42 +684,54 @@
     }catch(e){c.error=String(e.message||e);}
     finally{c.busy=false;d.innerHTML=cancellationHtml();}
   }
+  function uiTone(v){return({ok:'success',attention:'warning',danger:'danger',info:'info',draft:'draft',neutral:'neutral'})[statusClass(v)]||'neutral';}
+  // Pure builder for the membership hub, so the layout can be tested and reused without CRM.
+  function membershipHubHtml(d){
+    const UI=d.ui,c=d.contact,deals=d.deals||[],policies=d.policies||[],ext=d.extensions||[],active=d.activeDeal,prof=d.currentProfile,ic=d.icon||(()=>'');
+    const val=(r,f)=>{const k=f.find(x=>r&&r[x]!==undefined&&r[x]!==null&&r[x]!=='');return k?txt(r[k]):'';};
+    const cid=esc(c.id),name=d.contactName||'Customer';
+    const memberType=val(prof,['Current_Member_Type','Membership_Type'])||val(active,['Membership_Type']);
+    const memberStatus=val(prof,['Current_Membership_Status','Membership_Status']);
+    const pay=val(active,['Payment_Status']);
+    const exp=UI.expiry(active&&(active.Expiry_Date||active.Renewal_Date||active.End_Date),d.now);
+    const mainPolicy=policies[0],polStatus=val(mainPolicy,['Policy_Status','Application_Status']);
+    const header=UI.header({kicker:'Membership management',name,badge:memberType,chips:[c.Email,c.Mobile||c.Phone].filter(Boolean).map(x=>txt(x)),actions:
+      `<button type="button" class="button secondary" data-action="note" data-entity="Contacts" data-id="${cid}">${ic('sticky-note')} Add note</button><button type="button" class="button secondary" data-action="task" data-entity="Contacts" data-id="${cid}">${ic('list-todo')} Create task</button><button type="button" class="button secondary" data-action="docs-open" data-entity="Contacts" data-id="${cid}">${ic('file-plus')} Generate documents</button><button type="button" class="button secondary" data-action="select" data-entity="Contacts" data-id="${cid}">Customer profile</button>`});
+    const tiles='<div class="bg-tiles">'+
+      UI.tile({icon:ic('users-round'),label:'Member status',value:memberStatus||'Not recorded',sub:memberType,tone:memberStatus?uiTone(memberStatus):'warning'})+
+      UI.tile({icon:ic('clipboard-list'),label:'Membership payment',value:pay||'Not recorded',sub:val(active,['Stage','Purchase_Type']),tone:pay?uiTone(pay):'warning'})+
+      UI.tile({icon:ic('refresh-cw'),label:'Renewal and expiry',value:exp.value,sub:exp.sub,tone:exp.tone,pct:exp.pct})+
+      UI.tile({icon:ic('shield-check'),label:'Insurance',value:policies.length?policies.length+(policies.length===1?' policy':' policies'):'None',sub:policies.length?polStatus:'No linked policy',tone:policies.length?uiTone(polStatus):'neutral'})+'</div>';
+    const dealRow=(x,i)=>{const when=UI.niceDate(x.Expiry_Date||x.Renewal_Date||x.End_Date);return UI.row({attrs:'data-action="select" data-entity="Deals" data-id="'+esc(x.id)+'"',title:val(x,['Deal_Name','Name'])||'Membership',tag:i===0?'Latest':'',pills:[val(x,['Payment_Status'])?[val(x,['Payment_Status']),uiTone(val(x,['Payment_Status']))]:null,val(x,['Stage'])?[val(x,['Stage']),uiTone(val(x,['Stage']))]:null],aside:when?'Expires '+when:'No expiry recorded'});};
+    const shownDeals=deals.slice(0,2).map(dealRow).join(''),olderDeals=deals.slice(2).map((x,i)=>dealRow(x,i+2)).join('');
+    const membershipBody=deals.length?shownDeals+(olderDeals?'<details class="bg-more"><summary>Show '+(deals.length-2)+' earlier</summary>'+olderDeals+'</details>':''):UI.empty({title:'No memberships yet',text:'No membership transactions were returned from CRM.',action:'<button type="button" class="button secondary" data-action="journey-start" data-kind="membership">Start a membership</button>'});
+    const polRow=p=>{const st=val(p,['Policy_Status','Application_Status']),pp=val(p,['Payment_Status']),end=UI.niceDate(p.Policy_End_Date||p.End_Date);return UI.row({attrs:'data-action="select" data-entity="Insurance_Policy" data-id="'+esc(p.id)+'"',title:val(p,['Policy_Number','Name'])||'Policy',pills:[st?[st,uiTone(st)]:null,pp?['Payment '+pp.toLowerCase(),uiTone(pp)]:null],aside:end?'Ends '+end:''});};
+    const insuranceBody=policies.length?policies.map(polRow).join(''):UI.empty({title:'No insurance yet',text:'This customer has no linked policy.',action:'<button type="button" class="button secondary" data-action="journey-start" data-kind="membership">Start an application</button>'});
+    const previewOn=d.preview!==false;
+    const associateUk=/associate/i.test(String(memberType))&&/^(united kingdom|england|scotland|wales|northern ireland)$/i.test(String(c.Correspondence_Country||c.Mailing_Country||c.Country||'').trim());
+    const actions='<div class="bg-actions">'+
+      (active&&active.id?'<div class="bg-action-block"><span class="bg-action-label">Change this membership</span><div class="bg-action-btns"><button type="button" class="button secondary" data-action="membership-renew" data-id="'+esc(active.id)+'">Renew membership</button>'+(associateUk?'<button type="button" class="button secondary" data-action="membership-upgrade" data-id="'+esc(active.id)+'">Upgrade to Full with insurance</button>':'')+'</div></div>':'')+
+      '<div class="bg-action-block"><span class="bg-action-label">Start something new</span><div class="bg-action-btns"><button type="button" class="button primary" data-action="journey-start" data-kind="membership">New membership</button></div></div>'+
+      (active&&active.id&&previewOn?'<div class="bg-action-block bg-action-block--quiet"><span class="bg-action-label">Cancel or downgrade</span><div class="bg-action-btns"><button type="button" class="button secondary" data-action="membership-cancel-open" data-id="'+esc(active.id)+'">Cancellation / downgrade quote <span class="bg-preview-tag">Preview</span></button></div></div>':'')+
+      (active&&active.id?'<button type="button" class="bg-row" data-action="select" data-entity="Deals" data-id="'+esc(active.id)+'"><span class="bg-row-main"><span class="bg-row-title">Review current transaction</span></span><span class="bg-row-chev" aria-hidden="true">&rsaquo;</span></button>':'')+'</div>';
+    const extBody=ext.length?ext.map(x=>UI.row({attrs:'data-action="select" data-entity="Membership_Extension" data-id="'+esc(x.id)+'"',title:val(x,['Name','Extension_Name','Product_Name'])||'Extension',pills:[val(x,['Status','Payment_Status'])?[val(x,['Status','Payment_Status']),uiTone(val(x,['Status','Payment_Status']))]:null],aside:val(x,['Quantity'])?'Qty '+val(x,['Quantity']):''})).join(''):'No extensions on this membership.';
+    return '<section class="membership-workspace bg-hub" aria-label="Membership management">'+header+
+      (d.restricted?'<p class="v12-warning">Membership or insurance restrictions are present on a linked transaction. Review before processing a change.</p>':'')+tiles+
+      '<div class="bg-grid">'+UI.group({icon:ic('users-round'),title:'Membership',count:deals.length,body:membershipBody,footer:prof&&prof.id?'<button type="button" class="button secondary" data-action="select" data-entity="Membership" data-id="'+esc(prof.id)+'">View member profile</button>':''})+
+        UI.group({icon:ic('shield-check'),title:'Insurance',count:policies.length,body:insuranceBody,footer:policies.length?'Open a policy to review its cover'+(d.preview!==false?', request a change (MTA) or generate documents.':' and status.'):''})+'</div>'+
+      '<div class="bg-grid">'+UI.group({icon:ic('file-plus'),title:'Extensions',count:ext.length,body:extBody,compact:!ext.length})+
+        UI.group({icon:ic('arrow-up-right'),title:'Services',body:actions,footer:'Renewals and upgrades use the same application and payment steps. Cancellation and downgrade are a preview for now.'})+'</div></section>';
+  }
   function membershipServiceDashboard(entity,record){
-    if(![M.PROFILE,M.DEAL].includes(entity)||!state.contact)return '';
-    const c=state.contact,contactId=String(c.id);
-    const deals=allFor(M.DEAL).slice().sort((a,b)=>String(b.Modified_Time||b.Created_Time||'').localeCompare(String(a.Modified_Time||a.Created_Time||'')));
-    const profiles=allFor(M.PROFILE),policies=allFor(M.POLICY);
+    if(![M.PROFILE,M.DEAL].includes(entity)||!state.contact||!window.BGUI)return '';
+    const c=state.contact;
+    const byRecent=(a,b)=>String(b.Modified_Time||b.Created_Time||'').localeCompare(String(a.Modified_Time||a.Created_Time||''));
+    const deals=allFor(M.DEAL).slice().sort(byRecent),profiles=allFor(M.PROFILE),policies=allFor(M.POLICY);
     const currentProfile=profiles.find(x=>String(x.Current_Membership_Status||'').toLowerCase()==='current')||profiles[0];
     const activeDeal=entity===M.DEAL?record:deals.find(x=>String(x.Payment_Status||'').toLowerCase()==='paid')||deals[0];
-    const restrict=deals.filter(x=>x.Banned_From_Membership||x.Banned_From_Insurance||x.Has_Insurance_Issue);
-    const pick=(r,fields)=>{const k=fields.find(f=>r?.[f]!==undefined&&r[f]!==null&&r[f]!=='');return k?txt(r[k]):'Not recorded';};
-    const recordLink=(module,r,label)=>r?.id?'<button type="button" class="button secondary" data-action="select" data-entity="'+esc(module)+'" data-id="'+esc(r.id)+'">'+esc(label)+'</button>':'';
-    const row=(title,detail,action)=>'<div class="membership-service-row"><div><strong>'+esc(title)+'</strong><p>'+esc(detail)+'</p></div>'+action+'</div>';
     const coverage=policies.filter(x=>!activeDeal?.id||String(x.Membership?.id||x.Deal?.id||'')===String(activeDeal.id));
-    const shown=coverage.length?coverage:policies;
-    const extensions=allFor(M.ADDON);
-    return '<section class="membership-workspace" aria-label="Membership management"><header class="membership-workspace-heading"><div><span class="v12-kicker">MEMBERSHIP MANAGEMENT</span><h3>Customer relationship and services</h3><p>'+esc(rowTitle(M.CONTACT,c))+' · Data from linked CRM records</p></div>'+recordLink(M.CONTACT,c,'Customer profile')+'</header>'+
-      (restrict.length?'<p class="v12-warning">Membership or insurance restrictions are present on a linked transaction. Review before processing a change.</p>':'')+
-      '<div class="membership-health-grid">'+
-      '<div><span>Member status</span><strong>'+esc(pick(currentProfile,['Current_Membership_Status','Membership_Status']))+'</strong><small>'+esc(pick(currentProfile,['Current_Member_Type','Membership_Type']))+'</small></div>'+
-      '<div><span>Membership payment</span><strong>'+esc(pick(activeDeal,['Payment_Status']))+'</strong><small>'+esc(pick(activeDeal,['Stage','Purchase_Type']))+'</small></div>'+
-      '<div><span>Renewal / expiry</span><strong>'+esc(pick(activeDeal,['Expiry_Date','Renewal_Date','End_Date']))+'</strong><small>'+deals.length+' linked membership transaction(s)</small></div>'+
-      '<div><span>Insurance</span><strong>'+shown.length+' linked policy record(s)</strong><small>Policy status and payment remain independent</small></div></div>'+
-      '<div class="membership-service-grid"><section><h4>Membership transactions</h4>'+
-        (deals.length?deals.map(d=>row(pick(d,['Deal_Name','Name']), 'Payment: '+pick(d,['Payment_Status'])+' · '+pick(d,['Stage'])+' · Expires: '+pick(d,['Expiry_Date','Renewal_Date']),recordLink(M.DEAL,d,'View transaction'))).join(''):'<p class="v12-muted">No membership transactions returned from CRM.</p>')+
-        '<div class="membership-service-actions">'+recordLink(M.PROFILE,currentProfile,'View member profile')+'</div></section>'+
-      '<section><h4>Insurance and changes</h4>'+
-        (shown.length?shown.map(p=>row(pick(p,['Policy_Number','Name']), 'Cover: '+pick(p,['Policy_Status','Application_Status'])+' · Payment: '+pick(p,['Payment_Status'])+' · Ends: '+pick(p,['Policy_End_Date','End_Date']),recordLink(M.POLICY,p,OPERATIONAL_UAT&&!PREVIEW_COMPONENTS?'View policy':'View policy / MTA'))).join(''):'<p class="v12-muted">No linked insurance policies returned from CRM.</p>')+
-        '<p class="v12-muted">'+(OPERATIONAL_UAT&&!PREVIEW_COMPONENTS?'Open a policy to review its cover and status.':'Open a policy to review current cover, request an MTA, quote and save the revision.')+'</p></section>'+
-      '<section><h4>Membership extensions</h4>'+
-        (extensions.length?extensions.map(x=>row(pick(x,['Name','Extension_Name','Product_Name']), 'Status: '+pick(x,['Status','Payment_Status'])+' · '+pick(x,['Quantity']),recordLink(M.ADDON,x,'Open extension'))).join(''):'<p class="v12-muted">No extensions loaded for this membership. See the transaction’s related lists for the full list.</p>')+
-      '</section><section><h4>'+(OPERATIONAL_UAT&&!PREVIEW_COMPONENTS?'Current transaction':'Renewal and service actions')+'</h4>'+
-        (OPERATIONAL_UAT&&!PREVIEW_COMPONENTS?'':'<p class="v12-muted">Renewals and upgrades use the same application and payment steps. The payment status in CRM updates once payment is received. Cancellation and downgrade are a preview for now.</p>')+
-        '<div class="membership-service-actions">'+
-          (activeDeal?.id?'<button type="button" class="button secondary" data-action="membership-cancel-open" data-id="'+esc(activeDeal.id)+'">Cancellation / downgrade quote <span class="bg-preview-tag">Preview</span></button>':'')+
-          '<button type="button" class="button primary" data-action="journey-start" data-kind="membership">New membership</button>'+ (activeDeal?.id?'<button type="button" class="button secondary" data-action="membership-renew" data-id="'+esc(activeDeal.id)+'">Renew membership</button>'+(/associate/i.test(String(currentProfile?.Current_Member_Type||activeDeal?.Membership_Type||''))&&/^(united kingdom|england|scotland|wales|northern ireland)$/i.test(String(c.Correspondence_Country||c.Mailing_Country||c.Country||'').trim())?'<button type="button" class="button secondary" data-action="membership-upgrade" data-id="'+esc(activeDeal.id)+'">Upgrade to Full with insurance</button>':''):'')+
-          recordLink(M.DEAL,activeDeal,'Review current transaction')+
-        '</div></section></div></section>';
+    const shown=(coverage.length?coverage:policies).slice().sort(byRecent);
+    return membershipHubHtml({ui:window.BGUI,icon,contact:c,contactName:rowTitle(M.CONTACT,c),deals,policies:shown,extensions:allFor(M.ADDON),activeDeal,currentProfile,restricted:deals.some(x=>x.Banned_From_Membership||x.Banned_From_Insurance||x.Has_Insurance_Issue),preview:PREVIEW_COMPONENTS});
   }
   function sectionView(kind){const config={membership:{primary:[M.PROFILE,M.DEAL],groups:[[M.PROFILE,M.DEAL],[M.ADDON]]},insurance:{primary:[M.POLICY],groups:[[M.POLICY],[M.EXT,M.PERSON],[M.PREMISES,M.DECLARATION],[M.REVISION]]},accreditation:{primary:[M.ACC],groups:[[M.ACC,M.CENTRE],[M.QUAL,M.OFFER],[M.TUTOR,M.ACCLINK],[M.ACCEXT]]}}[kind];if(!config)return'';
     const f=state.focus;if(!f||state.focusEntityView!==kind)return browserList(kind,state.browseFilter==='attention');if(window.BGCRM12)return `${state.history.length?'<button type="button" class="button secondary" data-action="go-back">'+icon('arrow-left')+' Previous record or list</button>':''}<button class="button secondary" type="button" data-action="back-to-list" data-kind="${kind}">${icon('arrow-left')} All ${kind} records</button>`+contextBar(false)+(kind==='membership'?membershipServiceDashboard(f.entity,f.record):'')+focusPanel(f.entity,f.record);
@@ -1429,5 +1445,5 @@
   function demoQueue(){throw Error('Demo data is disabled');}
   function demoSearch(){throw Error('Demo data is disabled');}
   if(typeof document!=='undefined')document.addEventListener('DOMContentLoaded',init);
-  if(typeof module!=='undefined'&&module.exports)module.exports={workdriveLinkOf,sortTasks,openTasksQuery,taskDueInfo,taskRelated,isExcludedAction,customViewQuery,pageItems,SIZES,esc,asRows,matchContext,isQueueItem,refId,queryCriterion,statusClass,contactLookup,reviewKind,reviewSignals,insuranceBlocks,uatEditable,REVIEW_GROUPS,DEMO_RECORDS,M};
+  if(typeof module!=='undefined'&&module.exports)module.exports={icon,membershipHubHtml,uiTone,workdriveLinkOf,sortTasks,openTasksQuery,taskDueInfo,taskRelated,isExcludedAction,customViewQuery,pageItems,SIZES,esc,asRows,matchContext,isQueueItem,refId,queryCriterion,statusClass,contactLookup,reviewKind,reviewSignals,insuranceBlocks,uatEditable,REVIEW_GROUPS,DEMO_RECORDS,M};
 })();
