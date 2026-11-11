@@ -276,3 +276,13 @@ body.staff-dev-tools #staff-api-open{display:inline-flex}
 .bg-preview-banner{margin:10px 0 14px;padding:10px 14px;border:1px dashed #c7a7ba;border-radius:10px;background:#fbf3f8;color:#5b3a4d;font-size:13px}
 .bg-preview-banner strong{margin-right:6px;padding:2px 8px;border-radius:9px;background:#9d2a68;color:#fff;font-size:10px;letter-spacing:.05em;text-transform:uppercase}
 .bg-preview-tag{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:9px;background:#f3ecfa;color:#5b3a8a;font-size:10px;font-weight:750;letter-spacing:.03em;text-transform:uppercase;vertical-align:1px}
+
+.bg-docs-dialog{max-width:560px}
+.bg-docs-list{max-height:260px;overflow:auto;margin:10px 0;border:1px solid #eee5eb;border-radius:10px;padding:4px 12px}
+.bg-docs-group{border:0;margin:8px 0;padding:0}
+.bg-docs-group legend{padding:0;font-size:11px;font-weight:750;letter-spacing:.04em;text-transform:uppercase;color:#6b606b}
+.bg-docs-item{display:flex;gap:10px;align-items:flex-start;padding:6px 0;cursor:pointer}
+.bg-docs-item small{display:block;color:#6b606b}
+.bg-docs-steps{margin:8px 0 10px;padding-left:20px;font-size:13px}
+.bg-docs-steps li{padding:2px 0}
+.bg-docs-dialog [hidden]{display:none!important}

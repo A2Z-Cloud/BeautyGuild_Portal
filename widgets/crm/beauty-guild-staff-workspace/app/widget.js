@@ -284,10 +284,70 @@
       else if(!fit.length){j.draftsMessage='No saved application draft was found for this customer. Use Edit in CRM to change this record, or start a new application.';render();}
     }catch(e){setNotice('The application could not be reopened: '+String(e&&e.message||e),'error');}
   }
+
+  // Generate documents: choose the customer's record, then open CRM's own Mail Merge in a new tab (the default Zoho flow), so staff can edit the text, download the file and email it or upload it to WorkDrive.
+  function workdriveLinkOf(r){
+    if(!r||typeof r!=='object')return '';
+    for(const k of Object.keys(r)){
+      if(!/workdrive/i.test(k))continue;
+      const v=typeof r[k]==='string'?r[k]:(r[k]&&r[k].url)||'';
+      if(/^https:\/\/([a-z0-9-]+\.)*workdrive\.zoho\.[a-z.]+\//i.test(v))return v;
+    }
+    return '';
+  }
+  function docsStatus(entity,r){
+    const f={Insurance_Policy:['Application_Status','Policy_Status'],Deals:['Stage'],Membership:['Current_Membership_Status'],Training_Centre_Accred:['Application_Stage']}[entity]||[];
+    return f.map(k=>txt(r[k])).filter(v=>v&&v!=='—').join(' · ');
+  }
+  async function openDocsDialog(entity,id){
+    let cid='';
+    if(entity===M.CONTACT)cid=String(id);
+    else{const rec=state.focus&&state.focus.entity===entity&&String(state.focus.record.id)===String(id)?state.focus.record:null;const o=rec&&(rec.Contact||rec.Contact_Name||rec.Applicant_Contact);cid=o&&o.id?String(o.id):'';}
+    if(!cid){setNotice('This record has no customer, so open the customer first and choose Generate documents there.','error');return;}
+    setNotice('Finding this customer’s records…','info');
+    let contact,items=[];
+    try{
+      contact=state.focus&&state.focus.entity===M.CONTACT&&String(state.focus.record.id)===cid?state.focus.record:await getRecord(M.CONTACT,cid);
+      const defs=[[M.PROFILE,'Contact','Membership'],[M.DEAL,'Contact_Name','Membership purchases'],[M.POLICY,'Contact','Insurance policies'],[M.ACC,'Applicant_Contact','Accreditations']];
+      const found=await Promise.allSettled(defs.map(([e,f])=>searchRecords(e,f,cid)));
+      items.push({group:'Customer',entity:M.CONTACT,id:cid,title:rowTitle(M.CONTACT,contact)||'This customer',meta:'',record:contact});
+      found.forEach((res,i)=>{if(res.status!=='fulfilled')return;for(const r of res.value)items.push({group:defs[i][2],entity:defs[i][0],id:String(r.id),title:rowTitle(defs[i][0],r)||String(r.Name||r.id),meta:docsStatus(defs[i][0],r),record:r});});
+    }catch(e){setNotice('Could not load this customer’s records: '+String(e&&e.message||e),'error');return;}
+    setNotice('');
+    const pre=items.find(x=>x.entity===entity&&x.id===String(id))||items[0];
+    return new Promise(resolve=>{
+      const d=document.createElement('dialog');d.className='bg-leave-dialog bg-docs-dialog';d.setAttribute('aria-labelledby','bgDocsTitle');
+      const groups=[...new Set(items.map(x=>x.group))];
+      const list=groups.map(g=>'<fieldset class="bg-docs-group"><legend>'+esc(g)+'</legend>'+items.filter(x=>x.group===g).map(x=>'<label class="bg-docs-item"><input type="radio" name="docsTarget" value="'+esc(x.entity+'|'+x.id)+'"'+(x===pre?' checked':'')+'><span><strong>'+esc(x.title)+'</strong>'+(x.meta?'<small>'+esc(x.meta)+'</small>':'')+'</span></label>').join('')+'</fieldset>').join('');
+      d.innerHTML='<form method="dialog" novalidate><h2 id="bgDocsTitle">Generate documents</h2><p>For <strong>'+esc(rowTitle(M.CONTACT,contact)||'this customer')+'</strong>. Choose what the document is for, then open CRM’s Mail Merge.</p><div class="bg-docs-list">'+list+'</div><ol class="bg-docs-steps"><li>CRM opens in a <strong>new tab</strong> on the record you chose. Use <strong>Mail Merge</strong> from the record’s menu and pick the template.</li><li>Change any text you need, then download the file.</li><li>Email it to the customer, and/or upload it to the record’s WorkDrive folder.</li></ol><p class="bg-contact-error" role="alert" hidden></p><div class="bg-leave-actions"><button type="button" class="button secondary" data-docs="close">Close</button><button type="button" class="button secondary" data-docs="workdrive" hidden>Open WorkDrive folder</button><button type="button" class="button" data-docs="merge">Open Mail Merge in CRM</button></div></form>';
+      const err=d.querySelector('.bg-contact-error'),wd=d.querySelector('[data-docs="workdrive"]');
+      const selected=()=>{const r=d.querySelector('input[name="docsTarget"]:checked');if(!r)return null;const [e,i]=r.value.split('|');return items.find(x=>x.entity===e&&x.id===i)||null;};
+      const sync=()=>{const s=selected(),link=s?workdriveLinkOf(s.record):'';wd.hidden=!link;wd.dataset.url=link;};
+      d.addEventListener('change',sync);
+      const done=v=>{try{d.close();}catch(_){}d.remove();resolve(v);};
+      d.addEventListener('click',async e=>{
+        const b=e.target.closest&&e.target.closest('[data-docs]');if(!b)return;
+        if(b.dataset.docs==='close')return done(null);
+        err.hidden=true;
+        if(b.dataset.docs==='workdrive'){const u=wd.dataset.url;if(u)window.open(u,'_blank','noopener,noreferrer');return;}
+        if(b.dataset.docs==='merge'){
+          const s=selected();if(!s){err.textContent='Choose a record first.';err.hidden=false;return;}
+          try{await ZOHO.CRM.UI.Record.open({Entity:s.entity,RecordID:String(s.id),Target:'_blank'});}
+          catch(ex){err.textContent='CRM could not open the record: '+String(ex&&ex.message||ex);err.hidden=false;}
+        }
+      });
+      d.addEventListener('cancel',e=>{e.preventDefault();done(null);});
+      document.body.appendChild(d);
+      if(typeof d.showModal==='function')d.showModal();else d.setAttribute('open','');
+      sync();
+    });
+  }
+  const DOCS_ENTITIES=new Set(['Contacts','Membership','Deals','Insurance_Policy','Training_Centre_Accred']);
   function crmActionBar(entity,id){
     const focusRec=state.focus&&state.focus.entity===entity&&String(state.focus.record.id)===String(id)?state.focus.record:null;
     const cont=isDraftRecord(entity,focusRec)?`<button type="button" class="button" data-action="continue-draft" data-entity="${esc(entity)}" data-id="${esc(id)}">${icon('chevron-right')} Continue application</button>`:'';
-    return `<div class="sheet-actions workspace-actions">${cont}<button type="button" class="button secondary" data-action="edit" data-entity="${esc(entity)}" data-id="${esc(id)}">${icon('link')} Edit in CRM</button><button type="button" class="button secondary" data-action="email" data-entity="${esc(entity)}" data-id="${esc(id)}">${icon('link')} Send email (opens CRM)</button><button type="button" class="button secondary" data-action="crm-actions" data-entity="${esc(entity)}" data-id="${esc(id)}">${icon('arrow-up-right')} More CRM actions (opens CRM)</button><button type="button" class="button secondary" data-action="note" data-entity="${esc(entity)}" data-id="${esc(id)}">${icon('sticky-note')} Add note</button><button type="button" class="button secondary" data-action="task" data-entity="${esc(entity)}" data-id="${esc(id)}">${icon('list-todo')} Create task</button></div>`;
+    const docs=DOCS_ENTITIES.has(entity)?`<button type="button" class="button secondary" data-action="docs-open" data-entity="${esc(entity)}" data-id="${esc(id)}">${icon('file-plus')} Generate documents</button>`:'';
+    return `<div class="sheet-actions workspace-actions">${cont}${docs}<button type="button" class="button secondary" data-action="edit" data-entity="${esc(entity)}" data-id="${esc(id)}">${icon('link')} Edit in CRM</button><button type="button" class="button secondary" data-action="email" data-entity="${esc(entity)}" data-id="${esc(id)}">${icon('link')} Send email (opens CRM)</button><button type="button" class="button secondary" data-action="crm-actions" data-entity="${esc(entity)}" data-id="${esc(id)}">${icon('arrow-up-right')} More CRM actions (opens CRM)</button><button type="button" class="button secondary" data-action="note" data-entity="${esc(entity)}" data-id="${esc(id)}">${icon('sticky-note')} Add note</button><button type="button" class="button secondary" data-action="task" data-entity="${esc(entity)}" data-id="${esc(id)}">${icon('list-todo')} Create task</button></div>`;
   }
   const RELATED_MODULES={Insurance_Extensions:M.EXT,Insurance_Policy:M.POLICY,Accreditation1:M.ACC,Membership:M.PROFILE,Membership_Extension1:M.ADDON,Training_Centre_Course_Offering:M.OFFER,Tutor_Relationship:M.TUTOR};
   function nativeRow(list,row){
@@ -1326,6 +1386,7 @@
     else if(action==='select'){state.history.push(state.focus?{entity:state.focus.entity,id:state.focus.record.id,view:state.view}:{view:state.view,kind:state.browseKind,page:state.pages['browse:'+state.browseKind]||1,search:state.browseSearch});await select(entity,id);}
     else if(action==='new-customer')await startNewCustomer();
     else if(action==='continue-draft')await continueDraft(entity,id);
+    else if(action==='docs-open')await openDocsDialog(entity,id);
     else if(action==='tasks-refresh')await loadTasks();
     else if(action==='task-open')await openTask(id);
     else if(action==='task-back'){state.tasks.focusId='';state.tasks.focus=null;setNotice('');render();}
@@ -1347,5 +1408,5 @@
   function demoQueue(){throw Error('Demo data is disabled');}
   function demoSearch(){throw Error('Demo data is disabled');}
   if(typeof document!=='undefined')document.addEventListener('DOMContentLoaded',init);
-  if(typeof module!=='undefined'&&module.exports)module.exports={sortTasks,openTasksQuery,taskDueInfo,taskRelated,isExcludedAction,customViewQuery,pageItems,SIZES,esc,asRows,matchContext,isQueueItem,refId,queryCriterion,statusClass,contactLookup,reviewKind,reviewSignals,insuranceBlocks,uatEditable,REVIEW_GROUPS,DEMO_RECORDS,M};
+  if(typeof module!=='undefined'&&module.exports)module.exports={workdriveLinkOf,sortTasks,openTasksQuery,taskDueInfo,taskRelated,isExcludedAction,customViewQuery,pageItems,SIZES,esc,asRows,matchContext,isQueueItem,refId,queryCriterion,statusClass,contactLookup,reviewKind,reviewSignals,insuranceBlocks,uatEditable,REVIEW_GROUPS,DEMO_RECORDS,M};
 })();

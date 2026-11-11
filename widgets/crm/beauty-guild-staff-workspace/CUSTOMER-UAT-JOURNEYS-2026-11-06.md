@@ -6,7 +6,7 @@ The workspace is a single screen inside Zoho CRM where your team can find a memb
 
 ## How this test works
 
-Instead of a list of buttons to press, you will follow **nine short journeys**. Each one is a realistic piece of a working day. Work through them in order the first time, because later journeys build on earlier ones.
+Instead of a list of buttons to press, you will follow **ten short journeys**. Each one is a realistic piece of a working day. Work through them in order the first time, because later journeys build on earlier ones.
 
 - Allow about **90 minutes to two hours** in total. Journeys are 5 to 15 minutes each.
 - Use the **test records** we give you (listed below). Please do not use live member records.
@@ -222,6 +222,25 @@ For each step, note whether it did what we said, did it but was confusing or slo
    **Expect:** A cancellation screen opens with a **Preview** banner and four steps. You can look at each step. Pressing **Calculate refund quote** says it is a preview and does nothing.
 
 **Think about:** Is this the information and the order you would want when you take a change or a cancellation from a customer? What is missing?
+
+---
+
+## Journey 10: Generate documents for a customer
+
+*The customer needs a letter, certificate or schedule. Produce it from the right record, edit it, and send or store it.*
+
+1. Open a customer and click **Generate documents**.
+   **Expect:** A window lists the customer, then their memberships, membership purchases, insurance policies and accreditations, so you can choose what the document is for.
+2. Choose an insurance policy and click **Open Mail Merge in CRM**.
+   **Expect:** CRM opens in a new tab on that policy. Use Mail Merge from the record's menu and pick the template you want.
+3. Change any text you need in the merged document, then download it.
+   **Expect:** The document opens for editing and you can download it to your computer.
+4. Email the downloaded file to the customer, and/or upload it to the record's WorkDrive folder.
+   **Expect:** The file reaches the customer and/or is stored in the right WorkDrive folder. If the record has a WorkDrive link, **Open WorkDrive folder** appears in the window and opens it in a new tab.
+5. Go back to the window and choose a membership or accreditation, then repeat.
+   **Expect:** You can generate documents for any of the customer's records without leaving the workspace.
+
+**Think about:** Is it clear which record to choose? Are the templates you need available, and is the WorkDrive step quick enough?
 
 ---
 
