@@ -296,3 +296,8 @@ body.staff-dev-tools #staff-api-open{display:inline-flex}
 .bg-docs-dialog .bg-docs-text small{display:block;margin-top:1px}
 .bg-docs-none{margin:8px 0;font-size:12px;color:#6b606b}
 .bg-docs-how{margin:10px 0;font-size:13px}
+
+.bg-docs-fields{display:grid;gap:12px;margin:12px 0 4px}
+.bg-docs-field{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:650;text-align:left}
+.bg-docs-field select{width:100%;padding:10px 12px;border:1px solid #d9cfd6;border-radius:8px;font:inherit;font-weight:500;background:#fff;color:#26323d}
+.bg-docs-info{min-height:18px;margin:2px 0 6px;font-size:12px;color:#6b606b}

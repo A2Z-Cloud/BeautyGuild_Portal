@@ -230,7 +230,7 @@ For each step, note whether it did what we said, did it but was confusing or slo
 *The customer needs a letter, certificate or schedule. Produce it from the right record, edit it, and send or store it.*
 
 1. Open a customer and click **Generate documents**.
-   **Expect:** A window lists the customer, then their memberships, membership purchases, insurance policies and accreditations, so you can choose what the document is for.
+   **Expect:** A window has two drop-downs: **What is it for?** (the customer, membership, membership purchases, insurance policies or accreditations, with how many of each) and **Which one?** (their records of that type, newest first, with type and status). This stays easy to use even if the customer has many records.
 2. In the window, choose an insurance policy and click **Open in CRM**. Then open that policy and click **Generate documents** on it.
    **Expect:** CRM opens in a new tab on that policy. Click the Mail Merge button, then select a template from the Zoho Writer window. From the policy itself, Generate documents opens CRM straight away with no window, because the document is for that policy.
 3. Change any text you need in the merged document, then download it.

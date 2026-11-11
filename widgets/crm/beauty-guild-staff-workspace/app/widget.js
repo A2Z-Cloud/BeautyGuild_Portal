@@ -306,7 +306,7 @@
       setNotice('Opened in a new tab. There, click the Mail Merge button, choose a template, change any text, merge and download. To make a document for a different record, open the customer and choose Generate documents.','info');
     }catch(e){setNotice('CRM could not open the record: '+String(e&&e.message||e),'error');}
   }
-  // From the customer, choose which of their records the document is for.
+  // From the customer, choose which of their records the document is for. Two drop-downs scale to any number of records.
   async function openDocsDialog(entity,id){
     if(entity!==M.CONTACT)return openDocsDirect(entity,id);
     const cid=String(id);
@@ -320,20 +320,31 @@
       items.push({group:'Customer',entity:M.CONTACT,id:cid,title:rowTitle(M.CONTACT,contact)||'This customer',meta:'The customer’s own record',record:contact});
       found.forEach((res,i)=>{
         if(res.status!=='fulfilled'){failed.push(defs[i][2]);return;}
-        for(const r of res.value)items.push({group:defs[i][2],entity:defs[i][0],id:String(r.id),title:rowTitle(defs[i][0],r)||String(r.Name||r.id),meta:docsStatus(defs[i][0],r),record:r});
+        const rows=[...res.value].sort((x,y)=>String(y.Modified_Time||y.Created_Time||'').localeCompare(String(x.Modified_Time||x.Created_Time||'')));
+        for(const r of rows)items.push({group:defs[i][2],entity:defs[i][0],id:String(r.id),title:rowTitle(defs[i][0],r)||String(r.Name||r.id),meta:docsStatus(defs[i][0],r),record:r});
       });
     }catch(e){setNotice('Could not load this customer’s records: '+String(e&&e.message||e),'error');return;}
     setNotice('');
     return new Promise(resolve=>{
       const d=document.createElement('dialog');d.className='bg-leave-dialog bg-docs-dialog';d.setAttribute('aria-labelledby','bgDocsTitle');
       const groups=[...new Set(items.map(x=>x.group))];
-      const list=groups.map(g=>'<fieldset class="bg-docs-group"><legend>'+esc(g)+'</legend>'+items.filter(x=>x.group===g).map((x,n)=>'<label class="bg-docs-item"><input type="radio" name="docsTarget" value="'+esc(x.entity+'|'+x.id)+'"'+(x===items[0]?' checked':'')+'><span class="bg-docs-text"><strong>'+esc(x.title)+'</strong>'+(x.meta?'<small>'+esc(x.meta)+'</small>':'')+'</span></label>').join('')+'</fieldset>').join('');
       const none=['Membership','Membership purchases','Insurance policies','Accreditations'].filter(g=>!groups.includes(g)&&!failed.includes(g));
-      d.innerHTML='<form method="dialog" novalidate><h2 id="bgDocsTitle">Generate documents</h2><p>For <strong>'+esc(rowTitle(M.CONTACT,contact)||'this customer')+'</strong>. Choose what the document is for.</p><div class="bg-docs-list">'+list+(none.length?'<p class="bg-docs-none">No '+esc(none.join(', ').toLowerCase())+' found for this customer.</p>':'')+(failed.length?'<p class="bg-docs-none">Could not load: '+esc(failed.join(', ').toLowerCase())+'.</p>':'')+'</div><p class="bg-docs-how">CRM opens the record in a <strong>new tab</strong>. Click the <strong>Mail Merge</strong> button there, choose a template, change any text, merge and download. Then email it to the customer and/or upload it to the record’s WorkDrive folder.</p><p class="bg-contact-error" role="alert" hidden></p><div class="bg-leave-actions"><button type="button" class="button secondary" data-docs="close">Close</button><button type="button" class="button secondary" data-docs="workdrive" hidden>Open WorkDrive folder</button><button type="button" class="button" data-docs="merge">Open in CRM</button></div></form>';
-      const err=d.querySelector('.bg-contact-error'),wd=d.querySelector('[data-docs="workdrive"]');
-      const selected=()=>{const r=d.querySelector('input[name="docsTarget"]:checked');if(!r)return null;const [e,i]=r.value.split('|');return items.find(x=>x.entity===e&&x.id===i)||null;};
-      const sync=()=>{const s=selected(),link=s?workdriveLinkOf(s.record):'';wd.hidden=!link;wd.dataset.url=link;};
-      d.addEventListener('change',sync);
+      const typeOptions=groups.map(g=>'<option value="'+esc(g)+'">'+esc(g==='Customer'?'The customer':g)+(g==='Customer'?'':' ('+items.filter(x=>x.group===g).length+')')+'</option>').join('');
+      d.innerHTML='<form method="dialog" novalidate><h2 id="bgDocsTitle">Generate documents</h2><p>For <strong>'+esc(rowTitle(M.CONTACT,contact)||'this customer')+'</strong>. Choose what the document is for.</p>'+
+        '<div class="bg-docs-fields"><label class="bg-docs-field">What is it for?<select id="docsType">'+typeOptions+'</select></label><label class="bg-docs-field" id="docsRecordWrap">Which one?<select id="docsRecord"></select></label></div>'+
+        '<p class="bg-docs-info" id="docsInfo"></p>'+
+        (none.length?'<p class="bg-docs-none">No '+esc(none.join(', ').toLowerCase())+' found for this customer.</p>':'')+(failed.length?'<p class="bg-docs-none">Could not load: '+esc(failed.join(', ').toLowerCase())+'.</p>':'')+
+        '<p class="bg-docs-how">CRM opens the record in a <strong>new tab</strong>. Click the <strong>Mail Merge</strong> button there, choose a template, change any text, merge and download. Then email it to the customer and/or upload it to the record’s WorkDrive folder.</p><p class="bg-contact-error" role="alert" hidden></p><div class="bg-leave-actions"><button type="button" class="button secondary" data-docs="close">Close</button><button type="button" class="button secondary" data-docs="workdrive" hidden>Open WorkDrive folder</button><button type="button" class="button" data-docs="merge">Open in CRM</button></div></form>';
+      const err=d.querySelector('.bg-contact-error'),wd=d.querySelector('[data-docs="workdrive"]'),typeSel=d.querySelector('#docsType'),recSel=d.querySelector('#docsRecord'),recWrap=d.querySelector('#docsRecordWrap'),info=d.querySelector('#docsInfo');
+      const selected=()=>{const [e,i]=String(recSel.value||'').split('|');return items.find(x=>x.entity===e&&x.id===i)||null;};
+      const sync=()=>{const s=selected(),link=s?workdriveLinkOf(s.record):'';wd.hidden=!link;wd.dataset.url=link;info.textContent=s&&s.meta?s.meta:'';};
+      const fill=()=>{
+        const list=items.filter(x=>x.group===typeSel.value);
+        recSel.innerHTML=list.map(x=>'<option value="'+esc(x.entity+'|'+x.id)+'">'+esc(x.title+(x.meta&&x.group!=='Customer'?' · '+x.meta:''))+'</option>').join('');
+        recWrap.hidden=typeSel.value==='Customer';
+        sync();
+      };
+      typeSel.addEventListener('change',fill);recSel.addEventListener('change',sync);
       const done=v=>{try{d.close();}catch(_){}d.remove();resolve(v);};
       d.addEventListener('click',async e=>{
         const b=e.target.closest&&e.target.closest('[data-docs]');if(!b)return;
@@ -349,7 +360,7 @@
       d.addEventListener('cancel',e=>{e.preventDefault();done(null);});
       document.body.appendChild(d);
       if(typeof d.showModal==='function')d.showModal();else d.setAttribute('open','');
-      sync();
+      fill();
     });
   }
   const DOCS_ENTITIES=new Set(['Contacts','Membership','Deals','Insurance_Policy','Training_Centre_Accred']);
