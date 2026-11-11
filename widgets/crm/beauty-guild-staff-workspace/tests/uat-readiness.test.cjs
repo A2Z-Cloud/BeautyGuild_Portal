@@ -71,7 +71,7 @@ test('table status text does not break mid-word, and the stop banner is styled',
   assert.match(css,/\.v12-table td \.bg-state\{white-space:nowrap\}/);
   assert.match(css,/\.v12-stop-banner--stop/);
   const html=fs.readFileSync(path.join(app,'index.html'),'utf8');
-  assert.match(html,/widget\.js\?v=20261111-uatfix30/);
+  assert.match(html,/widget\.js\?v=20261111-uatfix31/);
 });
 
 test('buttons that only open the CRM record say so, and the note dialog names the record and hides the due date',()=>{
@@ -368,4 +368,16 @@ test('shared interface pieces: expiry sentences, status tiles and the membership
   const idx=fs.readFileSync(path.join(app,'index.html'),'utf8');
   assert.ok(idx.indexOf('staff-ux.css')<idx.indexOf('bg-ui.css'),'bg-ui.css must load after staff-ux.css');
   assert.match(idx,/bg-ui\.js/);
+});
+
+test('one visual system: rounded squares, tinted status pills, and no decorative coloured left edges',()=>{
+  const css=fs.readFileSync(path.join(app,'bg-ui.css'),'utf8');
+  assert.match(css,/--bg-r-card:12px;--bg-r-ctl:8px;--bg-r-pill:6px/);
+  assert.doesNotMatch(css,/border-left:\s*[34]px/);
+  assert.doesNotMatch(css,/border-radius:\s*(999px|50%)/);
+  assert.match(css,/\.bg-state-success\{background:#eaf6ef/);
+  assert.match(css,/\.v12-table th\{background:var\(--bg-lilac\)/);
+  assert.match(css,/\.notice,\.context-strip,\.draft-notice,\.staff-cancel-alert/);
+  const w=fs.readFileSync(path.join(app,'widget.js'),'utf8');
+  assert.match(w,/class="button primary" data-action="new-customer"/);
 });
