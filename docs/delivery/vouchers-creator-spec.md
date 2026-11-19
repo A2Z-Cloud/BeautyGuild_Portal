@@ -1,6 +1,6 @@
 # Vouchers and discounts: what Creator must do
 
-Written 27 October 2026 for A2Z Cloud. This is the Creator side of the vouchers plan in [vouchers-review.md](vouchers-review.md). It adds to [creator-payments-app.md](creator-payments-app.md), which until now said the invoice `discounts` array "stays empty for now". Nothing here is built in Creator yet. The portal side is in the pull requests for phases 0 to 4.
+Written 27 October 2026 for A2Z Cloud. This is the Creator side of the vouchers plan in [vouchers-review.md](vouchers-review.md). It adds to [creator-payments-app.md](creator-payments-app.md), which until now said the invoice `discounts` array "stays empty for now". The portal side is built (phases 0 to 4, merged). The Creator side for discounts was written on 5 November 2026 and is saved in the Creator payments app but **not yet tested**: see section 8 for what exists and what is not built.
 
 Scope: insurance, membership and accreditation. GTi redemption is parked. The £25 GTi voucher is still **issued** (section 5).
 
@@ -102,3 +102,37 @@ Phase 4. Design and the Deluge are in [vouchers-phase-4-gti-voucher.md](vouchers
 8. A new member and a renewal each get one £25 voucher, a repeat gets none, and an early renewal's voucher starts on the renewal date.
 
 Test mode only, until the Guild signs each one off.
+
+## 8. As built in the Creator payments app (5 November 2026)
+
+Status: **saved in Creator, not yet tested.** The Deluge is in [vouchers-creator-functions/](vouchers-creator-functions/).
+
+### 8.1 The Voucher Redemptions form
+
+Built by the Creator developer on 5 November 2026, with the report `Voucher_Redemptions_Report`. Fields (API names are made from the labels): `Redemption_Key` (unique), `Voucher`, `Contacts`, `Accreditation`, `School` (these four are lookups to the CRM), `Source`, `Code`, `SKU`, `Status` (Reserved, Used, Reversed), `Amount_Status` (Reserved, Used, Reversed), `List_Amount`, `Discount_Amount`, `Reserved_At`, `Used_At`, `Reversed_At`, `Stripe_Invoice_ID`, `Stripe_Session_ID`, `Stripe_Webhook_Log`.
+
+The portal reads `Redemption_Key`, `Voucher`, `Contacts` and `Status` (merged in PR 150). Because the lookups come back from Creator as objects, the portal reads their `ID`. In Deluge a lookup to the CRM is compared as **text**.
+
+### 8.2 What was built, against section 4
+
+| Spec point | Built |
+|---|---|
+| 4.1 Unique redemption key | `Redemption_Key` = `source|voucher or accreditation id|contact id|Stripe session id|sku`. The same session always gives the same key, so a repeated event creates nothing |
+| 4.2 Voucher to Used, count in step | `Creator.record_voucher_redemptions` writes the Used row. `Creator.finish_discounts` recounts the Reserved and Used rows and saves `Current_Usage_Count` on the CRM `Discount_Voucher` (recounted, not added to) |
+| 4.4 Referral recorded against the school | The row carries `School` and `Accreditation` and the new member in `Contacts` |
+| 4.5 Waiver Pending to Paid | `Creator.finish_discounts` finds the `Waive_Logs` row by `Stripe_Checkout_Session` and sets it Paid. Void on an expired checkout is **not** built |
+| Section 2 invoice record | The `discounts` array is not yet copied onto the Invoice Record's JSON. The redemption rows hold the same information |
+| Section 3 Books, fully waived joining fee | `Books.build_invoice_lines` adds the line at list price with a matching discount (the waived pass), shown as £0.00 |
+
+### 8.3 Not built
+
+- Reversal (4.3): a redemption going to Reversed on a refund, or when a checkout expires or fails. Needs `checkout.session.expired` and the refund events.
+- `Reserved` rows (the decision in section 4 is still open). Keep capped vouchers off until they exist.
+- Waiver Void on an expired checkout.
+- The £25 GTi voucher call (section 5): the scripts in `vouchers-phase-4/` are not yet in Creator.
+- The `discounts` array on the Invoice Record (section 2).
+
+### 8.4 Things the tests must show
+
+Tests 1 to 5 in section 7 apply to what is built: a referral on a yearly and a monthly plan, a staff waiver, a voucher with its count, and a retried event. Tests 6 to 8 need the parts listed in 8.3.
+

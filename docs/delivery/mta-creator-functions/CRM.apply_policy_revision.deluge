@@ -1,0 +1,187 @@
+map CRM.apply_policy_revision(string revision_id, string session_id)
+{
+	// ============================================================================
+	// DRAFT, UNTESTED. Do not enable until the CRM automation check in creator-payments-app.md 6.7 is done.
+	//
+	// CRM.apply_policy_revision
+	// Purpose : Apply ONE paid insurance change (a Policy_Revisions row), as in creator-payments-app.md 6.3:
+	//   1. Approve it (paid and verified).
+	//   2. A future start date: set it Scheduled and stop. The rows stay Draft until the daily scheduler applies it.
+	//   3. Otherwise apply now: Draft cover rows and people become Active, replaced rows become Superseded,
+	//      removed people become Removed (each with Effective_To), the revision becomes Applied.
+	//   4. Ask the CRM to regenerate the endorsement documents.
+	// It NEVER touches the policy's Payment_Status, Application_Status or Policy_Status. Setting Payment_Status to
+	// Paid would fire the INS Policy Activation workflow, which an MTA must never do. Updates here send no workflow
+	// trigger, except the single Document_Status update at the end.
+	// Safe to run again: every update sets exact values, an Applied revision is left alone, and an Approved or
+	// Scheduled one resumes. If any step fails the revision is NOT marked Applied, so a retry does the whole job.
+	//
+	// Parameters, in this order:
+	//   revision_id STRING  the Policy_Revisions id
+	//   session_id  STRING  the Stripe checkout session that paid for it. "" when the scheduler applies a
+	//                       revision that was already paid for.
+	// Returns {"status":"success","outcome":"applied|scheduled|already_applied"} or {"status":"error","message":..}
+	//
+	// Status values are the live CRM picklist spellings (read 5 November 2026). Write them exactly as spelt.
+	// ============================================================================
+
+	// CONFIRM with the CRM owner which module holds Document_Status for endorsements. Policy_Revisions is assumed.
+	document_status_module = "Policy_Revisions";
+	try
+	{
+		revision = zoho.crm.getRecordById("Policy_Revisions",revision_id.toLong());
+		if(revision == null || revision.get("id") == null)
+		{
+			return {"status":"error","message":"No Policy_Revisions row " + revision_id};
+		}
+		revision_status = ifnull(revision.get("Revision_Status"),"").toString();
+		//
+		// Already applied: nothing to do
+		if(revision_status == "Applied")
+		{
+			return {"status":"success","outcome":"already_applied"};
+		}
+		// Only a paid revision can be applied: Awaiting Payment (first time), or Approved / Scheduled (a resume or the scheduler)
+		if(revision_status != "Awaiting Payment" && revision_status != "Approved" && revision_status != "Scheduled")
+		{
+			return {"status":"error","message":"Revision " + revision_id + " is " + revision_status + ", so it cannot be applied."};
+		}
+		// On the first apply, the revision must belong to this payment
+		if(session_id != "" && ifnull(revision.get("Stripe_Checkout_Session_ID"),"").toString() != session_id)
+		{
+			return {"status":"error","message":"Revision " + revision_id + " belongs to a different checkout session."};
+		}
+		//
+		// ---- Step 1. Approved (paid and verified) ----
+		if(revision_status == "Awaiting Payment")
+		{
+			approve_response = zoho.crm.updateRecord("Policy_Revisions",revision_id.toLong(),{"Revision_Status":"Approved"});
+			if(approve_response == null || approve_response.get("status") == "error")
+			{
+				return {"status":"error","message":"Could not approve revision " + revision_id + ": " + ifnull(approve_response,"no response").toString()};
+			}
+		}
+		//
+		// ---- Step 2. A future start date waits for the daily scheduler ----
+		requested_text = ifnull(revision.get("Requested_Effective_Date"),"").toString();
+		if(requested_text == "")
+		{
+			return {"status":"error","message":"Revision " + revision_id + " has no Requested_Effective_Date."};
+		}
+		requested_date = requested_text.toDate("yyyy-MM-dd");
+		if(requested_date > zoho.currentdate)
+		{
+			scheduled_response = zoho.crm.updateRecord("Policy_Revisions",revision_id.toLong(),{"Revision_Status":"Scheduled"});
+			if(scheduled_response == null || scheduled_response.get("status") == "error")
+			{
+				return {"status":"error","message":"Could not schedule revision " + revision_id + ": " + ifnull(scheduled_response,"no response").toString()};
+			}
+			return {"status":"success","outcome":"scheduled"};
+		}
+		//
+		// ---- Step 3. Apply now ----
+		failures = List();
+		//
+		// 3a. The Draft cover rows made for this revision become Active.
+		//     A row that replaces an earlier row (Supersedes_Extension, used inside a basket of several dates) ends that
+		//     earlier row the day before this row starts, so there is never a day with both or neither.
+		extensions = zoho.crm.searchRecords("Insurance_Extension","(Policy_Revision.id:equals:" + revision_id + ")");
+		for each  ext in ifnull(extensions,List())
+		{
+			if(ifnull(ext.get("Status"),"").toString() == "Draft")
+			{
+				ext_response = zoho.crm.updateRecord("Insurance_Extension",ext.get("id").toLong(),{"Status":"Active"});
+				if(ext_response == null || ext_response.get("status") == "error")
+				{
+					failures.add("Cover row " + ext.get("id") + ": " + ifnull(ext_response,"no response").toString());
+				}
+			}
+			superseded = ext.get("Supersedes_Extension");
+			if(superseded != null && superseded.get("id") != null && ext.get("Effective_From") != null)
+			{
+				day_before = ext.get("Effective_From").toString().toDate("yyyy-MM-dd").subDay(1).toString("yyyy-MM-dd");
+				end_map = Map();
+				end_map.put("Status","Superseded");
+				end_map.put("Effective_To",day_before);
+				end_response = zoho.crm.updateRecord("Insurance_Extension",superseded.get("id").toLong(),end_map);
+				if(end_response == null || end_response.get("status") == "error")
+				{
+					failures.add("Replaced cover row " + superseded.get("id") + ": " + ifnull(end_response,"no response").toString());
+				}
+			}
+		}
+		//
+		// 3b. The Draft people made for this revision become Active.
+		people = zoho.crm.searchRecords("Insured_People","(Policy_Revision.id:equals:" + revision_id + ")");
+		for each  person in ifnull(people,List())
+		{
+			if(ifnull(person.get("Status"),"").toString() == "Draft")
+			{
+				person_response = zoho.crm.updateRecord("Insured_People",person.get("id").toLong(),{"Status":"Active"});
+				if(person_response == null || person_response.get("status") == "error")
+				{
+					failures.add("Person " + person.get("id") + ": " + ifnull(person_response,"no response").toString());
+				}
+			}
+		}
+		//
+		// 3c. The live rows and people this change ends. Request_Details.endings lists them, each with the last day covered.
+		//     A replaced cover row becomes Superseded. A removed person becomes Removed. Rows are never deleted.
+		details_text = ifnull(revision.get("Request_Details"),"").toString();
+		if(details_text != "")
+		{
+			details = details_text.toMap();
+			for each  ending in ifnull(details.get("endings"),List())
+			{
+				ending_map = Map();
+				ending_map.put("Effective_To",ending.get("effectiveTo"));
+				if(ending.get("module") == "Insurance_Extension")
+				{
+					ending_map.put("Status","Superseded");
+				}
+				else if(ending.get("module") == "Insured_People")
+				{
+					ending_map.put("Status","Removed");
+				}
+				if(ending_map.get("Status") != null)
+				{
+					ending_response = zoho.crm.updateRecord(ending.get("module"),ending.get("id").toLong(),ending_map);
+					if(ending_response == null || ending_response.get("status") == "error")
+					{
+						failures.add("Ending " + ending.get("module") + " " + ending.get("id") + ": " + ifnull(ending_response,"no response").toString());
+					}
+				}
+			}
+		}
+		//
+		// Stop before marking the revision Applied, so a retry does the whole job
+		if(failures.size() > 0)
+		{
+			return {"status":"error","message":failures.toString()};
+		}
+		//
+		// ---- Step 4. The revision is Applied ----
+		applied_map = Map();
+		applied_map.put("Revision_Status","Applied");
+		applied_map.put("Applied_Effective_Date",requested_text);
+		applied_response = zoho.crm.updateRecord("Policy_Revisions",revision_id.toLong(),applied_map);
+		if(applied_response == null || applied_response.get("status") == "error")
+		{
+			return {"status":"error","message":"Could not mark revision " + revision_id + " Applied: " + ifnull(applied_response,"no response").toString()};
+		}
+		//
+		// ---- Step 5. Ask the CRM to make the endorsement documents (agreed 5 November 2026) ----
+		// This is the one update that asks the CRM to run its workflows, because that is how the documents are made.
+		doc_response = zoho.crm.updateRecord(document_status_module,revision_id.toLong(),{"Document_Status":"Regenerate"},{"trigger":{"workflow"}});
+		if(doc_response == null || doc_response.get("status") == "error")
+		{
+			// The change is applied. Report the documents problem without undoing it.
+			return {"status":"success","outcome":"applied","warning":"Applied, but Document_Status was not set: " + ifnull(doc_response,"no response").toString()};
+		}
+		return {"status":"success","outcome":"applied"};
+	}	catch (e)
+	{
+		return {"status":"error","message":e.toString()};
+	}
+	return {};
+}

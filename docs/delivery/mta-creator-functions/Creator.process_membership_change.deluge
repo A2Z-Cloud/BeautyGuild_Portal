@@ -1,0 +1,313 @@
+map Creator.process_membership_change(int log_id)
+{
+	// ============================================================================
+	// DRAFT, UNTESTED. Keep the portal's membership-change switch off until this has been tested.
+	//
+	// Creator.process_membership_change
+	// Purpose : A paid change to a current membership part-way through its term (checkout.session.completed,
+	//           mode payment, type membership_change, mta_scope membership): extra branches and flat add-ons
+	//           (bundle, certificate, badge, sticker). See creator-payments-app.md 6.6.
+	//   1. Verify with Stripe: the type, the Deal, and that the amount charged equals the amounts in the metadata.
+	//   2. Record the Invoice Record and Payment in Creator.
+	//   3. Create the Membership_Extension rows that do not exist yet (a retry creates only the missing ones).
+	//   4. Push the invoice and payment to Books.
+	// No Policy_Revisions row is made for a membership change, and the term dates on the Deal do not change.
+	// Safe to run again: records are reused and extensions are found by Deal and type.
+	//
+	// OPEN (needs a decision before go-live): branch_yearly_amount is what an extra branch costs FROM THE NEXT
+	// RENEWAL. Adding it to the renewal subscription is a Stripe WRITE, and Creator only writes to Stripe to end a
+	// subscription today. This function records the extension for the rest of this term only. Decide who updates the
+	// renewal (Creator with a restricted key, or the portal's function) before relying on it.
+	//
+	// @input.log_id - the Stripe_Webhook_Log row of the checkout.session.completed event
+	// ============================================================================
+	try
+	{
+		branch_map = Map();
+		branch_map.put("beauty","Guild of Beauty Therapists");
+		branch_map.put("holistic","Guild of Holistic Therapists");
+		branch_map.put("nails","Guild of Nail Technicians");
+		branch_map.put("therapy","Guild of Therapy Lecturers");
+		branch_map.put("hair","Guild of Hairdresser and Barber");
+		//
+		// ---- Stage 0: load and claim the log row ----
+		log_rows = Stripe_Webhook_Log[ID == log_id];
+		if(log_rows.count() == 0)
+		{
+			return {"status":"error","message":"No Stripe_Webhook_Log row " + log_id};
+		}
+		current_status = log_rows.Status;
+		event_type = log_rows.Event_Type;
+		if((current_status != "Received" && current_status != "Failed") || event_type != "checkout.session.completed")
+		{
+			return {"status":"skipped","message":"Row is " + current_status + " / " + event_type};
+		}
+		log_rows.Status="Processing";
+		log_rows.Attempts=ifnull(log_rows.Attempts,0) + 1;
+		session_id = log_rows.Stripe_Object_ID;
+		//
+		// ---- Stage 1: verify with Stripe. Nothing is written yet. ----
+		verified = thisapp.Stripe.get_verified_session(session_id);
+		if(verified.get("status") == "waiting")
+		{
+			thisapp.Stripe.set_log_status(log_id,"Received","Session not complete and paid yet");
+			return {"status":"waiting"};
+		}
+		if(verified.get("status") != "success")
+		{
+			thisapp.Stripe.set_log_status(log_id,"Failed",verified.get("message"));
+			return {"status":"error","message":verified.get("message")};
+		}
+		session = verified.get("session");
+		metadata = ifnull(session.get("metadata"),Map());
+		if(metadata.get("type") != "membership_change" || session.get("mode") != "payment")
+		{
+			thisapp.Stripe.set_log_status(log_id,"Failed","Not a one-off membership change session (type " + metadata.get("type") + ", mode " + session.get("mode") + ")");
+			return {"status":"error","message":"Unsupported session"};
+		}
+		contact_id = ifnull(metadata.get("contact_id"),"").toString();
+		deal_id = ifnull(metadata.get("membership_deal_id"),"").toString();
+		if(contact_id == "" || deal_id == "" || (session.get("client_reference_id") != null && session.get("client_reference_id") != contact_id))
+		{
+			thisapp.Stripe.set_log_status(log_id,"Failed","Missing contact_id or membership_deal_id, or client_reference_id does not match contact_id");
+			return {"status":"error","message":"Metadata check failed"};
+		}
+		//
+		// The Deal must be this member's own, and live
+		deal = zoho.crm.getRecordById("Deals",deal_id.toLong());
+		if(deal == null || deal.get("id") == null)
+		{
+			thisapp.Stripe.set_log_status(log_id,"Failed","Deal " + deal_id + " not found in CRM");
+			return {"status":"error","message":"Deal not found"};
+		}
+		deal_contact = deal.get("Contact_Name");
+		if(deal_contact == null || deal_contact.get("id").toString() != contact_id)
+		{
+			thisapp.Stripe.set_log_status(log_id,"Failed","Deal " + deal_id + " belongs to a different contact. Nothing was changed.");
+			return {"status":"error","message":"Deal contact mismatch"};
+		}
+		if(ifnull(deal.get("Stage"),"").toString() != "Active")
+		{
+			thisapp.Stripe.set_log_status(log_id,"Failed","Deal " + deal_id + " is " + deal.get("Stage") + ", not Active. Nothing was changed.");
+			return {"status":"error","message":"Deal not active"};
+		}
+		//
+		// The amount charged must equal the gross amounts the portal listed (branches plus the flat items)
+		amount = (session.get("amount_total").toDecimal() / 100).round(2);
+		expected_amount = ifnull(metadata.get("branch_addon_amount"),"0").toDecimal() + ifnull(metadata.get("bundle_amount"),"0").toDecimal() + ifnull(metadata.get("certificate_amount"),"0").toDecimal() + ifnull(metadata.get("badge_amount"),"0").toDecimal() + ifnull(metadata.get("sticker_amount"),"0").toDecimal();
+		if((amount - expected_amount).abs() > 0.005)
+		{
+			thisapp.Stripe.set_log_status(log_id,"Failed","Amount mismatch: Stripe took " + amount + " but the metadata adds up to " + expected_amount + ". Nothing was changed.");
+			return {"status":"error","message":"Amount mismatch"};
+		}
+		payment_intent_id = ifnull(session.get("payment_intent"),"").toString();
+		if(payment_intent_id == "")
+		{
+			thisapp.Stripe.set_log_status(log_id,"Failed","The session has no payment intent");
+			return {"status":"error","message":"No payment intent"};
+		}
+		effective_date = ifnull(metadata.get("effective_date"),"").toString();
+		membership_expiry = ifnull(metadata.get("membership_expiry"),"").toString();
+		if(effective_date == "" || membership_expiry == "")
+		{
+			thisapp.Stripe.set_log_status(log_id,"Failed","effective_date or membership_expiry is missing from the metadata");
+			return {"status":"error","message":"Dates missing"};
+		}
+		//
+		// Line items, with the product so the price list code can be read
+		lines_response = thisapp.Stripe.call_stripe_api("https://api.stripe.com/v1/checkout/sessions/" + session_id + "/line_items?limit=100&expand%5B%5D=data.price.product","GET",null);
+		if(lines_response.get("error") != null || lines_response.get("data") == null)
+		{
+			thisapp.Stripe.set_log_status(log_id,"Failed","Could not read the session lines: " + lines_response.toString());
+			return {"status":"error","message":"Line items failed"};
+		}
+		if(lines_response.get("has_more").toString() == "true")
+		{
+			thisapp.Stripe.set_log_status(log_id,"Failed","More than 100 lines on a membership change payment, which is not expected.");
+			return {"status":"error","message":"Too many lines"};
+		}
+		lines_result = thisapp.Books.build_invoice_lines(lines_response.get("data"),amount,0.00,List());
+		if(lines_result.get("status") != "success")
+		{
+			thisapp.Stripe.set_log_status(log_id,"Failed","Books item mapping failed, nothing else was processed: " + lines_result.get("errors").toString());
+			return {"status":"error","message":"Books item mapping failed"};
+		}
+		customer_details = ifnull(session.get("customer_details"),Map());
+		customer_email = ifnull(customer_details.get("email"),metadata.get("email"));
+		livemode = session.get("livemode").toString() == "true";
+		paid_time = ifnull(log_rows.Stripe_Created,zoho.currenttime);
+		//
+		// ---- Stage 2: Creator records (each reuses an existing row on a retry) ----
+		inv_data = Map();
+		inv_data.put("invoice_id","");
+		inv_data.put("session_id",session_id);
+		inv_data.put("invoice_type","One-off payment");
+		inv_data.put("customer_name",customer_details.get("name"));
+		inv_data.put("customer_email",customer_email);
+		inv_data.put("contact_id",contact_id);
+		inv_data.put("membership_id",deal_id);
+		inv_data.put("product_description","Membership change");
+		inv_data.put("amount",amount);
+		inv_data.put("paid_time",paid_time);
+		inv_data.put("payment_intent_id",payment_intent_id);
+		inv_data.put("related_records",{"contact_id":contact_id,"membership_deal_id":deal_id});
+		inv_data.put("livemode",livemode);
+		inv_result = thisapp.Creator.get_or_create_invoice_record(inv_data);
+		pay_data = Map();
+		pay_data.put("reference",payment_intent_id);
+		pay_data.put("livemode",livemode);
+		pay_data.put("log_id",log_id);
+		pay_data.put("payment_intent_id",payment_intent_id);
+		pay_data.put("session_id",session_id);
+		pay_data.put("customer_id",session.get("customer"));
+		pay_data.put("contact_id",contact_id);
+		pay_data.put("invoice_record_id",inv_result.get("id"));
+		pay_data.put("currency",session.get("currency"));
+		pay_data.put("amount",amount);
+		pay_data.put("paid_time",paid_time);
+		pay_result = thisapp.Creator.get_or_create_payment_record(pay_data);
+		if(inv_result.get("status") != "success" || pay_result.get("status") != "success")
+		{
+			message = "Creator records failed: " + inv_result.toString() + " " + pay_result.toString();
+			thisapp.Stripe.set_log_status(log_id,"Failed",message);
+			return {"status":"error","message":message};
+		}
+		inv_rec_id = inv_result.get("id");
+		pay_rec_id = pay_result.get("id");
+		log_rows.Invoice=inv_rec_id;
+		//
+		// ---- Stage 3: CRM. Membership_Extension rows that do not exist yet. Same pattern as a new membership. ----
+		// This stage runs ONCE per payment: the Invoice Record's crm_membership_id is set when it succeeds, and a retry
+		// (for example after a Books failure) then skips it. That is what stops a flat add-on being created twice,
+		// because a mid-term add-on is a new purchase each time and cannot be found by its type alone.
+		// Limit: if the stage fails PART WAY (some rows created, then an error), a retry would create the flat add-ons
+		// again. Branches are protected by existing_keys. Check the extensions on the Deal by hand after any such failure.
+		inv_pre = Invoice_Records[ID == inv_rec_id];
+		if(ifnull(inv_pre.crm_membership_id,"").toString() == "")
+		{
+			existing_keys = List();
+			existing_ext = zoho.crm.searchRecords("Membership_Extension","(Membership_Extension.id:equals:" + deal_id + ")");
+			if(existing_ext != null)
+			{
+				for each  ext_row in existing_ext
+				{
+					existing_keys.add(ifnull(ext_row.get("Extension_Type"),"").toString() + "|" + ifnull(ext_row.get("Membership_Branch"),"").toString());
+				}
+			}
+			created_count = 0;
+			failures = List();
+			secondary_branches = ifnull(metadata.get("secondary_branches"),"").toString();
+			if(secondary_branches != "")
+			{
+				branch_list = secondary_branches.toList(",");
+				// The amount is shared across the branches bought in this payment
+				per_branch = (ifnull(metadata.get("branch_addon_amount"),"0").toDecimal() / branch_list.size()).round(2);
+				for each  sb in branch_list
+				{
+					crm_branch = branch_map.get(sb.trim());
+					if(crm_branch != null && !existing_keys.contains("Branch|" + crm_branch))
+					{
+						branch_result = thisapp.CRM.create_membership_extension(deal_id,"Branch",crm_branch,1,per_branch,effective_date,membership_expiry,"Active","Paid");
+						if(branch_result.get("status") == "success")
+						{
+							created_count = created_count + 1;
+						}
+						else
+						{
+							failures.add(branch_result.toString());
+						}
+					}
+				}
+			}
+			addons_map = Map();
+			if(ifnull(metadata.get("addons"),"").toString() != "")
+			{
+				addons_map = metadata.get("addons").toMap();
+			}
+			addon_types = Map();
+			addon_types.put("bundle","Bundle");
+			addon_types.put("certificate","Certificate");
+			addon_types.put("badge","Badge");
+			addon_types.put("sticker","Sticker");
+			for each  addon_key in addon_types.keys()
+			{
+				addon_qty = ifnull(addons_map.get(addon_key),0).toString().toLong();
+				addon_label = addon_types.get(addon_key);
+				// A flat item bought mid-term is a NEW purchase each time, so it is not skipped just because the member already has one.
+				if(addon_qty > 0)
+				{
+					addon_amount = ifnull(metadata.get(addon_key + "_amount"),"0").toDecimal();
+					addon_result = thisapp.CRM.create_membership_extension(deal_id,addon_label,"",addon_qty.toLong(),addon_amount,effective_date,membership_expiry,"Active","Paid");
+					if(addon_result.get("status") == "success")
+					{
+						created_count = created_count + 1;
+					}
+					else
+					{
+						failures.add(addon_result.toString());
+					}
+				}
+			}
+			if(failures.size() > 0)
+			{
+				thisapp.Stripe.set_log_status(log_id,"Failed","Some Membership_Extension records failed: " + failures.toString());
+				return {"status":"error","message":failures.toString()};
+			}
+			// Stage 3 is done: record the Deal on the Invoice Record, which is also the marker that stops a retry repeating it
+			for each  marker_rec in Invoice_Records[ID == inv_rec_id]
+			{
+				marker_rec.crm_membership_id=deal_id;
+			}
+		}
+		//
+		// ---- Stage 4: Books (CRM stays updated if this fails; a retry reuses what already exists) ----
+		inv_check = Invoice_Records[ID == inv_rec_id];
+		if(inv_check.Books_Sync_Status != "Pushed")
+		{
+			books_customer = thisapp.Books.get_or_create_books_customer(customer_email,contact_id);
+			if(books_customer.get("status") != "success")
+			{
+				books_error = "Books customer failed: " + books_customer.toString();
+				thisapp.Creator.mark_invoice_books_result(inv_rec_id,"Failed",{"error":books_error});
+				thisapp.Creator.mark_payment_books_result(pay_rec_id,"Failed",{"error":books_error});
+				thisapp.Stripe.set_log_status(log_id,"Failed",books_error);
+				return {"status":"error","message":books_error};
+			}
+			books_customer_id = books_customer.get("books_customer_id").toString();
+			invoice_push = thisapp.Books.create_books_invoice(books_customer_id,lines_result.get("lines"),payment_intent_id,amount,deal_id);
+			if(invoice_push.get("status") != "success")
+			{
+				books_error = "Books invoice failed: " + invoice_push.toString();
+				thisapp.Creator.mark_invoice_books_result(inv_rec_id,"Failed",{"error":books_error,"books_invoice_id":invoice_push.get("invoice_id"),"books_customer_id":books_customer_id,"lines_json":lines_result.get("snapshot").toString()});
+				thisapp.Creator.mark_payment_books_result(pay_rec_id,"Failed",{"error":books_error});
+				thisapp.Stripe.set_log_status(log_id,"Failed",books_error);
+				return {"status":"error","message":books_error};
+			}
+			books_invoice_id = invoice_push.get("invoice_id");
+			payment_push = thisapp.Books.record_books_payment(books_customer_id,books_invoice_id,amount,payment_intent_id,paid_time.toString("yyyy-MM-dd"));
+			if(payment_push.get("status") != "success")
+			{
+				books_error = "Books payment failed: " + payment_push.toString();
+				thisapp.Creator.mark_invoice_books_result(inv_rec_id,"Failed",{"error":books_error,"books_invoice_id":books_invoice_id,"books_customer_id":books_customer_id,"lines_json":lines_result.get("snapshot").toString()});
+				thisapp.Creator.mark_payment_books_result(pay_rec_id,"Failed",{"error":books_error});
+				thisapp.Stripe.set_log_status(log_id,"Failed",books_error);
+				return {"status":"error","message":books_error};
+			}
+			thisapp.Creator.mark_invoice_books_result(inv_rec_id,"Pushed",{"books_invoice_id":books_invoice_id,"books_customer_id":books_customer_id,"invoice_status":"Paid","lines_json":lines_result.get("snapshot").toString()});
+			thisapp.Creator.mark_payment_books_result(pay_rec_id,"Pushed",{"books_payment_id":payment_push.get("payment_id")});
+		}
+		for each  inv_rec in Invoice_Records[ID == inv_rec_id]
+		{
+			inv_rec.crm_membership_id=deal_id;
+		}
+		//
+		// ---- Stage 5: every stage succeeded ----
+		thisapp.Stripe.set_log_status(log_id,"Processed","");
+		return {"status":"success","invoice_record":inv_rec_id,"payment_record":pay_rec_id};
+	}	catch (e)
+	{
+		thisapp.Stripe.set_log_status(log_id,"Failed",e.toString());
+		return {"status":"error","message":e.toString()};
+	}
+	return {};
+}

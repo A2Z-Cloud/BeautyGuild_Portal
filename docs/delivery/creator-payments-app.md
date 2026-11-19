@@ -106,15 +106,52 @@ Daily, find revisions with status Scheduled and `Requested_Effective_Date` on or
 - An extra branch: add it to the Deal's branches and create the **Membership_Extension** row from `secondary_branches`. The charge is pro-rated to the end of the term; `branch_yearly_amount` is the full yearly price the branch costs **from the next renewal**, so add it to the renewal subscription. Flat items (`addons`: badge, certificate, sticker, bundle) are charged in full, with no £5 fee, and create their Membership_Extension rows with quantities.
 - No Revision record is made for a membership change. The term dates on the Deal do not change.
 
-### 6.7 To agree before building
-- The exact status values for replaced, removed and active rows on Insurance_Extension and Insured_People (the portal treats draft, cancelled, superseded, replaced, expired and removed as not current).
-- Whether the policy's stored premium totals are recalculated from the active rows by Creator or by a CRM workflow.
-- Whether Creator sets `Document_Status` to Regenerate on Applied so CRM makes the endorsement documents. Documents, emails and the bordereau stay in CRM; the portal does none of them.
-- The renewal date against the policy anniversary (MTA-D20) and a change in the last month of an already renewed policy (MTA-D23).
-- Whether employees get a membership record or certificate (MTA-D26). Today the £55 is a fee on the payer, with no employee record.
+### 6.7 Decisions and open points (updated 5 November 2026)
+
+**Decided or confirmed**
+
+| Point | Value |
+|---|---|
+| Insurance_Extension `Status` | Draft, Scheduled, Active, Superseded, Cancelled, `Expired (REC).` |
+| Insured_People `Status` | Draft, Active, Removed |
+| Insurance_Extension `Cover_Type` | MedMal, Named Person, Treatment, Teaching, Equipment, Employers Liability, Contents, Money, Buildings, Business Interruption, Property Away, `Ad Hoc Adjustment (REC).` |
+| Spelling | **Write these values exactly as spelt**, including the tag and the trailing full stop in `Expired (REC).` and `Ad Hoc Adjustment (REC).`, or the CRM rejects them. Read from the Guild's live CRM through the portal's field check on 5 November. If the Guild corrects a spelling, tell the portal owner (one constant) and update this table |
+| Replaced, removed and active, in those terms | An active row is **Active**. A row replaced by an increase or a swap is **Superseded**. A cover row the change removes is **Cancelled**. A person the change removes is **Removed**. A row for a future date stays **Draft** until it is applied, and is **Scheduled** once paid and waiting for its date (proposed: the revision is Scheduled, and its rows stay Draft until applied, as in 6.3) |
+| Rows that lapse with the policy | `Expired (REC).` is for rows that end because the policy ends. That is the CRM's, and the MTA handler does not set it (proposed) |
+| Endorsement documents | Creator sets `Document_Status` to **Regenerate** when a revision is Applied, and the CRM makes the documents (agreed 5 November) |
+| FEE-MTA and the new CRM fields | The Stripe `FEE-MTA` price (£5 including VAT) and the new CRM fields exist (confirmed 5 November) |
+| `Cover_Option` | A picklist on Insurance_Extension with placeholder values only ("-None-", "Equipment band or EL band", "Valid options by cover."). There are no real Employers' Liability tiers, so any change to a held Employers' Liability cover goes to the office and the handler does not depend on `Cover_Option` |
+
+**Open: A2Z and the Creator owner**
+- **Who recalculates the policy's stored premium totals.** Recommendation: a CRM roll-up or workflow that adds up the active rows, with Creator only changing row statuses, so that office-made changes (staff-assisted) use the same calculation. Fallback: Creator adds up the active rows once after applying all the revisions and writes the totals in a single update. Not yet decided.
+- **The CRM automation check, which gates every write.** Someone with CRM access lists every workflow, blueprint and custom function on Insurance_Policy, Insurance_Extension, Insured_People and Policy_Revisions that runs on create or edit, notes whether it can change a status, activate cover or send a document, then creates a Draft revision and Draft rows on a test policy and confirms nothing activates and nothing is sent. Then moves a row to Scheduled and Superseded and checks again. Not yet done.
+- **Policies that pre-date the saved levels.** Recommendation: increases on them go to the office until a one-off backfill, while decreases and removals can stay online. Not yet agreed.
+
+**Open: the Guild** (still to ask, with a recommended answer for each)
+- MTA-D03: the rounding order (premium rounded to the penny, then IPT at 12% on the rounded figure) and whether the £5 fee carries VAT detail Creator needs.
+- MTA-D04: whether a membership fee is refunded on a change, against the Terms of Business.
+- MTA-D14: whether the £10 duplicate documents fee is kept (it is not in Books).
+- MTA-D20: future-dated changes for monthly payers, and the renewal date against the policy anniversary.
+- MTA-D23: a change in the last month of a policy that has already renewed.
+- MTA-D26: whether employees get a membership record or certificate. Today the £55 is a fee on the payer, with no employee record.
 
 ### 6.8 Tests (Development, Stripe test mode)
 One revision paid now; a basket of two dates paid in one checkout (two revisions applied in date order, one `FEE-MTA` each); a future-dated revision that stays Scheduled and applies on its date; a swap that ends the old row and starts the new one; a repeated and an out-of-order event (applied once); an amount mismatch (nothing changes, exception logged); an expired session (back to Quoted); and a branch bought as a membership change. After each, check the live policy status and Payment_Status are untouched and that no activation or document workflow fired.
+
+### 6.9 Functions (drafted 5 November 2026, not yet in Creator, untested)
+
+The Deluge is in [mta-creator-functions/](mta-creator-functions/). It is a **draft**: it has not been pasted into Creator or run, and it must not be switched on until the automation check in 6.7 is done and the tests in 6.8 pass. The functions, named in the same style as the rest of the app:
+
+| Function | What it does | Section |
+|---|---|---|
+| `Stripe.process_log_row` (patch) | Route `checkout.session.completed` with `type=insurance_change` and `type=membership_change` to the handlers below, and `checkout.session.expired` to the expiry handler | 6.2, 6.6 |
+| `Creator.process_insurance_change(log_id)` | Fetch the session, verify amount, revision ids, session id, status, quote ids and policy, record the exception if any check fails, otherwise apply the revisions in effective-date order (idempotent by revision id), create the Invoice Record and push it to Books | 6.2, 6.3, 6.4 |
+| `CRM.apply_policy_revision(revision_id, session_id)` | Approve, then Schedule or apply one revision: Draft rows to Active, endings to Superseded or Removed with `Effective_To`, the revision to Applied, `Document_Status` to Regenerate. Never touches the policy's Payment_Status, Application_Status or Policy_Status | 6.3 |
+| `Creator.apply_scheduled_revisions()` | Daily schedule: apply every Scheduled revision whose date has come, and retry any stuck in Approved | 6.5 |
+| `Creator.expire_insurance_change(log_id)` | Revisions back from Awaiting Payment to Quoted, session id cleared | 6.2 |
+| `Creator.process_membership_change(log_id)` | Branch and add-on purchases mid-term: Membership_Extension rows, Invoice Record, Books | 6.6 |
+
+Still to do: split the Books invoice by revision, decide who adds a branch's yearly price to the renewal subscription (a Stripe write), and confirm which module holds `Document_Status`. Each function keeps the rules the rest of the app follows: verify from Stripe, one log row and one status, every step idempotent, `Failed` visible and retryable, Books items found by price list code and never created.
 
 ## 7. UAT round 1: items Creator must pick up (for QA)
 

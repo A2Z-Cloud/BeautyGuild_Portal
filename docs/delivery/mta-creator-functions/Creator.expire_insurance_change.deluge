@@ -1,0 +1,87 @@
+map Creator.expire_insurance_change(int log_id)
+{
+	// ============================================================================
+	// DRAFT, UNTESTED. Do not enable until the CRM automation check in creator-payments-app.md 6.7 is done.
+	//
+	// Creator.expire_insurance_change
+	// Purpose : A checkout for an insurance change expired without being paid. Put each of its revisions back from
+	//           Awaiting Payment to Quoted and clear the session id, so the member can pay again
+	//           (creator-payments-app.md 6.2). The portal also expires a session itself if it cannot mark the CRM.
+	// Event   : checkout.session.expired
+	// Safe to run again: only a revision still Awaiting Payment for this session is changed.
+	//
+	// @input.log_id - the Stripe_Webhook_Log row
+	// ============================================================================
+	try
+	{
+		// ---- Stage 0: load and claim the log row ----
+		log_rows = Stripe_Webhook_Log[ID == log_id];
+		if(log_rows.count() == 0)
+		{
+			return {"status":"error","message":"No Stripe_Webhook_Log row " + log_id};
+		}
+		current_status = log_rows.Status;
+		event_type = log_rows.Event_Type;
+		if((current_status != "Received" && current_status != "Failed") || event_type != "checkout.session.expired")
+		{
+			return {"status":"skipped","message":"Row is " + current_status + " / " + event_type};
+		}
+		log_rows.Status="Processing";
+		log_rows.Attempts=ifnull(log_rows.Attempts,0) + 1;
+		session_id = log_rows.Stripe_Object_ID;
+		//
+		// ---- Stage 1: read the session from Stripe (never trust the event text) ----
+		session = thisapp.Stripe.call_stripe_api("https://api.stripe.com/v1/checkout/sessions/" + session_id,"GET",null);
+		if(session.get("id") != session_id)
+		{
+			thisapp.Stripe.set_log_status(log_id,"Failed","Could not read the session from Stripe: " + session.toString());
+			return {"status":"error","message":"Session lookup failed"};
+		}
+		metadata = ifnull(session.get("metadata"),Map());
+		if(metadata.get("type") != "insurance_change")
+		{
+			thisapp.Stripe.set_log_status(log_id,"Skipped","Not an insurance change session (type " + metadata.get("type") + ").");
+			return {"status":"skipped","message":"Not an insurance change"};
+		}
+		if(session.get("status") != "expired")
+		{
+			thisapp.Stripe.set_log_status(log_id,"Skipped","The session is " + session.get("status") + ", not expired.");
+			return {"status":"skipped","message":"Session not expired"};
+		}
+		//
+		// ---- Stage 2: back to Quoted ----
+		reopened = 0;
+		failures = List();
+		revisions = zoho.crm.searchRecords("Policy_Revisions","(Stripe_Checkout_Session_ID:equals:" + session_id + ")");
+		for each  revision in ifnull(revisions,List())
+		{
+			if(ifnull(revision.get("Revision_Status"),"").toString() == "Awaiting Payment")
+			{
+				reopen_map = Map();
+				reopen_map.put("Revision_Status","Quoted");
+				reopen_map.put("Stripe_Checkout_Session_ID","");
+				reopen_response = zoho.crm.updateRecord("Policy_Revisions",revision.get("id").toLong(),reopen_map);
+				if(reopen_response == null || reopen_response.get("status") == "error")
+				{
+					failures.add("Revision " + revision.get("id") + ": " + ifnull(reopen_response,"no response").toString());
+				}
+				else
+				{
+					reopened = reopened + 1;
+				}
+			}
+		}
+		if(failures.size() > 0)
+		{
+			thisapp.Stripe.set_log_status(log_id,"Failed","Some revisions could not be reopened: " + failures.toString());
+			return {"status":"error","message":failures.toString()};
+		}
+		thisapp.Stripe.set_log_status(log_id,"Processed","");
+		return {"status":"success","reopened":reopened};
+	}	catch (e)
+	{
+		thisapp.Stripe.set_log_status(log_id,"Failed",e.toString());
+		return {"status":"error","message":e.toString()};
+	}
+	return {};
+}

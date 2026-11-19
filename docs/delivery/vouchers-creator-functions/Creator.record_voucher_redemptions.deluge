@@ -1,0 +1,122 @@
+map Creator.record_voucher_redemptions(map session_metadata, string contact_id, string stripe_session_id, string stripe_invoice_id, string log_id)
+{
+	// ============================================================================
+	// Creator.record_voucher_redemptions
+	// Purpose : After a first payment succeeds, write one Voucher Redemptions row
+	//           for each referral code or voucher used on that checkout.
+	// Safe to run twice: every row has a unique Redemption Key, so a repeated
+	// Stripe event creates nothing new.
+	// Not handled here: staff waivers (Waive Logs, see Creator.finish_discounts) and
+	// branch discounts (Stripe coupons, not vouchers).
+	// Returns : a map such as {"created":1,"skipped":0}
+	//
+	// Parameters, in this order:
+	//   session_metadata  MAP     the metadata map of the verified Stripe checkout session
+	//   contact_id        STRING  the CRM Contact id of the member
+	//   stripe_session_id STRING  the Stripe checkout session id (cs_...)
+	//   stripe_invoice_id STRING  the Stripe invoice id (in_...), may be empty
+	//   log_id            STRING  the Stripe Webhook Log record id, as text
+	// ============================================================================
+
+	created = 0;
+	skipped = 0;
+	result = Map();
+
+	// ---- Step 1. Read the discounts list from the checkout metadata ------------
+	// The portal stores it as one block of text holding a JSON list.
+	// No discounts on this payment means there is nothing to do.
+	discounts_text = ifnull(session_metadata.get("discounts"),"");
+	if(discounts_text == "")
+	{
+		result.put("created",0);
+		result.put("skipped",0);
+		return result;
+	}
+	entries = discounts_text.toJSONList();
+
+	// ---- Step 2. Go through each discount entry --------------------------------
+	for each  entry in entries
+	{
+		source = ifnull(entry.get("source"),"");
+
+		// Only referrals and vouchers are redemptions. Skip anything else.
+		if(source != "referral" && source != "voucher")
+		{
+			continue;
+		}
+
+		sku = ifnull(entry.get("sku"),"");
+		voucher_id = ifnull(entry.get("voucher_id"),"");
+		school_id = ifnull(entry.get("school_id"),"");
+		acc_id = ifnull(entry.get("accreditation_id"),"");
+
+		// ---- Step 3. Build the unique Redemption Key ---------------------------
+		// It says: what was used, by whom, on which payment, for which item.
+		// The same Stripe session always produces the same key.
+		used_what = if(source == "voucher",voucher_id,acc_id);
+		redemption_key = source + "|" + used_what + "|" + contact_id + "|" + stripe_session_id + "|" + sku;
+
+		// ---- Step 4. Already recorded? Then leave it alone ---------------------
+		existing = Voucher_Redemptions[Redemption_Key == redemption_key];
+		if(existing.count() > 0)
+		{
+			skipped = skipped + 1;
+			continue;
+		}
+
+		// ---- Step 5. Work out the amounts --------------------------------------
+		// The portal sends them as text, for example "10.00".
+		// list_amount can be missing when the metadata was too long, so fall back
+		// to the discount amount.
+		discount_amount = ifnull(entry.get("amount"),"0").toDecimal();
+		list_amount = ifnull(entry.get("list_amount"),ifnull(entry.get("amount"),"0")).toDecimal();
+
+		// ---- Step 6. Create the row --------------------------------------------
+		// Status is Used because this only runs after the payment succeeded.
+		// (Creator does not allow the insert result to be stored in a variable.)
+		insert into Voucher_Redemptions
+		[
+			Redemption_Key = redemption_key
+			Source = source
+			Code = ifnull(entry.get("code"),"")
+			SKU = sku
+			Status = "Used"
+			Amount_Status = "Used"
+			List_Amount = list_amount
+			Discount_Amount = discount_amount
+			Used_At = zoho.currenttime
+			Stripe_Session_ID = stripe_session_id
+			Stripe_Invoice_ID = stripe_invoice_id
+			Contacts = contact_id
+			Added_User = zoho.loginuser
+		];
+
+		// ---- Step 7. Fill in the lookups this entry has ------------------------
+		// Fetch the row we just created (the key is unique, so it finds exactly one),
+		// then set each lookup on its own so an empty one is never sent.
+		new_rec = Voucher_Redemptions[Redemption_Key == redemption_key];
+		if(voucher_id != "")
+		{
+			new_rec.Voucher = voucher_id;
+		}
+		if(school_id != "")
+		{
+			new_rec.School = school_id;
+		}
+		if(acc_id != "")
+		{
+			new_rec.Accreditation = acc_id;
+		}
+		if(log_id != "")
+		{
+			new_rec.Stripe_Webhook_Log = log_id;
+		}
+
+		created = created + 1;
+	}
+
+	// ---- Step 8. Report what happened ------------------------------------------
+	result.put("created",created);
+	result.put("skipped",skipped);
+	return result;
+}

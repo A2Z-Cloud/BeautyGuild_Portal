@@ -1,0 +1,97 @@
+// ============================================================================
+// PATCH for Books.build_invoice_lines  (not a function on its own)
+// Purpose : a FULLY waived joining fee is not on the Stripe invoice, so Books would not show the
+//           discount. This pass adds the line at its list price with a matching discount, so it shows
+//           as "Joining fee 10.00, discount 10.00, line total 0.00". The invoice total does not change.
+//
+// Three edits to the existing function:
+//
+// 1. Signature. Add a fourth parameter (type LIST):
+//      map Books.build_invoice_lines(list stripe_lines, decimal expected_total, decimal membership_credit, list discount_entries)
+//    and add to the @input comments:
+//      // @input.discount_entries - the parsed `discounts` metadata (a list). Use List() when there are none.
+//
+// 2. Paste the block below DIRECTLY ABOVE the line:
+//      // If any line failed, report every problem together and write nothing
+//
+// 3. Callers. Every call gets the fourth argument.
+//    Creator.process_membership_payment builds it from the metadata:
+//      discount_entries = List();
+//      discounts_text = ifnull(metadata.get("discounts"),"");
+//      if(discounts_text != "")
+//      {
+//          discount_entries = discounts_text.toJSONList();
+//      }
+//      lines_result = thisapp.Books.build_invoice_lines(stripe_lines,amount,upgrade_credit,discount_entries);
+//    Every other caller (process_accreditation_payment, process_recurring_payment,
+//    process_additional_venue_payment) passes List():
+//      lines_result = thisapp.Books.build_invoice_lines(stripe_lines,amount,0.00,List());
+// ============================================================================
+
+	//
+	// ---- Pass 4: fully waived lines (no Stripe line exists, so show them at list price with a matching discount) ----
+	// Example: the joining fee waived by a referral code. Stripe has no line for it, but Books should show
+	// "Joining fee 10.00, discount 10.00, line total 0.00". The invoice total does not change.
+	present_skus = List();
+	for each  it in items
+	{
+		present_skus.add(ifnull(it.get("sku_result").get("sku"),""));
+	}
+	for each  entry in discount_entries
+	{
+		entry_source = ifnull(entry.get("source"),"");
+		entry_sku = ifnull(entry.get("sku"),"");
+		// Branch discounts are Stripe coupons and keep their full-price line, so they are not handled here.
+		if(entry_source != "referral" && entry_source != "voucher" && entry_source != "staff_waiver")
+		{
+			continue;
+		}
+		// The line is already on the Stripe invoice (a part discount), so nothing to add.
+		if(entry_sku == "" || present_skus.contains(entry_sku))
+		{
+			continue;
+		}
+		entry_discount = ifnull(entry.get("amount"),"0").toDecimal();
+		entry_list = ifnull(entry.get("list_amount"),"").toString();
+		if(entry_list == "")
+		{
+			errors.add("Waived line " + entry_sku + " has no list_amount in the metadata, so it cannot be shown at list price.");
+			continue;
+		}
+		list_price = entry_list.toDecimal();
+		if((list_price - entry_discount).abs() > 0.005)
+		{
+			errors.add("Line " + entry_sku + " is not on the Stripe invoice but its discount (" + entry_discount + ") is not the full list price (" + list_price + ").");
+			continue;
+		}
+		waived_item = thisapp.Books.get_books_item(entry_sku);
+		if(waived_item.get("status") != "success")
+		{
+			errors.add("SKU " + entry_sku + " not usable in Books: " + ifnull(waived_item.get("message"),waived_item.get("status")));
+			continue;
+		}
+		waived_line = Map();
+		waived_line.put("item_id",waived_item.get("item_id"));
+		waived_line.put("quantity",1);
+		waived_line.put("rate",list_price.round(2));
+		waived_line.put("discount",entry_discount.round(2));
+		waived_line.put("description","Joining fee (" + entry_source.replaceAll("_"," ") + ")");
+		if(ifnull(waived_item.get("tax_id"),"") != "")
+		{
+			waived_line.put("tax_id",waived_item.get("tax_id"));
+		}
+		books_lines.add(waived_line);
+		// Keep a record on the Invoice Record snapshot. Its gross is 0.00 because nothing was charged for it.
+		waived_snap = Map();
+		waived_snap.put("sku",entry_sku);
+		waived_snap.put("split_from",entry_sku);
+		waived_snap.put("sku_source","discounts metadata");
+		waived_snap.put("description",waived_line.get("description"));
+		waived_snap.put("quantity",1);
+		waived_snap.put("stripe_gross",0.00);
+		waived_snap.put("discount",entry_discount.round(2));
+		waived_snap.put("books_item_id",waived_item.get("item_id"));
+		waived_snap.put("books_tax",ifnull(waived_item.get("tax_name"),""));
+		snapshot.add(waived_snap);
+		// stripe_total is not changed: the line nets to zero, so the invoice still adds up to what Stripe took.
+	}
