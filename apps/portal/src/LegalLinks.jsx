@@ -7,10 +7,13 @@ const ext = { target: '_blank', rel: 'noopener noreferrer' };
 export function LegalLinks({ keys = ['terms', 'privacy', 'ethics'], className = 'legal-links' }) {
   return (
     <span className={className}>
-      {keys.map(k => (
-        <a key={k} href={LEGAL[k].href} {...ext}>
-          {LEGAL[k].label}
-        </a>
+      {keys.map((k, i) => (
+        <React.Fragment key={k}>
+          {i > 0 && <span className="legal-links-sep">&amp;</span>}
+          <a href={LEGAL[k].href} {...ext}>
+            {LEGAL[k].label}
+          </a>
+        </React.Fragment>
       ))}
     </span>
   );

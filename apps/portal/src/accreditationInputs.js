@@ -48,8 +48,9 @@ export const DECLARATIONS = [
   [
     'teachingQualification',
     'I hold a recognised teaching qualification.',
-    'You need to hold a recognised teaching qualification to apply for accreditation. We recommend the GTi Teaching Certificate.',
+    "A recognised teaching qualification is required for Guild accreditation. If you don't already hold one, we recommend enrolling on the GTi Teaching Certificate. This course meets our teaching qualification requirement and can usually be completed in around one week.",
     '/gti-courses',
+    'Enrol on the GTi Teaching Certificate',
   ],
   [
     'evidenceAvailable',
@@ -67,9 +68,8 @@ export function accreditationSteps(countries) {
     {
       id: 'applicant',
       title: 'Your details',
-      description: 'The person applying. When you are signed in, we fill in what the Guild already holds for you.',
+      description: '',
       fields: [
-        f('title', 'Title', 'select', false, { options: list(['Mr', 'Mrs', 'Miss', 'Ms', 'Mx', 'Dr']) }),
         f('firstName', 'First name'),
         f('lastName', 'Surname'),
         f('email', 'Email address', 'email', true, {
@@ -106,8 +106,8 @@ export function accreditationSteps(countries) {
       title: 'Training centre',
       description: 'Tell us about the centre where you teach.',
       fields: [
-        f('copyHome', 'Use my own details', 'copyHome', false),
         f('centre', 'Training school name'),
+        f('copyHome', 'Use my own details', 'copyHome', false),
         country('country', 'Training centre country'),
         f('countryOther', 'Country name', 'text', true, { when: v => v.country === 'Other' }),
         f('centreEmail', 'Centre email', 'email', true),
@@ -158,7 +158,7 @@ export function accreditationSteps(countries) {
       id: 'courses',
       title: 'Courses',
       description:
-        'This is the complete list of GTi courses available to Guild accredited schools. Select every course you wish to offer, provided you hold the right qualifications and experience and can meet the requirements for that course. Use View course requirements to check each one first.',
+        "Select the GTi courses you would like to offer from the list below. You can update your course selection at any time, free of charge, during your accreditation period, so you don't need to decide on every course now.",
       // A course typed under "Other" counts in place of a ticked GTi course (only shown when the Other course switch is on).
       fields: [
         f(
@@ -175,11 +175,14 @@ export function accreditationSteps(countries) {
     {
       id: 'declarations',
       title: 'Declarations',
-      description:
-        'Confirm the training and qualification standards. Your accreditation starts when the Guild verifies it.',
+      description: '',
       fields: [
-        ...DECLARATIONS.map(([name, label, message, link]) =>
-          yn(name, label, { mustBe: 'yes', noMessage: message, ...(link ? { noLink: link } : {}) }),
+        ...DECLARATIONS.map(([name, label, message, link, linkLabel]) =>
+          yn(name, label, {
+            mustBe: 'yes',
+            noMessage: message,
+            ...(link ? { noLink: link, ...(linkLabel ? { noLinkLabel: linkLabel } : {}) } : {}),
+          }),
         ),
         f('terms', 'I accept the Terms of Business and the Privacy Policy.', 'checkbox', true, { links: LEGAL_LINKS }),
       ],

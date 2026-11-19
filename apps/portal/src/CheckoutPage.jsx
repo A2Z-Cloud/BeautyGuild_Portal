@@ -107,7 +107,7 @@ export default function CheckoutPage() {
       <PageHeading
         eyebrow="SECURE PAYMENT"
         title={TITLES[service] || 'Payment'}
-        description="You will pay on Stripe's secure page. We never see your card details."
+        description="You will pay on our secure payment page. We never see your card details."
       />
       {!INTEGRATIONS.stripeCheckout || !TITLES[service] ? (
         <Notice title="Not available yet">Online payment is not available yet.</Notice>

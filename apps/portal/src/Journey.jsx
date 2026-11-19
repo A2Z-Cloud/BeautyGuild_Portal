@@ -22,6 +22,13 @@ const ADDRESS_BLOCK_SIBLINGS = {
   postcode: ['address1', 'address2', 'address3', 'town', 'county'],
   centrePostcode: ['centreAddress1', 'centreAddress2', 'centreAddress3', 'centreTown', 'centreCounty'],
 };
+// County/postcode read oddly for a non-UK address; accreditation uses the more general names there instead.
+const NON_UK_FIELD_LABELS = {
+  county: 'State/Province/Region',
+  centreCounty: 'State/Province/Region',
+  postcode: 'Postal/Zip code',
+  centrePostcode: 'Postal/Zip code',
+};
 const reviewValue = (f, value, values = {}) =>
   f.type === 'courses'
     ? [
@@ -332,16 +339,6 @@ export function Journey({ kind }) {
     if (kind !== 'accreditation' || !detailsDone || !accountName) return;
     Object.entries(nameFromAccount(values, accountName)).forEach(([name, value]) => setAnswer(kind, name, value));
   }, [detailsDone, accountName]); // eslint-disable-line react-hooks/exhaustive-deps
-  async function signOutHere() {
-    try {
-      await portalApi.signOut();
-    } catch {
-      // Still clear the screen: the next call that needs the account will ask for sign-in again.
-    }
-    setSignedIn(false);
-    setAccountEmail('');
-    setAnswer(kind, 'email', '');
-  }
   const update = (name, value) => {
     setAnswer(kind, name, value);
     setErrors(previous => ({ ...previous, [name]: undefined }));
@@ -502,6 +499,13 @@ export function Journey({ kind }) {
       </div>
     );
   const mayNeedLocation = ['contact-address', 'centre', 'about', 'property', 'details'].includes(current.id);
+  // The postcode-lookup hint only makes sense for a UK address; accreditation also takes non-UK applicants and centres.
+  const stepAddressCountryIsUk =
+    kind === 'accreditation' && current.id === 'contact-address'
+      ? isUkContact(values)
+      : kind === 'accreditation' && current.id === 'centre'
+        ? isUkCentre(values)
+        : true;
   return (
     <div className="page journey-page">
       <Link className="back-link" to={'/' + kind}>
@@ -517,7 +521,7 @@ export function Journey({ kind }) {
         </span>
       </PageHeading>
       {prefilled && (
-        <p className="muted" role="status">
+        <p className="muted journey-prefill-note" role="status">
           We have filled in the details the Guild already holds for you. Please check them and change anything that is
           out of date.
         </p>
@@ -536,7 +540,7 @@ export function Journey({ kind }) {
           <div className="journey-body" id="journey-fields">
             <span className="eyebrow">STEP {String(index + 1).padStart(2, '0')}</span>
             <h2>{current.title}</h2>
-            <p className="journey-intro">{current.description}</p>
+            {current.description && <p className="journey-intro">{current.description}</p>}
             {last ? (
               <>
                 <ReviewDetails
@@ -561,7 +565,7 @@ export function Journey({ kind }) {
               </>
             ) : (
               <>
-                {mayNeedLocation && (
+                {mayNeedLocation && stepAddressCountryIsUk && (
                   <div className="address-hint">
                     <MapPin size={17} />
                     <span>
@@ -570,14 +574,6 @@ export function Journey({ kind }) {
                         : 'Address fields can be entered manually in this preview. Live postcode/address suggestions will use the Loqate backend.'}
                     </span>
                   </div>
-                )}
-                {kind === 'accreditation' && signedIn && accountEmail && (
-                  <p className="muted" role="status">
-                    Signed in as {accountEmail}.{' '}
-                    <button type="button" className="text-button" onClick={signOutHere}>
-                      Not you? Sign out
-                    </button>
-                  </p>
                 )}
                 <div className="fields-grid">
                   {resolveFields(current.fields, values).map(f => {
@@ -601,6 +597,8 @@ export function Journey({ kind }) {
                         </div>
                       );
                     const lookup = isLookupMode(f.name);
+                    const nonUkLabel =
+                      kind === 'accreditation' && !stepAddressCountryIsUk && NON_UK_FIELD_LABELS[f.name];
                     return (
                       <React.Fragment key={f.name}>
                         <Field
@@ -612,7 +610,9 @@ export function Journey({ kind }) {
                                   placeholder: 'e.g. AB1 2CD, or start typing your address',
                                   hint: undefined,
                                 }
-                              : f
+                              : nonUkLabel
+                                ? { ...f, label: nonUkLabel, hint: undefined }
+                                : f
                           }
                           value={values[f.name]}
                           locked={isLocked(f, values[f.name], accountEmail)}

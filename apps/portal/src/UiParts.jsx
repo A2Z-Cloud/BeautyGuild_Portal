@@ -329,7 +329,7 @@ export function Field({ field, value, onChange, error, values = {}, locked = fal
           {field.noLink && (
             <>
               {' '}
-              <Link to={field.noLink}>See the GTi courses</Link>
+              <Link to={field.noLink}>{field.noLinkLabel || 'See the GTi courses'}</Link>
             </>
           )}
         </small>

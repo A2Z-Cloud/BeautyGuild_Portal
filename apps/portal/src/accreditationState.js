@@ -35,10 +35,10 @@ export function accreditationState({ schools = [], drafts = [] } = {}) {
   if (open.length)
     return {
       key: 'review',
-      title: 'Your accreditation application is being reviewed.',
-      text: 'We will be in touch when the review is complete.',
-      action: 'View my training centre',
-      to: '/schools/' + encodeURIComponent(open[0].id) + '/profile',
+      title: 'Your application has been received and is pending verification.',
+      text: '',
+      action: 'Click here to continue',
+      to: '/accreditation',
     };
   const approved = real.find(s => APPROVED.test(s.status));
   if (approved)

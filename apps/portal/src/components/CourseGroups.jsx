@@ -146,11 +146,6 @@ export default function CourseGroups({
                       .filter(Boolean)
                       .join(' · ')}
                   </span>
-                  {selectable && (
-                    <button type="button" className="text-button course-view" onClick={() => setDetail(c)}>
-                      View course requirements
-                    </button>
-                  )}
                 </li>
               ))}
             </ul>

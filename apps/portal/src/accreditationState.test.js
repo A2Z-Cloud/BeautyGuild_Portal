@@ -36,7 +36,8 @@ test('paid with no qualifications asks for them, then waits for review', () => {
   assert.equal(q.to, '/schools/11/qualifications');
   const r = accreditationState({ schools: [{ ...paid, qualificationCount: 2 }] });
   assert.equal(r.key, 'review');
-  assert.equal(r.title, 'Your accreditation application is being reviewed.');
+  assert.equal(r.title, 'Your application has been received and is pending verification.');
+  assert.equal(r.to, '/accreditation');
 });
 test('an approved school shows the management options', () => {
   const s = accreditationState({

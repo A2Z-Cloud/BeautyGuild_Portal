@@ -951,6 +951,13 @@ small {
   background: #faeaf2;
   color: #a72a70;
 }
+@media (max-width: 600px) {
+  .journey-counter,
+  .journey-body .eyebrow,
+  .journey-prefill-note {
+    display: none;
+  }
+}
 .journey-card {
   border: 1px solid #f0e8ee;
   border-radius: 15px;
@@ -3361,7 +3368,12 @@ iframe {
     grid-template-columns: 1fr;
   }
   .phone-input {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(84px, 100px) 1fr;
+    gap: 6px;
+  }
+  .phone-code-label {
+    padding: 0 8px;
+    font-size: 12px;
   }
   .course-view {
     margin-left: 0;
@@ -3447,6 +3459,9 @@ iframe {
   display: inline-flex;
   gap: 14px;
   flex-wrap: wrap;
+}
+.legal-links-sep {
+  color: #807984;
 }
 .legal-links a,
 .legal-note a,
