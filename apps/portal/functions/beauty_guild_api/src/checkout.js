@@ -17,6 +17,7 @@ const { createPaymentFacts, gbpToPence } = require('./paymentFacts');
 const { createStripeReader } = require('./stripeRead');
 const { levelOf } = require('./cancellationQuote');
 const { decideMembership, WORKING } = require('./membershipDecision');
+const { PREFERENCE_FIELDS } = require('./profile');
 const insuranceModule = require('./insurance');
 const { upgradeCredit: computeUpgradeCredit } = require('./cancellations');
 const plans = require('./plans');
@@ -230,11 +231,23 @@ function registerCheckoutRoutes(
         Correspondence_County: clean(input.county, 80),
         Correspondence_Postcode: clean(input.postcode, 20),
       };
+      // The Guild asks for the same consent on the Join journey as on the Account page; nothing is ticked unless the member chose it.
+      const preferences =
+        input.preferences && typeof input.preferences === 'object'
+          ? {
+              ...Object.fromEntries(
+                Object.entries(PREFERENCE_FIELDS).map(([key, field]) => [field, input.preferences[key] === true]),
+              ),
+              Preferences_Updated_On: new Date(now()).toISOString().replace(/\.\d{3}Z$/, '+00:00'),
+              Preferences_Source: 'Portal Join',
+            }
+          : {};
       const record = {
         ...(first ? { First_Name: first } : {}),
         Last_Name: last,
         Email: email,
         ...Object.fromEntries(Object.entries(address).filter(([, v]) => v)),
+        ...preferences,
       };
       const id = await crmCreate(req, 'Contacts', record);
       if (madeContacts.size >= 500) madeContacts.delete(madeContacts.keys().next().value);
@@ -750,6 +763,10 @@ function registerCheckoutRoutes(
     postcode: String(src.postcode || ''),
     insurance:
       src.insurance && typeof src.insurance === 'object' && !Array.isArray(src.insurance) ? src.insurance : null,
+    preferences:
+      src.preferences && typeof src.preferences === 'object' && !Array.isArray(src.preferences)
+        ? src.preferences
+        : null,
   });
   function parseAddons(text) {
     const out = {};

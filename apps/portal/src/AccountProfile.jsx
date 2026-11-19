@@ -6,12 +6,12 @@ import { LEGAL } from './legal.js';
 
 // Contact preferences and contact details on the live Account page (UAT REV-1 and REV-10). Both read and write the signed-in member's own
 // Contact on the server. Nothing is ticked for a member who has not chosen: consent is an active choice.
-const METHODS = [
+export const METHODS = [
   ['email', 'E-Mail'],
   ['sms', 'SMS'],
   ['post', 'By Post'],
 ];
-const NEWSLETTERS = [
+export const NEWSLETTERS = [
   [
     'guildGazette',
     'Guild Gazette',
@@ -23,7 +23,7 @@ const NEWSLETTERS = [
     'Be the first to hear about industry news, information and special offers from carefully selected partners straight to your inbox.',
   ],
 ];
-const BLANK_PREFS = { email: false, sms: false, post: false, guildGazette: false, newsAndOffers: false };
+export const BLANK_PREFS = { email: false, sms: false, post: false, guildGazette: false, newsAndOffers: false };
 const messageOf = err => (err && err.message ? err.message : 'Something went wrong. Please try again.');
 
 export function ContactPreferences() {

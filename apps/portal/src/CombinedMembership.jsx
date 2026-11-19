@@ -21,6 +21,7 @@ import AddressLookup from './components/AddressLookup.jsx';
 import { BRANCHES, branchName } from './branches.js';
 import { EMPTY_DETAILS, DETAIL_LABELS, detailsRequest, missingDetails, tradingNameOf } from './membershipDetails.js';
 import { DetailField } from './BuyMembership.jsx';
+import { BLANK_PREFS, METHODS, NEWSLETTERS } from './AccountProfile.jsx';
 import {
   ADDITIONAL_BRANCHES_TEXT,
   BRANCH_TEXT,
@@ -182,6 +183,7 @@ export default function CombinedMembership() {
       accepted: false,
       start: '',
       code: '',
+      preferences: BLANK_PREFS,
     },
     x => ({
       ...x,
@@ -191,6 +193,7 @@ export default function CombinedMembership() {
       branchTouched: Boolean(x.branchTouched || x.branch),
       accepted: false,
       start: x.start && x.start >= startLimits().min ? x.start : '',
+      preferences: { ...BLANK_PREFS, ...(x.preferences && typeof x.preferences === 'object' ? x.preferences : {}) },
     }),
   );
   const [kept, setKept] = useStoredState('combined_insurance', { iv: {} });
@@ -417,6 +420,7 @@ export default function CombinedMembership() {
         ...request(),
         accepted: 'yes',
         interests: f.interests,
+        preferences: f.preferences,
         ...detailsRequest(d),
       });
       if (!/^https:\/\/checkout\.stripe\.com\//.test(r.checkoutUrl))
@@ -722,6 +726,52 @@ export default function CombinedMembership() {
                         .
                       </p>
                     )}
+                  </section>
+                  <section className="surface padded buy-section">
+                    <h2>Your contact preferences</h2>
+                    <p>
+                      We take your privacy seriously and you can view our{' '}
+                      <a href={LEGAL.privacy.href} target="_blank" rel="noopener noreferrer">
+                        Privacy Policy
+                      </a>
+                      . We may have legitimate reasons to contact you in relation to certain membership and insurance
+                      services where applicable which we have been contracted to provide you. If you would like to
+                      receive news and marketing information, you need to give us your permission to contact you by
+                      one of the following methods.
+                    </p>
+                    <fieldset className="pref-group">
+                      <legend>How we contact you</legend>
+                      {METHODS.map(([k, label]) => (
+                        <label key={k} className="auth-checkbox">
+                          <input
+                            type="checkbox"
+                            checked={f.preferences[k]}
+                            onChange={e => set({ preferences: { ...f.preferences, [k]: e.target.checked } })}
+                          />{' '}
+                          {label}
+                        </label>
+                      ))}
+                    </fieldset>
+                    <fieldset className="pref-group">
+                      <legend>Email newsletters</legend>
+                      <p className="muted">
+                        These newsletters are free to receive and are packed full of useful information, advice and
+                        industry news.
+                      </p>
+                      {NEWSLETTERS.map(([k, label, hint]) => (
+                        <label key={k} className="auth-checkbox pref-newsletter">
+                          <input
+                            type="checkbox"
+                            checked={f.preferences[k]}
+                            onChange={e => set({ preferences: { ...f.preferences, [k]: e.target.checked } })}
+                          />
+                          <span>
+                            <strong>{label}</strong>
+                            <small>{hint}</small>
+                          </span>
+                        </label>
+                      ))}
+                    </fieldset>
                   </section>
                 </>
               )}
